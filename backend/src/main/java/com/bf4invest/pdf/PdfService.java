@@ -38,22 +38,32 @@ public class PdfService {
     
     // Formatters
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy");
-    // Format avec virgule pour milliers et point pour décimales (comme dans l'exemple: 3,895.00)
-    private static final DecimalFormat DECIMAL_FORMAT = new DecimalFormat("#,##0.00");
-    private static final NumberFormat NUMBER_FORMAT = NumberFormat.getNumberInstance(Locale.FRENCH);
+    // Format français: espace insécable pour milliers, virgule pour décimales (ex: 1 515,83)
+    private static final NumberFormat FRENCH_NUMBER_FORMAT = NumberFormat.getNumberInstance(Locale.FRENCH);
+    static {
+        FRENCH_NUMBER_FORMAT.setMinimumFractionDigits(2);
+        FRENCH_NUMBER_FORMAT.setMaximumFractionDigits(2);
+        FRENCH_NUMBER_FORMAT.setGroupingUsed(true);
+    }
+    private static final NumberFormat FRENCH_QUANTITY_FORMAT = NumberFormat.getNumberInstance(Locale.FRENCH);
+    static {
+        FRENCH_QUANTITY_FORMAT.setMinimumFractionDigits(2);
+        FRENCH_QUANTITY_FORMAT.setMaximumFractionDigits(2);
+        FRENCH_QUANTITY_FORMAT.setGroupingUsed(true);
+    }
     
-    // Format pour les quantités (entiers sans décimales)
-    private static String formatQuantity(Integer qty) {
-        if (qty == null) return "0";
-        return NUMBER_FORMAT.format(qty);
+    // Format pour les quantités (avec décimales possibles, format français)
+    private static String formatQuantity(Double qty) {
+        if (qty == null) return "0,00";
+        return FRENCH_QUANTITY_FORMAT.format(qty);
     }
     
     // Format pour les montants (avec 2 décimales et séparateur de milliers)
-    // Format américain: virgule pour milliers, point pour décimales (ex: 3,895.00)
+    // Format français: espace insécable pour milliers, virgule pour décimales (ex: 1 515,83)
     private static String formatAmount(Double amount) {
-        if (amount == null) return "0.00";
-        // Utiliser le format américain (virgule pour milliers, point pour décimales)
-        return new DecimalFormat("#,##0.00", new java.text.DecimalFormatSymbols(Locale.US)).format(amount);
+        if (amount == null) return "0,00";
+        // Utiliser le format français (espace insécable pour milliers, virgule pour décimales)
+        return FRENCH_NUMBER_FORMAT.format(amount);
     }
     
     public byte[] generateBC(BandeCommande bc) throws DocumentException, IOException {
@@ -327,19 +337,21 @@ public class PdfService {
         PdfPCell logoCell = createLogoCell(writer, 80f, 60f);
         headerTable.addCell(logoCell);
         
-        // Titre "BON DE COMMANDE N°"
+        // Titre "BON DE COMMANDEN°" avec numéro sur la même ligne
         PdfPCell titleCell = new PdfPCell();
         titleCell.setBorder(Rectangle.NO_BORDER);
-        Paragraph title = new Paragraph("BON DE COMMANDE N°", 
+        Paragraph title = new Paragraph();
+        // Texte "BON DE COMMANDEN°" en noir
+        Chunk titleChunk = new Chunk("BON DE COMMANDEN°", 
             FontFactory.getFont(FontFactory.HELVETICA_BOLD, 14));
+        title.add(titleChunk);
+        // Numéro en rouge directement après
+        String numeroBC = bc.getNumeroBC() != null ? bc.getNumeroBC() : "";
+        Chunk numeroChunk = new Chunk(" " + numeroBC, 
+            FontFactory.getFont(FontFactory.HELVETICA_BOLD, 14, RED));
+        title.add(numeroChunk);
         title.setAlignment(Element.ALIGN_LEFT);
         titleCell.addElement(title);
-        
-        // Numéro en rouge
-        Paragraph numero = new Paragraph(bc.getNumeroBC() != null ? bc.getNumeroBC() : "", 
-            FontFactory.getFont(FontFactory.HELVETICA_BOLD, 14, RED));
-        numero.setAlignment(Element.ALIGN_LEFT);
-        titleCell.addElement(numero);
         headerTable.addCell(titleCell);
         
         // Date à droite
@@ -365,16 +377,21 @@ public class PdfService {
         PdfPTable destTable = new PdfPTable(2);
         destTable.setWidthPercentage(100);
         destTable.setSpacingAfter(15);
+        destTable.setWidths(new float[]{2f, 5f});
         
+        // Cellule gauche avec fond bleu clair et bordure blanche
         PdfPCell labelCell = new PdfPCell(new Phrase("DESTINATAIRE :", 
             FontFactory.getFont(FontFactory.HELVETICA_BOLD, 10)));
         labelCell.setBackgroundColor(BLUE_LIGHT);
         labelCell.setPadding(8);
-        labelCell.setBorder(Rectangle.NO_BORDER);
+        labelCell.setBorder(Rectangle.BOX);
+        labelCell.setBorderColor(Color.WHITE);
         destTable.addCell(labelCell);
         
+        // Cellule droite avec bordure blanche et nom du fournisseur en rouge
         PdfPCell nameCell = new PdfPCell();
-        nameCell.setBorder(Rectangle.NO_BORDER);
+        nameCell.setBorder(Rectangle.BOX);
+        nameCell.setBorderColor(Color.WHITE);
         nameCell.setPadding(8);
         String supplierName = supplier != null ? supplier.getNom() : "";
         Paragraph name = new Paragraph(supplierName, 
@@ -418,13 +435,14 @@ public class PdfService {
                 addTableCell(table, ligne.getUnite() != null ? ligne.getUnite() : "", 
                     Element.ALIGN_CENTER);
                 
-                // Quantité (format entier sans décimales)
-                String qty = formatQuantity(ligne.getQuantiteAchetee());
+                // Quantité (format français avec décimales possibles)
+                Double qtyValue = ligne.getQuantiteAchetee() != null ? ligne.getQuantiteAchetee().doubleValue() : 0.0;
+                String qty = formatQuantity(qtyValue);
                 addTableCell(table, qty, Element.ALIGN_RIGHT);
                 
                 // PU HT (format avec 2 décimales)
                 String puHT = ligne.getPrixAchatUnitaireHT() != null ? 
-                    formatAmount(ligne.getPrixAchatUnitaireHT()) : "0.00";
+                    formatAmount(ligne.getPrixAchatUnitaireHT()) : "0,00";
                 addTableCell(table, puHT, Element.ALIGN_RIGHT);
                 
                 // Prix Total HT
@@ -467,7 +485,7 @@ public class PdfService {
         tvaLabel.setPadding(5);
         totalsTable.addCell(tvaLabel);
         
-        PdfPCell tvaRate = new PdfPCell(new Phrase(String.format("%.1f%%", tauxTVA), 
+        PdfPCell tvaRate = new PdfPCell(new Phrase(String.format("%.0f%%", tauxTVA), 
             FontFactory.getFont(FontFactory.HELVETICA_BOLD, 10, RED)));
         tvaRate.setBorder(Rectangle.NO_BORDER);
         tvaRate.setPadding(5);
@@ -560,9 +578,10 @@ public class PdfService {
         emptyCell.setBorder(Rectangle.NO_BORDER);
         headerTable.addCell(emptyCell);
         
-        // Client info box
+        // Client info box avec bordure noire
         PdfPCell clientCell = new PdfPCell();
         clientCell.setBorder(Rectangle.BOX);
+        clientCell.setBorderColor(Color.BLACK);
         clientCell.setPadding(8);
         clientCell.setBackgroundColor(Color.WHITE);
         
@@ -681,11 +700,13 @@ public class PdfService {
                 addTableCell(table, ligne.getUnite() != null ? ligne.getUnite() : "", 
                     Element.ALIGN_CENTER);
                 
-                String qty = formatQuantity(ligne.getQuantiteVendue());
+                // Quantité (format français avec décimales possibles)
+                Double qtyValue = ligne.getQuantiteVendue() != null ? ligne.getQuantiteVendue().doubleValue() : 0.0;
+                String qty = formatQuantity(qtyValue);
                 addTableCell(table, qty, Element.ALIGN_RIGHT);
                 
                 String puHT = ligne.getPrixVenteUnitaireHT() != null ? 
-                    formatAmount(ligne.getPrixVenteUnitaireHT()) : "0.00";
+                    formatAmount(ligne.getPrixVenteUnitaireHT()) : "0,00";
                 addTableCell(table, puHT, Element.ALIGN_RIGHT);
                 
                 double totalHT = (ligne.getQuantiteVendue() != null ? ligne.getQuantiteVendue() : 0) * 
@@ -904,11 +925,13 @@ public class PdfService {
                 addTableCell(table, ligne.getUnite() != null ? ligne.getUnite() : "", 
                     Element.ALIGN_CENTER);
                 
-                String qty = formatQuantity(ligne.getQuantiteAchetee());
+                // Quantité (format français avec décimales possibles)
+                Double qtyValue = ligne.getQuantiteAchetee() != null ? ligne.getQuantiteAchetee().doubleValue() : 0.0;
+                String qty = formatQuantity(qtyValue);
                 addTableCell(table, qty, Element.ALIGN_RIGHT);
                 
                 String puHT = ligne.getPrixAchatUnitaireHT() != null ? 
-                    formatAmount(ligne.getPrixAchatUnitaireHT()) : "0.00";
+                    formatAmount(ligne.getPrixAchatUnitaireHT()) : "0,00";
                 addTableCell(table, puHT, Element.ALIGN_RIGHT);
                 
                 double totalHT = (ligne.getQuantiteAchetee() != null ? ligne.getQuantiteAchetee() : 0) * 
