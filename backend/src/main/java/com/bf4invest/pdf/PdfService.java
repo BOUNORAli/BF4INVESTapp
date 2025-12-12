@@ -31,10 +31,11 @@ public class PdfService {
     private final SupplierRepository supplierRepository;
     private final BandeCommandeRepository bandeCommandeRepository;
     
-    // Couleurs utilisées
+    // Couleurs utilisées - ajustées pour correspondre aux images de référence
     private static final Color BLUE_DARK = new Color(30, 64, 124); // Bleu foncé pour logo
-    private static final Color BLUE_LIGHT = new Color(176, 224, 230); // Bleu clair pour les sections
-    private static final Color RED = new Color(220, 53, 69); // Rouge pour les éléments importants
+    private static final Color BLUE_LIGHT = new Color(200, 220, 240); // Bleu clair grisé pour les sections (comme référence)
+    private static final Color BLUE_HEADER = new Color(70, 130, 180); // Bleu moyen pour les headers de tableau
+    private static final Color RED = new Color(180, 0, 0); // Rouge foncé pour les éléments importants (comme référence)
     
     // Formatters
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy");
@@ -379,7 +380,7 @@ public class PdfService {
         destTable.setSpacingAfter(15);
         destTable.setWidths(new float[]{2f, 5f});
         
-        // Cellule gauche avec fond bleu clair et bordure blanche
+        // Cellule gauche avec fond bleu clair
         PdfPCell labelCell = new PdfPCell(new Phrase("DESTINATAIRE :", 
             FontFactory.getFont(FontFactory.HELVETICA_BOLD, 10)));
         labelCell.setBackgroundColor(BLUE_LIGHT);
@@ -388,14 +389,14 @@ public class PdfService {
         labelCell.setBorderColor(Color.WHITE);
         destTable.addCell(labelCell);
         
-        // Cellule droite avec bordure blanche et nom du fournisseur en rouge
+        // Cellule droite avec nom du fournisseur en rouge et souligné
         PdfPCell nameCell = new PdfPCell();
         nameCell.setBorder(Rectangle.BOX);
         nameCell.setBorderColor(Color.WHITE);
         nameCell.setPadding(8);
         String supplierName = supplier != null ? supplier.getNom() : "";
-        Paragraph name = new Paragraph(supplierName, 
-            FontFactory.getFont(FontFactory.HELVETICA_BOLD, 12, RED));
+        Font nameFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 12, Font.UNDERLINE, RED);
+        Paragraph name = new Paragraph(supplierName, nameFont);
         nameCell.addElement(name);
         destTable.addCell(nameCell);
         
@@ -408,15 +409,16 @@ public class PdfService {
         table.setWidths(new float[]{0.5f, 3f, 1f, 1.5f, 2f, 2.5f});
         table.setSpacingAfter(15);
         
-        // En-têtes avec fond bleu clair
-        String[] headers = {"N°", "Désignation", "Unité", "Quantité", "PU HT", "Prix Total HT"};
-        Font headerFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 9, Color.WHITE);
+        // En-têtes avec fond bleu clair et texte bleu foncé
+        String[] headers = {"N°", "Désignation", "Unité", "Quantité", "PU HT", "PrixTotalHT"};
+        Font headerFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 9, BLUE_HEADER);
         
         for (String header : headers) {
             PdfPCell cell = new PdfPCell(new Phrase(header, headerFont));
             cell.setBackgroundColor(BLUE_LIGHT);
             cell.setPadding(6);
             cell.setHorizontalAlignment(Element.ALIGN_CENTER);
+            cell.setBorderColor(Color.WHITE);
             table.addCell(cell);
         }
         
@@ -508,31 +510,32 @@ public class PdfService {
         PdfPTable infoTable = new PdfPTable(2);
         infoTable.setWidthPercentage(100);
         infoTable.setSpacingAfter(30);
+        infoTable.setWidths(new float[]{3f, 4f});
         
         Font labelFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 9);
         Font valueFont = FontFactory.getFont(FontFactory.HELVETICA, 9);
         Font valueFontRed = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 9, RED);
         
         // LIEU DE LIVRAISON
-        addInfoRow(infoTable, "LIEU DE LIVRAISON:", 
+        addInfoRowWithBackground(infoTable, "LIEU DE LIVRAISON:", 
             client != null && client.getAdresse() != null ? client.getAdresse() : "", 
-            labelFont, valueFont);
+            labelFont, valueFontRed);
         
         // CONDITION DE LIVRAISON
-        addInfoRow(infoTable, "CONDITION DE LIVRAISON:", "LIVRAISON IMMEDIATE", 
+        addInfoRowWithBackground(infoTable, "CONDITION DE LIVRAISON:", "LIVRAISON IMMEDIATE", 
             labelFont, valueFontRed);
         
         // RESPONSABLE A CONTACTER
         String responsable = client != null && client.getContacts() != null && !client.getContacts().isEmpty() ?
             client.getContacts().get(0).getNom() : "N/A";
-        addInfoRow(infoTable, "RESPONSABLE A CONTACTER A LA LIVRAISON:", responsable, 
+        addInfoRowWithBackground(infoTable, "RESPONSABLE A CONTACTER A LA\nLIVRAISON", responsable, 
             labelFont, valueFontRed);
         
         // MODE PAIEMENT (récupérer depuis la BC ou utiliser une valeur par défaut)
         String modePaiement = bc.getModePaiement() != null && !bc.getModePaiement().isEmpty() 
             ? bc.getModePaiement() 
             : "120J"; // Valeur par défaut
-        addInfoRow(infoTable, "MODE PAIEMENT:", modePaiement, labelFont, valueFontRed);
+        addInfoRowWithBackground(infoTable, "MODE PAIEMENT :", modePaiement, labelFont, valueFontRed);
         
         document.add(infoTable);
     }
@@ -678,15 +681,16 @@ public class PdfService {
         table.setWidths(new float[]{0.5f, 3f, 1f, 1.5f, 1.5f, 2f});
         table.setSpacingAfter(15);
         
-        // En-têtes
+        // En-têtes avec fond bleu clair et texte bleu foncé
         String[] headers = {"N° ARTICLE", "DESIGNATIONS ET PRESTATIONS", "UNITE", "QUANTITE", "PU HT", "Prix Total HT"};
-        Font headerFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 9, Color.WHITE);
+        Font headerFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 9, BLUE_HEADER);
         
         for (String header : headers) {
             PdfPCell cell = new PdfPCell(new Phrase(header, headerFont));
             cell.setBackgroundColor(BLUE_LIGHT);
             cell.setPadding(6);
             cell.setHorizontalAlignment(Element.ALIGN_CENTER);
+            cell.setBorderColor(Color.WHITE);
             table.addCell(cell);
         }
         
@@ -733,13 +737,13 @@ public class PdfService {
         addTotalsRow(totalsTable, "TOTAL HT", formatAmount(totalHT), false);
         
         // TVA A
-        PdfPCell tvaLabel = new PdfPCell(new Phrase("TVAA", 
+        PdfPCell tvaLabel = new PdfPCell(new Phrase("TVA A", 
             FontFactory.getFont(FontFactory.HELVETICA_BOLD, 10)));
         tvaLabel.setBorder(Rectangle.NO_BORDER);
         tvaLabel.setPadding(5);
         totalsTable.addCell(tvaLabel);
         
-        PdfPCell tvaRate = new PdfPCell(new Phrase(String.format("%.1f%%", tauxTVA), 
+        PdfPCell tvaRate = new PdfPCell(new Phrase(String.format("%.0f%%", tauxTVA), 
             FontFactory.getFont(FontFactory.HELVETICA_BOLD, 10)));
         tvaRate.setBorder(Rectangle.NO_BORDER);
         tvaRate.setPadding(5);
@@ -903,15 +907,16 @@ public class PdfService {
         table.setWidths(new float[]{0.5f, 3f, 1f, 1.5f, 1.5f, 2f});
         table.setSpacingAfter(15);
         
-        // En-têtes
+        // En-têtes avec fond bleu clair et texte bleu foncé
         String[] headers = {"N° ARTICLE", "DESIGNATIONS", "UNITE", "QUANTITE", "PU HT", "Prix Total HT"};
-        Font headerFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 9, Color.WHITE);
+        Font headerFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 9, BLUE_HEADER);
         
         for (String header : headers) {
             PdfPCell cell = new PdfPCell(new Phrase(header, headerFont));
             cell.setBackgroundColor(BLUE_LIGHT);
             cell.setPadding(6);
             cell.setHorizontalAlignment(Element.ALIGN_CENTER);
+            cell.setBorderColor(Color.WHITE);
             table.addCell(cell);
         }
         
@@ -958,13 +963,13 @@ public class PdfService {
         addTotalsRow(totalsTable, "TOTAL HT", formatAmount(totalHT), false);
         
         // TVA A
-        PdfPCell tvaLabel = new PdfPCell(new Phrase("TVAA", 
+        PdfPCell tvaLabel = new PdfPCell(new Phrase("TVA A", 
             FontFactory.getFont(FontFactory.HELVETICA_BOLD, 10)));
         tvaLabel.setBorder(Rectangle.NO_BORDER);
         tvaLabel.setPadding(5);
         totalsTable.addCell(tvaLabel);
         
-        PdfPCell tvaRate = new PdfPCell(new Phrase(String.format("%.1f%%", tauxTVA), 
+        PdfPCell tvaRate = new PdfPCell(new Phrase(String.format("%.0f%%", tauxTVA), 
             FontFactory.getFont(FontFactory.HELVETICA_BOLD, 10)));
         tvaRate.setBorder(Rectangle.NO_BORDER);
         tvaRate.setPadding(5);
@@ -1026,6 +1031,22 @@ public class PdfService {
         
         PdfPCell valueCell = new PdfPCell(new Phrase(value, valueFont));
         valueCell.setBorder(Rectangle.NO_BORDER);
+        valueCell.setHorizontalAlignment(Element.ALIGN_LEFT);
+        valueCell.setPadding(5);
+        table.addCell(valueCell);
+    }
+    
+    private void addInfoRowWithBackground(PdfPTable table, String label, String value, Font labelFont, Font valueFont) {
+        PdfPCell labelCell = new PdfPCell(new Phrase(label, labelFont));
+        labelCell.setBackgroundColor(BLUE_LIGHT);
+        labelCell.setBorder(Rectangle.BOX);
+        labelCell.setBorderColor(Color.WHITE);
+        labelCell.setPadding(5);
+        table.addCell(labelCell);
+        
+        PdfPCell valueCell = new PdfPCell(new Phrase(value, valueFont));
+        valueCell.setBorder(Rectangle.BOX);
+        valueCell.setBorderColor(Color.WHITE);
         valueCell.setHorizontalAlignment(Element.ALIGN_LEFT);
         valueCell.setPadding(5);
         table.addCell(valueCell);
