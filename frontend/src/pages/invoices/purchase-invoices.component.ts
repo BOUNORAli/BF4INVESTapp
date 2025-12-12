@@ -57,7 +57,9 @@ import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, FormsModule } 
            </div>
         </div>
 
-        <table class="w-full text-sm text-left text-slate-600 min-w-[800px]">
+        <!-- Table wrapper with horizontal scroll -->
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm text-left text-slate-600 min-w-[800px]">
           <thead class="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-200">
             <tr>
               <th class="px-6 py-4 font-semibold">Numéro</th>
@@ -129,6 +131,7 @@ import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, FormsModule } 
               }
           </tbody>
         </table>
+        </div>
       </div>
 
       <!-- SLIDE OVER FORM -->
