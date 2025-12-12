@@ -2,13 +2,23 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpHeaders, HttpParams, HttpResponse } from '@angular/common/http';
 import { Observable, throwError } from 'rxjs';
 import { catchError, map } from 'rxjs/operators';
-import { API_BASE_URL } from '../config/environment';
+import { API_BASE_URL, getApiBaseUrlDynamic } from '../config/environment';
 
 @Injectable({
   providedIn: 'root'
 })
 export class ApiService {
   private http = inject(HttpClient);
+
+  private getApiUrl(): string {
+    // Utiliser la fonction dynamique pour récupérer l'URL (au cas où window.__API_URL__ serait défini)
+    const url = getApiBaseUrlDynamic();
+    // Fallback si l'URL contient encore "votre-backend"
+    if (url.includes('votre-backend')) {
+      return 'https://bf4investapp-production.up.railway.app/api';
+    }
+    return url;
+  }
 
   private getHeaders(): HttpHeaders {
     const token = localStorage.getItem('bf4_token');
@@ -33,7 +43,7 @@ export class ApiService {
       });
     }
 
-    return this.http.get<T>(`${API_BASE_URL}${endpoint}`, {
+    return this.http.get<T>(`${this.getApiUrl()}${endpoint}`, {
       headers: this.getHeaders(),
       params: httpParams
     }).pipe(
@@ -42,7 +52,7 @@ export class ApiService {
   }
 
   post<T>(endpoint: string, body: any): Observable<T> {
-    return this.http.post<T>(`${API_BASE_URL}${endpoint}`, body, {
+    return this.http.post<T>(`${this.getApiUrl()}${endpoint}`, body, {
       headers: this.getHeaders()
     }).pipe(
       catchError(this.handleError)
@@ -50,7 +60,7 @@ export class ApiService {
   }
 
   put<T>(endpoint: string, body: any): Observable<T> {
-    return this.http.put<T>(`${API_BASE_URL}${endpoint}`, body, {
+    return this.http.put<T>(`${this.getApiUrl()}${endpoint}`, body, {
       headers: this.getHeaders()
     }).pipe(
       catchError(this.handleError)
@@ -58,7 +68,7 @@ export class ApiService {
   }
 
   delete(endpoint: string): Observable<void> {
-    return this.http.delete<void>(`${API_BASE_URL}${endpoint}`, {
+    return this.http.delete<void>(`${this.getApiUrl()}${endpoint}`, {
       headers: this.getHeaders()
     }).pipe(
       catchError(this.handleError)
@@ -76,7 +86,7 @@ export class ApiService {
     }
     // Don't set Content-Type - browser will set it automatically with boundary for FormData
 
-    return this.http.post(`${API_BASE_URL}${endpoint}`, formData, {
+    return this.http.post(`${this.getApiUrl()}${endpoint}`, formData, {
       headers: headers
     }).pipe(
       catchError(this.handleError)
@@ -90,7 +100,7 @@ export class ApiService {
       headers = headers.set('Authorization', `Bearer ${token}`);
     }
 
-    return this.http.get(`${API_BASE_URL}${endpoint}`, {
+    return this.http.get(`${this.getApiUrl()}${endpoint}`, {
       headers: headers,
       responseType: 'blob'
     }).pipe(
