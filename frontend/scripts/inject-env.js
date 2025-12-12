@@ -1,8 +1,12 @@
 // Script pour injecter les variables d'environnement dans index.html après le build
 // Exécuté après ng build sur Vercel
 
-const fs = require('fs');
-const path = require('path');
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const distPath = path.join(__dirname, '..', 'dist');
 const indexPath = path.join(distPath, 'index.html');
@@ -14,7 +18,7 @@ if (fs.existsSync(indexPath)) {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || 
                  process.env.VITE_API_URL || 
                  process.env.API_URL ||
-                 'https://votre-backend.railway.app/api';
+                 'https://bf4investapp-production.up.railway.app/api';
   
   // Injecter dans le script window.__API_URL__ (remplacer la valeur par défaut)
   const scriptTag = `  <script>
