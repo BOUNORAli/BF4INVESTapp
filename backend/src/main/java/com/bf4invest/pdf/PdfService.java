@@ -38,8 +38,23 @@ public class PdfService {
     
     // Formatters
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+    // Format avec virgule pour milliers et point pour décimales (comme dans l'exemple: 3,895.00)
     private static final DecimalFormat DECIMAL_FORMAT = new DecimalFormat("#,##0.00");
     private static final NumberFormat NUMBER_FORMAT = NumberFormat.getNumberInstance(Locale.FRENCH);
+    
+    // Format pour les quantités (entiers sans décimales)
+    private static String formatQuantity(Integer qty) {
+        if (qty == null) return "0";
+        return NUMBER_FORMAT.format(qty);
+    }
+    
+    // Format pour les montants (avec 2 décimales et séparateur de milliers)
+    // Format américain: virgule pour milliers, point pour décimales (ex: 3,895.00)
+    private static String formatAmount(Double amount) {
+        if (amount == null) return "0.00";
+        // Utiliser le format américain (virgule pour milliers, point pour décimales)
+        return new DecimalFormat("#,##0.00", new java.text.DecimalFormatSymbols(Locale.US)).format(amount);
+    }
     
     public byte[] generateBC(BandeCommande bc) throws DocumentException, IOException {
         Document document = new Document(PageSize.A4, 40f, 40f, 60f, 60f);
@@ -403,20 +418,19 @@ public class PdfService {
                 addTableCell(table, ligne.getUnite() != null ? ligne.getUnite() : "", 
                     Element.ALIGN_CENTER);
                 
-                // Quantité (format français avec virgule)
-                String qty = ligne.getQuantiteAchetee() != null ? 
-                    NUMBER_FORMAT.format(ligne.getQuantiteAchetee()) : "0";
+                // Quantité (format entier sans décimales)
+                String qty = formatQuantity(ligne.getQuantiteAchetee());
                 addTableCell(table, qty, Element.ALIGN_RIGHT);
                 
-                // PU HT
+                // PU HT (format avec 2 décimales)
                 String puHT = ligne.getPrixAchatUnitaireHT() != null ? 
-                    DECIMAL_FORMAT.format(ligne.getPrixAchatUnitaireHT()) : "0,00";
+                    formatAmount(ligne.getPrixAchatUnitaireHT()) : "0.00";
                 addTableCell(table, puHT, Element.ALIGN_RIGHT);
                 
                 // Prix Total HT
                 double totalHT = (ligne.getQuantiteAchetee() != null ? ligne.getQuantiteAchetee() : 0) * 
                     (ligne.getPrixAchatUnitaireHT() != null ? ligne.getPrixAchatUnitaireHT() : 0);
-                addTableCell(table, DECIMAL_FORMAT.format(totalHT), Element.ALIGN_RIGHT);
+                addTableCell(table, formatAmount(totalHT), Element.ALIGN_RIGHT);
             }
         }
         
@@ -444,7 +458,7 @@ public class PdfService {
         double totalTTC = totalHT + montantTVA;
         
         // TOTAL HT
-        addTotalsRow(totalsTable, "TOTAL HT", DECIMAL_FORMAT.format(totalHT), false);
+        addTotalsRow(totalsTable, "TOTAL HT", formatAmount(totalHT), false);
         
         // TVA A
         PdfPCell tvaLabel = new PdfPCell(new Phrase("TVA A", 
@@ -453,13 +467,13 @@ public class PdfService {
         tvaLabel.setPadding(5);
         totalsTable.addCell(tvaLabel);
         
-        PdfPCell tvaRate = new PdfPCell(new Phrase(tauxTVA + "%", 
+        PdfPCell tvaRate = new PdfPCell(new Phrase(String.format("%.1f%%", tauxTVA), 
             FontFactory.getFont(FontFactory.HELVETICA_BOLD, 10, RED)));
         tvaRate.setBorder(Rectangle.NO_BORDER);
         tvaRate.setPadding(5);
         totalsTable.addCell(tvaRate);
         
-        PdfPCell tvaAmount = new PdfPCell(new Phrase(DECIMAL_FORMAT.format(montantTVA), 
+        PdfPCell tvaAmount = new PdfPCell(new Phrase(formatAmount(montantTVA), 
             FontFactory.getFont(FontFactory.HELVETICA_BOLD, 10)));
         tvaAmount.setBorder(Rectangle.NO_BORDER);
         tvaAmount.setHorizontalAlignment(Element.ALIGN_RIGHT);
@@ -467,7 +481,7 @@ public class PdfService {
         totalsTable.addCell(tvaAmount);
         
         // TOTAL TTC
-        addTotalsRow(totalsTable, "TOTAL TTC", DECIMAL_FORMAT.format(totalTTC), true);
+        addTotalsRow(totalsTable, "TOTAL TTC", formatAmount(totalTTC), true);
         
         document.add(totalsTable);
     }
@@ -667,17 +681,16 @@ public class PdfService {
                 addTableCell(table, ligne.getUnite() != null ? ligne.getUnite() : "", 
                     Element.ALIGN_CENTER);
                 
-                String qty = ligne.getQuantiteVendue() != null ? 
-                    NUMBER_FORMAT.format(ligne.getQuantiteVendue()) : "0";
+                String qty = formatQuantity(ligne.getQuantiteVendue());
                 addTableCell(table, qty, Element.ALIGN_RIGHT);
                 
                 String puHT = ligne.getPrixVenteUnitaireHT() != null ? 
-                    DECIMAL_FORMAT.format(ligne.getPrixVenteUnitaireHT()) : "0,00";
+                    formatAmount(ligne.getPrixVenteUnitaireHT()) : "0.00";
                 addTableCell(table, puHT, Element.ALIGN_RIGHT);
                 
                 double totalHT = (ligne.getQuantiteVendue() != null ? ligne.getQuantiteVendue() : 0) * 
                     (ligne.getPrixVenteUnitaireHT() != null ? ligne.getPrixVenteUnitaireHT() : 0);
-                addTableCell(table, DECIMAL_FORMAT.format(totalHT), Element.ALIGN_RIGHT);
+                addTableCell(table, formatAmount(totalHT), Element.ALIGN_RIGHT);
             }
         }
         
@@ -696,7 +709,7 @@ public class PdfService {
         double montantTVA = facture.getTotalTVA() != null ? facture.getTotalTVA() : (totalHT * (tauxTVA / 100));
         double totalTTC = facture.getTotalTTC() != null ? facture.getTotalTTC() : (totalHT + montantTVA);
         
-        addTotalsRow(totalsTable, "TOTAL HT", DECIMAL_FORMAT.format(totalHT), false);
+        addTotalsRow(totalsTable, "TOTAL HT", formatAmount(totalHT), false);
         
         // TVA A
         PdfPCell tvaLabel = new PdfPCell(new Phrase("TVAA", 
@@ -705,20 +718,20 @@ public class PdfService {
         tvaLabel.setPadding(5);
         totalsTable.addCell(tvaLabel);
         
-        PdfPCell tvaRate = new PdfPCell(new Phrase(tauxTVA + "%", 
+        PdfPCell tvaRate = new PdfPCell(new Phrase(String.format("%.1f%%", tauxTVA), 
             FontFactory.getFont(FontFactory.HELVETICA_BOLD, 10)));
         tvaRate.setBorder(Rectangle.NO_BORDER);
         tvaRate.setPadding(5);
         totalsTable.addCell(tvaRate);
         
-        PdfPCell tvaAmount = new PdfPCell(new Phrase(DECIMAL_FORMAT.format(montantTVA), 
+        PdfPCell tvaAmount = new PdfPCell(new Phrase(formatAmount(montantTVA), 
             FontFactory.getFont(FontFactory.HELVETICA_BOLD, 10)));
         tvaAmount.setBorder(Rectangle.NO_BORDER);
         tvaAmount.setHorizontalAlignment(Element.ALIGN_RIGHT);
         tvaAmount.setPadding(5);
         totalsTable.addCell(tvaAmount);
         
-        addTotalsRow(totalsTable, "TOTAL TTC", DECIMAL_FORMAT.format(totalTTC), true);
+        addTotalsRow(totalsTable, "TOTAL TTC", formatAmount(totalTTC), true);
         
         document.add(totalsTable);
     }
@@ -891,17 +904,16 @@ public class PdfService {
                 addTableCell(table, ligne.getUnite() != null ? ligne.getUnite() : "", 
                     Element.ALIGN_CENTER);
                 
-                String qty = ligne.getQuantiteAchetee() != null ? 
-                    NUMBER_FORMAT.format(ligne.getQuantiteAchetee()) : "0";
+                String qty = formatQuantity(ligne.getQuantiteAchetee());
                 addTableCell(table, qty, Element.ALIGN_RIGHT);
                 
                 String puHT = ligne.getPrixAchatUnitaireHT() != null ? 
-                    DECIMAL_FORMAT.format(ligne.getPrixAchatUnitaireHT()) : "0,00";
+                    formatAmount(ligne.getPrixAchatUnitaireHT()) : "0.00";
                 addTableCell(table, puHT, Element.ALIGN_RIGHT);
                 
                 double totalHT = (ligne.getQuantiteAchetee() != null ? ligne.getQuantiteAchetee() : 0) * 
                     (ligne.getPrixAchatUnitaireHT() != null ? ligne.getPrixAchatUnitaireHT() : 0);
-                addTableCell(table, DECIMAL_FORMAT.format(totalHT), Element.ALIGN_RIGHT);
+                addTableCell(table, formatAmount(totalHT), Element.ALIGN_RIGHT);
             }
         }
         
@@ -920,7 +932,7 @@ public class PdfService {
         double montantTVA = facture.getTotalTVA() != null ? facture.getTotalTVA() : (totalHT * (tauxTVA / 100));
         double totalTTC = facture.getTotalTTC() != null ? facture.getTotalTTC() : (totalHT + montantTVA);
         
-        addTotalsRow(totalsTable, "TOTAL HT", DECIMAL_FORMAT.format(totalHT), false);
+        addTotalsRow(totalsTable, "TOTAL HT", formatAmount(totalHT), false);
         
         // TVA A
         PdfPCell tvaLabel = new PdfPCell(new Phrase("TVAA", 
@@ -929,20 +941,20 @@ public class PdfService {
         tvaLabel.setPadding(5);
         totalsTable.addCell(tvaLabel);
         
-        PdfPCell tvaRate = new PdfPCell(new Phrase(tauxTVA + "%", 
+        PdfPCell tvaRate = new PdfPCell(new Phrase(String.format("%.1f%%", tauxTVA), 
             FontFactory.getFont(FontFactory.HELVETICA_BOLD, 10)));
         tvaRate.setBorder(Rectangle.NO_BORDER);
         tvaRate.setPadding(5);
         totalsTable.addCell(tvaRate);
         
-        PdfPCell tvaAmount = new PdfPCell(new Phrase(DECIMAL_FORMAT.format(montantTVA), 
+        PdfPCell tvaAmount = new PdfPCell(new Phrase(formatAmount(montantTVA), 
             FontFactory.getFont(FontFactory.HELVETICA_BOLD, 10)));
         tvaAmount.setBorder(Rectangle.NO_BORDER);
         tvaAmount.setHorizontalAlignment(Element.ALIGN_RIGHT);
         tvaAmount.setPadding(5);
         totalsTable.addCell(tvaAmount);
         
-        addTotalsRow(totalsTable, "TOTAL TTC", DECIMAL_FORMAT.format(totalTTC), true);
+        addTotalsRow(totalsTable, "TOTAL TTC", formatAmount(totalTTC), true);
         
         document.add(totalsTable);
     }
@@ -1457,7 +1469,7 @@ public class PdfService {
     }
     
     private String formatCurrency(double amount) {
-        return DECIMAL_FORMAT.format(amount) + " MAD";
+        return formatAmount(amount) + " MAD";
     }
     
     private String formatMonth(String monthStr) {

@@ -978,20 +978,72 @@ export class StoreService {
   }
 
   // --- PDF EXPORT ---
+  
+  // Helper method pour gérer le téléchargement/ouverture des PDFs
+  private async handlePDFDownload(blob: Blob, fileName: string): Promise<void> {
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    
+    if (isMobile) {
+      // Sur mobile : essayer d'abord l'API Web Share si disponible
+      if (navigator.share && navigator.canShare) {
+        try {
+          const file = new File([blob], fileName, { type: 'application/pdf' });
+          if (navigator.canShare({ files: [file] })) {
+            await navigator.share({
+              files: [file],
+              title: fileName,
+              text: fileName
+            });
+            return; // Succès, on sort
+          }
+        } catch (error: any) {
+          // Si l'utilisateur annule le partage ou erreur, continuer avec l'ouverture
+          if (error.name !== 'AbortError') {
+            console.log('Web Share API not available or user cancelled, falling back to window.open');
+          }
+        }
+      }
+      
+      // Fallback : ouvrir dans une nouvelle fenêtre
+      const url = window.URL.createObjectURL(blob);
+      const newWindow = window.open(url, '_blank');
+      if (newWindow) {
+        // Révocuer l'URL après un court délai
+        setTimeout(() => {
+          window.URL.revokeObjectURL(url);
+        }, 1000);
+      } else {
+        // Si popup bloquée, fallback sur téléchargement
+        this.forceDownload(url, fileName);
+        setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+      }
+    } else {
+      // Sur desktop : télécharger normalement
+      const url = window.URL.createObjectURL(blob);
+      this.forceDownload(url, fileName);
+      setTimeout(() => window.URL.revokeObjectURL(url), 100);
+    }
+  }
+  
+  // Force le téléchargement avec un nom de fichier propre
+  private forceDownload(url: string, fileName: string): void {
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+
   async downloadBCPDF(bcId: string): Promise<void> {
     try {
       this.showToast('Génération du PDF en cours...', 'info');
       const blob = await this.api.downloadFile(`/pdf/bandes-commandes/${bcId}`).toPromise();
       if (blob) {
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `BC-${this.getBCNumber(bcId)}.pdf`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
-        this.showToast('PDF téléchargé avec succès', 'success');
+        const fileName = `BC-${this.getBCNumber(bcId)}.pdf`;
+        await this.handlePDFDownload(blob, fileName);
+        this.showToast('PDF généré avec succès', 'success');
         this.addNotification({
           title: 'Export PDF',
           message: `BC ${this.getBCNumber(bcId)} exportée en PDF.`,
@@ -1011,15 +1063,9 @@ export class StoreService {
       const blob = await this.api.downloadFile(`/pdf/factures-ventes/${factureId}`).toPromise();
       if (blob) {
         const invoice = this.invoices().find(i => i.id === factureId);
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `FV-${invoice?.number || factureId}.pdf`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
-        this.showToast('PDF téléchargé avec succès', 'success');
+        const fileName = `FV-${invoice?.number || factureId}.pdf`;
+        await this.handlePDFDownload(blob, fileName);
+        this.showToast('PDF généré avec succès', 'success');
       }
     } catch (error) {
       console.error('Error downloading Facture Vente PDF:', error);
@@ -1034,15 +1080,9 @@ export class StoreService {
       const blob = await this.api.downloadFile(`/pdf/factures-achats/${factureId}`).toPromise();
       if (blob) {
         const invoice = this.invoices().find(i => i.id === factureId);
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `FA-${invoice?.number || factureId}.pdf`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
-        this.showToast('PDF téléchargé avec succès', 'success');
+        const fileName = `FA-${invoice?.number || factureId}.pdf`;
+        await this.handlePDFDownload(blob, fileName);
+        this.showToast('PDF généré avec succès', 'success');
       }
     } catch (error) {
       console.error('Error downloading Facture Achat PDF:', error);
@@ -1174,20 +1214,11 @@ export class StoreService {
       const blob = await this.api.downloadFile(url).toPromise();
       
       if (blob) {
-        const urlObj = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = urlObj;
-        
-        // Nom du fichier avec la date
         const today = new Date().toISOString().split('T')[0];
-        link.download = `Rapport_Activite_${today}.pdf`;
+        const fileName = `Rapport_Activite_${today}.pdf`;
+        await this.handlePDFDownload(blob, fileName);
         
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(urlObj);
-        
-        this.showToast('Rapport téléchargé avec succès', 'success');
+        this.showToast('Rapport généré avec succès', 'success');
         this.addNotification({ 
           title: 'Rapport d\'Activité', 
           message: 'Le rapport PDF a été généré et téléchargé.', 

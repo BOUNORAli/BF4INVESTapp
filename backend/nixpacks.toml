@@ -1,0 +1,12 @@
+# Configuration Nixpacks pour Railway
+# Nixpacks détectera automatiquement Java/Maven
+
+[phases.setup]
+nixPkgs = ["maven", "jdk17"]
+
+[phases.build]
+cmds = ["mvn clean package -DskipTests"]
+
+[start]
+cmd = "java -jar target/bf4-invest-backend-1.0.0.jar"
+
