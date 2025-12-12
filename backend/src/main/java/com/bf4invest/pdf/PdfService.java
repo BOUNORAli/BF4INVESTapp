@@ -163,7 +163,7 @@ public class PdfService {
      */
     private PdfPCell createLogoCell(PdfWriter writer, float width, float height) throws DocumentException, IOException {
         PdfPCell logoCell = new PdfPCell();
-        logoCell.setBackgroundColor(new Color(0, 0, 0)); // Fond noir
+        logoCell.setBackgroundColor(Color.WHITE); // Fond blanc au lieu de noir
         logoCell.setFixedHeight(height);
         logoCell.setBorder(Rectangle.NO_BORDER);
         logoCell.setPadding(0); // Pas de padding pour que l'image remplisse toute la cellule
