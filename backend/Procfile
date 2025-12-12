@@ -1,3 +1,2 @@
-# Railway utilise Dockerfile, ce fichier n'est pas utilisé
-# web: java -jar app.jar
+web: bash start.sh
 

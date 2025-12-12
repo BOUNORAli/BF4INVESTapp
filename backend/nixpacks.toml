@@ -1,12 +1,13 @@
-# Railway utilise Dockerfile, ce fichier n'est pas utilisé
-# Si Railway ne détecte pas Dockerfile, décommentez les lignes ci-dessous :
-#
-# [phases.setup]
-# nixPkgs = ["maven", "jdk17"]
-#
-# [phases.build]
-# cmds = ["mvn clean package -DskipTests"]
-#
-# [start]
-# cmd = "java -jar app.jar"
+# Configuration Nixpacks pour Railway
+# Railway utilisera Nixpacks pour builder et déployer
+
+[phases.setup]
+nixPkgs = ["maven", "jdk17"]
+
+[phases.build]
+cmds = ["mvn clean package -DskipTests"]
+
+[start]
+# Utiliser le script start.sh qui trouve automatiquement le JAR
+cmd = "bash start.sh"
 
