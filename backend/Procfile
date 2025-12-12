@@ -1,2 +1,2 @@
-web: bash start.sh
+web: java -jar target/bf4-invest-backend-1.0.0.jar
 

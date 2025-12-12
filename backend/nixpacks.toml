@@ -8,6 +8,7 @@ nixPkgs = ["maven", "jdk17"]
 cmds = ["mvn clean package -DskipTests"]
 
 [start]
-# Utiliser le script start.sh qui trouve automatiquement le JAR
-cmd = "bash start.sh"
+# Spring Boot génère le JAR avec le nom: artifactId-version.jar
+# Dans notre cas: bf4-invest-backend-1.0.0.jar
+cmd = "java -jar target/bf4-invest-backend-1.0.0.jar"
 
