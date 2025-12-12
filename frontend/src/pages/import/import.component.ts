@@ -332,13 +332,6 @@ export class ImportComponent implements OnInit {
       this.isImporting.set(false);
       this.store.showToast('Erreur lors de l\'import: ' + (error.message || 'Erreur inconnue'), 'error');
       
-      const errorLog: ImportLog = {
-        id: Date.now().toString(),
-        name: file.name,
-        details: error.message || 'Erreur lors de l\'import',
-        success: false,
-        time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
-      };
       // Reload import history from backend (will include error if backend logged it)
       await this.loadImportHistory();
     }
