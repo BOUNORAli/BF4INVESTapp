@@ -8,5 +8,6 @@ nixPkgs = ["maven", "jdk17"]
 cmds = ["mvn clean package -DskipTests"]
 
 [start]
-cmd = "java -jar target/bf4-invest-backend-1.0.0.jar"
+# Utiliser find pour localiser le JAR exécutable généré par Spring Boot
+cmd = "java -jar $(find target -name '*.jar' -not -name '*-sources.jar' -not -name '*-original.jar' | head -1)"
 
