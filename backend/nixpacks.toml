@@ -1,13 +1,12 @@
-# Configuration Nixpacks pour Railway
-# Nixpacks détectera automatiquement Java/Maven
-
-[phases.setup]
-nixPkgs = ["maven", "jdk17"]
-
-[phases.build]
-cmds = ["mvn clean package -DskipTests"]
-
-[start]
-# Utiliser find pour localiser le JAR exécutable généré par Spring Boot
-cmd = "java -jar $(find target -name '*.jar' -not -name '*-sources.jar' -not -name '*-original.jar' | head -1)"
+# Railway utilise Dockerfile, ce fichier n'est pas utilisé
+# Si Railway ne détecte pas Dockerfile, décommentez les lignes ci-dessous :
+#
+# [phases.setup]
+# nixPkgs = ["maven", "jdk17"]
+#
+# [phases.build]
+# cmds = ["mvn clean package -DskipTests"]
+#
+# [start]
+# cmd = "java -jar app.jar"
 

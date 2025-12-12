@@ -1,2 +1,3 @@
-web: java -jar target/bf4-invest-backend-1.0.0.jar
+# Railway utilise Dockerfile, ce fichier n'est pas utilisé
+# web: java -jar app.jar
 
