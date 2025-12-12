@@ -1,0 +1,37 @@
+# Backend
+backend/target/
+backend/.mvn/
+backend/.idea/
+backend/*.iml
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.angular/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+
+# Logs
+*.log
+
+# Docker
+*.pid
+*.seed
+*.pid.lock
+
+
+
+

@@ -1,0 +1,667 @@
+import { Component, inject, computed, signal, OnInit } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { StoreService, Invoice, BC } from '../../services/store.service';
+import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
+
+@Component({
+  selector: 'app-sales-invoices',
+  standalone: true,
+  imports: [CommonModule, RouterLink, ReactiveFormsModule, FormsModule],
+  template: `
+    <div class="space-y-8 fade-in-up pb-10 relative">
+      
+      <!-- Header Section -->
+      <div class="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 border-b border-slate-200/60 pb-6">
+        <div>
+           <h1 class="text-2xl md:text-3xl font-bold text-slate-800 font-display">Factures Vente</h1>
+           <p class="text-slate-500 mt-2 text-sm">Suivi des encaissements clients et de la trésorerie.</p>
+        </div>
+        <div class="flex gap-3 w-full md:w-auto">
+           <button class="flex-1 md:flex-none px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-lg text-sm font-medium hover:bg-slate-50 hover:text-slate-900 transition shadow-sm text-center">
+             Relances ({{ pendingSalesCount() }})
+           </button>
+           <button (click)="openForm()" class="flex-1 md:flex-none px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-lg shadow-blue-600/20 font-medium transition flex items-center justify-center gap-2">
+             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+             Créer Facture
+           </button>
+        </div>
+      </div>
+
+      <!-- KPI Grid -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <!-- Total Encaissement -->
+        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 hover-card relative overflow-hidden group">
+          <div class="absolute -right-6 -top-6 w-24 h-24 bg-blue-50 rounded-full group-hover:scale-110 transition-transform duration-500"></div>
+          <div class="relative z-10">
+            <div class="text-xs font-bold text-blue-600 uppercase tracking-wider mb-1">Chiffre d'affaires facturé</div>
+            <div class="text-3xl font-extrabold text-slate-800 break-words">{{ formatLargeNumber(totalSales()) }}</div>
+            @if (caGrowthPercent() !== null) {
+              <div class="mt-3 flex items-center gap-2 text-xs font-medium w-fit px-2 py-1 rounded-full"
+                   [class.text-emerald-600]="caGrowthPercent()! >= 0"
+                   [class.bg-emerald-50]="caGrowthPercent()! >= 0"
+                   [class.text-red-600]="caGrowthPercent()! < 0"
+                   [class.bg-red-50]="caGrowthPercent()! < 0">
+                @if (caGrowthPercent()! >= 0) {
+                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>
+                } @else {
+                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6"></path></svg>
+                }
+                {{ caGrowthPercent()! >= 0 ? '+' : '' }}{{ caGrowthPercent()!.toFixed(1) }}% ce mois
+              </div>
+            }
+          </div>
+        </div>
+
+        <!-- En attente -->
+        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 hover-card">
+           <div class="text-xs font-bold text-amber-500 uppercase tracking-wider mb-1">En attente de paiement</div>
+           <div class="text-3xl font-extrabold text-slate-800 break-words">{{ formatLargeNumber(pendingSales()) }}</div>
+           <p class="text-xs text-slate-500 mt-3">Sur {{ pendingSalesCount() }} factures émises</p>
+        </div>
+
+        <!-- Taux de recouvrement -->
+        <div class="bg-gradient-to-br from-indigo-600 to-blue-700 p-6 rounded-2xl shadow-lg shadow-blue-500/20 text-white hover-card">
+           <div class="text-xs font-bold text-blue-200 uppercase tracking-wider mb-1">Taux de recouvrement</div>
+           <div class="flex items-center gap-3">
+             <div class="text-3xl font-extrabold">{{ recoveryRate() | number:'1.0-0' }}%</div>
+             <div class="w-px h-8 bg-blue-400/30"></div>
+             <div class="text-xs text-blue-100 leading-snug whitespace-pre-line">{{ getRecoveryRateLabel() }}</div>
+           </div>
+           <div class="w-full bg-blue-900/30 rounded-full h-1.5 mt-4">
+              <div class="bg-white h-1.5 rounded-full transition-all" [style.width.%]="getRecoveryRateWidth()"></div>
+           </div>
+        </div>
+      </div>
+
+      <!-- Invoices Table -->
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+        
+        <!-- Filter Bar inside Table Card -->
+        <div class="p-4 border-b border-slate-100 flex flex-col md:flex-row gap-3 bg-slate-50/50 justify-between items-center">
+           <div class="flex gap-2 overflow-x-auto w-full md:w-auto pb-2 md:pb-0">
+             <button (click)="setFilter('all')" [class.bg-slate-800]="filterStatus() === 'all'" [class.text-white]="filterStatus() === 'all'" class="px-3 py-1.5 rounded-full text-xs font-semibold bg-white text-slate-600 border border-slate-200 hover:bg-slate-100 shrink-0 transition-colors">Tout voir</button>
+             <button (click)="setFilter('paid')" [class.bg-emerald-600]="filterStatus() === 'paid'" [class.text-white]="filterStatus() === 'paid'" [class.border-emerald-600]="filterStatus() === 'paid'" class="px-3 py-1.5 rounded-full text-xs font-semibold bg-white text-slate-600 border border-slate-200 hover:bg-slate-100 shrink-0 transition-colors">Payées</button>
+             <button (click)="setFilter('pending')" [class.bg-amber-500]="filterStatus() === 'pending'" [class.text-white]="filterStatus() === 'pending'" [class.border-amber-500]="filterStatus() === 'pending'" class="px-3 py-1.5 rounded-full text-xs font-semibold bg-white text-slate-600 border border-slate-200 hover:bg-slate-100 shrink-0 transition-colors">En attente</button>
+             <button (click)="setFilter('overdue')" [class.bg-red-600]="filterStatus() === 'overdue'" [class.text-white]="filterStatus() === 'overdue'" [class.border-red-600]="filterStatus() === 'overdue'" class="px-3 py-1.5 rounded-full text-xs font-semibold bg-white text-slate-600 border border-slate-200 hover:bg-slate-100 shrink-0 transition-colors">Retard</button>
+           </div>
+           
+           <div class="relative w-full md:w-64">
+              <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+              </span>
+              <input type="text" [(ngModel)]="searchTerm" placeholder="Rechercher facture..." class="w-full pl-9 pr-3 py-1.5 rounded-full border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all">
+           </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm text-left min-w-[700px]">
+            <thead class="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-200">
+              <tr>
+                <th class="px-6 py-4 font-semibold">Facture</th>
+                <th class="px-6 py-4 font-semibold">Client & BC</th>
+                <th class="px-6 py-4 font-semibold">Date Émission</th>
+                <th class="px-6 py-4 font-semibold">Échéance</th>
+                <th class="px-6 py-4 font-semibold text-right">Montant TTC</th>
+                <th class="px-6 py-4 font-semibold text-center">Mode Paiement</th>
+                <th class="px-6 py-4 font-semibold text-center">État</th>
+                <th class="px-6 py-4 text-center">Actions</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+              @for (inv of filteredInvoices(); track inv.id) {
+                <tr class="bg-white hover:bg-slate-50 transition-colors group" [attr.data-item-id]="inv.id">
+                  <td class="px-6 py-4">
+                    <div class="font-bold text-slate-800 text-base mb-0.5">{{ inv.number }}</div>
+                    <span class="text-xs text-slate-400">Ref interne</span>
+                  </td>
+                  <td class="px-6 py-4">
+                    <div class="flex flex-col">
+                       <span class="font-medium text-slate-700 flex items-center gap-1.5">
+                         <div class="w-1.5 h-1.5 rounded-full bg-indigo-500"></div>
+                         {{ store.getClientName(inv.partnerId || '') }}
+                       </span>
+                       @if (inv.bcId) {
+                         <a [routerLink]="['/bc/edit', inv.bcId]" class="text-xs text-blue-500 hover:underline mt-0.5 pl-3">BC: {{ store.getBCNumber(inv.bcId) }}</a>
+                       }
+                    </div>
+                  </td>
+                  <td class="px-6 py-4 text-slate-600">{{ inv.date }}</td>
+                  <td class="px-6 py-4">
+                    <span class="text-slate-600 font-medium">{{ inv.dueDate }}</span>
+                  </td>
+                  <td class="px-6 py-4 text-right font-bold text-slate-800">
+                    {{ inv.amountTTC | number:'1.2-2' }} MAD
+                  </td>
+                  <td class="px-6 py-4 text-center">
+                    @if (inv.paymentMode) {
+                      <span class="inline-flex items-center bg-blue-50 text-blue-700 text-xs px-2.5 py-1 rounded-full font-medium border border-blue-200">
+                        {{ inv.paymentMode }}
+                      </span>
+                    } @else {
+                      <span class="text-xs text-slate-400 italic">Non défini</span>
+                    }
+                  </td>
+                  <td class="px-6 py-4 text-center">
+                    <span [class]="getStatusClass(inv.status)">
+                      {{ getStatusLabel(inv.status) }}
+                    </span>
+                  </td>
+                  <td class="px-6 py-4 text-center">
+                    <div class="flex items-center justify-center gap-2 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button (click)="exportPDF(inv)" class="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-full transition-all" title="Exporter PDF">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                      </button>
+                      <button (click)="editInvoice(inv)" class="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-all" title="Modifier">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                      </button>
+                      <button (click)="deleteInvoice(inv.id)" class="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-all" title="Supprimer">
+                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              }
+              @if (filteredInvoices().length === 0) {
+                <tr>
+                  <td colspan="8" class="px-6 py-12 text-center text-slate-500">
+                    Aucune facture trouvée.
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+       <!-- SLIDE OVER FORM -->
+      @if (isFormOpen()) {
+         <div class="fixed inset-0 z-50 flex justify-end" aria-modal="true">
+            <!-- Backdrop -->
+            <div (click)="closeForm()" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity"></div>
+            
+            <!-- Panel -->
+            <div class="relative w-full md:w-[600px] bg-white h-full shadow-2xl flex flex-col transform transition-transform animate-[slideInRight_0.3s_ease-out]">
+               <div class="flex items-center justify-between p-6 border-b border-slate-100 bg-slate-50/50">
+                  <h2 class="text-xl font-bold text-slate-800">
+                    {{ isEditMode() ? 'Modifier' : 'Créer' }} Facture Vente
+                  </h2>
+                  <button (click)="closeForm()" class="text-slate-400 hover:text-slate-600 transition">
+                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                  </button>
+               </div>
+               
+               <form [formGroup]="form" (ngSubmit)="onSubmit()" class="flex-1 overflow-y-auto p-6 space-y-6">
+                  
+                  <!-- Section Link -->
+                  <div class="bg-indigo-50 p-4 rounded-xl border border-indigo-100 space-y-4">
+                     <div>
+                        <label class="block text-xs font-bold text-indigo-700 uppercase mb-1">Client</label>
+                        <select formControlName="partnerId" (change)="onPartnerChange()" class="w-full p-2 border border-indigo-200 rounded-lg bg-white focus:ring-2 focus:ring-blue-500/20 outline-none">
+                           <option value="">Sélectionner un client</option>
+                           @for (c of store.clients(); track c.id) {
+                              <option [value]="c.id">{{ c.name }}</option>
+                           }
+                        </select>
+                     </div>
+                     <div>
+                        <label class="block text-xs font-bold text-indigo-700 uppercase mb-1">Basé sur BC (Optionnel)</label>
+                        <select formControlName="bcId" (change)="onBCChange()" class="w-full p-2 border border-indigo-200 rounded-lg bg-white focus:ring-2 focus:ring-blue-500/20 outline-none">
+                           <option value="">Aucun BC</option>
+                           @for (bc of availableBCs(); track bc.id) {
+                              <option [value]="bc.id">{{ bc.number }} - {{ bc.date }}</option>
+                           }
+                        </select>
+                     </div>
+                  </div>
+
+                  <div class="space-y-4">
+                     <div>
+                       <label class="block text-sm font-semibold text-slate-700 mb-1">Numéro Facture (Interne)</label>
+                       <input formControlName="number" type="text" placeholder="FV-2025-XXX" class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition uppercase">
+                     </div>
+
+                     <div class="grid grid-cols-2 gap-4">
+                        <div>
+                          <label class="block text-sm font-semibold text-slate-700 mb-1">Date Émission</label>
+                          <input formControlName="date" type="date" class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition">
+                        </div>
+                        <div>
+                          <label class="block text-sm font-semibold text-slate-700 mb-1">Date Échéance</label>
+                          <input formControlName="dueDate" type="date" class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition">
+                        </div>
+                     </div>
+                     
+                     <div class="grid grid-cols-2 gap-4">
+                        <div>
+                           <label class="block text-sm font-semibold text-slate-700 mb-1">Montant HT</label>
+                           <input formControlName="amountHT" type="number" step="0.01" class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition text-right">
+                        </div>
+                        <div>
+                           <label class="block text-sm font-semibold text-slate-700 mb-1">Montant TTC</label>
+                           <input formControlName="amountTTC" type="number" step="0.01" class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition text-right font-bold text-slate-800">
+                        </div>
+                     </div>
+
+                     <div class="grid grid-cols-2 gap-4">
+                        <div>
+                           <label class="block text-sm font-semibold text-slate-700 mb-1">Statut Paiement</label>
+                           <select formControlName="status" class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition">
+                              <option value="pending">En attente</option>
+                              <option value="paid">Payée</option>
+                              <option value="overdue">En retard</option>
+                           </select>
+                        </div>
+                        <div>
+                           <label class="block text-sm font-semibold text-slate-700 mb-1">Mode de Paiement</label>
+                           <select formControlName="paymentMode" class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition">
+                              <option value="">Non défini</option>
+                              @for (mode of activePaymentModes(); track mode.id) {
+                                 <option [value]="mode.name">{{ mode.name }}</option>
+                              }
+                           </select>
+                        </div>
+                     </div>
+                  </div>
+               </form>
+
+               <div class="p-6 border-t border-slate-100 bg-slate-50/50 flex gap-3">
+                  <button (click)="closeForm()" class="flex-1 px-4 py-2 bg-white border border-slate-200 text-slate-700 font-medium rounded-lg hover:bg-slate-50 transition">Annuler</button>
+                  <button (click)="onSubmit()" [disabled]="form.invalid" class="flex-1 px-4 py-2 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition shadow-lg disabled:opacity-50 shadow-blue-600/20">
+                    {{ isEditMode() ? 'Mettre à jour' : 'Créer Facture' }}
+                  </button>
+               </div>
+            </div>
+         </div>
+      }
+
+    </div>
+  `,
+  styles: [`
+    @keyframes slideInRight {
+      from { transform: translateX(100%); }
+      to { transform: translateX(0); }
+    }
+  `]
+})
+export class SalesInvoicesComponent implements OnInit {
+  store = inject(StoreService);
+  fb = inject(FormBuilder);
+
+  async ngOnInit() {
+    // Charger les factures au démarrage si elles ne sont pas déjà chargées
+    if (this.store.invoices().length === 0) {
+      await this.store.loadInvoices();
+    }
+  }
+
+  isFormOpen = signal(false);
+  isEditMode = signal(false);
+  editingId: string | null = null;
+  originalInvoice: Invoice | null = null; // Stocker la facture originale pour préserver les valeurs
+  availableBCs = signal<BC[]>([]);
+
+  // Filters
+  filterStatus = signal<'all' | 'paid' | 'pending' | 'overdue'>('all');
+  searchTerm = signal('');
+
+  // Active payment modes
+  activePaymentModes = computed(() => this.store.paymentModes().filter(m => m.active));
+
+  form: FormGroup = this.fb.group({
+    number: ['FV-2025-', Validators.required],
+    partnerId: ['', Validators.required],
+    bcId: [''],
+    date: [new Date().toISOString().split('T')[0], Validators.required],
+    dueDate: ['', Validators.required],
+    amountHT: [0, [Validators.required, Validators.min(0)]],
+    amountTTC: [0, [Validators.required, Validators.min(0)]],
+    status: ['pending', Validators.required],
+    paymentMode: ['']
+  });
+
+  constructor() {
+    // Auto calculate due date default (+30 days for sales)
+    this.form.get('date')?.valueChanges.subscribe(dateVal => {
+      if (dateVal && !this.isEditMode()) {
+        const d = new Date(dateVal);
+        d.setDate(d.getDate() + 30);
+        this.form.patchValue({ dueDate: d.toISOString().split('T')[0] }, { emitEvent: false });
+      }
+    });
+  }
+
+  // Raw list
+  allSalesInvoices = computed(() => this.store.invoices().filter(i => i.type === 'sale'));
+
+  // Filtered List
+  filteredInvoices = computed(() => {
+    let list = this.allSalesInvoices();
+    
+    // Status Filter
+    const status = this.filterStatus();
+    if (status !== 'all') {
+      list = list.filter(i => i.status === status);
+    }
+
+    // Search Filter
+    const term = this.searchTerm().toLowerCase();
+    if (term) {
+      list = list.filter(i => 
+        i.number.toLowerCase().includes(term) ||
+        this.store.getClientName(i.partnerId || '').toLowerCase().includes(term)
+      );
+    }
+    
+    return list;
+  });
+
+  totalSales = computed(() => {
+    const invoices = this.allSalesInvoices();
+    return invoices.reduce((acc, i) => acc + (i.amountTTC || 0), 0);
+  });
+  
+  pendingSales = computed(() => {
+    const invoices = this.allSalesInvoices().filter(i => i.status === 'pending' || i.status === 'overdue');
+    return invoices.reduce((acc, i) => acc + (i.amountTTC || 0), 0);
+  });
+  
+  pendingSalesCount = computed(() => {
+    return this.allSalesInvoices().filter(i => i.status === 'pending' || i.status === 'overdue').length;
+  });
+
+  // Calculate CA growth percentage (this month vs last month)
+  caGrowthPercent = computed(() => {
+    const invoices = this.allSalesInvoices();
+    if (invoices.length === 0) return null;
+
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+
+    // Filter invoices for current month
+    const currentMonthInvoices = invoices.filter(inv => {
+      if (!inv.date) return false;
+      const invDate = new Date(inv.date);
+      return invDate.getMonth() === currentMonth && invDate.getFullYear() === currentYear;
+    });
+    const currentMonthTotal = currentMonthInvoices.reduce((acc, curr) => acc + (curr.amountTTC || 0), 0);
+
+    // Filter invoices for last month
+    const lastMonth = currentMonth === 0 ? 11 : currentMonth - 1;
+    const lastMonthYear = currentMonth === 0 ? currentYear - 1 : currentYear;
+    const lastMonthInvoices = invoices.filter(inv => {
+      if (!inv.date) return false;
+      const invDate = new Date(inv.date);
+      return invDate.getMonth() === lastMonth && invDate.getFullYear() === lastMonthYear;
+    });
+    const lastMonthTotal = lastMonthInvoices.reduce((acc, curr) => acc + (curr.amountTTC || 0), 0);
+
+    if (lastMonthTotal === 0) return currentMonthTotal > 0 ? 100 : null;
+    
+    return ((currentMonthTotal - lastMonthTotal) / lastMonthTotal) * 100;
+  });
+
+  // Calculate recovery rate (total paid / total invoiced)
+  recoveryRate = computed(() => {
+    const invoices = this.allSalesInvoices();
+    if (invoices.length === 0) return 0;
+
+    const totalInvoiced = invoices.reduce((acc, curr) => acc + curr.amountTTC, 0);
+    if (totalInvoiced === 0) return 0;
+
+    // Get total paid from payments
+    let totalPaid = 0;
+    invoices.forEach(inv => {
+      const payments = this.store.getPaymentsForInvoice(inv.id);
+      const paymentsTotal = payments.reduce((sum, p) => sum + (p.montant || 0), 0);
+      totalPaid += paymentsTotal;
+      
+      // If invoice marked as paid but no payments recorded, assume full amount paid
+      if (inv.status === 'paid' && paymentsTotal === 0) {
+        totalPaid += inv.amountTTC;
+      }
+    });
+
+    return (totalPaid / totalInvoiced) * 100;
+  });
+
+  getRecoveryRateLabel(): string {
+    const rate = this.recoveryRate();
+    if (rate >= 90) return 'Excellent\nniveau';
+    if (rate >= 75) return 'Bon niveau';
+    if (rate >= 50) return 'À améliorer';
+    return 'Faible';
+  }
+
+  getRecoveryRateWidth(): number {
+    const rate = this.recoveryRate();
+    return Math.min(Math.max(rate, 0), 100);
+  }
+
+  formatLargeNumber(value: number): string {
+    if (!value && value !== 0) return '0';
+    // Formater avec séparateurs de milliers (espace en français)
+    return new Intl.NumberFormat('fr-MA', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(value);
+  }
+
+  setFilter(status: 'all' | 'paid' | 'pending' | 'overdue') {
+    this.filterStatus.set(status);
+  }
+
+  getStatusClass(status: string): string {
+    switch(status) {
+      case 'paid': return 'inline-flex items-center bg-emerald-100 text-emerald-800 text-xs px-3 py-1.5 rounded-full font-bold border border-emerald-200 shadow-sm whitespace-nowrap';
+      case 'pending': return 'inline-flex items-center bg-amber-100 text-amber-800 text-xs px-3 py-1.5 rounded-full font-bold border border-amber-200 shadow-sm whitespace-nowrap';
+      case 'overdue': return 'inline-flex items-center bg-red-100 text-red-800 text-xs px-3 py-1.5 rounded-full font-bold border border-red-200 shadow-sm whitespace-nowrap';
+      default: return 'inline-flex items-center text-xs px-3 py-1.5 rounded-full font-bold whitespace-nowrap';
+    }
+  }
+
+  getStatusLabel(status: string): string {
+    const map: any = { 'paid': 'Payée', 'pending': 'En attente', 'overdue': 'En retard' };
+    return map[status] || status;
+  }
+
+  // --- ACTIONS ---
+
+  openForm() {
+    this.isEditMode.set(false);
+    this.editingId = null;
+    const randomNum = Math.floor(Math.random() * 1000);
+    this.form.reset({ 
+      number: `FV-2025-${randomNum}`,
+      date: new Date().toISOString().split('T')[0],
+      status: 'pending',
+      amountHT: 0,
+      amountTTC: 0
+    });
+    
+    // Set default due date
+    const today = new Date();
+    today.setDate(today.getDate() + 30);
+    this.form.patchValue({ dueDate: today.toISOString().split('T')[0] });
+
+    this.availableBCs.set([]);
+    this.isFormOpen.set(true);
+  }
+
+  closeForm() {
+    this.isFormOpen.set(false);
+    this.originalInvoice = null; // Réinitialiser lors de la fermeture
+  }
+
+  onPartnerChange() {
+    const clientId = this.form.get('partnerId')?.value;
+    if (clientId) {
+      const bcs = this.store.bcs().filter(b => b.clientId === clientId);
+      this.availableBCs.set(bcs);
+    } else {
+      this.availableBCs.set([]);
+    }
+  }
+
+  onBCChange() {
+    const bcId = this.form.get('bcId')?.value;
+    const bc = this.store.bcs().find(b => b.id === bcId);
+    if (bc) {
+      // Auto fill amounts from BC Selling values
+      const totalHT = bc.items.reduce((acc, i) => acc + (i.qtySell * i.priceSellHT), 0);
+      const totalTva = bc.items.reduce((acc, i) => acc + (i.qtySell * i.priceSellHT * (i.tvaRate/100)), 0);
+      
+      this.form.patchValue({
+        amountHT: totalHT,
+        amountTTC: totalHT + totalTva
+      });
+    }
+  }
+
+  editInvoice(inv: Invoice) {
+    console.log('🔵 editInvoice - Facture reçue:', inv);
+    console.log('🔵 editInvoice - Montants:', { amountHT: inv.amountHT, amountTTC: inv.amountTTC });
+    
+    this.isEditMode.set(true);
+    this.editingId = inv.id;
+    // Stocker la facture originale pour préserver les valeurs
+    this.originalInvoice = { ...inv };
+    console.log('🔵 editInvoice - originalInvoice sauvegardé:', this.originalInvoice);
+    console.log('🔵 editInvoice - Montants dans originalInvoice:', { 
+      amountHT: this.originalInvoice.amountHT, 
+      amountTTC: this.originalInvoice.amountTTC 
+    });
+    
+    // S'assurer que tous les champs sont bien remplis, notamment les montants
+    const formValues = {
+      number: inv.number || '',
+      partnerId: inv.partnerId || '',
+      bcId: inv.bcId || '',
+      date: inv.date || '',
+      dueDate: inv.dueDate || '',
+      amountHT: inv.amountHT != null && inv.amountHT !== undefined ? Number(inv.amountHT) : 0,
+      amountTTC: inv.amountTTC != null && inv.amountTTC !== undefined ? Number(inv.amountTTC) : 0,
+      status: inv.status || 'pending',
+      paymentMode: inv.paymentMode || ''
+    };
+    console.log('🔵 editInvoice - Valeurs du formulaire:', formValues);
+    this.form.patchValue(formValues);
+    
+    // Vérifier les valeurs après patchValue
+    setTimeout(() => {
+      console.log('🔵 editInvoice - Valeurs du formulaire APRÈS patchValue:', this.form.value);
+    }, 100);
+    
+    if (inv.partnerId) {
+      const bcs = this.store.bcs().filter(b => b.clientId === inv.partnerId);
+      this.availableBCs.set(bcs);
+    }
+    this.isFormOpen.set(true);
+  }
+
+  async exportPDF(inv: Invoice) {
+    try {
+      await this.store.downloadFactureVentePDF(inv.id);
+    } catch (error) {
+      // Error already handled in store service
+    }
+  }
+
+  async deleteInvoice(id: string) {
+    if (confirm('Êtes-vous sûr de vouloir supprimer cette facture ?')) {
+      try {
+        await this.store.deleteInvoice(id);
+      } catch (error) {
+        // Error already handled in store
+      }
+    }
+  }
+
+  async onSubmit() {
+    console.log('🟢 onSubmit - Début');
+    console.log('🟢 onSubmit - isEditMode:', this.isEditMode());
+    console.log('🟢 onSubmit - editingId:', this.editingId);
+    console.log('🟢 onSubmit - originalInvoice:', this.originalInvoice);
+    
+    if (this.form.invalid) {
+      console.warn('🟡 onSubmit - Formulaire invalide');
+      return;
+    }
+    
+    const val = this.form.value;
+    console.log('🟢 onSubmit - Valeurs du formulaire:', val);
+    console.log('🟢 onSubmit - Montants du formulaire:', { 
+      amountHT: val.amountHT, 
+      amountTTC: val.amountTTC,
+      amountHTType: typeof val.amountHT,
+      amountTTCType: typeof val.amountTTC
+    });
+    
+    // En mode édition, toujours préserver les montants et autres valeurs de la facture originale
+    if (this.isEditMode() && this.editingId && this.originalInvoice) {
+      console.log('🟢 onSubmit - Mode édition détecté');
+      console.log('🟢 onSubmit - Montants dans originalInvoice:', { 
+        amountHT: this.originalInvoice.amountHT, 
+        amountTTC: this.originalInvoice.amountTTC 
+      });
+      
+      // TOUJOURS utiliser les montants de la facture originale, jamais ceux du formulaire
+      // Le formulaire peut avoir des valeurs vides ou 0 à cause du formatage
+      const originalHT = this.originalInvoice.amountHT;
+      const originalTTC = this.originalInvoice.amountTTC;
+      
+      console.log('🟢 onSubmit - Utilisation des montants originaux:', { 
+        originalHT, 
+        originalTTC,
+        originalHTType: typeof originalHT,
+        originalTTCType: typeof originalTTC
+      });
+      
+      val.amountHT = originalHT;
+      val.amountTTC = originalTTC;
+      
+      // Préserver aussi les autres champs essentiels de l'original
+      val.number = this.originalInvoice.number || val.number || '';
+      val.date = this.originalInvoice.date || val.date || '';
+      val.dueDate = this.originalInvoice.dueDate || val.dueDate || '';
+      val.partnerId = this.originalInvoice.partnerId || val.partnerId || '';
+      val.bcId = this.originalInvoice.bcId || val.bcId || '';
+      
+      // Le statut peut être modifié, on utilise la valeur du formulaire
+      val.status = val.status || this.originalInvoice.status || 'pending';
+      
+      console.log('🟢 onSubmit - Valeurs finales après préservation:', val);
+      console.log('🟢 onSubmit - Montants finaux:', { 
+        amountHT: val.amountHT, 
+        amountTTC: val.amountTTC 
+      });
+    }
+    
+    const invoice: Invoice = {
+      id: this.editingId || `fv-${Date.now()}`,
+      type: 'sale',
+      ...val
+    };
+    
+    console.log('🟢 onSubmit - Invoice final à envoyer:', invoice);
+    console.log('🟢 onSubmit - Montants dans invoice final:', { 
+      amountHT: invoice.amountHT, 
+      amountTTC: invoice.amountTTC 
+    });
+
+    try {
+      if (this.isEditMode()) {
+        console.log('🟢 onSubmit - Appel à store.updateInvoice');
+        await this.store.updateInvoice(invoice);
+      } else {
+        await this.store.addInvoice(invoice);
+      }
+      this.closeForm();
+      this.originalInvoice = null; // Réinitialiser après sauvegarde
+    } catch (error) {
+      // Error already handled in store service
+      console.error('❌ Error saving invoice:', error);
+    }
+  }
+}

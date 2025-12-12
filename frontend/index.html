@@ -1,0 +1,55 @@
+
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BF4 Invest Manager</title>
+  <!-- Injection de l'URL de l'API depuis les variables d'environnement Vercel -->
+  <script>
+    // Vercel injecte les variables d'environnement via process.env au build
+    // Pour Angular, on les expose via window
+    window.__API_URL__ = window.__API_URL__ || 'https://votre-backend.railway.app/api';
+  </script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; background-color: #F5F6FA; }
+    /* BF4 Custom Colors */
+    .bg-bf4-blue { background-color: #0059B3; }
+    .text-bf4-blue { color: #0059B3; }
+    .bg-bf4-light { background-color: #4DA3FF; }
+    .text-bf4-light { color: #4DA3FF; }
+    
+    /* Scrollbar aesthetics */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: #f1f1f1; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+  </style>
+<script type="importmap">
+{
+  "imports": {
+    "rxjs": "https://aistudiocdn.com/rxjs@^7.8.2?conditions=es2015",
+    "rxjs/operators": "https://aistudiocdn.com/rxjs@^7.8.2/operators?conditions=es2015",
+    "rxjs/ajax": "https://aistudiocdn.com/rxjs@^7.8.2/ajax?conditions=es2015",
+    "rxjs/webSocket": "https://aistudiocdn.com/rxjs@^7.8.2/webSocket?conditions=es2015",
+    "rxjs/testing": "https://aistudiocdn.com/rxjs@^7.8.2/testing?conditions=es2015",
+    "rxjs/fetch": "https://aistudiocdn.com/rxjs@^7.8.2/fetch?conditions=es2015",
+    "@angular/forms": "https://next.esm.sh/@angular/forms@^21.0.1?external=rxjs",
+    "@angular/common": "https://next.esm.sh/@angular/common@^21.0.1?external=rxjs",
+    "@angular/core": "https://next.esm.sh/@angular/core@^21.0.1?external=rxjs",
+    "@angular/router": "https://next.esm.sh/@angular/router@^21.0.1?external=rxjs",
+    "@angular/compiler": "https://next.esm.sh/@angular/compiler@^21.0.1?external=rxjs",
+    "@angular/platform-browser": "https://next.esm.sh/@angular/platform-browser@^21.0.1?external=rxjs"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body>
+  <app-root></app-root>
+</body>
+</html>

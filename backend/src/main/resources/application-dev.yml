@@ -1,0 +1,13 @@
+spring:
+  data:
+    mongodb:
+      uri: mongodb://localhost:27017/bf4invest-dev
+      
+logging:
+  level:
+    com.bf4invest: DEBUG
+    org.springframework.web: DEBUG
+
+
+
+
