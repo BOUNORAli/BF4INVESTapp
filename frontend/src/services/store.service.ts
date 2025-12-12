@@ -358,7 +358,7 @@ export class StoreService {
         params.to = to.toISOString().split('T')[0];
       }
       
-      const kpis = await this.api.get<DashboardKpiResponse>('/api/dashboard/kpis', params).toPromise();
+      const kpis = await this.api.get<DashboardKpiResponse>('/dashboard/kpis', params).toPromise();
       if (kpis) {
         this.dashboardKPIs.set(kpis);
       }
@@ -1164,7 +1164,7 @@ export class StoreService {
       }
       
       // Construire l'URL avec les paramètres
-      let url = '/api/dashboard/report/pdf';
+      let url = '/dashboard/report/pdf';
       const queryString = new URLSearchParams(params).toString();
       if (queryString) {
         url += '?' + queryString;
