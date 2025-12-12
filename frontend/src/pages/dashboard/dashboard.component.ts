@@ -93,7 +93,7 @@ import { Router, RouterLink } from '@angular/router';
             <div class="mt-4">
               @if (kpis()?.margeMoyenne) {
                 <div class="w-full bg-emerald-800/30 rounded-full h-1.5 mb-2">
-                  <div class="bg-white h-1.5 rounded-full transition-all" [style.width.%]="Math.min(Math.max(kpis()!.margeMoyenne, 0), 100)"></div>
+                  <div class="bg-white h-1.5 rounded-full transition-all" [style.width.%]="getMargeWidthPercent(kpis()!.margeMoyenne)"></div>
                 </div>
                 <p class="text-xs text-emerald-100 font-medium">
                   {{ kpis()!.margeMoyenne >= 15 ? 'Performance excellente' : kpis()!.margeMoyenne >= 10 ? 'Performance bonne' : 'Performance à améliorer' }}
@@ -402,5 +402,10 @@ export class DashboardComponent implements OnInit {
 
   viewBC(bcId: string) {
     this.router.navigate(['/bc/edit', bcId]);
+  }
+
+  getMargeWidthPercent(marge: number | undefined): number {
+    if (marge === undefined || marge === null) return 0;
+    return Math.min(Math.max(marge, 0), 100);
   }
 }
