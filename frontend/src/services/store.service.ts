@@ -832,15 +832,19 @@ export class StoreService {
 
   async addInvoice(inv: Invoice): Promise<void> {
     try {
+      // S'assurer que les montants sont des nombres
+      const amountHT = inv.amountHT != null && inv.amountHT !== undefined ? Number(inv.amountHT) : 0;
+      const amountTTC = inv.amountTTC != null && inv.amountTTC !== undefined ? Number(inv.amountTTC) : 0;
+
       if (inv.type === 'purchase') {
         const payload = {
           numeroFactureAchat: inv.number,
           dateFacture: inv.date,
-          bandeCommandeId: inv.bcId,
+          bandeCommandeId: inv.bcId || null,
           fournisseurId: inv.partnerId,
-          totalHT: inv.amountHT,
-          totalTTC: inv.amountTTC,
-          modePaiement: inv.paymentMode,
+          totalHT: amountHT,
+          totalTTC: amountTTC,
+          modePaiement: inv.paymentMode || null,
           etatPaiement: inv.status === 'paid' ? 'regle' : 'non_regle'
         };
         
@@ -851,11 +855,11 @@ export class StoreService {
         const payload = {
           numeroFactureVente: inv.number,
           dateFacture: inv.date,
-          bandeCommandeId: inv.bcId,
+          bandeCommandeId: inv.bcId || null,
           clientId: inv.partnerId,
-          totalHT: inv.amountHT,
-          totalTTC: inv.amountTTC,
-          modePaiement: inv.paymentMode,
+          totalHT: amountHT,
+          totalTTC: amountTTC,
+          modePaiement: inv.paymentMode || null,
           etatPaiement: inv.status === 'paid' ? 'regle' : 'non_regle'
         };
         
@@ -867,7 +871,7 @@ export class StoreService {
       this.showToast(inv.type === 'sale' ? 'Facture vente émise' : 'Facture achat enregistrée', 'success');
       this.addNotification({ 
         title: inv.type === 'sale' ? 'Facture Vente' : 'Facture Achat', 
-        message: `${inv.number} enregistrée pour ${inv.amountTTC} MAD.`, 
+        message: `${inv.number} enregistrée pour ${amountTTC} MAD.`, 
         type: 'info' 
       });
     } catch (error) {

@@ -467,10 +467,22 @@ export class PurchaseInvoicesComponent {
       val.dueDate = date.toISOString().split('T')[0];
     }
     
+    // S'assurer que les montants sont des nombres
+    const amountHT = val.amountHT != null && val.amountHT !== undefined ? Number(val.amountHT) : 0;
+    const amountTTC = val.amountTTC != null && val.amountTTC !== undefined ? Number(val.amountTTC) : 0;
+    
     const invoice: Invoice = {
       id: this.editingId || `fa-${Date.now()}`,
       type: 'purchase',
-      ...val
+      number: val.number,
+      partnerId: val.partnerId,
+      bcId: val.bcId || undefined,
+      date: val.date,
+      dueDate: val.dueDate,
+      amountHT: amountHT,
+      amountTTC: amountTTC,
+      status: val.status || 'pending',
+      paymentMode: val.paymentMode || undefined
     };
 
     if (this.isEditMode()) {
