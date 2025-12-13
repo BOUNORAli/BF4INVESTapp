@@ -31,6 +31,10 @@ public class PdfService {
     private final SupplierRepository supplierRepository;
     private final BandeCommandeRepository bandeCommandeRepository;
     
+    // Cache statique pour le logo (chargé une seule fois)
+    private static byte[] cachedLogoBytes = null;
+    private static final Object LOGO_LOCK = new Object();
+    
     // Couleurs utilisées - ajustées pour correspondre aux images de référence
     private static final Color BLUE_DARK = new Color(30, 64, 124); // Bleu foncé pour logo
     private static final Color BLUE_LIGHT = new Color(200, 220, 240); // Bleu clair grisé pour les sections (comme référence)
@@ -158,6 +162,45 @@ public class PdfService {
     // ============ LOGO METHODS ============
     
     /**
+     * Récupère les bytes du logo depuis le cache ou les charge depuis les ressources
+     * Le logo est chargé une seule fois et mis en cache pour optimiser les performances
+     */
+    private byte[] getLogoBytes() throws IOException {
+        if (cachedLogoBytes != null) {
+            return cachedLogoBytes;
+        }
+        
+        synchronized (LOGO_LOCK) {
+            // Double-check locking
+            if (cachedLogoBytes != null) {
+                return cachedLogoBytes;
+            }
+            
+            // Essayer de charger l'image depuis les ressources
+            String[] extensions = {"png", "jpg", "jpeg", "gif"};
+            for (String ext : extensions) {
+                try {
+                    ClassPathResource resource = new ClassPathResource("images/logo." + ext);
+                    if (resource.exists() && resource.isReadable()) {
+                        try (InputStream is = resource.getInputStream()) {
+                            cachedLogoBytes = is.readAllBytes();
+                            if (cachedLogoBytes != null && cachedLogoBytes.length > 0) {
+                                log.info("✅ Logo mis en cache: {} bytes ({})", cachedLogoBytes.length, ext);
+                                return cachedLogoBytes;
+                            }
+                        }
+                    }
+                } catch (Exception e) {
+                    log.debug("Logo {} non trouvé, essai suivant...", ext);
+                }
+            }
+            
+            log.warn("⚠️ Aucun logo trouvé dans les ressources, utilisation du logo dessiné programmatiquement");
+            return null;
+        }
+    }
+    
+    /**
      * Crée une cellule avec le logo BF4 INVEST depuis un fichier image
      * Si l'image n'existe pas, crée un logo dessiné programmatiquement
      */
@@ -174,70 +217,20 @@ public class PdfService {
         
         Image logoImage = null;
         
-        // Essayer de charger l'image depuis les ressources - plusieurs méthodes
-        String[] extensions = {"png", "jpg", "jpeg", "gif"};
-        for (String ext : extensions) {
+        // Utiliser le cache pour obtenir les bytes du logo
+        byte[] logoBytes = getLogoBytes();
+        if (logoBytes != null && logoBytes.length > 0) {
             try {
-                ClassPathResource resource = new ClassPathResource("images/logo." + ext);
-                log.info("🔍 Recherche logo: images/logo.{} - existe={}, URI={}", 
-                    ext, resource.exists(), resource.exists() ? resource.getURI().toString() : "N/A");
-                
-                if (resource.exists() && resource.isReadable()) {
-                    try (InputStream is = resource.getInputStream()) {
-                        byte[] imageBytes = is.readAllBytes();
-                        log.info("📦 Logo {}: {} bytes lus", ext, imageBytes.length);
-                        
-                        if (imageBytes != null && imageBytes.length > 0) {
-                            // Essayer plusieurs méthodes de chargement
-                            // Méthode 1: byte[] direct
-                            try {
-                                logoImage = Image.getInstance(imageBytes);
-                                log.info("✅ Logo chargé avec succès via byte[] ({} bytes)", imageBytes.length);
-                            } catch (Exception e1) {
-                                log.warn("❌ Échec byte[]: {}", e1.getMessage());
-                                
-                                // Méthode 2: URL
-                                try {
-                                    java.net.URL url = resource.getURL();
-                                    logoImage = Image.getInstance(url);
-                                    log.info("✅ Logo chargé avec succès via URL");
-                                } catch (Exception e2) {
-                                    log.warn("❌ Échec URL: {}", e2.getMessage());
-                                    
-                                    // Méthode 3: Fichier temporaire
-                                    try {
-                                        java.io.File tempFile = java.io.File.createTempFile("bf4logo_", "." + ext);
-                                        tempFile.deleteOnExit();
-                                        try (java.io.FileOutputStream fos = new java.io.FileOutputStream(tempFile)) {
-                                            fos.write(imageBytes);
-                                            fos.flush();
-                                        }
-                                        logoImage = Image.getInstance(tempFile.getAbsolutePath());
-                                        log.info("✅ Logo chargé via fichier temporaire: {}", tempFile.getAbsolutePath());
-                                    } catch (Exception e3) {
-                                        log.error("❌ Toutes les méthodes ont échoué: {}", e3.getMessage(), e3);
-                                    }
-                                }
-                            }
-                            
-                            if (logoImage != null) {
-                                // Redimensionner en gardant les proportions
-                                float imgW = logoImage.getWidth();
-                                float imgH = logoImage.getHeight();
-                                float scale = Math.min((width - 4) / imgW, (height - 4) / imgH);
-                                logoImage.scaleAbsolute(imgW * scale, imgH * scale);
-                                log.info("📏 Logo redimensionné: {}x{} -> {}x{}", 
-                                    imgW, imgH, logoImage.getScaledWidth(), logoImage.getScaledHeight());
-                                break;
-                            }
-                        }
-                    } catch (Exception e) {
-                        log.error("❌ Erreur lecture logo.{}: {}", ext, e.getMessage(), e);
-                    }
-                }
+                // Essayer de charger depuis les bytes mis en cache
+                logoImage = Image.getInstance(logoBytes);
+                // Redimensionner en gardant les proportions
+                float imgW = logoImage.getWidth();
+                float imgH = logoImage.getHeight();
+                float scale = Math.min((width - 4) / imgW, (height - 4) / imgH);
+                logoImage.scaleAbsolute(imgW * scale, imgH * scale);
+                log.debug("✅ Logo chargé depuis le cache et redimensionné ({} bytes)", logoBytes.length);
             } catch (Exception e) {
-                log.warn("Erreur lors du chargement de logo.{}: {}", ext, e.getMessage());
-                // Continuer avec l'extension suivante
+                log.warn("❌ Échec chargement logo depuis cache: {}", e.getMessage());
             }
         }
         

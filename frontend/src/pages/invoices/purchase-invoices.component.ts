@@ -1,4 +1,4 @@
-import { Component, inject, signal, computed } from '@angular/core';
+import { Component, inject, signal, computed, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { StoreService, Invoice, BC } from '../../services/store.service';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, FormsModule } from '@angular/forms';
@@ -245,12 +245,18 @@ import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, FormsModule } 
     }
   `]
 })
-export class PurchaseInvoicesComponent {
+export class PurchaseInvoicesComponent implements OnInit {
   store = inject(StoreService);
   fb = inject(FormBuilder);
 
   isFormOpen = signal(false);
   isEditMode = signal(false);
+
+  async ngOnInit() {
+    if (this.store.invoices().length === 0) {
+      await this.store.loadInvoices();
+    }
+  }
   editingId: string | null = null;
   availableBCs = signal<BC[]>([]);
 

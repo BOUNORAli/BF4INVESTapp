@@ -79,6 +79,10 @@ export class AppComponent implements OnInit {
     await this.store.markNotificationAsRead(notificationId);
   }
 
+  async refreshAllData() {
+    await this.store.refreshAllData();
+  }
+
   async ngOnInit() {
     // Load notifications on app start
     await this.store.loadNotifications(false);

@@ -1,5 +1,5 @@
 
-import { Component, inject, signal, computed } from '@angular/core';
+import { Component, inject, signal, computed, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
@@ -173,12 +173,18 @@ import { StoreService, BC } from '../../services/store.service';
     </div>
   `
 })
-export class BcListComponent {
+export class BcListComponent implements OnInit {
   store = inject(StoreService);
 
   // Filters State
   searchTerm = signal('');
   filterSupplier = signal('');
+
+  async ngOnInit() {
+    if (this.store.bcs().length === 0) {
+      await this.store.loadBCs();
+    }
+  }
   filterClient = signal('');
   dateMin = signal('');
   dateMax = signal('');

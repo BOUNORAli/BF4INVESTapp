@@ -271,29 +271,49 @@ export class StoreService {
     try {
       this.loading.set(true);
       
-      // Charger les clients
-      const clients = await this.api.get<any[]>('/clients').toPromise() || [];
-      this.clients.set(clients.map(c => this.mapClient(c)));
-      
-      // Charger les fournisseurs
-      const suppliers = await this.api.get<any[]>('/fournisseurs').toPromise() || [];
-      this.suppliers.set(suppliers.map(s => this.mapSupplier(s)));
-      
-      // Charger les produits
-      const products = await this.api.get<any[]>('/produits').toPromise() || [];
-      this.products.set(products.map(p => this.mapProduct(p)));
-      
-      // Charger les modes de paiement
-      await this.loadPaymentModes();
-      
-      // Charger les notifications
-      await this.loadNotifications(false);
+      // Charger TOUTES les données en parallèle pour plus de rapidité
+      await Promise.all([
+        this.loadClients(),
+        this.loadSuppliers(),
+        this.loadProducts(),
+        this.loadPaymentModes(),
+        this.loadBCs(),
+        this.loadInvoices(),
+        this.loadNotifications(false)
+      ]);
       
     } catch (error) {
       console.error('Error loading initial data:', error);
       this.showToast('Erreur lors du chargement des données', 'error');
     } finally {
       this.loading.set(false);
+    }
+  }
+
+  private async loadClients(): Promise<void> {
+    try {
+      const clients = await this.api.get<any[]>('/clients').toPromise() || [];
+      this.clients.set(clients.map(c => this.mapClient(c)));
+    } catch (error) {
+      console.error('Error loading clients:', error);
+    }
+  }
+
+  private async loadSuppliers(): Promise<void> {
+    try {
+      const suppliers = await this.api.get<any[]>('/fournisseurs').toPromise() || [];
+      this.suppliers.set(suppliers.map(s => this.mapSupplier(s)));
+    } catch (error) {
+      console.error('Error loading suppliers:', error);
+    }
+  }
+
+  private async loadProducts(): Promise<void> {
+    try {
+      const products = await this.api.get<any[]>('/produits').toPromise() || [];
+      this.products.set(products.map(p => this.mapProduct(p)));
+    } catch (error) {
+      console.error('Error loading products:', error);
     }
   }
 
@@ -307,6 +327,27 @@ export class StoreService {
       })));
     } catch (error) {
       console.error('Error loading payment modes:', error);
+    }
+  }
+
+  // --- REFRESH ALL DATA ---
+  async refreshAllData(): Promise<void> {
+    this.loading.set(true);
+    try {
+      await Promise.all([
+        this.loadClients(),
+        this.loadSuppliers(), 
+        this.loadProducts(),
+        this.loadBCs(),
+        this.loadInvoices(),
+        this.loadPaymentModes()
+      ]);
+      this.showToast('Données actualisées', 'success');
+    } catch (error) {
+      console.error('Error refreshing data:', error);
+      this.showToast('Erreur lors du rafraîchissement', 'error');
+    } finally {
+      this.loading.set(false);
     }
   }
 
