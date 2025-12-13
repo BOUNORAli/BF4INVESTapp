@@ -171,7 +171,6 @@ public class PdfService {
         }
         
         synchronized (LOGO_LOCK) {
-            // Double-check locking
             if (cachedLogoBytes != null) {
                 return cachedLogoBytes;
             }
@@ -185,17 +184,14 @@ public class PdfService {
                         try (InputStream is = resource.getInputStream()) {
                             cachedLogoBytes = is.readAllBytes();
                             if (cachedLogoBytes != null && cachedLogoBytes.length > 0) {
-                                log.info("✅ Logo mis en cache: {} bytes ({})", cachedLogoBytes.length, ext);
                                 return cachedLogoBytes;
                             }
                         }
                     }
                 } catch (Exception e) {
-                    log.debug("Logo {} non trouvé, essai suivant...", ext);
+                    // Ignorer silencieusement, on essaie l'extension suivante
                 }
             }
-            
-            log.warn("⚠️ Aucun logo trouvé dans les ressources, utilisation du logo dessiné programmatiquement");
             return null;
         }
     }
@@ -221,47 +217,33 @@ public class PdfService {
         byte[] logoBytes = getLogoBytes();
         if (logoBytes != null && logoBytes.length > 0) {
             try {
-                // Essayer de charger depuis les bytes mis en cache
                 logoImage = Image.getInstance(logoBytes);
-                // Redimensionner en gardant les proportions
                 float imgW = logoImage.getWidth();
                 float imgH = logoImage.getHeight();
                 float scale = Math.min((width - 4) / imgW, (height - 4) / imgH);
                 logoImage.scaleAbsolute(imgW * scale, imgH * scale);
-                log.debug("✅ Logo chargé depuis le cache et redimensionné ({} bytes)", logoBytes.length);
             } catch (Exception e) {
-                log.warn("❌ Échec chargement logo depuis cache: {}", e.getMessage());
+                // Fallback au logo dessiné
             }
         }
         
         // Si aucune image trouvée, créer un logo dessiné programmatiquement
         if (logoImage == null) {
-            log.warn("Aucune image logo trouvée dans les ressources, utilisation du logo dessiné programmatiquement");
             try {
                 logoImage = createDrawnLogo(writer, width, height);
             } catch (Exception e) {
-                log.error("Erreur lors de la création du logo dessiné: {}", e.getMessage());
+                // Fallback au texte simple
             }
         }
         
         if (logoImage != null) {
-            // Ajouter l'image directement à la cellule (elle sera centrée automatiquement)
             logoCell.addElement(logoImage);
-            log.info("✅ Logo ajouté à la cellule PDF ({}x{})", 
-                logoImage.getScaledWidth(), logoImage.getScaledHeight());
         } else {
-            log.error("❌ Échec création logo - utilisation du fallback dessiné");
-            try {
-                logoImage = createDrawnLogo(writer, width, height);
-                logoCell.addElement(logoImage);
-            } catch (Exception e) {
-                log.error("Erreur logo fallback: {}", e.getMessage());
-                // Dernier recours: texte
-                Paragraph fallback = new Paragraph("BF4\nINVEST", 
-                    FontFactory.getFont(FontFactory.HELVETICA_BOLD, 14, new Color(33, 150, 243)));
-                fallback.setAlignment(Element.ALIGN_CENTER);
-                logoCell.addElement(fallback);
-            }
+            // Dernier recours: texte simple
+            Paragraph fallback = new Paragraph("BF4\nINVEST", 
+                FontFactory.getFont(FontFactory.HELVETICA_BOLD, 14, new Color(33, 150, 243)));
+            fallback.setAlignment(Element.ALIGN_CENTER);
+            logoCell.addElement(fallback);
         }
         
         return logoCell;

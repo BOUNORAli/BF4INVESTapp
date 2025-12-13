@@ -261,16 +261,25 @@ export class StoreService {
   readonly dashboardKPIs = signal<DashboardKpiResponse | null>(null);
   readonly dashboardLoading = signal<boolean>(false);
   readonly payments = signal<Map<string, Payment[]>>(new Map()); // Map<invoiceId, Payment[]>
+  
+  // Flag pour éviter les rechargements multiples
+  private dataLoaded = false;
+  private dataLoading = false;
 
   constructor() {
-    // Charger les données au démarrage
+    // Charger les données au démarrage (une seule fois)
     this.loadInitialData();
   }
 
   private async loadInitialData() {
+    // Éviter les rechargements multiples
+    if (this.dataLoaded || this.dataLoading) {
+      return;
+    }
+    
+    this.dataLoading = true;
+    
     try {
-      this.loading.set(true);
-      
       // Charger TOUTES les données en parallèle pour plus de rapidité
       await Promise.all([
         this.loadClients(),
@@ -282,11 +291,12 @@ export class StoreService {
         this.loadNotifications(false)
       ]);
       
+      this.dataLoaded = true;
     } catch (error) {
       console.error('Error loading initial data:', error);
-      this.showToast('Erreur lors du chargement des données', 'error');
+      // Ne pas afficher de toast pour ne pas bloquer l'UX
     } finally {
-      this.loading.set(false);
+      this.dataLoading = false;
     }
   }
 
@@ -331,8 +341,15 @@ export class StoreService {
   }
 
   // --- REFRESH ALL DATA ---
+  // Signal pour indiquer un rafraîchissement en cours (non bloquant)
+  readonly refreshing = signal<boolean>(false);
+  
   async refreshAllData(): Promise<void> {
-    this.loading.set(true);
+    if (this.refreshing()) return; // Éviter les rafraîchissements simultanés
+    
+    this.refreshing.set(true);
+    this.showToast('Actualisation...', 'info');
+    
     try {
       await Promise.all([
         this.loadClients(),
@@ -347,7 +364,7 @@ export class StoreService {
       console.error('Error refreshing data:', error);
       this.showToast('Erreur lors du rafraîchissement', 'error');
     } finally {
-      this.loading.set(false);
+      this.refreshing.set(false);
     }
   }
 

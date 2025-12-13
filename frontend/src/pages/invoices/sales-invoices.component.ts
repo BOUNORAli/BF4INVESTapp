@@ -1,4 +1,4 @@
-import { Component, inject, computed, signal, OnInit } from '@angular/core';
+import { Component, inject, computed, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { StoreService, Invoice, BC } from '../../services/store.service';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, FormsModule } from '@angular/forms';
@@ -284,16 +284,9 @@ import { RouterLink } from '@angular/router';
     }
   `]
 })
-export class SalesInvoicesComponent implements OnInit {
+export class SalesInvoicesComponent {
   store = inject(StoreService);
   fb = inject(FormBuilder);
-
-  async ngOnInit() {
-    // Charger les factures au démarrage si elles ne sont pas déjà chargées
-    if (this.store.invoices().length === 0) {
-      await this.store.loadInvoices();
-    }
-  }
 
   isFormOpen = signal(false);
   isEditMode = signal(false);

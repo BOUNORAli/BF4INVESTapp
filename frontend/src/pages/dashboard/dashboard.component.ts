@@ -336,11 +336,8 @@ export class DashboardComponent implements OnInit {
   }
 
   async ngOnInit() {
-    // Load KPIs on component initialization
+    // Load KPIs on component initialization (les BCs et factures sont déjà chargés au démarrage)
     await this.store.loadDashboardKPIs();
-    // Also load BCs and invoices if not already loaded
-    await this.store.loadBCs();
-    await this.store.loadInvoices();
   }
 
   async reloadKPIs(from?: Date, to?: Date) {
