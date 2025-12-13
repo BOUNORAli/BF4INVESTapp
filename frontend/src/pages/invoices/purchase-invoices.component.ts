@@ -376,10 +376,30 @@ export class PurchaseInvoicesComponent {
   onBCChange() {
     const bcId = this.form.get('bcId')?.value;
     const bc = this.store.bcs().find(b => b.id === bcId);
+    
     if (bc) {
-      // Auto fill amounts from BC Buying values
-      const totalHT = bc.items.reduce((acc, i) => acc + (i.qtyBuy * i.priceBuyHT), 0);
-      const totalTva = bc.items.reduce((acc, i) => acc + (i.qtyBuy * i.priceBuyHT * (i.tvaRate/100)), 0);
+      let totalHT = 0;
+      let totalTva = 0;
+
+      // Nouvelle structure: lignesAchat
+      if (bc.lignesAchat && bc.lignesAchat.length > 0) {
+        // Utiliser les totaux pré-calculés si disponibles
+        if (bc.totalAchatHT !== undefined && bc.totalAchatTTC !== undefined) {
+          totalHT = bc.totalAchatHT;
+          totalTva = bc.totalAchatTTC - totalHT;
+        } else {
+          // Calculer à partir des lignes d'achat
+          totalHT = bc.lignesAchat.reduce((acc, l) => 
+            acc + (l.quantiteAchetee || 0) * (l.prixAchatUnitaireHT || 0), 0);
+          totalTva = bc.lignesAchat.reduce((acc, l) => 
+            acc + (l.quantiteAchetee || 0) * (l.prixAchatUnitaireHT || 0) * ((l.tva || 0) / 100), 0);
+        }
+      } 
+      // Ancienne structure: items
+      else if (bc.items) {
+        totalHT = bc.items.reduce((acc, i) => acc + (i.qtyBuy * i.priceBuyHT), 0);
+        totalTva = bc.items.reduce((acc, i) => acc + (i.qtyBuy * i.priceBuyHT * (i.tvaRate/100)), 0);
+      }
       
       this.form.patchValue({
         amountHT: totalHT,
