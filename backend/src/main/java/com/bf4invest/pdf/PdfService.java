@@ -79,18 +79,28 @@ public class PdfService {
         document.open();
         
         // Récupérer les informations client et fournisseur
-        Client client = bc.getClientId() != null ? 
-            clientRepository.findById(bc.getClientId()).orElse(null) : null;
+        // Nouvelle structure multi-clients: prendre le premier client pour l'affichage
+        Client client = null;
+        if (bc.getClientsVente() != null && !bc.getClientsVente().isEmpty()) {
+            String firstClientId = bc.getClientsVente().get(0).getClientId();
+            if (firstClientId != null) {
+                client = clientRepository.findById(firstClientId).orElse(null);
+            }
+        } else if (bc.getClientId() != null) {
+            // Ancienne structure
+            client = clientRepository.findById(bc.getClientId()).orElse(null);
+        }
+        
         Supplier supplier = bc.getFournisseurId() != null ? 
             supplierRepository.findById(bc.getFournisseurId()).orElse(null) : null;
         
         // En-tête avec logo et numéro
         addBCHeader(document, bc, writer);
         
-        // Section Destinataire
+        // Section Destinataire (fournisseur)
         addBCDestinataire(document, supplier);
         
-        // Tableau des lignes
+        // Tableau des lignes d'achat
         addBCProductTable(document, bc);
         
         // Totaux
@@ -397,8 +407,39 @@ public class PdfService {
             table.addCell(cell);
         }
         
-        // Lignes de produits
-        if (bc.getLignes() != null && !bc.getLignes().isEmpty()) {
+        // Nouvelle structure: lignesAchat
+        if (bc.getLignesAchat() != null && !bc.getLignesAchat().isEmpty()) {
+            int lineNum = 1;
+            for (var ligne : bc.getLignesAchat()) {
+                // N°
+                addTableCell(table, String.valueOf(lineNum++), Element.ALIGN_CENTER);
+                
+                // Désignation
+                addTableCell(table, ligne.getDesignation() != null ? ligne.getDesignation() : "", 
+                    Element.ALIGN_LEFT);
+                
+                // Unité
+                addTableCell(table, ligne.getUnite() != null ? ligne.getUnite() : "", 
+                    Element.ALIGN_CENTER);
+                
+                // Quantité (format français avec décimales possibles)
+                Double qtyValue = ligne.getQuantiteAchetee() != null ? ligne.getQuantiteAchetee() : 0.0;
+                String qty = formatQuantity(qtyValue);
+                addTableCell(table, qty, Element.ALIGN_RIGHT);
+                
+                // PU HT (format avec 2 décimales)
+                String puHT = ligne.getPrixAchatUnitaireHT() != null ? 
+                    formatAmount(ligne.getPrixAchatUnitaireHT()) : "0,00";
+                addTableCell(table, puHT, Element.ALIGN_RIGHT);
+                
+                // Prix Total HT
+                double totalHT = (ligne.getQuantiteAchetee() != null ? ligne.getQuantiteAchetee() : 0) * 
+                    (ligne.getPrixAchatUnitaireHT() != null ? ligne.getPrixAchatUnitaireHT() : 0);
+                addTableCell(table, formatAmount(totalHT), Element.ALIGN_RIGHT);
+            }
+        }
+        // Rétrocompatibilité: ancienne structure lignes
+        else if (bc.getLignes() != null && !bc.getLignes().isEmpty()) {
             int lineNum = 1;
             for (var ligne : bc.getLignes()) {
                 // N°
@@ -439,16 +480,34 @@ public class PdfService {
         totalsTable.setWidths(new float[]{2f, 1.5f, 1.5f, 2f});
         totalsTable.setSpacingAfter(20);
         
-        // Pour le BC, on utilise les quantités achetées pour calculer les totaux
+        // Calculer les totaux
         double totalHT = 0.0;
         double tauxTVA = 20.0;
-        if (bc.getLignes() != null && !bc.getLignes().isEmpty()) {
+        
+        // Nouvelle structure: lignesAchat
+        if (bc.getLignesAchat() != null && !bc.getLignesAchat().isEmpty()) {
+            for (var ligne : bc.getLignesAchat()) {
+                double qty = ligne.getQuantiteAchetee() != null ? ligne.getQuantiteAchetee() : 0;
+                double puHT = ligne.getPrixAchatUnitaireHT() != null ? ligne.getPrixAchatUnitaireHT() : 0;
+                totalHT += qty * puHT;
+                if (ligne.getTva() != null && ligne.getTva() > 0) {
+                    tauxTVA = ligne.getTva();
+                }
+            }
+        }
+        // Rétrocompatibilité: ancienne structure lignes
+        else if (bc.getLignes() != null && !bc.getLignes().isEmpty()) {
             for (var ligne : bc.getLignes()) {
                 double qty = ligne.getQuantiteAchetee() != null ? ligne.getQuantiteAchetee() : 0;
                 double puHT = ligne.getPrixAchatUnitaireHT() != null ? ligne.getPrixAchatUnitaireHT() : 0;
                 totalHT += qty * puHT;
             }
         }
+        // Utiliser le total pré-calculé si disponible
+        else if (bc.getTotalAchatHT() != null) {
+            totalHT = bc.getTotalAchatHT();
+        }
+        
         double montantTVA = totalHT * (tauxTVA / 100);
         double totalTTC = totalHT + montantTVA;
         

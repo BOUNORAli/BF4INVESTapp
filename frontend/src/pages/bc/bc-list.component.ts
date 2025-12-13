@@ -110,12 +110,31 @@ import { StoreService, BC } from '../../services/store.service';
                     </div>
                   </td>
                   <td class="px-6 py-4">
-                    <div class="flex flex-col gap-1">
-                      <span class="text-slate-700 font-medium flex items-center gap-1">
-                        <span class="w-1.5 h-1.5 rounded-full bg-indigo-500"></span> {{ store.getClientName(bc.clientId) }}
-                      </span>
-                      <span class="text-xs text-slate-500 flex items-center gap-1 pl-2.5 border-l-2 border-slate-200 ml-1">
-                        Fourn: {{ store.getSupplierName(bc.supplierId) }}
+                    <div class="flex flex-col gap-1.5">
+                      <!-- Clients (multi ou unique) -->
+                      @if (getClientIds(bc).length > 0) {
+                        <div class="flex flex-wrap gap-1">
+                          @for (clientId of getClientIds(bc); track clientId; let i = $index) {
+                            @if (i < 3) {
+                              <span class="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full text-xs font-medium">
+                                <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                                {{ store.getClientName(clientId) }}
+                              </span>
+                            }
+                          }
+                          @if (getClientIds(bc).length > 3) {
+                            <span class="px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full text-xs font-medium">
+                              +{{ getClientIds(bc).length - 3 }}
+                            </span>
+                          }
+                        </div>
+                      } @else {
+                        <span class="text-xs text-slate-400">Aucun client</span>
+                      }
+                      <!-- Fournisseur -->
+                      <span class="text-xs text-slate-500 flex items-center gap-1 pl-1">
+                        <svg class="w-3 h-3 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
+                        {{ store.getSupplierName(bc.supplierId) }}
                       </span>
                     </div>
                   </td>
@@ -191,10 +210,16 @@ export class BcListComponent {
     const dMax = this.dateMax();
 
     return this.store.bcs().filter(bc => {
-      const clientName = this.store.getClientName(bc.clientId).toLowerCase();
-      const matchesSearch = bc.number.toLowerCase().includes(term) || clientName.includes(term);
+      // Recherche dans le numéro BC et les noms des clients
+      const clientIds = this.getClientIds(bc);
+      const clientNames = clientIds.map(id => this.store.getClientName(id).toLowerCase());
+      const matchesSearch = bc.number.toLowerCase().includes(term) || 
+                           clientNames.some(name => name.includes(term));
+      
       const matchesSup = supId ? bc.supplierId === supId : true;
-      const matchesCli = cliId ? bc.clientId === cliId : true;
+      
+      // Filtrer par client (nouveau: cherche dans tous les clients du BC)
+      const matchesCli = cliId ? clientIds.includes(cliId) : true;
       
       const bcDate = new Date(bc.date).getTime();
       const matchesMin = dMin ? bcDate >= new Date(dMin).getTime() : true;
@@ -203,6 +228,21 @@ export class BcListComponent {
       return matchesSearch && matchesSup && matchesCli && matchesMin && matchesMax;
     });
   });
+
+  /**
+   * Récupère tous les IDs des clients d'un BC (nouvelle et ancienne structure)
+   */
+  getClientIds(bc: BC): string[] {
+    // Nouvelle structure: clientsVente
+    if (bc.clientsVente && bc.clientsVente.length > 0) {
+      return bc.clientsVente.map(cv => cv.clientId).filter(id => id);
+    }
+    // Ancienne structure: clientId unique
+    if (bc.clientId) {
+      return [bc.clientId];
+    }
+    return [];
+  }
 
   resetFilters() {
     this.searchTerm.set('');
@@ -222,7 +262,6 @@ export class BcListComponent {
 
   async exportGlobal() {
     try {
-      // Préparer les paramètres de filtrage
       const params: any = {};
       
       if (this.filterClient()) {
@@ -238,11 +277,8 @@ export class BcListComponent {
         params.dateMax = this.dateMax();
       }
       
-      // Note: Le statut n'est pas filtré dans l'interface actuelle, mais on pourrait l'ajouter
-      
       await this.store.exportBCsToExcel(params);
     } catch (error) {
-      // Error already handled in store service
       console.error('Error in exportGlobal:', error);
     }
   }
@@ -251,15 +287,56 @@ export class BcListComponent {
     return new Intl.NumberFormat('fr-MA', { style: 'currency', currency: 'MAD', maximumFractionDigits: 0 }).format(val);
   }
 
+  /**
+   * Calcule le total d'achat HT (nouvelle et ancienne structure)
+   */
   getBuyTotal(bc: BC): number {
-    return bc.items.reduce((acc, i) => acc + (i.qtyBuy * i.priceBuyHT), 0);
+    // Utiliser les totaux pré-calculés si disponibles
+    if (bc.totalAchatHT !== undefined) {
+      return bc.totalAchatHT;
+    }
+    // Nouvelle structure
+    if (bc.lignesAchat && bc.lignesAchat.length > 0) {
+      return bc.lignesAchat.reduce((acc, l) => 
+        acc + (l.quantiteAchetee || 0) * (l.prixAchatUnitaireHT || 0), 0);
+    }
+    // Ancienne structure
+    if (bc.items) {
+      return bc.items.reduce((acc, i) => acc + (i.qtyBuy * i.priceBuyHT), 0);
+    }
+    return 0;
   }
 
+  /**
+   * Calcule le total de vente HT (nouvelle et ancienne structure)
+   */
   getSellTotal(bc: BC): number {
-    return bc.items.reduce((acc, i) => acc + (i.qtySell * i.priceSellHT), 0);
+    // Utiliser les totaux pré-calculés si disponibles
+    if (bc.totalVenteHT !== undefined) {
+      return bc.totalVenteHT;
+    }
+    // Nouvelle structure
+    if (bc.clientsVente && bc.clientsVente.length > 0) {
+      return bc.clientsVente.reduce((acc, cv) => {
+        if (cv.lignesVente) {
+          return acc + cv.lignesVente.reduce((sum, l) => 
+            sum + (l.quantiteVendue || 0) * (l.prixVenteUnitaireHT || 0), 0);
+        }
+        return acc;
+      }, 0);
+    }
+    // Ancienne structure
+    if (bc.items) {
+      return bc.items.reduce((acc, i) => acc + (i.qtySell * i.priceSellHT), 0);
+    }
+    return 0;
   }
 
   getMarginPercent(bc: BC): string {
+    // Utiliser le pourcentage pré-calculé si disponible
+    if (bc.margePourcentage !== undefined) {
+      return bc.margePourcentage.toFixed(1);
+    }
     const buy = this.getBuyTotal(bc);
     const sell = this.getSellTotal(bc);
     if (buy === 0) return '0';
@@ -268,7 +345,6 @@ export class BcListComponent {
 
   getMarginClass(bc: BC): string {
     const pct = parseFloat(this.getMarginPercent(bc));
-    // Badge styles
     if (pct >= 15) return 'bg-emerald-50 text-emerald-700 text-xs font-bold px-2.5 py-1 rounded-full border border-emerald-100 shadow-sm';
     if (pct > 0) return 'bg-amber-50 text-amber-700 text-xs font-bold px-2.5 py-1 rounded-full border border-amber-100 shadow-sm';
     return 'bg-red-50 text-red-700 text-xs font-bold px-2.5 py-1 rounded-full border border-red-100 shadow-sm';

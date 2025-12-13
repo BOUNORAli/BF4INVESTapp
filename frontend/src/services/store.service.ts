@@ -42,15 +42,67 @@ export interface LineItem {
   tvaRate: number;
 }
 
+// === NOUVELLE STRUCTURE MULTI-CLIENTS ===
+
+export interface LigneAchat {
+  produitRef: string;
+  designation: string;
+  unite: string;
+  quantiteAchetee: number;
+  prixAchatUnitaireHT: number;
+  tva: number;
+  totalHT?: number;
+  totalTTC?: number;
+}
+
+export interface LigneVente {
+  produitRef: string;
+  designation: string;
+  unite: string;
+  quantiteVendue: number;
+  prixVenteUnitaireHT: number;
+  tva: number;
+  totalHT?: number;
+  totalTTC?: number;
+  margeUnitaire?: number;
+  margePourcentage?: number;
+}
+
+export interface ClientVente {
+  clientId: string;
+  lignesVente: LigneVente[];
+  totalVenteHT?: number;
+  totalVenteTTC?: number;
+  totalTVA?: number;
+  margeTotale?: number;
+  margePourcentage?: number;
+}
+
+// === FIN NOUVELLE STRUCTURE ===
+
 export interface BC {
   id: string;
   number: string;
   date: string;
-  clientId: string;
   supplierId: string;
-  items: LineItem[];
   status: 'draft' | 'sent' | 'completed';
   paymentMode?: string;
+  
+  // Nouvelle structure multi-clients
+  lignesAchat?: LigneAchat[];
+  clientsVente?: ClientVente[];
+  
+  // Ancienne structure (rétrocompatibilité)
+  clientId?: string;
+  items?: LineItem[];
+  
+  // Totaux
+  totalAchatHT?: number;
+  totalAchatTTC?: number;
+  totalVenteHT?: number;
+  totalVenteTTC?: number;
+  margeTotale?: number;
+  margePourcentage?: number;
 }
 
 export interface PaymentMode {

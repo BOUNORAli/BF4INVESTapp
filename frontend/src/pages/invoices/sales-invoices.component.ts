@@ -490,7 +490,15 @@ export class SalesInvoicesComponent {
   onPartnerChange() {
     const clientId = this.form.get('partnerId')?.value;
     if (clientId) {
-      const bcs = this.store.bcs().filter(b => b.clientId === clientId);
+      // Filtrer les BCs qui contiennent ce client (nouvelle structure multi-clients ou ancienne structure)
+      const bcs = this.store.bcs().filter(bc => {
+        // Nouvelle structure: clientsVente
+        if (bc.clientsVente && bc.clientsVente.length > 0) {
+          return bc.clientsVente.some(cv => cv.clientId === clientId);
+        }
+        // Ancienne structure: clientId unique
+        return bc.clientId === clientId;
+      });
       this.availableBCs.set(bcs);
     } else {
       this.availableBCs.set([]);
@@ -499,11 +507,36 @@ export class SalesInvoicesComponent {
 
   onBCChange() {
     const bcId = this.form.get('bcId')?.value;
+    const clientId = this.form.get('partnerId')?.value;
     const bc = this.store.bcs().find(b => b.id === bcId);
+    
     if (bc) {
-      // Auto fill amounts from BC Selling values
-      const totalHT = bc.items.reduce((acc, i) => acc + (i.qtySell * i.priceSellHT), 0);
-      const totalTva = bc.items.reduce((acc, i) => acc + (i.qtySell * i.priceSellHT * (i.tvaRate/100)), 0);
+      let totalHT = 0;
+      let totalTva = 0;
+
+      // Nouvelle structure multi-clients
+      if (bc.clientsVente && bc.clientsVente.length > 0) {
+        // Trouver le client spécifique dans le BC
+        const clientVente = bc.clientsVente.find(cv => cv.clientId === clientId);
+        if (clientVente && clientVente.lignesVente) {
+          // Utiliser les totaux pré-calculés si disponibles
+          if (clientVente.totalVenteHT !== undefined && clientVente.totalVenteTTC !== undefined) {
+            totalHT = clientVente.totalVenteHT;
+            totalTva = (clientVente.totalVenteTTC || 0) - totalHT;
+          } else {
+            // Calculer à partir des lignes de vente
+            totalHT = clientVente.lignesVente.reduce((acc, l) => 
+              acc + (l.quantiteVendue || 0) * (l.prixVenteUnitaireHT || 0), 0);
+            totalTva = clientVente.lignesVente.reduce((acc, l) => 
+              acc + (l.quantiteVendue || 0) * (l.prixVenteUnitaireHT || 0) * ((l.tva || 0) / 100), 0);
+          }
+        }
+      } 
+      // Ancienne structure
+      else if (bc.items) {
+        totalHT = bc.items.reduce((acc, i) => acc + (i.qtySell * i.priceSellHT), 0);
+        totalTva = bc.items.reduce((acc, i) => acc + (i.qtySell * i.priceSellHT * (i.tvaRate/100)), 0);
+      }
       
       this.form.patchValue({
         amountHT: totalHT,
