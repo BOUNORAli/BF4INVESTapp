@@ -160,6 +160,101 @@
     <!-- Main Content Wrapper -->
     <main class="flex-1 flex flex-col min-w-0 bg-[#F8FAFC]">
       
+      <!-- Mobile Search Modal -->
+      @if (isMobileSearchOpen()) {
+        <div class="fixed inset-0 bg-white z-[100] flex flex-col md:hidden">
+          <!-- Header -->
+          <div class="flex items-center gap-3 p-4 border-b border-slate-200 bg-white">
+            <button (click)="closeMobileSearch()" class="p-2 text-slate-600 hover:text-slate-800 transition-colors">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+              </svg>
+            </button>
+            <div class="flex-1 relative">
+              <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none z-10">
+                <svg class="h-5 w-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                </svg>
+              </span>
+              <input 
+                type="text" 
+                class="mobile-search-input w-full pl-10 pr-4 py-3 rounded-lg border border-slate-200 bg-slate-50 text-base focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder-slate-400" 
+                [(ngModel)]="globalSearchTerm"
+                (input)="onSearchInput($event)"
+                (keydown)="onSearchKeyDown($event)"
+                (focus)="isSearchOpen.set(globalSearchTerm().length > 0 && searchResults().length > 0)"
+                placeholder="Recherche globale...">
+            </div>
+          </div>
+
+          <!-- Results -->
+          <div class="flex-1 overflow-y-auto bg-white">
+            @if (globalSearchTerm().length > 0 && searchResults().length > 0) {
+              <div class="border-b border-slate-100 bg-slate-50/50 px-4 py-2">
+                <span class="text-xs font-semibold text-slate-600 uppercase tracking-wider">
+                  {{ searchResults().length }} résultat{{ searchResults().length > 1 ? 's' : '' }}
+                </span>
+              </div>
+
+              <div class="py-2">
+                @for (category of getGroupedResults(); track category.type) {
+                  <div class="border-b border-slate-50 last:border-b-0">
+                    <div class="px-4 py-2 bg-slate-50/30">
+                      <div class="flex items-center gap-2">
+                        <svg class="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" [attr.d]="getCategoryIcon(category.type)"></path>
+                        </svg>
+                        <span class="text-xs font-bold text-slate-600 uppercase tracking-wider">{{ getCategoryLabel(category.type) }}</span>
+                        <span class="text-xs text-slate-400">({{ category.results.length }})</span>
+                      </div>
+                    </div>
+
+                    @for (result of category.results; track result.id; let idx = $index) {
+                      <div 
+                        (click)="navigateToResult(result); closeMobileSearch()"
+                        [class.bg-blue-50]="selectedResultIndex() === getResultIndex(category.type, idx)"
+                        [class.border-l-4]="selectedResultIndex() === getResultIndex(category.type, idx)"
+                        [class.border-blue-500]="selectedResultIndex() === getResultIndex(category.type, idx)"
+                        class="px-4 py-3 hover:bg-slate-50 transition-colors cursor-pointer border-l-4 border-transparent flex items-start gap-3">
+                        <div class="mt-0.5 shrink-0">
+                          <div [class]="getResultIconClass(result.type)">
+                            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" [attr.d]="result.icon"></path>
+                            </svg>
+                          </div>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                          <div class="font-semibold text-slate-800 text-base" 
+                               [innerHTML]="highlightText(result.title, globalSearchTerm())"></div>
+                          <div class="text-sm text-slate-500 mt-0.5" 
+                               [innerHTML]="highlightText(result.subtitle, globalSearchTerm())"></div>
+                        </div>
+                      </div>
+                    }
+                  </div>
+                }
+              </div>
+            } @else if (globalSearchTerm().length > 0 && searchResults().length === 0) {
+              <div class="flex flex-col items-center justify-center py-16 px-4">
+                <svg class="w-16 h-16 text-slate-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                </svg>
+                <p class="text-base font-medium text-slate-600 mb-1">Aucun résultat trouvé</p>
+                <p class="text-sm text-slate-400">Essayez avec d'autres mots-clés</p>
+              </div>
+            } @else {
+              <div class="flex flex-col items-center justify-center py-16 px-4">
+                <svg class="w-16 h-16 text-slate-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                </svg>
+                <p class="text-base font-medium text-slate-600 mb-1">Recherche globale</p>
+                <p class="text-sm text-slate-400 text-center">Tapez pour rechercher dans les BCs, factures, produits, clients et fournisseurs</p>
+              </div>
+            }
+          </div>
+        </div>
+      }
+      
       <!-- Glass Header -->
       <header class="h-16 md:h-20 glass sticky top-0 z-20 px-4 md:px-8 flex items-center justify-between shadow-sm">
         
@@ -174,6 +269,15 @@
         </div>
 
         <div class="flex items-center gap-4 md:gap-6 relative">
+          <!-- Mobile Search Button -->
+          <button (click)="isMobileSearchOpen.set(true)" 
+                  class="md:hidden p-2 text-slate-400 hover:text-blue-600 transition-colors focus:outline-none"
+                  title="Recherche">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+            </svg>
+          </button>
+
           <!-- Search (Hidden on Mobile) -->
           <div class="relative hidden md:block global-search-container">
             <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none z-10">

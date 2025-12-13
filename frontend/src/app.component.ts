@@ -1,5 +1,5 @@
 
-import { Component, inject, signal, effect, OnInit, HostListener } from '@angular/core';
+import { Component, inject, signal, effect, OnInit, HostListener, ViewChild, ElementRef, AfterViewChecked } from '@angular/core';
 import { RouterOutlet, RouterLink, RouterLinkActive, Router, NavigationEnd } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -39,6 +39,7 @@ export class AppComponent implements OnInit {
   globalSearchTerm = signal('');
   searchResults = signal<SearchResult[]>([]);
   isSearchOpen = signal(false);
+  isMobileSearchOpen = signal(false);
   selectedResultIndex = signal(-1);
   private searchDebounceTimer: any = null;
 
@@ -50,7 +51,20 @@ export class AppComponent implements OnInit {
       this.isMobileMenuOpen.set(false);
       this.isNotificationsOpen.set(false);
       this.isSearchOpen.set(false);
+      this.isMobileSearchOpen.set(false);
       this.globalSearchTerm.set('');
+    });
+
+    // Focus automatique sur l'input de recherche mobile quand le modal s'ouvre
+    effect(() => {
+      if (this.isMobileSearchOpen()) {
+        setTimeout(() => {
+          const input = document.querySelector('.mobile-search-input') as HTMLInputElement;
+          if (input) {
+            input.focus();
+          }
+        }, 100);
+      }
     });
   }
 
@@ -370,6 +384,13 @@ export class AppComponent implements OnInit {
 
   closeSearch() {
     this.isSearchOpen.set(false);
+  }
+
+  closeMobileSearch() {
+    this.isMobileSearchOpen.set(false);
+    this.globalSearchTerm.set('');
+    this.searchResults.set([]);
+    this.selectedResultIndex.set(-1);
   }
 
   @HostListener('document:click', ['$event'])
