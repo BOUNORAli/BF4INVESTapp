@@ -18,6 +18,7 @@ import java.util.stream.Collectors;
 public class BandeCommandeService {
     
     private final BandeCommandeRepository bcRepository;
+    private final AuditService auditService;
     
     public List<BandeCommande> findAll() {
         return bcRepository.findAll();
@@ -39,12 +40,20 @@ public class BandeCommandeService {
         bc.setCreatedAt(LocalDateTime.now());
         bc.setUpdatedAt(LocalDateTime.now());
         
-        return bcRepository.save(bc);
+        BandeCommande saved = bcRepository.save(bc);
+        
+        // Journaliser la création
+        auditService.logCreate("BandeCommande", saved.getId(), 
+            "BC " + saved.getNumeroBC() + " créée - Total: " + saved.getTotalVenteTTC() + " MAD");
+        
+        return saved;
     }
     
     public BandeCommande update(String id, BandeCommande bc) {
         return bcRepository.findById(id)
                 .map(existing -> {
+                    String oldEtat = existing.getEtat();
+                    
                     existing.setDateBC(bc.getDateBC());
                     existing.setClientId(bc.getClientId());
                     existing.setFournisseurId(bc.getFournisseurId());
@@ -59,12 +68,25 @@ public class BandeCommandeService {
                     calculateTotals(existing);
                     
                     existing.setUpdatedAt(LocalDateTime.now());
-                    return bcRepository.save(existing);
+                    BandeCommande saved = bcRepository.save(existing);
+                    
+                    // Journaliser la modification
+                    String details = "BC " + saved.getNumeroBC() + " modifiée";
+                    if (!oldEtat.equals(bc.getEtat())) {
+                        details += " - Statut: " + oldEtat + " -> " + bc.getEtat();
+                    }
+                    auditService.logUpdate("BandeCommande", saved.getId(), oldEtat, details);
+                    
+                    return saved;
                 })
                 .orElseThrow(() -> new RuntimeException("BC not found with id: " + id));
     }
     
     public void delete(String id) {
+        // Récupérer la BC avant suppression pour le log
+        bcRepository.findById(id).ifPresent(bc -> {
+            auditService.logDelete("BandeCommande", id, "BC " + bc.getNumeroBC() + " supprimée");
+        });
         bcRepository.deleteById(id);
     }
     

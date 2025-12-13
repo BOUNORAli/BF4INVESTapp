@@ -15,6 +15,7 @@ import { LoginComponent } from './pages/auth/login.component';
 import { SettingsComponent } from './pages/settings/settings.component';
 import { SearchComponent } from './pages/search/search.component';
 import { NotificationsComponent } from './pages/notifications/notifications.component';
+import { AuditComponent } from './pages/audit/audit.component';
 
 const authGuard: CanActivateFn = () => {
   const auth = inject(AuthService);
@@ -46,6 +47,7 @@ export const routes: Routes = [
       { path: 'settings', component: SettingsComponent },
       { path: 'search', component: SearchComponent },
       { path: 'notifications', component: NotificationsComponent },
+      { path: 'audit', component: AuditComponent },
     ]
   },
   { path: '**', redirectTo: 'dashboard' }

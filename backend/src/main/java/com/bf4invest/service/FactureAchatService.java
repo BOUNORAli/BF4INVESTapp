@@ -18,6 +18,7 @@ public class FactureAchatService {
     
     private final FactureAchatRepository factureRepository;
     private final AppConfig appConfig;
+    private final AuditService auditService;
     
     public List<FactureAchat> findAll() {
         return factureRepository.findAll();
@@ -50,7 +51,13 @@ public class FactureAchatService {
         facture.setCreatedAt(LocalDateTime.now());
         facture.setUpdatedAt(LocalDateTime.now());
         
-        return factureRepository.save(facture);
+        FactureAchat saved = factureRepository.save(facture);
+        
+        // Journaliser la création
+        auditService.logCreate("FactureAchat", saved.getId(), 
+            "Facture Achat " + saved.getNumeroFactureAchat() + " créée - Montant: " + saved.getTotalTTC() + " MAD");
+        
+        return saved;
     }
     
     public FactureAchat update(String id, FactureAchat facture) {
@@ -112,12 +119,22 @@ public class FactureAchatService {
                     }
                     
                     existing.setUpdatedAt(LocalDateTime.now());
-                    return factureRepository.save(existing);
+                    FactureAchat saved = factureRepository.save(existing);
+                    
+                    // Journaliser la modification
+                    auditService.logUpdate("FactureAchat", saved.getId(), null, 
+                        "Facture Achat " + saved.getNumeroFactureAchat() + " modifiée - Statut: " + saved.getEtatPaiement());
+                    
+                    return saved;
                 })
                 .orElseThrow(() -> new RuntimeException("Facture achat not found with id: " + id));
     }
     
     public void delete(String id) {
+        // Journaliser avant suppression
+        factureRepository.findById(id).ifPresent(f -> {
+            auditService.logDelete("FactureAchat", id, "Facture Achat " + f.getNumeroFactureAchat() + " supprimée");
+        });
         factureRepository.deleteById(id);
     }
     

@@ -18,31 +18,23 @@ public class DataInitializer implements CommandLineRunner {
     
     @Override
     public void run(String... args) {
-        // Créer un utilisateur admin par défaut si aucun n'existe
-        if (userRepository.findAll().isEmpty()) {
-            User admin = User.builder()
-                    .name("Administrateur")
-                    .email("admin@bf4invest.ma")
-                    .password(passwordEncoder.encode("admin123"))
-                    .role(User.Role.ADMIN)
-                    .enabled(true)
-                    .accountNonExpired(true)
-                    .accountNonLocked(true)
-                    .credentialsNonExpired(true)
-                    .createdAt(LocalDateTime.now())
-                    .updatedAt(LocalDateTime.now())
-                    .build();
-            
-            userRepository.save(admin);
-            System.out.println("Utilisateur admin créé: admin@bf4invest.ma / admin123");
-        }
+        // Créer les 4 comptes utilisateurs si ils n'existent pas
+        createUserIfNotExists("Boubker", "boubker@bf4invest.ma", "boubker123");
+        createUserIfNotExists("Fatima", "fatima@bf4invest.ma", "fatima123");
+        createUserIfNotExists("Ali", "ali@bf4invest.ma", "ali123");
+        createUserIfNotExists("Direction", "direction@bf4invest.ma", "direction123");
         
-        // Créer aussi un utilisateur avec admin@bf4.com pour compatibilité
-        if (userRepository.findByEmail("admin@bf4.com").isEmpty()) {
-            User adminAlt = User.builder()
-                    .name("Administrateur")
-                    .email("admin@bf4.com")
-                    .password(passwordEncoder.encode("admin123"))
+        // Garder les anciens comptes admin pour compatibilité
+        createUserIfNotExists("Administrateur", "admin@bf4invest.ma", "admin123");
+        createUserIfNotExists("Administrateur", "admin@bf4.com", "admin123");
+    }
+    
+    private void createUserIfNotExists(String name, String email, String password) {
+        if (userRepository.findByEmail(email).isEmpty()) {
+            User user = User.builder()
+                    .name(name)
+                    .email(email)
+                    .password(passwordEncoder.encode(password))
                     .role(User.Role.ADMIN)
                     .enabled(true)
                     .accountNonExpired(true)
@@ -52,8 +44,8 @@ public class DataInitializer implements CommandLineRunner {
                     .updatedAt(LocalDateTime.now())
                     .build();
             
-            userRepository.save(adminAlt);
-            System.out.println("Utilisateur admin créé: admin@bf4.com / admin123");
+            userRepository.save(user);
+            System.out.println("Utilisateur cree: " + email + " / " + password);
         }
     }
 }
