@@ -971,26 +971,89 @@ export class StoreService {
   }
 
   private mapBC(bc: any): BC {
-    return {
+    console.log('🟣 store.mapBC() - DÉBUT mapping');
+    console.log('🟣 store.mapBC() - BC reçue:', {
+      id: bc.id,
+      numeroBC: bc.numeroBC,
+      lignesAchat: bc.lignesAchat,
+      clientsVente: bc.clientsVente,
+      lignesAchatCount: bc.lignesAchat?.length || 0,
+      clientsVenteCount: bc.clientsVente?.length || 0
+    });
+    
+    // Mapper lignesAchat (nouvelle structure)
+    const lignesAchat: LigneAchat[] = bc.lignesAchat ? bc.lignesAchat.map((l: any) => ({
+      produitRef: l.produitRef || '',
+      designation: l.designation || '',
+      unite: l.unite || 'U',
+      quantiteAchetee: l.quantiteAchetee || 0,
+      prixAchatUnitaireHT: l.prixAchatUnitaireHT || 0,
+      tva: l.tva || 20,
+      totalHT: l.totalHT,
+      totalTTC: l.totalTTC
+    })) : [];
+    
+    // Mapper clientsVente (nouvelle structure)
+    const clientsVente: ClientVente[] = bc.clientsVente ? bc.clientsVente.map((cv: any) => ({
+      clientId: cv.clientId || '',
+      lignesVente: (cv.lignesVente || []).map((lv: any) => ({
+        produitRef: lv.produitRef || '',
+        designation: lv.designation || '',
+        unite: lv.unite || 'U',
+        quantiteVendue: lv.quantiteVendue || 0,
+        prixVenteUnitaireHT: lv.prixVenteUnitaireHT || 0,
+        tva: lv.tva || 20,
+        totalHT: lv.totalHT,
+        totalTTC: lv.totalTTC,
+        margeUnitaire: lv.margeUnitaire,
+        margePourcentage: lv.margePourcentage
+      }))
+    })) : [];
+    
+    console.log('🟣 store.mapBC() - lignesAchat mappées:', lignesAchat.length);
+    console.log('🟣 store.mapBC() - clientsVente mappés:', clientsVente.length);
+    
+    // Mapper items (ancienne structure pour rétrocompatibilité)
+    const items: LineItem[] = (bc.lignes || bc.items || []).map((item: any) => ({
+      productId: item.productId || '',
+      ref: item.produitRef || item.ref,
+      name: item.designation || item.name,
+      unit: item.unite || item.unit,
+      qtyBuy: item.quantiteAchetee || item.qtyBuy,
+      qtySell: item.quantiteVendue || item.qtySell,
+      priceBuyHT: item.prixAchatUnitaireHT || item.priceBuyHT,
+      priceSellHT: item.prixVenteUnitaireHT || item.priceSellHT,
+      tvaRate: item.tva || item.tvaRate
+    }));
+    
+    const mapped: BC = {
       id: bc.id,
       number: bc.numeroBC || bc.number,
       date: bc.dateBC || bc.date,
-      clientId: bc.clientId,
+      clientId: bc.clientId, // Rétrocompatibilité
       supplierId: bc.fournisseurId || bc.supplierId,
       status: bc.etat || bc.status,
       paymentMode: bc.modePaiement || bc.paymentMode,
-      items: (bc.lignes || bc.items || []).map((item: any) => ({
-        productId: item.productId || '',
-        ref: item.produitRef || item.ref,
-        name: item.designation || item.name,
-        unit: item.unite || item.unit,
-        qtyBuy: item.quantiteAchetee || item.qtyBuy,
-        qtySell: item.quantiteVendue || item.qtySell,
-        priceBuyHT: item.prixAchatUnitaireHT || item.priceBuyHT,
-        priceSellHT: item.prixVenteUnitaireHT || item.priceSellHT,
-        tvaRate: item.tva || item.tvaRate
-      }))
+      items: items, // Rétrocompatibilité
+      // Nouvelle structure
+      lignesAchat: lignesAchat,
+      clientsVente: clientsVente,
+      // Totaux
+      totalAchatHT: bc.totalAchatHT,
+      totalAchatTTC: bc.totalAchatTTC,
+      totalVenteHT: bc.totalVenteHT,
+      totalVenteTTC: bc.totalVenteTTC,
+      margeTotale: bc.margeTotale,
+      margePourcentage: bc.margePourcentage
     };
+    
+    console.log('🟣 store.mapBC() - BC mappée finale:', {
+      id: mapped.id,
+      lignesAchatCount: mapped.lignesAchat?.length || 0,
+      clientsVenteCount: mapped.clientsVente?.length || 0
+    });
+    
+    return mapped;
   }
 
   // --- ACTIONS: INVOICES ---
