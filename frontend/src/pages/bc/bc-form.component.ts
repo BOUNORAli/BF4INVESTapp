@@ -747,6 +747,51 @@ export class BcFormComponent implements OnInit {
       return;
     }
 
+    // Vérifier que la somme des quantités vendues aux clients
+    // est égale aux quantités achetées auprès du fournisseur (par produit)
+    const achatsMap = new Map<string, number>();
+    const ventesMap = new Map<string, number>();
+
+    // 1) Quantités achetées par produit
+    this.lignesAchatArray.controls.forEach(control => {
+      const val = control.value;
+      const ref: string = val.produitRef || val.designation;
+      const qte: number = val.quantiteAchetee || 0;
+      if (!ref) {
+        return;
+      }
+      achatsMap.set(ref, (achatsMap.get(ref) || 0) + qte);
+    });
+
+    // 2) Quantités vendues (tous les clients) par produit
+    this.clientsVenteArray.controls.forEach(clientControl => {
+      const lignesArray = clientControl.get('lignesVente') as FormArray;
+      lignesArray.controls.forEach(ligneControl => {
+        const val = ligneControl.value;
+        const ref: string = val.produitRef || val.designation;
+        const qte: number = val.quantiteVendue || 0;
+        if (!ref) {
+          return;
+        }
+        ventesMap.set(ref, (ventesMap.get(ref) || 0) + qte);
+      });
+    });
+
+    // 3) Comparer pour chaque produit
+    for (const [ref, qteAchat] of achatsMap.entries()) {
+      const qteVente = ventesMap.get(ref) || 0;
+      if (qteVente !== qteAchat) {
+        alert(
+          `Incohérence sur le produit "${ref}" :\n` +
+          `- Quantité achetée fournisseur : ${qteAchat}\n` +
+          `- Quantité répartie chez les clients : ${qteVente}\n\n` +
+          `La somme des quantités vendues aux clients doit être ÉGALE à la quantité achetée.\n` +
+          `Merci d'ajuster les quantités avant d'enregistrer.`
+        );
+        return;
+      }
+    }
+
     const formVal = this.form.value;
 
     // Construire les lignes d'achat
