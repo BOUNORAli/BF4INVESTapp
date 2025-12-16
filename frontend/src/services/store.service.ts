@@ -783,6 +783,12 @@ export class StoreService {
       const created = await this.api.post<any>('/bandes-commandes', payload).toPromise();
       const mapped = this.mapBC(created);
       this.bcs.update(list => [mapped, ...list]);
+      
+      // Recharger les produits si le stock a été mis à jour
+      if (bc.ajouterAuStock) {
+        await this.loadProducts();
+      }
+      
       this.showToast('Commande créée avec succès', 'success');
       this.addNotification({ title: 'Nouvelle Commande', message: `BC ${bc.number} créé.`, type: 'success' });
     } catch (error) {
@@ -854,6 +860,11 @@ export class StoreService {
       const updated = await this.api.put<any>(`/bandes-commandes/${updatedBc.id}`, payload).toPromise();
       const mapped = this.mapBC(updated);
       this.bcs.update(list => list.map(b => b.id === updatedBc.id ? mapped : b));
+      
+      // Recharger les produits si le stock a été mis à jour
+      if (updatedBc.ajouterAuStock) {
+        await this.loadProducts();
+      }
       this.showToast('Commande mise à jour', 'success');
     } catch (error) {
       this.showToast('Erreur lors de la mise à jour', 'error');

@@ -910,13 +910,13 @@ export class BcFormComponent implements OnInit {
 
     // Construire les lignes d'achat
     const lignesAchat: LigneAchat[] = this.lignesAchatArray.value
-      .filter((l: any) => l.designation && l.prixAchatUnitaireHT > 0)
+      .filter((l: any) => l.designation && l.produitRef) // Filtrer seulement les lignes avec produit sélectionné
       .map((l: any) => ({
         produitRef: l.produitRef || l.designation,
         designation: l.designation,
         unite: l.unite || 'U',
-        quantiteAchetee: l.quantiteAchetee || 1,
-        prixAchatUnitaireHT: l.prixAchatUnitaireHT,
+        quantiteAchetee: l.quantiteAchetee || 0,
+        prixAchatUnitaireHT: l.prixAchatUnitaireHT || 0,
         tva: l.tva || 20
       }));
 
