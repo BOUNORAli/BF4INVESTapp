@@ -665,6 +665,7 @@ export class StoreService {
         unite: product.unit,
         prixAchatUnitaireHT: product.priceBuyHT,
         prixVenteUnitaireHT: product.priceSellHT,
+        quantiteEnStock: product.stock !== undefined ? product.stock : 0,
         tva: 20.0
       };
       
@@ -685,7 +686,8 @@ export class StoreService {
         designation: product.name,
         unite: product.unit,
         prixAchatUnitaireHT: product.priceBuyHT,
-        prixVenteUnitaireHT: product.priceSellHT
+        prixVenteUnitaireHT: product.priceSellHT,
+        quantiteEnStock: product.stock !== undefined ? product.stock : 0
       };
       
       const updated = await this.api.put<any>(`/produits/${product.id}`, payload).toPromise();
