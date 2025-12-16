@@ -272,20 +272,30 @@ export class PartnersComponent {
   });
 
   filteredClients = computed(() => {
-    const term = this.searchTerm().toLowerCase();
+    const term = this.searchTerm().toLowerCase().trim();
+    if (!term) {
+      return this.store.clients();
+    }
     return this.store.clients().filter(c => 
-      c.name.toLowerCase().includes(term) || 
-      c.ice.includes(term) || 
-      c.contact.toLowerCase().includes(term)
+      (c.name && c.name.toLowerCase().includes(term)) || 
+      (c.ice && c.ice.toLowerCase().includes(term)) || 
+      (c.contact && c.contact.toLowerCase().includes(term)) ||
+      (c.email && c.email.toLowerCase().includes(term)) ||
+      (c.phone && c.phone.toLowerCase().includes(term))
     );
   });
 
   filteredSuppliers = computed(() => {
-    const term = this.searchTerm().toLowerCase();
+    const term = this.searchTerm().toLowerCase().trim();
+    if (!term) {
+      return this.store.suppliers();
+    }
     return this.store.suppliers().filter(s => 
-      s.name.toLowerCase().includes(term) || 
-      s.ice.includes(term) || 
-      s.contact.toLowerCase().includes(term)
+      (s.name && s.name.toLowerCase().includes(term)) || 
+      (s.ice && s.ice.toLowerCase().includes(term)) || 
+      (s.contact && s.contact.toLowerCase().includes(term)) ||
+      (s.email && s.email.toLowerCase().includes(term)) ||
+      (s.phone && s.phone.toLowerCase().includes(term))
     );
   });
 

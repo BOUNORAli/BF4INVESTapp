@@ -722,9 +722,42 @@ export class StoreService {
       const payload: any = {
         numeroBC: bc.number,
         dateBC: bc.date,
-        clientId: bc.clientId,
         fournisseurId: bc.supplierId,
-        lignes: bc.items.map(item => ({
+        etat: bc.status
+      };
+      
+      // Nouvelle structure multi-clients
+      if (bc.lignesAchat && bc.lignesAchat.length > 0) {
+        payload.lignesAchat = bc.lignesAchat.map(l => ({
+          produitRef: l.produitRef,
+          designation: l.designation,
+          unite: l.unite,
+          quantiteAchetee: l.quantiteAchetee,
+          prixAchatUnitaireHT: l.prixAchatUnitaireHT,
+          tva: l.tva
+        }));
+      }
+      
+      if (bc.clientsVente && bc.clientsVente.length > 0) {
+        payload.clientsVente = bc.clientsVente.map(cv => ({
+          clientId: cv.clientId,
+          lignesVente: (cv.lignesVente || []).map(lv => ({
+            produitRef: lv.produitRef,
+            designation: lv.designation,
+            unite: lv.unite,
+            quantiteVendue: lv.quantiteVendue,
+            prixVenteUnitaireHT: lv.prixVenteUnitaireHT,
+            tva: lv.tva
+          }))
+        }));
+      }
+      
+      // Rétrocompatibilité ancienne structure
+      if (bc.clientId) {
+        payload.clientId = bc.clientId;
+      }
+      if (bc.items && bc.items.length > 0) {
+        payload.lignes = bc.items.map(item => ({
           produitRef: item.ref,
           designation: item.name,
           unite: item.unit,
@@ -733,9 +766,9 @@ export class StoreService {
           prixAchatUnitaireHT: item.priceBuyHT,
           prixVenteUnitaireHT: item.priceSellHT,
           tva: item.tvaRate
-        })),
-        etat: bc.status
-      };
+        }));
+      }
+      
       if (bc.paymentMode) {
         payload.modePaiement = bc.paymentMode;
       }
@@ -756,9 +789,42 @@ export class StoreService {
       const payload: any = {
         numeroBC: updatedBc.number,
         dateBC: updatedBc.date,
-        clientId: updatedBc.clientId,
         fournisseurId: updatedBc.supplierId,
-        lignes: updatedBc.items.map(item => ({
+        etat: updatedBc.status
+      };
+      
+      // Nouvelle structure multi-clients
+      if (updatedBc.lignesAchat && updatedBc.lignesAchat.length > 0) {
+        payload.lignesAchat = updatedBc.lignesAchat.map(l => ({
+          produitRef: l.produitRef,
+          designation: l.designation,
+          unite: l.unite,
+          quantiteAchetee: l.quantiteAchetee,
+          prixAchatUnitaireHT: l.prixAchatUnitaireHT,
+          tva: l.tva
+        }));
+      }
+      
+      if (updatedBc.clientsVente && updatedBc.clientsVente.length > 0) {
+        payload.clientsVente = updatedBc.clientsVente.map(cv => ({
+          clientId: cv.clientId,
+          lignesVente: (cv.lignesVente || []).map(lv => ({
+            produitRef: lv.produitRef,
+            designation: lv.designation,
+            unite: lv.unite,
+            quantiteVendue: lv.quantiteVendue,
+            prixVenteUnitaireHT: lv.prixVenteUnitaireHT,
+            tva: lv.tva
+          }))
+        }));
+      }
+      
+      // Rétrocompatibilité ancienne structure
+      if (updatedBc.clientId) {
+        payload.clientId = updatedBc.clientId;
+      }
+      if (updatedBc.items && updatedBc.items.length > 0) {
+        payload.lignes = updatedBc.items.map(item => ({
           produitRef: item.ref,
           designation: item.name,
           unite: item.unit,
@@ -767,9 +833,9 @@ export class StoreService {
           prixAchatUnitaireHT: item.priceBuyHT,
           prixVenteUnitaireHT: item.priceSellHT,
           tva: item.tvaRate
-        })),
-        etat: updatedBc.status
-      };
+        }));
+      }
+      
       if (updatedBc.paymentMode) {
         payload.modePaiement = updatedBc.paymentMode;
       }
