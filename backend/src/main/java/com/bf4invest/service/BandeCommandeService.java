@@ -141,15 +141,18 @@ public class BandeCommandeService {
             throw new IllegalArgumentException("Un client est requis pour générer le numéro BC");
         }
         
+        // Créer une variable finale pour utiliser dans les lambdas
+        final String finalClientId = clientId;
+        
         // 2. Récupérer la référence du client
-        String refClient = clientService.findById(clientId)
+        String refClient = clientService.findById(finalClientId)
                 .map(Client::getReferenceClient)
-                .orElseThrow(() -> new IllegalArgumentException("Client non trouvé: " + clientId));
+                .orElseThrow(() -> new IllegalArgumentException("Client non trouvé: " + finalClientId));
         
         if (refClient == null || refClient.trim().isEmpty()) {
             // Générer depuis le nom si manquant
-            Client client = clientService.findById(clientId)
-                    .orElseThrow(() -> new IllegalArgumentException("Client non trouvé: " + clientId));
+            Client client = clientService.findById(finalClientId)
+                    .orElseThrow(() -> new IllegalArgumentException("Client non trouvé: " + finalClientId));
             refClient = generateReferenceFromName(client.getNom());
         }
         
@@ -158,20 +161,23 @@ public class BandeCommandeService {
             throw new IllegalArgumentException("Un fournisseur est requis pour générer le numéro BC");
         }
         
-        String refFournisseur = supplierService.findById(bc.getFournisseurId())
+        // Créer une variable finale pour le fournisseurId
+        final String fournisseurId = bc.getFournisseurId();
+        
+        String refFournisseur = supplierService.findById(fournisseurId)
                 .map(Supplier::getReferenceFournisseur)
-                .orElseThrow(() -> new IllegalArgumentException("Fournisseur non trouvé: " + bc.getFournisseurId()));
+                .orElseThrow(() -> new IllegalArgumentException("Fournisseur non trouvé: " + fournisseurId));
         
         if (refFournisseur == null || refFournisseur.trim().isEmpty()) {
             // Générer depuis le nom si manquant
-            Supplier supplier = supplierService.findById(bc.getFournisseurId())
-                    .orElseThrow(() -> new IllegalArgumentException("Fournisseur non trouvé: " + bc.getFournisseurId()));
+            Supplier supplier = supplierService.findById(fournisseurId)
+                    .orElseThrow(() -> new IllegalArgumentException("Fournisseur non trouvé: " + fournisseurId));
             refFournisseur = generateReferenceFromName(supplier.getNom());
         }
         
         // 4. Extraire mois et année
-        int month = bc.getDateBC().getMonthValue();
-        int year = bc.getDateBC().getYear();
+        final int month = bc.getDateBC().getMonthValue();
+        final int year = bc.getDateBC().getYear();
         String mois = String.format("%02d", month);
         String annee2chiffres = String.valueOf(year).substring(2);
         
@@ -181,7 +187,7 @@ public class BandeCommandeService {
                     if (existingBc.getDateBC() == null) return false;
                     if (existingBc.getDateBC().getMonthValue() != month) return false;
                     if (existingBc.getDateBC().getYear() != year) return false;
-                    if (!existingBc.getFournisseurId().equals(bc.getFournisseurId())) return false;
+                    if (!existingBc.getFournisseurId().equals(fournisseurId)) return false;
                     
                     // Vérifier si cette BC concerne le même client
                     String existingClientId = null;
@@ -191,7 +197,7 @@ public class BandeCommandeService {
                         existingClientId = existingBc.getClientId();
                     }
                     
-                    return clientId.equals(existingClientId);
+                    return finalClientId.equals(existingClientId);
                 })
                 .count();
         
