@@ -64,16 +64,60 @@ public class BandeCommandeController {
     
     @PostMapping
     public ResponseEntity<BandeCommande> createBC(@RequestBody BandeCommande bc) {
+        System.out.println("🔵 Controller.createBC() - BC reçue: id=" + bc.getId() + ", numeroBC=" + bc.getNumeroBC());
+        System.out.println("🔵 Controller.createBC() - lignesAchat count: " + (bc.getLignesAchat() != null ? bc.getLignesAchat().size() : 0));
+        System.out.println("🔵 Controller.createBC() - clientsVente count: " + (bc.getClientsVente() != null ? bc.getClientsVente().size() : 0));
+        if (bc.getLignesAchat() != null) {
+            System.out.println("🔵 Controller.createBC() - lignesAchat: " + bc.getLignesAchat());
+        }
+        if (bc.getClientsVente() != null) {
+            for (int idx = 0; idx < bc.getClientsVente().size(); idx++) {
+                var cv = bc.getClientsVente().get(idx);
+                System.out.println("🔵 Controller.createBC() - Client " + idx + " (id=" + cv.getClientId() + "): " + (cv.getLignesVente() != null ? cv.getLignesVente().size() : 0) + " lignes");
+                if (cv.getLignesVente() != null) {
+                    System.out.println("🔵 Controller.createBC() - Client " + idx + " lignesVente: " + cv.getLignesVente());
+                }
+            }
+        }
+        
         BandeCommande created = bcService.create(bc);
+        
+        System.out.println("🟣 Controller.createBC() - BC sauvegardée: id=" + created.getId());
+        System.out.println("🟣 Controller.createBC() - lignesAchat count sauvegardées: " + (created.getLignesAchat() != null ? created.getLignesAchat().size() : 0));
+        System.out.println("🟣 Controller.createBC() - clientsVente count sauvegardées: " + (created.getClientsVente() != null ? created.getClientsVente().size() : 0));
+        
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
     
     @PutMapping("/{id}")
     public ResponseEntity<BandeCommande> updateBC(@PathVariable String id, @RequestBody BandeCommande bc) {
         try {
+            System.out.println("🔵 Controller.updateBC() - BC reçue: id=" + id + ", numeroBC=" + bc.getNumeroBC());
+            System.out.println("🔵 Controller.updateBC() - lignesAchat count: " + (bc.getLignesAchat() != null ? bc.getLignesAchat().size() : 0));
+            System.out.println("🔵 Controller.updateBC() - clientsVente count: " + (bc.getClientsVente() != null ? bc.getClientsVente().size() : 0));
+            if (bc.getLignesAchat() != null) {
+                System.out.println("🔵 Controller.updateBC() - lignesAchat: " + bc.getLignesAchat());
+            }
+            if (bc.getClientsVente() != null) {
+                for (int idx = 0; idx < bc.getClientsVente().size(); idx++) {
+                    var cv = bc.getClientsVente().get(idx);
+                    System.out.println("🔵 Controller.updateBC() - Client " + idx + " (id=" + cv.getClientId() + "): " + (cv.getLignesVente() != null ? cv.getLignesVente().size() : 0) + " lignes");
+                    if (cv.getLignesVente() != null) {
+                        System.out.println("🔵 Controller.updateBC() - Client " + idx + " lignesVente: " + cv.getLignesVente());
+                    }
+                }
+            }
+            
             BandeCommande updated = bcService.update(id, bc);
+            
+            System.out.println("🟣 Controller.updateBC() - BC sauvegardée: id=" + updated.getId());
+            System.out.println("🟣 Controller.updateBC() - lignesAchat count sauvegardées: " + (updated.getLignesAchat() != null ? updated.getLignesAchat().size() : 0));
+            System.out.println("🟣 Controller.updateBC() - clientsVente count sauvegardées: " + (updated.getClientsVente() != null ? updated.getClientsVente().size() : 0));
+            
             return ResponseEntity.ok(updated);
         } catch (RuntimeException e) {
+            System.out.println("❌ Controller.updateBC() - Erreur: " + e.getMessage());
+            e.printStackTrace();
             return ResponseEntity.notFound().build();
         }
     }

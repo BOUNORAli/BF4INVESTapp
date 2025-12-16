@@ -29,6 +29,11 @@ public class BandeCommandeService {
     }
     
     public BandeCommande create(BandeCommande bc) {
+        System.out.println("🟢 Service.create() - DÉBUT");
+        System.out.println("🟢 Service.create() - BC avant traitement: id=" + bc.getId() + ", numeroBC=" + bc.getNumeroBC());
+        System.out.println("🟢 Service.create() - lignesAchat count: " + (bc.getLignesAchat() != null ? bc.getLignesAchat().size() : 0));
+        System.out.println("🟢 Service.create() - clientsVente count: " + (bc.getClientsVente() != null ? bc.getClientsVente().size() : 0));
+        
         // Générer le numéro BC si non fourni
         if (bc.getNumeroBC() == null || bc.getNumeroBC().isEmpty()) {
             bc.setNumeroBC(generateBCNumber(bc.getDateBC()));
@@ -37,10 +42,30 @@ public class BandeCommandeService {
         // Calculer les totaux
         calculateTotals(bc);
         
+        System.out.println("🟢 Service.create() - Après calculateTotals:");
+        System.out.println("🟢 Service.create() - lignesAchat count: " + (bc.getLignesAchat() != null ? bc.getLignesAchat().size() : 0));
+        System.out.println("🟢 Service.create() - clientsVente count: " + (bc.getClientsVente() != null ? bc.getClientsVente().size() : 0));
+        
         bc.setCreatedAt(LocalDateTime.now());
         bc.setUpdatedAt(LocalDateTime.now());
         
+        System.out.println("🟢 Service.create() - Avant save() dans repository");
         BandeCommande saved = bcRepository.save(bc);
+        System.out.println("🟢 Service.create() - Après save() dans repository");
+        
+        System.out.println("🟣 Service.create() - BC sauvegardée:");
+        System.out.println("🟣 Service.create() - id: " + saved.getId());
+        System.out.println("🟣 Service.create() - lignesAchat count: " + (saved.getLignesAchat() != null ? saved.getLignesAchat().size() : 0));
+        System.out.println("🟣 Service.create() - clientsVente count: " + (saved.getClientsVente() != null ? saved.getClientsVente().size() : 0));
+        if (saved.getLignesAchat() != null) {
+            System.out.println("🟣 Service.create() - lignesAchat: " + saved.getLignesAchat());
+        }
+        if (saved.getClientsVente() != null) {
+            for (int idx = 0; idx < saved.getClientsVente().size(); idx++) {
+                var cv = saved.getClientsVente().get(idx);
+                System.out.println("🟣 Service.create() - Client " + idx + " (id=" + cv.getClientId() + "): " + (cv.getLignesVente() != null ? cv.getLignesVente().size() : 0) + " lignes");
+            }
+        }
         
         // Journaliser la création
         int nbClients = saved.getNombreClients();
@@ -52,8 +77,17 @@ public class BandeCommandeService {
     }
     
     public BandeCommande update(String id, BandeCommande bc) {
+        System.out.println("🟢 Service.update() - DÉBUT - id=" + id);
+        System.out.println("🟢 Service.update() - BC reçue: numeroBC=" + bc.getNumeroBC());
+        System.out.println("🟢 Service.update() - lignesAchat count: " + (bc.getLignesAchat() != null ? bc.getLignesAchat().size() : 0));
+        System.out.println("🟢 Service.update() - clientsVente count: " + (bc.getClientsVente() != null ? bc.getClientsVente().size() : 0));
+        
         return bcRepository.findById(id)
                 .map(existing -> {
+                    System.out.println("🟢 Service.update() - BC existante trouvée: id=" + existing.getId());
+                    System.out.println("🟢 Service.update() - BC existante lignesAchat count: " + (existing.getLignesAchat() != null ? existing.getLignesAchat().size() : 0));
+                    System.out.println("🟢 Service.update() - BC existante clientsVente count: " + (existing.getClientsVente() != null ? existing.getClientsVente().size() : 0));
+                    
                     String oldEtat = existing.getEtat();
                     
                     existing.setDateBC(bc.getDateBC());
@@ -67,10 +101,20 @@ public class BandeCommandeService {
                     
                     // Nouvelle structure multi-clients
                     if (bc.getLignesAchat() != null) {
+                        System.out.println("🟢 Service.update() - Mise à jour lignesAchat: " + bc.getLignesAchat().size() + " lignes");
                         existing.setLignesAchat(bc.getLignesAchat());
+                    } else {
+                        System.out.println("⚠️ Service.update() - lignesAchat est NULL dans BC reçue!");
                     }
                     if (bc.getClientsVente() != null) {
+                        System.out.println("🟢 Service.update() - Mise à jour clientsVente: " + bc.getClientsVente().size() + " clients");
+                        for (int idx = 0; idx < bc.getClientsVente().size(); idx++) {
+                            var cv = bc.getClientsVente().get(idx);
+                            System.out.println("🟢 Service.update() - Client " + idx + " (id=" + cv.getClientId() + "): " + (cv.getLignesVente() != null ? cv.getLignesVente().size() : 0) + " lignes");
+                        }
                         existing.setClientsVente(bc.getClientsVente());
+                    } else {
+                        System.out.println("⚠️ Service.update() - clientsVente est NULL dans BC reçue!");
                     }
                     
                     // Rétrocompatibilité ancienne structure
@@ -81,11 +125,35 @@ public class BandeCommandeService {
                         existing.setLignes(bc.getLignes());
                     }
                     
+                    System.out.println("🟢 Service.update() - Avant calculateTotals:");
+                    System.out.println("🟢 Service.update() - existing.lignesAchat count: " + (existing.getLignesAchat() != null ? existing.getLignesAchat().size() : 0));
+                    System.out.println("🟢 Service.update() - existing.clientsVente count: " + (existing.getClientsVente() != null ? existing.getClientsVente().size() : 0));
+                    
                     // Recalculer les totaux
                     calculateTotals(existing);
                     
+                    System.out.println("🟢 Service.update() - Après calculateTotals:");
+                    System.out.println("🟢 Service.update() - existing.lignesAchat count: " + (existing.getLignesAchat() != null ? existing.getLignesAchat().size() : 0));
+                    System.out.println("🟢 Service.update() - existing.clientsVente count: " + (existing.getClientsVente() != null ? existing.getClientsVente().size() : 0));
+                    
                     existing.setUpdatedAt(LocalDateTime.now());
+                    System.out.println("🟢 Service.update() - Avant save() dans repository");
                     BandeCommande saved = bcRepository.save(existing);
+                    System.out.println("🟢 Service.update() - Après save() dans repository");
+                    
+                    System.out.println("🟣 Service.update() - BC sauvegardée:");
+                    System.out.println("🟣 Service.update() - id: " + saved.getId());
+                    System.out.println("🟣 Service.update() - lignesAchat count: " + (saved.getLignesAchat() != null ? saved.getLignesAchat().size() : 0));
+                    System.out.println("🟣 Service.update() - clientsVente count: " + (saved.getClientsVente() != null ? saved.getClientsVente().size() : 0));
+                    if (saved.getLignesAchat() != null) {
+                        System.out.println("🟣 Service.update() - lignesAchat: " + saved.getLignesAchat());
+                    }
+                    if (saved.getClientsVente() != null) {
+                        for (int idx = 0; idx < saved.getClientsVente().size(); idx++) {
+                            var cv = saved.getClientsVente().get(idx);
+                            System.out.println("🟣 Service.update() - Client " + idx + " (id=" + cv.getClientId() + "): " + (cv.getLignesVente() != null ? cv.getLignesVente().size() : 0) + " lignes");
+                        }
+                    }
                     
                     // Journaliser la modification
                     String details = "BC " + saved.getNumeroBC() + " modifiée";
