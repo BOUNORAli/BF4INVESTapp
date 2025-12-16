@@ -50,6 +50,8 @@ public class BandeCommande {
     private String notes;
     private String modePaiement; // virement, cheque, LCN, compensation, etc.
     
+    private Boolean ajouterAuStock; // Option pour ajouter les quantités achetées au stock (défaut: false)
+    
     // Totaux calculés globaux
     private Double totalAchatHT;
     private Double totalAchatTTC;

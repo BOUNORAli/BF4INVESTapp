@@ -89,6 +89,7 @@ export interface BC {
   supplierId: string;
   status: 'draft' | 'sent' | 'completed';
   paymentMode?: string;
+  ajouterAuStock?: boolean; // Option pour ajouter les quantités achetées au stock
   
   // Nouvelle structure multi-clients
   lignesAchat?: LigneAchat[];
@@ -728,6 +729,10 @@ export class StoreService {
         etat: bc.status
       };
       
+      if (bc.ajouterAuStock !== undefined) {
+        payload.ajouterAuStock = bc.ajouterAuStock;
+      }
+      
       // Nouvelle structure multi-clients
       if (bc.lignesAchat && bc.lignesAchat.length > 0) {
         payload.lignesAchat = bc.lignesAchat.map(l => ({
@@ -794,6 +799,10 @@ export class StoreService {
         fournisseurId: updatedBc.supplierId,
         etat: updatedBc.status
       };
+      
+      if (updatedBc.ajouterAuStock !== undefined) {
+        payload.ajouterAuStock = updatedBc.ajouterAuStock;
+      }
       
       // Nouvelle structure multi-clients
       if (updatedBc.lignesAchat && updatedBc.lignesAchat.length > 0) {
@@ -913,6 +922,7 @@ export class StoreService {
       date: bc.dateBC || bc.date,
       clientId: bc.clientId, // Rétrocompatibilité
       supplierId: bc.fournisseurId || bc.supplierId,
+      ajouterAuStock: bc.ajouterAuStock || false,
       status: bc.etat || bc.status,
       paymentMode: bc.modePaiement || bc.paymentMode,
       items: items, // Rétrocompatibilité

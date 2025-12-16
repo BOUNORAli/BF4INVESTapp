@@ -19,6 +19,7 @@ public class BandeCommandeService {
     
     private final BandeCommandeRepository bcRepository;
     private final AuditService auditService;
+    private final ProductService productService;
     
     public List<BandeCommande> findAll() {
         return bcRepository.findAll();
@@ -42,9 +43,14 @@ public class BandeCommandeService {
         
         BandeCommande saved = bcRepository.save(bc);
         
+        // Mettre à jour le stock si demandé
+        if (Boolean.TRUE.equals(saved.getAjouterAuStock()) && saved.getLignesAchat() != null) {
+            updateStockFromBC(saved);
+        }
+        
         // Journaliser la création
         int nbClients = saved.getNombreClients();
-        String clientsInfo = nbClients > 1 ? " (" + nbClients + " clients)" : "";
+        String clientsInfo = nbClients > 1 ? " (" + nbClients + " clients)" : (nbClients == 0 ? " (stock)" : "");
         auditService.logCreate("BandeCommande", saved.getId(), 
             "BC " + saved.getNumeroBC() + " créée" + clientsInfo + " - Total: " + saved.getTotalVenteTTC() + " MAD");
         
@@ -63,6 +69,10 @@ public class BandeCommandeService {
                     
                     if (bc.getModePaiement() != null) {
                         existing.setModePaiement(bc.getModePaiement());
+                    }
+                    
+                    if (bc.getAjouterAuStock() != null) {
+                        existing.setAjouterAuStock(bc.getAjouterAuStock());
                     }
                     
                     // Nouvelle structure multi-clients
@@ -86,6 +96,11 @@ public class BandeCommandeService {
                     
                     existing.setUpdatedAt(LocalDateTime.now());
                     BandeCommande saved = bcRepository.save(existing);
+                    
+                    // Mettre à jour le stock si demandé (seulement si ajouterAuStock est passé à true)
+                    if (Boolean.TRUE.equals(bc.getAjouterAuStock()) && saved.getLignesAchat() != null) {
+                        updateStockFromBC(saved);
+                    }
                     
                     // Journaliser la modification
                     String details = "BC " + saved.getNumeroBC() + " modifiée";
@@ -324,5 +339,36 @@ public class BandeCommandeService {
                     }
                     return Optional.empty();
                 });
+    }
+    
+    /**
+     * Met à jour le stock des produits à partir des lignes d'achat du BC
+     */
+    private void updateStockFromBC(BandeCommande bc) {
+        if (bc.getLignesAchat() == null || bc.getLignesAchat().isEmpty()) {
+            return;
+        }
+        
+        for (LigneAchat ligne : bc.getLignesAchat()) {
+            if (ligne.getProduitRef() == null || ligne.getProduitRef().isEmpty()) {
+                continue;
+            }
+            
+            Integer quantite = ligne.getQuantiteAchetee();
+            if (quantite == null || quantite <= 0) {
+                continue;
+            }
+            
+            try {
+                Product updated = productService.updateStockByRef(ligne.getProduitRef(), quantite);
+                if (updated != null) {
+                    // Log réussi (peut être ajouté si nécessaire)
+                } else {
+                    // Produit non trouvé - ne pas bloquer
+                }
+            } catch (Exception e) {
+                // Ne pas bloquer la création du BC en cas d'erreur
+            }
+        }
     }
 }

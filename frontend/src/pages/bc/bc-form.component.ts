@@ -93,16 +93,17 @@ import { StoreService, BC, LigneAchat, LigneVente, ClientVente, Product } from '
             </h2>
             <div class="overflow-x-auto">
               <table class="w-full text-sm text-left min-w-[700px]">
-                <thead class="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-200">
-                  <tr>
-                    <th class="p-3 w-2/5">Produit</th>
-                    <th class="p-3 w-20">Qté</th>
-                    <th class="p-3 text-right">Prix Achat HT</th>
-                    <th class="p-3 w-16 text-center">TVA %</th>
-                    <th class="p-3 text-right bg-orange-50/50">Total HT</th>
-                    <th class="p-3 text-center w-10"></th>
-                  </tr>
-                </thead>
+                      <thead class="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-200">
+                        <tr>
+                          <th class="p-3 w-2/5">Produit</th>
+                          <th class="p-3 w-20">Qté</th>
+                          <th class="p-3 text-right">Prix Achat HT</th>
+                          <th class="p-3 w-16 text-center">TVA %</th>
+                          <th class="p-3 w-20 text-center">Stock</th>
+                          <th class="p-3 text-right bg-orange-50/50">Total HT</th>
+                          <th class="p-3 text-center w-10"></th>
+                        </tr>
+                      </thead>
                 <tbody formArrayName="lignesAchat" class="divide-y divide-slate-100">
                   @for (item of lignesAchatArray.controls; track item; let i = $index) {
                     <tr [formGroupName]="i" class="bg-white hover:bg-slate-50/70 transition-colors">
@@ -144,6 +145,16 @@ import { StoreService, BC, LigneAchat, LigneVente, ClientVente, Product } from '
                       <td class="p-2 align-top">
                         <input type="number" formControlName="tva" (input)="calculateTotals()" class="w-full p-2 border border-slate-200 rounded-md text-center focus:ring-2 focus:ring-orange-500/20 outline-none">
                       </td>
+                      <td class="p-2 align-top text-center">
+                        @if (item.value.produitRef) {
+                          @let stock = getProductStock(item.value.produitRef);
+                          <span [class]="getStockClass(stock)" class="px-2 py-1 rounded text-xs font-bold">
+                            {{ stock }}
+                          </span>
+                        } @else {
+                          <span class="text-xs text-slate-400">-</span>
+                        }
+                      </td>
                       <td class="p-2 align-top text-right font-bold text-orange-700 bg-orange-50/30 pt-4">
                         {{ getAchatLineTotal(i) | number:'1.2-2' }}
                       </td>
@@ -157,7 +168,7 @@ import { StoreService, BC, LigneAchat, LigneVente, ClientVente, Product } from '
                 </tbody>
                 <tfoot class="bg-slate-50 border-t border-slate-200">
                   <tr>
-                    <td colspan="6" class="p-3">
+                    <td colspan="7" class="p-3">
                       <button type="button" (click)="addLigneAchat()" class="w-full text-center py-2 text-sm text-orange-600 hover:bg-orange-50 rounded-lg font-semibold transition flex items-center justify-center gap-1">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
                         Ajouter un article
@@ -169,19 +180,43 @@ import { StoreService, BC, LigneAchat, LigneVente, ClientVente, Product } from '
             </div>
           </div>
 
-          <!-- Card 3: Clients et Ventes -->
+          <!-- Card 3: Option Stock ou Clients et Ventes -->
           <div class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
-            <div class="flex items-center justify-between p-4 md:p-6 border-b border-slate-100 bg-blue-50/50">
-              <h2 class="text-base font-bold text-slate-800 flex items-center gap-2">
-                <span class="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold">3</span>
-                <span class="text-blue-800">Clients et Ventes</span>
-                <span class="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full font-bold ml-2">{{ clientsVenteArray.length }} client(s)</span>
-              </h2>
-              <button type="button" (click)="addClientVente()" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition flex items-center gap-2">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
-                Ajouter un client
-              </button>
+            <div class="p-4 md:p-6 border-b border-slate-100 bg-blue-50/50">
+              <div class="flex items-center justify-between mb-4">
+                <h2 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                  <span class="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold">3</span>
+                  <span class="text-blue-800">Destination</span>
+                </h2>
+              </div>
+              
+              <!-- Option Ajouter au Stock -->
+              <div class="bg-emerald-50 p-4 rounded-xl border border-emerald-100 mb-4">
+                <label class="flex items-center gap-3 cursor-pointer">
+                  <input type="checkbox" formControlName="ajouterAuStock" (change)="onStockOptionChange()" class="w-5 h-5 text-emerald-600 border-emerald-300 rounded focus:ring-emerald-500 focus:ring-2">
+                  <div class="flex-1">
+                    <span class="text-sm font-semibold text-emerald-800">Ajouter les quantités achetées au stock</span>
+                    <p class="text-xs text-emerald-600 mt-0.5">Cochez cette option pour incrémenter automatiquement le stock des produits achetés (sans client)</p>
+                  </div>
+                </label>
+              </div>
+              
+              <!-- Section Clients (masquée si ajouterAuStock est coché) -->
+              @if (!form.get('ajouterAuStock')?.value) {
+                <div class="flex items-center justify-between">
+                  <h3 class="text-sm font-bold text-slate-700 flex items-center gap-2">
+                    <span class="text-blue-800">Clients et Ventes</span>
+                    <span class="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full font-bold">{{ clientsVenteArray.length }} client(s)</span>
+                  </h3>
+                  <button type="button" (click)="addClientVente()" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                    Ajouter un client
+                  </button>
+                </div>
+              }
             </div>
+            
+            @if (!form.get('ajouterAuStock')?.value) {
             
             <div formArrayName="clientsVente" class="divide-y divide-slate-200">
               @for (clientForm of clientsVenteArray.controls; track clientForm; let clientIdx = $index) {
@@ -223,6 +258,7 @@ import { StoreService, BC, LigneAchat, LigneVente, ClientVente, Product } from '
                           <th class="p-3 w-20">Qté Vendue</th>
                           <th class="p-3 text-right">Prix Vente HT</th>
                           <th class="p-3 w-16 text-center">TVA %</th>
+                          <th class="p-3 w-20 text-center">Stock</th>
                           <th class="p-3 w-20 text-center">Marge</th>
                           <th class="p-3 text-right bg-blue-50/50">Total HT</th>
                           <th class="p-3 w-10"></th>
@@ -276,6 +312,22 @@ import { StoreService, BC, LigneAchat, LigneVente, ClientVente, Product } from '
                               <input type="number" formControlName="tva" (input)="calculateTotals()" class="w-full p-2 border border-slate-200 rounded-md text-center focus:ring-2 focus:ring-blue-500/20 outline-none">
                             </td>
                             <td class="p-2 align-top text-center">
+                              @if (ligneForm.value.produitRef) {
+                                @let stock = getProductStock(ligneForm.value.produitRef);
+                                <div class="flex flex-col gap-1">
+                                  <span [class]="getStockClass(stock)" class="px-2 py-1 rounded text-xs font-bold">
+                                    {{ stock }}
+                                  </span>
+                                  @if (getLigneVenteStockWarning(clientIdx, ligneIdx)) {
+                                    @let warning = getLigneVenteStockWarning(clientIdx, ligneIdx);
+                                    <span class="text-[10px] text-amber-600 font-semibold">⚠ Insuffisant</span>
+                                  }
+                                </div>
+                              } @else {
+                                <span class="text-xs text-slate-400">-</span>
+                              }
+                            </td>
+                            <td class="p-2 align-top text-center">
                               <span [class]="getMargeClass(getVenteLigneMarge(clientIdx, ligneIdx))" class="px-2 py-1 rounded text-xs font-bold">
                                 {{ getVenteLigneMarge(clientIdx, ligneIdx) | number:'1.1-1' }}%
                               </span>
@@ -293,7 +345,7 @@ import { StoreService, BC, LigneAchat, LigneVente, ClientVente, Product } from '
                       </tbody>
                       <tfoot class="bg-slate-50 border-t border-slate-200">
                         <tr>
-                          <td colspan="7" class="p-2">
+                          <td colspan="8" class="p-2">
                             <button type="button" (click)="addLigneVente(clientIdx)" class="w-full text-center py-2 text-sm text-blue-600 hover:bg-blue-50 rounded-lg font-semibold transition flex items-center justify-center gap-1">
                               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
                               Ajouter une ligne
@@ -431,6 +483,7 @@ export class BcFormComponent implements OnInit {
       supplierId: ['', Validators.required],
       status: ['draft', Validators.required],
       paymentMode: [''],
+      ajouterAuStock: [false],
       lignesAchat: this.fb.array([]),
       clientsVente: this.fb.array([])
     });
@@ -457,9 +510,9 @@ export class BcFormComponent implements OnInit {
       this.bcId = id;
       this.loadExistingBC(id);
     } else {
-      // Par défaut: 1 ligne achat + 1 client avec 1 ligne vente
+      // Par défaut: 1 ligne achat
       this.addLigneAchat();
-      this.addClientVente();
+      // Ne pas créer de client par défaut - l'utilisateur choisira entre "Ajouter au stock" ou ajouter un client
     }
   }
 
@@ -472,7 +525,8 @@ export class BcFormComponent implements OnInit {
       date: bc.date,
       supplierId: bc.supplierId,
       status: bc.status,
-      paymentMode: bc.paymentMode || ''
+      paymentMode: bc.paymentMode || '',
+      ajouterAuStock: bc.ajouterAuStock || false
     });
 
     // Nouvelle structure multi-clients
@@ -726,6 +780,12 @@ export class BcFormComponent implements OnInit {
     return null;
   }
 
+  onStockOptionChange() {
+    const ajouterAuStock = this.form.get('ajouterAuStock')?.value;
+    // Si on coche "Ajouter au stock", on peut vider les clients (optionnel)
+    // L'utilisateur peut toujours garder les clients s'il veut
+  }
+
   calculateTotals() {
     let bTot = 0, bTva = 0, sTot = 0, sTva = 0;
 
@@ -779,15 +839,19 @@ export class BcFormComponent implements OnInit {
       return;
     }
 
-    // Vérifier qu'il y a au moins un client
-    const clientsVente = this.clientsVenteArray.value;
-    const validClients = clientsVente.filter((c: any) => c.clientId);
-    if (validClients.length === 0) {
-      alert('Veuillez sélectionner au moins un client');
-      return;
-    }
+    const ajouterAuStock = this.form.get('ajouterAuStock')?.value;
+    
+    // Si on ajoute au stock, pas besoin de clients
+    if (!ajouterAuStock) {
+      // Vérifier qu'il y a au moins un client
+      const clientsVente = this.clientsVenteArray.value;
+      const validClients = clientsVente.filter((c: any) => c.clientId);
+      if (validClients.length === 0) {
+        alert('Veuillez sélectionner au moins un client OU cocher "Ajouter au stock"');
+        return;
+      }
 
-    // Vérifier que la somme des quantités vendues aux clients
+      // Vérifier que la somme des quantités vendues aux clients
     // est égale aux quantités achetées auprès du fournisseur (par produit)
     const achatsMap = new Map<string, number>();
     const ventesMap = new Map<string, number>();
@@ -817,18 +881,19 @@ export class BcFormComponent implements OnInit {
       });
     });
 
-    // 3) Comparer pour chaque produit
-    for (const [ref, qteAchat] of achatsMap.entries()) {
-      const qteVente = ventesMap.get(ref) || 0;
-      if (qteVente !== qteAchat) {
-        alert(
-          `Incohérence sur le produit "${ref}" :\n` +
-          `- Quantité achetée fournisseur : ${qteAchat}\n` +
-          `- Quantité répartie chez les clients : ${qteVente}\n\n` +
-          `La somme des quantités vendues aux clients doit être ÉGALE à la quantité achetée.\n` +
-          `Merci d'ajuster les quantités avant d'enregistrer.`
-        );
-        return;
+      // 3) Comparer pour chaque produit (seulement si pas d'ajout au stock)
+      for (const [ref, qteAchat] of achatsMap.entries()) {
+        const qteVente = ventesMap.get(ref) || 0;
+        if (qteVente !== qteAchat) {
+          alert(
+            `Incohérence sur le produit "${ref}" :\n` +
+            `- Quantité achetée fournisseur : ${qteAchat}\n` +
+            `- Quantité répartie chez les clients : ${qteVente}\n\n` +
+            `La somme des quantités vendues aux clients doit être ÉGALE à la quantité achetée.\n` +
+            `Merci d'ajuster les quantités avant d'enregistrer.`
+          );
+          return;
+        }
       }
     }
 
@@ -846,8 +911,8 @@ export class BcFormComponent implements OnInit {
         tva: l.tva || 20
       }));
 
-    // Construire les clients avec leurs lignes de vente
-    const clientsVenteData: ClientVente[] = validClients.map((client: any) => ({
+    // Construire les clients avec leurs lignes de vente (seulement si pas d'ajout au stock)
+    const clientsVenteData: ClientVente[] = ajouterAuStock ? [] : validClients.map((client: any) => ({
       clientId: client.clientId,
       lignesVente: (client.lignesVente || [])
         .filter((l: any) => l.designation && l.prixVenteUnitaireHT > 0)
@@ -868,15 +933,16 @@ export class BcFormComponent implements OnInit {
       supplierId: formVal.supplierId,
       status: formVal.status,
       paymentMode: formVal.paymentMode || undefined,
+      ajouterAuStock: ajouterAuStock || false,
       lignesAchat: lignesAchat,
-      clientsVente: clientsVenteData,
+      clientsVente: clientsVenteData.length > 0 ? clientsVenteData : undefined,
       // Totaux
       totalAchatHT: this.buyTotal(),
       totalAchatTTC: this.buyTotal() + this.buyTva(),
-      totalVenteHT: this.sellTotal(),
-      totalVenteTTC: this.sellTotal() + this.sellTva(),
-      margeTotale: this.sellTotal() - this.buyTotal(),
-      margePourcentage: this.marginPercent()
+      totalVenteHT: ajouterAuStock ? 0 : this.sellTotal(),
+      totalVenteTTC: ajouterAuStock ? 0 : this.sellTotal() + this.sellTva(),
+      margeTotale: ajouterAuStock ? 0 : this.sellTotal() - this.buyTotal(),
+      margePourcentage: ajouterAuStock ? 0 : this.marginPercent()
     };
 
     if (this.isEditMode) {
