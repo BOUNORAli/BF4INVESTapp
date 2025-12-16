@@ -354,10 +354,12 @@ public class BandeCommandeService {
                 continue;
             }
             
-            Integer quantite = ligne.getQuantiteAchetee();
-            if (quantite == null || quantite <= 0) {
+            Double quantiteDouble = ligne.getQuantiteAchetee();
+            if (quantiteDouble == null || quantiteDouble <= 0) {
                 continue;
             }
+            
+            Integer quantite = quantiteDouble.intValue();
             
             try {
                 Product updated = productService.updateStockByRef(ligne.getProduitRef(), quantite);
