@@ -794,10 +794,6 @@ export class BcFormComponent implements OnInit {
 
     const formVal = this.form.value;
 
-    console.log('🔵 bc-form.save() - DÉBUT');
-    console.log('🔵 bc-form.save() - FormArray clientsVente RAW:', this.clientsVenteArray.value);
-    console.log('🔵 bc-form.save() - FormArray lignesAchat RAW:', this.lignesAchatArray.value);
-
     // Construire les lignes d'achat
     const lignesAchat: LigneAchat[] = this.lignesAchatArray.value
       .filter((l: any) => l.designation && l.prixAchatUnitaireHT > 0)
@@ -810,26 +806,11 @@ export class BcFormComponent implements OnInit {
         tva: l.tva || 20
       }));
 
-    console.log('🟢 bc-form.save() - lignesAchat construites:', lignesAchat);
-    console.log('🟢 bc-form.save() - Nombre de lignes achat:', lignesAchat.length);
-
     // Construire les clients avec leurs lignes de vente
-    console.log('🟡 bc-form.save() - validClients avant map:', validClients);
-    const clientsVenteData: ClientVente[] = validClients.map((client: any, idx: number) => {
-      console.log(`🟡 bc-form.save() - Traitement client ${idx + 1}:`, {
-        clientId: client.clientId,
-        lignesVenteRaw: client.lignesVente,
-        lignesVenteLength: client.lignesVente?.length || 0
-      });
-      
-      const lignesVenteFiltrees = (client.lignesVente || [])
-        .filter((l: any) => {
-          const isValid = l.designation && l.prixVenteUnitaireHT > 0;
-          if (!isValid) {
-            console.log(`⚠️ bc-form.save() - Ligne vente filtrée (client ${idx + 1}):`, l);
-          }
-          return isValid;
-        })
+    const clientsVenteData: ClientVente[] = validClients.map((client: any) => ({
+      clientId: client.clientId,
+      lignesVente: (client.lignesVente || [])
+        .filter((l: any) => l.designation && l.prixVenteUnitaireHT > 0)
         .map((l: any) => ({
           produitRef: l.produitRef || l.designation,
           designation: l.designation,
@@ -837,21 +818,8 @@ export class BcFormComponent implements OnInit {
           quantiteVendue: l.quantiteVendue || 1,
           prixVenteUnitaireHT: l.prixVenteUnitaireHT,
           tva: l.tva || 20
-        }));
-      
-      console.log(`🟢 bc-form.save() - Client ${idx + 1} lignesVente finales:`, lignesVenteFiltrees);
-      
-      return {
-        clientId: client.clientId,
-        lignesVente: lignesVenteFiltrees
-      };
-    });
-
-    console.log('🟢 bc-form.save() - clientsVenteData construites:', clientsVenteData);
-    console.log('🟢 bc-form.save() - Nombre de clients:', clientsVenteData.length);
-    clientsVenteData.forEach((cv, idx) => {
-      console.log(`🟢 bc-form.save() - Client ${idx + 1} (${cv.clientId}): ${cv.lignesVente.length} lignes`);
-    });
+        }))
+    }));
 
     const bcData: BC = {
       id: this.bcId || `bc-${Date.now()}`,
@@ -871,23 +839,9 @@ export class BcFormComponent implements OnInit {
       margePourcentage: this.marginPercent()
     };
 
-    console.log('🟣 bc-form.save() - bcData FINAL avant envoi:', {
-      id: bcData.id,
-      number: bcData.number,
-      supplierId: bcData.supplierId,
-      lignesAchatCount: bcData.lignesAchat?.length || 0,
-      clientsVenteCount: bcData.clientsVente?.length || 0,
-      lignesAchat: bcData.lignesAchat,
-      clientsVente: bcData.clientsVente,
-      totalAchatHT: bcData.totalAchatHT,
-      totalVenteHT: bcData.totalVenteHT
-    });
-
     if (this.isEditMode) {
-      console.log('🟣 bc-form.save() - Appel updateBC()');
       this.store.updateBC(bcData);
     } else {
-      console.log('🟣 bc-form.save() - Appel addBC()');
       this.store.addBC(bcData);
     }
 

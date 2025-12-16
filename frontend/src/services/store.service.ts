@@ -719,15 +719,6 @@ export class StoreService {
 
   async addBC(bc: BC): Promise<void> {
     try {
-      console.log('🔵 store.addBC() - DÉBUT - BC reçue:', {
-        id: bc.id,
-        number: bc.number,
-        lignesAchatCount: bc.lignesAchat?.length || 0,
-        clientsVenteCount: bc.clientsVente?.length || 0,
-        lignesAchat: bc.lignesAchat,
-        clientsVente: bc.clientsVente
-      });
-
       const payload: any = {
         numeroBC: bc.number,
         dateBC: bc.date,
@@ -737,54 +728,28 @@ export class StoreService {
       
       // Nouvelle structure multi-clients
       if (bc.lignesAchat && bc.lignesAchat.length > 0) {
-        console.log('🟢 store.addBC() - Construction lignesAchat, count:', bc.lignesAchat.length);
-        payload.lignesAchat = bc.lignesAchat.map((l, idx) => {
-          const mapped = {
-            produitRef: l.produitRef,
-            designation: l.designation,
-            unite: l.unite,
-            quantiteAchetee: l.quantiteAchetee,
-            prixAchatUnitaireHT: l.prixAchatUnitaireHT,
-            tva: l.tva
-          };
-          console.log(`🟢 store.addBC() - Ligne achat ${idx + 1}:`, mapped);
-          return mapped;
-        });
-        console.log('🟢 store.addBC() - lignesAchat dans payload:', payload.lignesAchat);
-      } else {
-        console.log('⚠️ store.addBC() - Aucune ligne achat!');
+        payload.lignesAchat = bc.lignesAchat.map(l => ({
+          produitRef: l.produitRef,
+          designation: l.designation,
+          unite: l.unite,
+          quantiteAchetee: l.quantiteAchetee,
+          prixAchatUnitaireHT: l.prixAchatUnitaireHT,
+          tva: l.tva
+        }));
       }
       
       if (bc.clientsVente && bc.clientsVente.length > 0) {
-        console.log('🟢 store.addBC() - Construction clientsVente, count:', bc.clientsVente.length);
-        payload.clientsVente = bc.clientsVente.map((cv, clientIdx) => {
-          console.log(`🟡 store.addBC() - Client ${clientIdx + 1} (${cv.clientId}):`, {
-            clientId: cv.clientId,
-            lignesVenteCount: cv.lignesVente?.length || 0,
-            lignesVenteRaw: cv.lignesVente
-          });
-          
-          const mapped = {
-            clientId: cv.clientId,
-            lignesVente: (cv.lignesVente || []).map((lv, ligneIdx) => {
-              const mappedLigne = {
-                produitRef: lv.produitRef,
-                designation: lv.designation,
-                unite: lv.unite,
-                quantiteVendue: lv.quantiteVendue,
-                prixVenteUnitaireHT: lv.prixVenteUnitaireHT,
-                tva: lv.tva
-              };
-              console.log(`  🟢 store.addBC() - Client ${clientIdx + 1}, Ligne ${ligneIdx + 1}:`, mappedLigne);
-              return mappedLigne;
-            })
-          };
-          console.log(`🟢 store.addBC() - Client ${clientIdx + 1} final:`, mapped);
-          return mapped;
-        });
-        console.log('🟢 store.addBC() - clientsVente dans payload:', payload.clientsVente);
-      } else {
-        console.log('⚠️ store.addBC() - Aucun client vente!');
+        payload.clientsVente = bc.clientsVente.map(cv => ({
+          clientId: cv.clientId,
+          lignesVente: (cv.lignesVente || []).map(lv => ({
+            produitRef: lv.produitRef,
+            designation: lv.designation,
+            unite: lv.unite,
+            quantiteVendue: lv.quantiteVendue,
+            prixVenteUnitaireHT: lv.prixVenteUnitaireHT,
+            tva: lv.tva
+          }))
+        }));
       }
       
       // Rétrocompatibilité ancienne structure
@@ -808,27 +773,8 @@ export class StoreService {
         payload.modePaiement = bc.paymentMode;
       }
       
-      console.log('🟣 store.addBC() - Payload FINAL avant envoi au backend:', JSON.stringify(payload, null, 2));
-      console.log('🟣 store.addBC() - Payload.lignesAchat count:', payload.lignesAchat?.length || 0);
-      console.log('🟣 store.addBC() - Payload.clientsVente count:', payload.clientsVente?.length || 0);
-      
       const created = await this.api.post<any>('/bandes-commandes', payload).toPromise();
-      
-      console.log('🟣 store.addBC() - Réponse backend:', {
-        id: created?.id,
-        numeroBC: created?.numeroBC,
-        lignesAchatCount: created?.lignesAchat?.length || 0,
-        clientsVenteCount: created?.clientsVente?.length || 0,
-        lignesAchat: created?.lignesAchat,
-        clientsVente: created?.clientsVente
-      });
-      
       const mapped = this.mapBC(created);
-      console.log('🟣 store.addBC() - BC mappée:', {
-        id: mapped.id,
-        lignesAchatCount: mapped.lignesAchat?.length || 0,
-        clientsVenteCount: mapped.clientsVente?.length || 0
-      });
       this.bcs.update(list => [mapped, ...list]);
       this.showToast('Commande créée avec succès', 'success');
       this.addNotification({ title: 'Nouvelle Commande', message: `BC ${bc.number} créé.`, type: 'success' });
@@ -840,15 +786,6 @@ export class StoreService {
 
   async updateBC(updatedBc: BC): Promise<void> {
     try {
-      console.log('🔵 store.updateBC() - DÉBUT - BC reçue:', {
-        id: updatedBc.id,
-        number: updatedBc.number,
-        lignesAchatCount: updatedBc.lignesAchat?.length || 0,
-        clientsVenteCount: updatedBc.clientsVente?.length || 0,
-        lignesAchat: updatedBc.lignesAchat,
-        clientsVente: updatedBc.clientsVente
-      });
-
       const payload: any = {
         numeroBC: updatedBc.number,
         dateBC: updatedBc.date,
@@ -858,54 +795,28 @@ export class StoreService {
       
       // Nouvelle structure multi-clients
       if (updatedBc.lignesAchat && updatedBc.lignesAchat.length > 0) {
-        console.log('🟢 store.updateBC() - Construction lignesAchat, count:', updatedBc.lignesAchat.length);
-        payload.lignesAchat = updatedBc.lignesAchat.map((l, idx) => {
-          const mapped = {
-            produitRef: l.produitRef,
-            designation: l.designation,
-            unite: l.unite,
-            quantiteAchetee: l.quantiteAchetee,
-            prixAchatUnitaireHT: l.prixAchatUnitaireHT,
-            tva: l.tva
-          };
-          console.log(`🟢 store.updateBC() - Ligne achat ${idx + 1}:`, mapped);
-          return mapped;
-        });
-        console.log('🟢 store.updateBC() - lignesAchat dans payload:', payload.lignesAchat);
-      } else {
-        console.log('⚠️ store.updateBC() - Aucune ligne achat!');
+        payload.lignesAchat = updatedBc.lignesAchat.map(l => ({
+          produitRef: l.produitRef,
+          designation: l.designation,
+          unite: l.unite,
+          quantiteAchetee: l.quantiteAchetee,
+          prixAchatUnitaireHT: l.prixAchatUnitaireHT,
+          tva: l.tva
+        }));
       }
       
       if (updatedBc.clientsVente && updatedBc.clientsVente.length > 0) {
-        console.log('🟢 store.updateBC() - Construction clientsVente, count:', updatedBc.clientsVente.length);
-        payload.clientsVente = updatedBc.clientsVente.map((cv, clientIdx) => {
-          console.log(`🟡 store.updateBC() - Client ${clientIdx + 1} (${cv.clientId}):`, {
-            clientId: cv.clientId,
-            lignesVenteCount: cv.lignesVente?.length || 0,
-            lignesVenteRaw: cv.lignesVente
-          });
-          
-          const mapped = {
-            clientId: cv.clientId,
-            lignesVente: (cv.lignesVente || []).map((lv, ligneIdx) => {
-              const mappedLigne = {
-                produitRef: lv.produitRef,
-                designation: lv.designation,
-                unite: lv.unite,
-                quantiteVendue: lv.quantiteVendue,
-                prixVenteUnitaireHT: lv.prixVenteUnitaireHT,
-                tva: lv.tva
-              };
-              console.log(`  🟢 store.updateBC() - Client ${clientIdx + 1}, Ligne ${ligneIdx + 1}:`, mappedLigne);
-              return mappedLigne;
-            })
-          };
-          console.log(`🟢 store.updateBC() - Client ${clientIdx + 1} final:`, mapped);
-          return mapped;
-        });
-        console.log('🟢 store.updateBC() - clientsVente dans payload:', payload.clientsVente);
-      } else {
-        console.log('⚠️ store.updateBC() - Aucun client vente!');
+        payload.clientsVente = updatedBc.clientsVente.map(cv => ({
+          clientId: cv.clientId,
+          lignesVente: (cv.lignesVente || []).map(lv => ({
+            produitRef: lv.produitRef,
+            designation: lv.designation,
+            unite: lv.unite,
+            quantiteVendue: lv.quantiteVendue,
+            prixVenteUnitaireHT: lv.prixVenteUnitaireHT,
+            tva: lv.tva
+          }))
+        }));
       }
       
       // Rétrocompatibilité ancienne structure
@@ -929,27 +840,8 @@ export class StoreService {
         payload.modePaiement = updatedBc.paymentMode;
       }
       
-      console.log('🟣 store.updateBC() - Payload FINAL avant envoi au backend:', JSON.stringify(payload, null, 2));
-      console.log('🟣 store.updateBC() - Payload.lignesAchat count:', payload.lignesAchat?.length || 0);
-      console.log('🟣 store.updateBC() - Payload.clientsVente count:', payload.clientsVente?.length || 0);
-      
       const updated = await this.api.put<any>(`/bandes-commandes/${updatedBc.id}`, payload).toPromise();
-      
-      console.log('🟣 store.updateBC() - Réponse backend:', {
-        id: updated?.id,
-        numeroBC: updated?.numeroBC,
-        lignesAchatCount: updated?.lignesAchat?.length || 0,
-        clientsVenteCount: updated?.clientsVente?.length || 0,
-        lignesAchat: updated?.lignesAchat,
-        clientsVente: updated?.clientsVente
-      });
-      
       const mapped = this.mapBC(updated);
-      console.log('🟣 store.updateBC() - BC mappée:', {
-        id: mapped.id,
-        lignesAchatCount: mapped.lignesAchat?.length || 0,
-        clientsVenteCount: mapped.clientsVente?.length || 0
-      });
       this.bcs.update(list => list.map(b => b.id === updatedBc.id ? mapped : b));
       this.showToast('Commande mise à jour', 'success');
     } catch (error) {
@@ -971,16 +863,6 @@ export class StoreService {
   }
 
   private mapBC(bc: any): BC {
-    console.log('🟣 store.mapBC() - DÉBUT mapping');
-    console.log('🟣 store.mapBC() - BC reçue:', {
-      id: bc.id,
-      numeroBC: bc.numeroBC,
-      lignesAchat: bc.lignesAchat,
-      clientsVente: bc.clientsVente,
-      lignesAchatCount: bc.lignesAchat?.length || 0,
-      clientsVenteCount: bc.clientsVente?.length || 0
-    });
-    
     // Mapper lignesAchat (nouvelle structure)
     const lignesAchat: LigneAchat[] = bc.lignesAchat ? bc.lignesAchat.map((l: any) => ({
       produitRef: l.produitRef || '',
@@ -1010,9 +892,6 @@ export class StoreService {
       }))
     })) : [];
     
-    console.log('🟣 store.mapBC() - lignesAchat mappées:', lignesAchat.length);
-    console.log('🟣 store.mapBC() - clientsVente mappés:', clientsVente.length);
-    
     // Mapper items (ancienne structure pour rétrocompatibilité)
     const items: LineItem[] = (bc.lignes || bc.items || []).map((item: any) => ({
       productId: item.productId || '',
@@ -1026,7 +905,7 @@ export class StoreService {
       tvaRate: item.tva || item.tvaRate
     }));
     
-    const mapped: BC = {
+    return {
       id: bc.id,
       number: bc.numeroBC || bc.number,
       date: bc.dateBC || bc.date,
@@ -1046,14 +925,6 @@ export class StoreService {
       margeTotale: bc.margeTotale,
       margePourcentage: bc.margePourcentage
     };
-    
-    console.log('🟣 store.mapBC() - BC mappée finale:', {
-      id: mapped.id,
-      lignesAchatCount: mapped.lignesAchat?.length || 0,
-      clientsVenteCount: mapped.clientsVente?.length || 0
-    });
-    
-    return mapped;
   }
 
   // --- ACTIONS: INVOICES ---
