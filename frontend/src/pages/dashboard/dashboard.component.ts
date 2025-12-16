@@ -195,65 +195,91 @@ import { Router, RouterLink } from '@angular/router';
            <div class="space-y-6">
               @if (monthlyData().length > 0) {
                 <!-- Real Chart Representation from backend data -->
-                <div class="relative h-48 w-full flex items-end justify-between px-2 gap-2">
+                <div class="relative h-48 w-full flex items-end justify-between px-1 gap-1.5 mb-2">
                   @for (month of monthlyData().slice(-5); track month.mois) {
                     @let maxValue = getMaxMonthlyValue();
                     @let heightPercent = maxValue > 0 ? (month.caHT / maxValue) * 100 : 0;
-                    <div class="w-full bg-blue-500 rounded-t-md hover:bg-blue-600 transition-all cursor-pointer relative group flex-1"
+                    @let monthLabel = formatMonthLabel(month.mois);
+                    <div class="w-full bg-blue-500 rounded-t-md hover:bg-blue-600 transition-all cursor-pointer relative group flex-1 flex flex-col items-center justify-end"
                          [style.height.%]="heightPercent">
-                      <div class="absolute -top-6 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-xs py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition whitespace-nowrap">
-                        {{ month.mois }}: {{ formatCurrency(month.caHT) }}
+                      <!-- Valeur sur la barre -->
+                      <div class="absolute -top-5 left-1/2 -translate-x-1/2 text-[10px] font-semibold text-slate-700 opacity-0 group-hover:opacity-100 transition whitespace-nowrap">
+                        {{ formatCurrency(month.caHT) }}
                       </div>
                     </div>
                   }
                 </div>
-                <div class="flex justify-between text-xs text-slate-400">
+                <!-- Labels des mois -->
+                <div class="flex justify-between text-xs text-slate-500 font-medium px-1">
                   @for (month of monthlyData().slice(-5); track month.mois) {
-                    <span>{{ month.mois.substring(0, 3) }}</span>
+                    <span class="text-center flex-1">{{ formatMonthLabel(month.mois).split(' ')[0] }}</span>
                   }
                 </div>
               } @else {
                 <!-- Fallback: Weekly activity from BCs -->
-                <div class="relative h-48 w-full flex items-end justify-between px-2 gap-2">
+                <div class="relative h-48 w-full flex items-end justify-between px-1 gap-1.5 mb-2">
                   @for (day of weeklyActivity(); track day.day) {
                     @let maxValue = getMaxWeeklyValue();
                     @let heightPercent = maxValue > 0 ? (day.total / maxValue) * 100 : 0;
-                    <div class="w-full bg-blue-500 rounded-t-md hover:bg-blue-600 transition-all cursor-pointer relative group flex-1"
+                    <div class="w-full bg-blue-500 rounded-t-md hover:bg-blue-600 transition-all cursor-pointer relative group flex-1 flex flex-col items-center justify-end"
                          [style.height.%]="heightPercent">
-                      <div class="absolute -top-6 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-xs py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition whitespace-nowrap">
-                        {{ day.label }}: {{ formatCurrency(day.total) }}
+                      <!-- Valeur sur la barre -->
+                      <div class="absolute -top-5 left-1/2 -translate-x-1/2 text-[10px] font-semibold text-slate-700 opacity-0 group-hover:opacity-100 transition whitespace-nowrap">
+                        {{ formatCurrency(day.total) }}
                       </div>
                     </div>
                   }
                 </div>
-                <div class="flex justify-between text-xs text-slate-400">
+                <div class="flex justify-between text-xs text-slate-500 font-medium px-1">
                   @for (day of weeklyActivity(); track day.day) {
-                    <span>{{ day.day }}</span>
+                    <span class="text-center flex-1">{{ day.day }}</span>
                   }
                 </div>
               }
 
-              <div class="border-t border-slate-100 pt-6 mt-2 space-y-3">
-                 @if (kpis()?.caMensuel && kpis()!.caMensuel.length > 0) {
-                   @let recentMonths = kpis()!.caMensuel.slice(-2);
-                   @let thisMonth = recentMonths[recentMonths.length - 1];
-                   @let lastMonth = recentMonths.length > 1 ? recentMonths[0] : null;
-                   @if (thisMonth && lastMonth) {
-                     @let directSales = thisMonth.caHT;
-                     @let totalSales = directSales + (lastMonth?.caHT || 0);
-                     @let directPercent = totalSales > 0 ? (directSales / totalSales) * 100 : 50;
-                     @let otherPercent = 100 - directPercent;
+              <!-- Comparaison claire entre ce mois et le mois précédent -->
+              <div class="border-t border-slate-100 pt-4 mt-4 space-y-3">
+                 @let comparison = getMonthlyComparison();
+                 @if (comparison) {
+                   <!-- Ce mois -->
+                   <div class="space-y-1">
                      <div class="flex items-center justify-between">
-                        <span class="flex items-center text-sm text-slate-600 gap-2"><div class="w-2 h-2 rounded-full bg-blue-500"></div> Ce mois</span>
-                        <span class="text-sm font-bold text-slate-800">{{ directPercent | number:'1.0-0' }}%</span>
+                       <span class="flex items-center text-sm text-slate-600 gap-2">
+                         <div class="w-2 h-2 rounded-full bg-blue-500"></div>
+                         <span class="font-medium">{{ comparison.thisMonth.label }}</span>
+                       </span>
+                       <span class="text-sm font-bold text-slate-800">{{ formatCurrency(comparison.thisMonth.value) }}</span>
                      </div>
-                     <div class="flex items-center justify-between">
-                        <span class="flex items-center text-sm text-slate-600 gap-2"><div class="w-2 h-2 rounded-full bg-indigo-400"></div> Mois précédent</span>
-                        <span class="text-sm font-bold text-slate-800">{{ otherPercent | number:'1.0-0' }}%</span>
-                     </div>
-                   }
+                     
+                     <!-- Mois précédent et évolution -->
+                     @if (comparison.lastMonth) {
+                       <div class="flex items-center justify-between">
+                         <span class="flex items-center text-sm text-slate-500 gap-2">
+                           <div class="w-2 h-2 rounded-full bg-slate-300"></div>
+                           <span>{{ comparison.lastMonth.label }}</span>
+                         </span>
+                         <span class="text-sm font-medium text-slate-600">{{ formatCurrency(comparison.lastMonth.value) }}</span>
+                       </div>
+                       
+                       @if (comparison.evolution) {
+                         <div class="flex items-center justify-end gap-1.5 pt-1">
+                           @if (comparison.evolution.isPositive) {
+                             <svg class="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
+                             </svg>
+                             <span class="text-xs font-bold text-emerald-600">+{{ comparison.evolution.percent.toFixed(1) }}%</span>
+                           } @else {
+                             <svg class="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6"></path>
+                             </svg>
+                             <span class="text-xs font-bold text-red-600">-{{ comparison.evolution.percent.toFixed(1) }}%</span>
+                           }
+                         </div>
+                       }
+                     }
+                   </div>
                  } @else {
-                   <div class="text-sm text-slate-500 text-center py-4">Données en cours de chargement...</div>
+                   <div class="text-sm text-slate-500 text-center py-2">Données insuffisantes pour la comparaison</div>
                  }
               </div>
            </div>
@@ -366,7 +392,25 @@ export class DashboardComponent implements OnInit {
   }
 
   getBCTotal(bc: any): number {
-    return bc.items.reduce((acc: number, item: any) => acc + (item.qtySell * item.priceSellHT), 0);
+    // Utiliser les totaux pré-calculés si disponibles
+    if (bc.totalVenteHT !== undefined && bc.totalVenteHT !== null) {
+      return bc.totalVenteHT;
+    }
+    // Nouvelle structure multi-clients
+    if (bc.clientsVente && bc.clientsVente.length > 0) {
+      return bc.clientsVente.reduce((acc: number, cv: any) => {
+        if (cv.lignesVente) {
+          return acc + cv.lignesVente.reduce((sum: number, l: any) => 
+            sum + (l.quantiteVendue || 0) * (l.prixVenteUnitaireHT || 0), 0);
+        }
+        return acc;
+      }, 0);
+    }
+    // Ancienne structure (compatibilité)
+    if (bc.items && bc.items.length > 0) {
+      return bc.items.reduce((acc: number, item: any) => acc + (item.qtySell * item.priceSellHT), 0);
+    }
+    return 0;
   }
 
   getStatusClass(status: string): string {
@@ -404,5 +448,53 @@ export class DashboardComponent implements OnInit {
   getMargeWidthPercent(marge: number | undefined): number {
     if (marge === undefined || marge === null) return 0;
     return Math.min(Math.max(marge, 0), 100);
+  }
+
+  // Formate un mois au format "2025-01" en "Jan 2025"
+  formatMonthLabel(monthString: string): string {
+    if (!monthString) return '';
+    try {
+      // Parse "2025-01" format
+      const [year, month] = monthString.split('-');
+      const date = new Date(parseInt(year), parseInt(month) - 1, 1);
+      return date.toLocaleDateString('fr-FR', { month: 'short', year: 'numeric' });
+    } catch (e) {
+      return monthString;
+    }
+  }
+
+  // Calcule l'évolution en % entre deux valeurs
+  calculateEvolution(current: number, previous: number): { percent: number; isPositive: boolean } {
+    if (!previous || previous === 0) {
+      return { percent: current > 0 ? 100 : 0, isPositive: current > 0 };
+    }
+    const percent = ((current - previous) / previous) * 100;
+    return { percent: Math.abs(percent), isPositive: percent >= 0 };
+  }
+
+  // Obtient les données de comparaison mensuelle (ce mois vs mois précédent)
+  getMonthlyComparison() {
+    const data = this.monthlyData();
+    if (data.length === 0) return null;
+    
+    const sorted = [...data].sort((a, b) => a.mois.localeCompare(b.mois));
+    const thisMonth = sorted[sorted.length - 1];
+    const lastMonth = sorted.length > 1 ? sorted[sorted.length - 2] : null;
+    
+    if (!thisMonth) return null;
+    
+    const evolution = lastMonth ? this.calculateEvolution(thisMonth.caHT, lastMonth.caHT) : null;
+    
+    return {
+      thisMonth: {
+        label: this.formatMonthLabel(thisMonth.mois),
+        value: thisMonth.caHT
+      },
+      lastMonth: lastMonth ? {
+        label: this.formatMonthLabel(lastMonth.mois),
+        value: lastMonth.caHT
+      } : null,
+      evolution
+    };
   }
 }
