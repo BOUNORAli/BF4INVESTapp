@@ -107,38 +107,41 @@ import { StoreService, Client, Supplier } from '../../services/store.service';
       @if (activeTab() === 'suppliers') {
         <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 animate-[fadeIn_0.3s_ease-out]">
           @for (sup of filteredSuppliers(); track sup.id) {
-            <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 hover-card group relative" [attr.data-item-id]="sup.id">
+            <div class="bg-white rounded-2xl shadow-sm hover-card group relative" [class.border-2]="isRegulariteFiscaleExpired(sup)" [class.border-red-500]="isRegulariteFiscaleExpired(sup)" [class.border-slate-100]="!isRegulariteFiscaleExpired(sup)" [attr.data-item-id]="sup.id">
                
-               <div class="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
-                 <button (click)="editSupplier(sup)" class="p-1.5 text-blue-600 bg-blue-50 rounded hover:bg-blue-100">
-                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
-                 </button>
-                 <button (click)="deleteSupplier(sup.id)" class="p-1.5 text-red-600 bg-red-50 rounded hover:bg-red-100">
-                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-                 </button>
-               </div>
-
-               <div class="flex justify-between items-start mb-4">
-                 <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-emerald-500/20">
-                   {{ sup.name.charAt(0) }}
-                 </div>
-               </div>
-               
-               <h3 class="text-lg font-bold text-slate-800 mb-1">{{ sup.name }}</h3>
-               <div class="flex items-center gap-2 text-xs text-slate-500 mb-4">
-                 <span class="bg-slate-100 px-2 py-1 rounded">ICE: {{ sup.ice }}</span>
-               </div>
+               <!-- Alerte de régularité fiscale expirée en haut de la carte -->
                @if (isRegulariteFiscaleExpired(sup)) {
-                 <div class="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2">
+                 <div class="p-3 bg-red-50 border-b-2 border-red-500 rounded-t-2xl flex items-center gap-2">
                    <svg class="w-5 h-5 text-red-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
                    </svg>
                    <div class="flex-1">
-                     <p class="text-sm font-semibold text-red-800">Régularité fiscale expirée</p>
+                     <p class="text-sm font-bold text-red-800">Régularité fiscale expirée</p>
                      <p class="text-xs text-red-600">Date de régularité fiscale de plus de 6 mois</p>
                    </div>
                  </div>
                }
+
+               <div class="p-6">
+                 <div class="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
+                   <button (click)="editSupplier(sup)" class="p-1.5 text-blue-600 bg-blue-50 rounded hover:bg-blue-100">
+                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                   </button>
+                   <button (click)="deleteSupplier(sup.id)" class="p-1.5 text-red-600 bg-red-50 rounded hover:bg-red-100">
+                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                   </button>
+                 </div>
+
+                 <div class="flex justify-between items-start mb-4">
+                   <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-emerald-500/20">
+                     {{ sup.name.charAt(0) }}
+                   </div>
+                 </div>
+                 
+                 <h3 class="text-lg font-bold text-slate-800 mb-1">{{ sup.name }}</h3>
+                 <div class="flex items-center gap-2 text-xs text-slate-500 mb-4">
+                   <span class="bg-slate-100 px-2 py-1 rounded">ICE: {{ sup.ice }}</span>
+                 </div>
 
                <div class="space-y-3 pt-4 border-t border-slate-100">
                   <div class="flex items-start gap-3">
@@ -164,6 +167,7 @@ import { StoreService, Client, Supplier } from '../../services/store.service';
                       </div>
                     </div>
                   }
+               </div>
                </div>
             </div>
           }

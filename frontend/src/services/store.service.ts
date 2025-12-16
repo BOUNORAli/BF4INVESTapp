@@ -601,6 +601,7 @@ export class StoreService {
       const payload = {
         nom: supplier.name,
         ice: supplier.ice,
+        contact: supplier.contact || null,
         telephone: supplier.phone,
         email: supplier.email,
         adresse: supplier.address,
@@ -623,6 +624,7 @@ export class StoreService {
       const payload = {
         nom: supplier.name,
         ice: supplier.ice,
+        contact: supplier.contact || null,
         telephone: supplier.phone,
         email: supplier.email,
         adresse: supplier.address,

@@ -41,6 +41,7 @@ public class SupplierService {
                     String oldName = existing.getNom();
                     existing.setNom(supplier.getNom());
                     existing.setIce(supplier.getIce());
+                    existing.setContact(supplier.getContact());
                     existing.setAdresse(supplier.getAdresse());
                     existing.setTelephone(supplier.getTelephone());
                     existing.setEmail(supplier.getEmail());

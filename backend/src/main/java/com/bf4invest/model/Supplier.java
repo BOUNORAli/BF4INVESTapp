@@ -22,6 +22,7 @@ public class Supplier {
     
     private String nom;
     private String ice;
+    private String contact; // Contact principal
     private String adresse;
     private String telephone;
     private String email;
