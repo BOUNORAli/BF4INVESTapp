@@ -143,6 +143,11 @@ import { StoreService, Product } from '../../services/store.service';
                         <input formControlName="priceSellHT" type="number" class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition text-right font-bold text-slate-800">
                     </div>
                   </div>
+                  <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-1">Quantité en Stock</label>
+                    <input formControlName="stock" type="number" class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition text-right" placeholder="0">
+                    <p class="text-xs text-slate-400 mt-1">Quantité actuellement disponible en stock</p>
+                  </div>
                   <div class="bg-blue-50 p-4 rounded-lg">
                     <div class="flex justify-between text-sm">
                        <span class="text-blue-700 font-medium">Marge estimée:</span>
@@ -184,7 +189,8 @@ export class ProductsComponent {
     name: ['', Validators.required],
     unit: ['U', Validators.required],
     priceBuyHT: [0, [Validators.required, Validators.min(0)]],
-    priceSellHT: [0, [Validators.required, Validators.min(0)]]
+    priceSellHT: [0, [Validators.required, Validators.min(0)]],
+    stock: [0, [Validators.min(0)]]
   });
 
   filteredProducts = computed(() => {
@@ -216,7 +222,7 @@ export class ProductsComponent {
   openForm() {
     this.isEditMode.set(false);
     this.editingId = null;
-    this.form.reset({ unit: 'U', priceBuyHT: 0, priceSellHT: 0 });
+    this.form.reset({ unit: 'U', priceBuyHT: 0, priceSellHT: 0, stock: 0 });
     this.isFormOpen.set(true);
   }
 

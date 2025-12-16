@@ -121,7 +121,10 @@ import { StoreService, BC, LigneAchat, LigneVente, ClientVente, Product } from '
                                   <span class="font-medium text-slate-800 text-sm">{{ prod.name }}</span>
                                   <div class="flex justify-between text-xs text-slate-500">
                                     <span>Ref: {{ prod.ref }}</span>
-                                    <span class="font-mono">{{ prod.priceBuyHT }} Dhs</span>
+                                    <div class="flex items-center gap-2">
+                                      <span [class]="getStockClass(prod.stock ?? 0)" class="font-semibold">Stock: {{ prod.stock ?? 0 }}</span>
+                                      <span class="font-mono">{{ prod.priceBuyHT }} Dhs</span>
+                                    </div>
                                   </div>
                                 </div>
                               }
@@ -239,9 +242,13 @@ import { StoreService, BC, LigneAchat, LigneVente, ClientVente, Product } from '
                                 @if (activeDropdownType() === 'vente-' + clientIdx && activeDropdownIndex() === ligneIdx) {
                                   <div class="absolute z-50 top-full left-0 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-xl max-h-48 overflow-y-auto">
                                     @for (prod of getProduitsFromAchat(); track prod.produitRef) {
+                                      @let productStock = getProductStock(prod.produitRef);
                                       <div (mousedown)="selectProductVente(clientIdx, ligneIdx, prod)" class="p-2 hover:bg-blue-50 cursor-pointer border-b border-slate-50 last:border-0 flex flex-col">
                                         <span class="font-medium text-slate-800 text-sm">{{ prod.designation }}</span>
-                                        <span class="text-xs text-slate-500">Ref: {{ prod.produitRef }} - Achat: {{ prod.prixAchatUnitaireHT }} Dhs</span>
+                                        <div class="flex justify-between items-center text-xs">
+                                          <span class="text-slate-500">Ref: {{ prod.produitRef }} - Achat: {{ prod.prixAchatUnitaireHT }} Dhs</span>
+                                          <span [class]="getStockClass(productStock)" class="font-semibold">Stock: {{ productStock }}</span>
+                                        </div>
                                       </div>
                                     }
                                     @if (getProduitsFromAchat().length === 0) {
@@ -252,7 +259,15 @@ import { StoreService, BC, LigneAchat, LigneVente, ClientVente, Product } from '
                               </div>
                             </td>
                             <td class="p-2 align-top">
-                              <input type="number" formControlName="quantiteVendue" (input)="calculateTotals()" class="w-full p-2 border border-slate-200 rounded-md text-right focus:ring-2 focus:ring-blue-500/20 outline-none">
+                              <div class="flex flex-col gap-1">
+                                <input type="number" formControlName="quantiteVendue" (input)="calculateTotals()" class="w-full p-2 border border-slate-200 rounded-md text-right focus:ring-2 focus:ring-blue-500/20 outline-none">
+                                @if (getLigneVenteStockWarning(clientIdx, ligneIdx)) {
+                                  @let warning = getLigneVenteStockWarning(clientIdx, ligneIdx);
+                                  <div class="text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded border border-amber-200">
+                                    Stock: {{ warning.stock }} / Qté: {{ warning.quantite }}
+                                  </div>
+                                }
+                              </div>
                             </td>
                             <td class="p-2 align-top">
                               <input type="number" formControlName="prixVenteUnitaireHT" (input)="calculateTotals()" class="w-full p-2 border border-slate-200 rounded-md text-right font-medium focus:ring-2 focus:ring-blue-500/20 outline-none">
@@ -684,6 +699,31 @@ export class BcFormComponent implements OnInit {
     if (marge >= 15) return 'bg-emerald-100 text-emerald-700';
     if (marge > 0) return 'bg-amber-100 text-amber-700';
     return 'bg-red-100 text-red-700';
+  }
+
+  getProductStock(produitRef: string): number {
+    const product = this.store.products().find(p => p.ref === produitRef);
+    return product?.stock ?? 0;
+  }
+
+  getStockClass(stock: number): string {
+    if (stock < 0) return 'text-red-600 font-bold';
+    if (stock === 0) return 'text-red-500 font-semibold';
+    if (stock < 10) return 'text-amber-600 font-semibold';
+    return 'text-emerald-600 font-semibold';
+  }
+
+  getLigneVenteStockWarning(clientIdx: number, ligneIdx: number): { stock: number; quantite: number } | null {
+    const ligne = this.getLignesVenteArray(clientIdx).at(ligneIdx).value;
+    if (!ligne.produitRef || !ligne.quantiteVendue) {
+      return null;
+    }
+    const stock = this.getProductStock(ligne.produitRef);
+    const quantite = ligne.quantiteVendue || 0;
+    if (stock < quantite) {
+      return { stock, quantite };
+    }
+    return null;
   }
 
   calculateTotals() {
