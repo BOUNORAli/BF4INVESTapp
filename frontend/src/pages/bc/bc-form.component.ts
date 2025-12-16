@@ -911,14 +911,32 @@ export class BcFormComponent implements OnInit {
     // Construire les lignes d'achat
     const lignesAchat: LigneAchat[] = this.lignesAchatArray.value
       .filter((l: any) => l.designation && l.produitRef) // Filtrer seulement les lignes avec produit sélectionné
-      .map((l: any) => ({
-        produitRef: l.produitRef || l.designation,
-        designation: l.designation,
-        unite: l.unite || 'U',
-        quantiteAchetee: l.quantiteAchetee || 0,
-        prixAchatUnitaireHT: l.prixAchatUnitaireHT || 0,
-        tva: l.tva || 20
-      }));
+      .map((l: any) => {
+        const prix = l.prixAchatUnitaireHT || 0;
+        const qte = l.quantiteAchetee || 0;
+        // Si le prix est 0, essayer de le récupérer depuis le produit
+        if (prix === 0 && l.produitRef) {
+          const product = this.store.products().find(p => p.ref === l.produitRef);
+          if (product && product.priceBuyHT) {
+            return {
+              produitRef: l.produitRef || l.designation,
+              designation: l.designation,
+              unite: l.unite || 'U',
+              quantiteAchetee: qte,
+              prixAchatUnitaireHT: product.priceBuyHT,
+              tva: l.tva || 20
+            };
+          }
+        }
+        return {
+          produitRef: l.produitRef || l.designation,
+          designation: l.designation,
+          unite: l.unite || 'U',
+          quantiteAchetee: qte,
+          prixAchatUnitaireHT: prix,
+          tva: l.tva || 20
+        };
+      });
 
     // Construire les clients avec leurs lignes de vente (seulement si pas d'ajout au stock)
     const clientsVenteData: ClientVente[] = ajouterAuStock ? [] : validClients.map((client: any) => ({
@@ -935,6 +953,10 @@ export class BcFormComponent implements OnInit {
         }))
     }));
 
+    // Debug: vérifier les lignes d'achat
+    console.log('🔵 Lignes d\'achat avant envoi:', lignesAchat);
+    console.log('🔵 Total achat calculé:', this.buyTotal());
+    
     const bcData: BC = {
       id: this.bcId || `bc-${Date.now()}`,
       number: formVal.number,

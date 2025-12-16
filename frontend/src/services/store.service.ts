@@ -783,7 +783,11 @@ export class StoreService {
       }
       
       const created = await this.api.post<any>('/bandes-commandes', payload).toPromise();
+      console.log('🔵 BC créé par le backend:', created);
+      console.log('🔵 totalAchatHT renvoyé:', created?.totalAchatHT);
       const mapped = this.mapBC(created);
+      console.log('🔵 BC mappé:', mapped);
+      console.log('🔵 totalAchatHT mappé:', mapped.totalAchatHT);
       this.bcs.update(list => [mapped, ...list]);
       
       // Recharger les produits si le stock a été mis à jour
