@@ -128,6 +128,17 @@ import { StoreService, Client, Supplier } from '../../services/store.service';
                <div class="flex items-center gap-2 text-xs text-slate-500 mb-4">
                  <span class="bg-slate-100 px-2 py-1 rounded">ICE: {{ sup.ice }}</span>
                </div>
+               @if (isRegulariteFiscaleExpired(sup)) {
+                 <div class="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2">
+                   <svg class="w-5 h-5 text-red-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                   </svg>
+                   <div class="flex-1">
+                     <p class="text-sm font-semibold text-red-800">Régularité fiscale expirée</p>
+                     <p class="text-xs text-red-600">Date de régularité fiscale de plus de 6 mois</p>
+                   </div>
+                 </div>
+               }
 
                <div class="space-y-3 pt-4 border-t border-slate-100">
                   <div class="flex items-start gap-3">
@@ -142,6 +153,17 @@ import { StoreService, Client, Supplier } from '../../services/store.service';
                     <svg class="w-4 h-4 text-slate-400 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
                     <span class="text-sm text-slate-600 truncate">{{ sup.address }}</span>
                   </div>
+                  @if (sup.dateRegulariteFiscale) {
+                    <div class="flex items-start gap-3">
+                      <svg class="w-4 h-4 text-slate-400 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                      <div class="flex-1">
+                        <span class="text-sm text-slate-600">Régularité fiscale: </span>
+                        <span class="text-sm font-medium" [class.text-red-600]="isRegulariteFiscaleExpired(sup)" [class.text-slate-700]="!isRegulariteFiscaleExpired(sup)">
+                          {{ formatDate(sup.dateRegulariteFiscale) }}
+                        </span>
+                      </div>
+                    </div>
+                  }
                </div>
             </div>
           }
@@ -179,6 +201,13 @@ import { StoreService, Client, Supplier } from '../../services/store.service';
                     <label class="block text-sm font-semibold text-slate-700 mb-1">ICE (Identifiant Fiscal)</label>
                     <input formControlName="ice" type="text" class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition">
                   </div>
+                  @if (activeTab() === 'suppliers') {
+                    <div>
+                      <label class="block text-sm font-semibold text-slate-700 mb-1">Date de régularité fiscale</label>
+                      <input formControlName="dateRegulariteFiscale" type="date" class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition">
+                      <p class="text-xs text-slate-500 mt-1">Date de la dernière régularité fiscale du fournisseur</p>
+                    </div>
+                  }
                   <div>
                     <label class="block text-sm font-semibold text-slate-700 mb-1">Contact Principal</label>
                     <input formControlName="contact" type="text" class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition">
@@ -234,7 +263,8 @@ export class PartnersComponent {
     contact: ['', Validators.required],
     phone: [''],
     email: ['', [Validators.email]],
-    address: ['']
+    address: [''],
+    dateRegulariteFiscale: [''] // Uniquement pour les fournisseurs
   });
 
   filteredClients = computed(() => {
@@ -335,5 +365,31 @@ export class PartnersComponent {
     }
     
     this.closeForm();
+  }
+
+  // Vérifie si la date de régularité fiscale est expirée (plus de 6 mois)
+  isRegulariteFiscaleExpired(supplier: Supplier): boolean {
+    if (!supplier.dateRegulariteFiscale) {
+      return false; // Pas de date = pas d'alerte
+    }
+
+    const dateRegularite = new Date(supplier.dateRegulariteFiscale);
+    const now = new Date();
+    
+    // Calculer la différence en millisecondes
+    const diffMs = now.getTime() - dateRegularite.getTime();
+    
+    // Convertir en jours
+    const diffDays = diffMs / (1000 * 60 * 60 * 24);
+    
+    // 6 mois = environ 180 jours (on utilise 180 pour être précis)
+    return diffDays > 180;
+  }
+
+  // Formate une date au format français
+  formatDate(dateString: string): string {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
   }
 }

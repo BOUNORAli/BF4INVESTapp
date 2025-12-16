@@ -28,6 +28,7 @@ export interface Supplier {
   phone: string;
   email: string;
   address: string;
+  dateRegulariteFiscale?: string; // Date de régularité fiscale (format ISO: YYYY-MM-DD)
 }
 
 export interface LineItem {
@@ -441,7 +442,8 @@ export class StoreService {
       contact: s.contact,
       phone: s.telephone || s.phone,
       email: s.email,
-      address: s.adresse || s.address
+      address: s.adresse || s.address,
+      dateRegulariteFiscale: s.dateRegulariteFiscale || undefined
     };
   }
 
@@ -602,7 +604,8 @@ export class StoreService {
         telephone: supplier.phone,
         email: supplier.email,
         adresse: supplier.address,
-        modesPaiementAcceptes: ['virement', 'cheque', 'LCN', 'compensation']
+        modesPaiementAcceptes: ['virement', 'cheque', 'LCN', 'compensation'],
+        dateRegulariteFiscale: supplier.dateRegulariteFiscale || null
       };
       
       const created = await this.api.post<any>('/fournisseurs', payload).toPromise();
@@ -622,7 +625,8 @@ export class StoreService {
         ice: supplier.ice,
         telephone: supplier.phone,
         email: supplier.email,
-        adresse: supplier.address
+        adresse: supplier.address,
+        dateRegulariteFiscale: supplier.dateRegulariteFiscale || null
       };
       
       const updated = await this.api.put<any>(`/fournisseurs/${supplier.id}`, payload).toPromise();

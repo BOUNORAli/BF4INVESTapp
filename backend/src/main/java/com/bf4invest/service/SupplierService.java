@@ -45,6 +45,7 @@ public class SupplierService {
                     existing.setTelephone(supplier.getTelephone());
                     existing.setEmail(supplier.getEmail());
                     existing.setModesPaiementAcceptes(supplier.getModesPaiementAcceptes());
+                    existing.setDateRegulariteFiscale(supplier.getDateRegulariteFiscale());
                     existing.setUpdatedAt(LocalDateTime.now());
                     Supplier saved = supplierRepository.save(existing);
                     

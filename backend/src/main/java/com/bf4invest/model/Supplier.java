@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -26,6 +27,8 @@ public class Supplier {
     private String email;
     
     private List<String> modesPaiementAcceptes; // virement, chèque, LCN, compensation
+    
+    private LocalDate dateRegulariteFiscale; // Date de régularité fiscale du fournisseur
     
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
