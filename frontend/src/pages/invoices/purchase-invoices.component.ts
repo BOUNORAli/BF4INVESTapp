@@ -375,7 +375,9 @@ export class PurchaseInvoicesComponent {
 
   onBCChange() {
     const bcId = this.form.get('bcId')?.value;
+    console.log('🔵 purchase-invoices.onBCChange - bcId sélectionné:', bcId);
     const bc = this.store.bcs().find(b => b.id === bcId);
+    console.log('🔵 purchase-invoices.onBCChange - BC trouvé:', bc);
     
     if (bc) {
       let totalHT = 0;
@@ -383,11 +385,17 @@ export class PurchaseInvoicesComponent {
 
       // Nouvelle structure: lignesAchat
       if (bc.lignesAchat && bc.lignesAchat.length > 0) {
+        console.log('🔵 purchase-invoices.onBCChange - Utilisation nouvelle structure (lignesAchat)');
         // Utiliser les totaux pré-calculés si disponibles
         if (bc.totalAchatHT !== undefined && bc.totalAchatTTC !== undefined) {
+          console.log('🔵 purchase-invoices.onBCChange - Utilisation totaux pré-calculés:', {
+            totalAchatHT: bc.totalAchatHT,
+            totalAchatTTC: bc.totalAchatTTC
+          });
           totalHT = bc.totalAchatHT;
           totalTva = bc.totalAchatTTC - totalHT;
         } else {
+          console.log('🔵 purchase-invoices.onBCChange - Calcul depuis lignesAchat');
           // Calculer à partir des lignes d'achat
           totalHT = bc.lignesAchat.reduce((acc, l) => 
             acc + (l.quantiteAchetee || 0) * (l.prixAchatUnitaireHT || 0), 0);
@@ -397,14 +405,28 @@ export class PurchaseInvoicesComponent {
       } 
       // Ancienne structure: items
       else if (bc.items) {
+        console.log('🔵 purchase-invoices.onBCChange - Utilisation ancienne structure (items)');
         totalHT = bc.items.reduce((acc, i) => acc + (i.qtyBuy * i.priceBuyHT), 0);
         totalTva = bc.items.reduce((acc, i) => acc + (i.qtyBuy * i.priceBuyHT * (i.tvaRate/100)), 0);
       }
+      
+      console.log('🔵 purchase-invoices.onBCChange - Montants calculés:', {
+        totalHT,
+        totalTva,
+        totalTTC: totalHT + totalTva
+      });
       
       this.form.patchValue({
         amountHT: totalHT,
         amountTTC: totalHT + totalTva
       });
+      
+      console.log('🔵 purchase-invoices.onBCChange - Formulaire mis à jour, valeurs actuelles:', {
+        amountHT: this.form.get('amountHT')?.value,
+        amountTTC: this.form.get('amountTTC')?.value
+      });
+    } else {
+      console.warn('🔵 purchase-invoices.onBCChange - BC non trouvé pour id:', bcId);
     }
   }
 
@@ -450,7 +472,15 @@ export class PurchaseInvoicesComponent {
   }
 
   onSubmit() {
+    console.log('🟢 purchase-invoices.onSubmit - DÉBUT');
     const val = this.form.value;
+    console.log('🟢 purchase-invoices.onSubmit - Valeurs du formulaire:', val);
+    console.log('🟢 purchase-invoices.onSubmit - Montants dans formulaire:', {
+      amountHT: val.amountHT,
+      amountTTC: val.amountTTC,
+      'amountHT type': typeof val.amountHT,
+      'amountTTC type': typeof val.amountTTC
+    });
     
     // Validation manuelle des champs essentiels
     if (!val.number || !val.date || !val.partnerId) {
@@ -471,6 +501,13 @@ export class PurchaseInvoicesComponent {
     const amountHT = val.amountHT != null && val.amountHT !== undefined ? Number(val.amountHT) : 0;
     const amountTTC = val.amountTTC != null && val.amountTTC !== undefined ? Number(val.amountTTC) : 0;
     
+    console.log('🟢 purchase-invoices.onSubmit - Montants convertis:', {
+      amountHT,
+      amountTTC,
+      'amountHT type': typeof amountHT,
+      'amountTTC type': typeof amountTTC
+    });
+    
     const invoice: Invoice = {
       id: this.editingId || `fa-${Date.now()}`,
       type: 'purchase',
@@ -485,9 +522,18 @@ export class PurchaseInvoicesComponent {
       paymentMode: val.paymentMode || undefined
     };
 
+    console.log('🟢 purchase-invoices.onSubmit - Invoice final créé:', invoice);
+    console.log('🟢 purchase-invoices.onSubmit - Montants dans invoice:', {
+      amountHT: invoice.amountHT,
+      amountTTC: invoice.amountTTC
+    });
+    console.log('🟢 purchase-invoices.onSubmit - isEditMode:', this.isEditMode());
+
     if (this.isEditMode()) {
+      console.log('🟢 purchase-invoices.onSubmit - Appel updateInvoice');
       this.store.updateInvoice(invoice);
     } else {
+      console.log('🟢 purchase-invoices.onSubmit - Appel addInvoice');
       this.store.addInvoice(invoice);
     }
     this.closeForm();

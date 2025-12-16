@@ -831,10 +831,26 @@ export class StoreService {
   }
 
   async addInvoice(inv: Invoice): Promise<void> {
+    console.log('🟡 store.addInvoice - DÉBUT');
+    console.log('🟡 store.addInvoice - Invoice reçue:', inv);
+    console.log('🟡 store.addInvoice - Montants reçus:', {
+      amountHT: inv.amountHT,
+      amountTTC: inv.amountTTC,
+      'amountHT type': typeof inv.amountHT,
+      'amountTTC type': typeof inv.amountTTC
+    });
+    
     try {
       // S'assurer que les montants sont des nombres
       const amountHT = inv.amountHT != null && inv.amountHT !== undefined ? Number(inv.amountHT) : 0;
       const amountTTC = inv.amountTTC != null && inv.amountTTC !== undefined ? Number(inv.amountTTC) : 0;
+
+      console.log('🟡 store.addInvoice - Montants convertis:', {
+        amountHT,
+        amountTTC,
+        'amountHT type': typeof amountHT,
+        'amountTTC type': typeof amountTTC
+      });
 
       if (inv.type === 'purchase') {
         const payload = {
@@ -848,8 +864,25 @@ export class StoreService {
           etatPaiement: inv.status === 'paid' ? 'regle' : 'non_regle'
         };
         
+        console.log('🟡 store.addInvoice - Payload pour facture achat:', payload);
+        console.log('🟡 store.addInvoice - Payload JSON:', JSON.stringify(payload, null, 2));
+        
         const created = await this.api.post<any>('/factures-achats', payload).toPromise();
+        console.log('🟡 store.addInvoice - Réponse backend (facture achat):', created);
+        console.log('🟡 store.addInvoice - Montants dans réponse:', {
+          totalHT: created?.totalHT,
+          totalTTC: created?.totalTTC,
+          'totalHT type': typeof created?.totalHT,
+          'totalTTC type': typeof created?.totalTTC
+        });
+        
         const mapped = this.mapInvoice(created, 'purchase');
+        console.log('🟡 store.addInvoice - Invoice mappée (facture achat):', mapped);
+        console.log('🟡 store.addInvoice - Montants dans invoice mappée:', {
+          amountHT: mapped.amountHT,
+          amountTTC: mapped.amountTTC
+        });
+        
         this.invoices.update(list => [mapped, ...list]);
       } else {
         const payload = {
@@ -863,8 +896,25 @@ export class StoreService {
           etatPaiement: inv.status === 'paid' ? 'regle' : 'non_regle'
         };
         
+        console.log('🟡 store.addInvoice - Payload pour facture vente:', payload);
+        console.log('🟡 store.addInvoice - Payload JSON:', JSON.stringify(payload, null, 2));
+        
         const created = await this.api.post<any>('/factures-ventes', payload).toPromise();
+        console.log('🟡 store.addInvoice - Réponse backend (facture vente):', created);
+        console.log('🟡 store.addInvoice - Montants dans réponse:', {
+          totalHT: created?.totalHT,
+          totalTTC: created?.totalTTC,
+          'totalHT type': typeof created?.totalHT,
+          'totalTTC type': typeof created?.totalTTC
+        });
+        
         const mapped = this.mapInvoice(created, 'sale');
+        console.log('🟡 store.addInvoice - Invoice mappée (facture vente):', mapped);
+        console.log('🟡 store.addInvoice - Montants dans invoice mappée:', {
+          amountHT: mapped.amountHT,
+          amountTTC: mapped.amountTTC
+        });
+        
         this.invoices.update(list => [mapped, ...list]);
       }
       
@@ -874,7 +924,10 @@ export class StoreService {
         message: `${inv.number} enregistrée pour ${amountTTC} MAD.`, 
         type: 'info' 
       });
+      
+      console.log('🟡 store.addInvoice - FIN - Succès');
     } catch (error) {
+      console.error('❌ store.addInvoice - ERREUR:', error);
       this.showToast('Erreur lors de l\'enregistrement de la facture', 'error');
       throw error;
     }
@@ -1036,6 +1089,19 @@ export class StoreService {
   }
 
   private mapInvoice(inv: any, type: 'purchase' | 'sale'): Invoice {
+    console.log('🟣 store.mapInvoice - DÉBUT mapping', type);
+    console.log('🟣 store.mapInvoice - Objet inv reçu:', inv);
+    console.log('🟣 store.mapInvoice - Tous les champs numériques dans inv:', {
+      totalHT: inv?.totalHT,
+      totalTTC: inv?.totalTTC,
+      amountHT: inv?.amountHT,
+      amountTTC: inv?.amountTTC,
+      montantHT: inv?.montantHT,
+      montantTTC: inv?.montantTTC,
+      'totalHT type': typeof inv?.totalHT,
+      'totalTTC type': typeof inv?.totalTTC
+    });
+    
     const today = new Date().toISOString().split('T')[0];
     const dueDate = inv.dateEcheance || inv.dueDate || today;
     
@@ -1063,7 +1129,14 @@ export class StoreService {
                       (inv.montantTTC != null && inv.montantTTC !== undefined) ? Number(inv.montantTTC) : 
                       amountHT; // Fallback sur HT si TTC non disponible
     
-    return {
+    console.log('🟣 store.mapInvoice - Montants extraits:', {
+      amountHT,
+      amountTTC,
+      'amountHT type': typeof amountHT,
+      'amountTTC type': typeof amountTTC
+    });
+    
+    const mappedInvoice = {
       id: inv.id,
       number: inv.numeroFactureAchat || inv.numeroFactureVente || inv.number,
       bcId: inv.bandeCommandeId || inv.bcId || '',
@@ -1076,6 +1149,15 @@ export class StoreService {
       type: type,
       paymentMode: inv.modePaiement || inv.paymentMode
     };
+    
+    console.log('🟣 store.mapInvoice - Invoice final mappé:', mappedInvoice);
+    console.log('🟣 store.mapInvoice - Montants dans invoice final:', {
+      amountHT: mappedInvoice.amountHT,
+      amountTTC: mappedInvoice.amountTTC
+    });
+    console.log('🟣 store.mapInvoice - FIN mapping');
+    
+    return mappedInvoice;
   }
 
   // --- HELPERS ---

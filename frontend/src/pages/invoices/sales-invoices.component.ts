@@ -508,7 +508,9 @@ export class SalesInvoicesComponent {
   onBCChange() {
     const bcId = this.form.get('bcId')?.value;
     const clientId = this.form.get('partnerId')?.value;
+    console.log('🔵 sales-invoices.onBCChange - bcId:', bcId, 'clientId:', clientId);
     const bc = this.store.bcs().find(b => b.id === bcId);
+    console.log('🔵 sales-invoices.onBCChange - BC trouvé:', bc);
     
     if (bc) {
       let totalHT = 0;
@@ -516,32 +518,55 @@ export class SalesInvoicesComponent {
 
       // Nouvelle structure multi-clients
       if (bc.clientsVente && bc.clientsVente.length > 0) {
+        console.log('🔵 sales-invoices.onBCChange - Utilisation nouvelle structure (clientsVente)');
         // Trouver le client spécifique dans le BC
         const clientVente = bc.clientsVente.find(cv => cv.clientId === clientId);
+        console.log('🔵 sales-invoices.onBCChange - ClientVente trouvé:', clientVente);
         if (clientVente && clientVente.lignesVente) {
           // Utiliser les totaux pré-calculés si disponibles
           if (clientVente.totalVenteHT !== undefined && clientVente.totalVenteTTC !== undefined) {
+            console.log('🔵 sales-invoices.onBCChange - Utilisation totaux pré-calculés:', {
+              totalVenteHT: clientVente.totalVenteHT,
+              totalVenteTTC: clientVente.totalVenteTTC
+            });
             totalHT = clientVente.totalVenteHT;
             totalTva = (clientVente.totalVenteTTC || 0) - totalHT;
           } else {
+            console.log('🔵 sales-invoices.onBCChange - Calcul depuis lignesVente');
             // Calculer à partir des lignes de vente
             totalHT = clientVente.lignesVente.reduce((acc, l) => 
               acc + (l.quantiteVendue || 0) * (l.prixVenteUnitaireHT || 0), 0);
             totalTva = clientVente.lignesVente.reduce((acc, l) => 
               acc + (l.quantiteVendue || 0) * (l.prixVenteUnitaireHT || 0) * ((l.tva || 0) / 100), 0);
           }
+        } else {
+          console.warn('🔵 sales-invoices.onBCChange - ClientVente ou lignesVente non trouvé pour clientId:', clientId);
         }
       } 
       // Ancienne structure
       else if (bc.items) {
+        console.log('🔵 sales-invoices.onBCChange - Utilisation ancienne structure (items)');
         totalHT = bc.items.reduce((acc, i) => acc + (i.qtySell * i.priceSellHT), 0);
         totalTva = bc.items.reduce((acc, i) => acc + (i.qtySell * i.priceSellHT * (i.tvaRate/100)), 0);
       }
+      
+      console.log('🔵 sales-invoices.onBCChange - Montants calculés:', {
+        totalHT,
+        totalTva,
+        totalTTC: totalHT + totalTva
+      });
       
       this.form.patchValue({
         amountHT: totalHT,
         amountTTC: totalHT + totalTva
       });
+      
+      console.log('🔵 sales-invoices.onBCChange - Formulaire mis à jour, valeurs actuelles:', {
+        amountHT: this.form.get('amountHT')?.value,
+        amountTTC: this.form.get('amountTTC')?.value
+      });
+    } else {
+      console.warn('🔵 sales-invoices.onBCChange - BC non trouvé pour id:', bcId);
     }
   }
 
