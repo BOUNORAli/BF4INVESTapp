@@ -15,6 +15,7 @@ export interface Client {
   id: string;
   name: string;
   ice: string;
+  referenceClient?: string; // Référence client (3 premières lettres du nom par défaut)
   contact?: string;
   phone: string;
   email: string;
@@ -25,6 +26,7 @@ export interface Supplier {
   id: string;
   name: string;
   ice: string;
+  referenceFournisseur?: string; // Référence fournisseur (3 premières lettres du nom par défaut)
   contact?: string;
   phone: string;
   email: string;
@@ -429,6 +431,7 @@ export class StoreService {
       id: c.id,
       name: c.nom || c.name,
       ice: c.ice,
+      referenceClient: c.referenceClient,
       contact: c.contacts?.[0]?.nom,
       phone: c.telephone || c.phone,
       email: c.email,
@@ -441,6 +444,7 @@ export class StoreService {
       id: s.id,
       name: s.nom || s.name,
       ice: s.ice,
+      referenceFournisseur: s.referenceFournisseur,
       contact: s.contact,
       phone: s.telephone || s.phone,
       email: s.email,
@@ -549,6 +553,7 @@ export class StoreService {
       const payload = {
         nom: client.name,
         ice: client.ice,
+        referenceClient: client.referenceClient || null,
         telephone: client.phone,
         email: client.email,
         adresse: client.address,
@@ -571,6 +576,7 @@ export class StoreService {
       const payload = {
         nom: client.name,
         ice: client.ice,
+        referenceClient: client.referenceClient || null,
         telephone: client.phone,
         email: client.email,
         adresse: client.address
@@ -604,6 +610,7 @@ export class StoreService {
       const payload = {
         nom: supplier.name,
         ice: supplier.ice,
+        referenceFournisseur: supplier.referenceFournisseur || null,
         contact: supplier.contact || null,
         telephone: supplier.phone,
         email: supplier.email,
@@ -627,6 +634,7 @@ export class StoreService {
       const payload = {
         nom: supplier.name,
         ice: supplier.ice,
+        referenceFournisseur: supplier.referenceFournisseur || null,
         contact: supplier.contact || null,
         telephone: supplier.phone,
         email: supplier.email,

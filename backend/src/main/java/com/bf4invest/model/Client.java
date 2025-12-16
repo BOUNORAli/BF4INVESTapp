@@ -21,6 +21,7 @@ public class Client {
     
     private String ice;
     private String nom;
+    private String referenceClient; // Référence client (3 premières lettres du nom par défaut)
     private String adresse;
     private String telephone;
     private String email;

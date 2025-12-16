@@ -77,6 +77,9 @@ import { StoreService, Client, Supplier } from '../../services/store.service';
                <h3 class="text-lg font-bold text-slate-800 mb-1">{{ client.name }}</h3>
                <div class="flex items-center gap-2 text-xs text-slate-500 mb-4">
                  <span class="bg-slate-100 px-2 py-1 rounded">ICE: {{ client.ice }}</span>
+                 @if (client.referenceClient) {
+                   <span class="bg-blue-100 text-blue-700 px-2 py-1 rounded font-medium">Ref: {{ client.referenceClient }}</span>
+                 }
                </div>
 
                <div class="space-y-3 pt-4 border-t border-slate-100">
@@ -141,6 +144,9 @@ import { StoreService, Client, Supplier } from '../../services/store.service';
                  <h3 class="text-lg font-bold text-slate-800 mb-1">{{ sup.name }}</h3>
                  <div class="flex items-center gap-2 text-xs text-slate-500 mb-4">
                    <span class="bg-slate-100 px-2 py-1 rounded">ICE: {{ sup.ice }}</span>
+                   @if (sup.referenceFournisseur) {
+                     <span class="bg-emerald-100 text-emerald-700 px-2 py-1 rounded font-medium">Ref: {{ sup.referenceFournisseur }}</span>
+                   }
                  </div>
 
                <div class="space-y-3 pt-4 border-t border-slate-100">
@@ -205,6 +211,25 @@ import { StoreService, Client, Supplier } from '../../services/store.service';
                     <label class="block text-sm font-semibold text-slate-700 mb-1">ICE (Identifiant Fiscal)</label>
                     <input formControlName="ice" type="text" class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition">
                   </div>
+                  <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-1">
+                      Référence {{ activeTab() === 'clients' ? 'Client' : 'Fournisseur' }}
+                    </label>
+                    @if (activeTab() === 'clients') {
+                      <input formControlName="referenceClient" 
+                             type="text" 
+                             maxlength="10"
+                             class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition">
+                    } @else {
+                      <input formControlName="referenceFournisseur" 
+                             type="text" 
+                             maxlength="10"
+                             class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition">
+                    }
+                    <p class="text-xs text-slate-500 mt-1">
+                      Référence personnalisée (3 premières lettres du nom par défaut si vide)
+                    </p>
+                  </div>
                   @if (activeTab() === 'suppliers') {
                     <div>
                       <label class="block text-sm font-semibold text-slate-700 mb-1">Date de régularité fiscale</label>
@@ -264,6 +289,8 @@ export class PartnersComponent {
   form: FormGroup = this.fb.group({
     name: ['', Validators.required],
     ice: ['', Validators.required],
+    referenceClient: [''], // Référence client
+    referenceFournisseur: [''], // Référence fournisseur
     contact: ['', Validators.required],
     phone: [''],
     email: ['', [Validators.email]],
@@ -279,6 +306,7 @@ export class PartnersComponent {
     return this.store.clients().filter(c => 
       (c.name && c.name.toLowerCase().includes(term)) || 
       (c.ice && c.ice.toLowerCase().includes(term)) || 
+      (c.referenceClient && c.referenceClient.toLowerCase().includes(term)) ||
       (c.contact && c.contact.toLowerCase().includes(term)) ||
       (c.email && c.email.toLowerCase().includes(term)) ||
       (c.phone && c.phone.toLowerCase().includes(term))
@@ -293,6 +321,7 @@ export class PartnersComponent {
     return this.store.suppliers().filter(s => 
       (s.name && s.name.toLowerCase().includes(term)) || 
       (s.ice && s.ice.toLowerCase().includes(term)) || 
+      (s.referenceFournisseur && s.referenceFournisseur.toLowerCase().includes(term)) ||
       (s.contact && s.contact.toLowerCase().includes(term)) ||
       (s.email && s.email.toLowerCase().includes(term)) ||
       (s.phone && s.phone.toLowerCase().includes(term))

@@ -20,6 +20,8 @@ public class BandeCommandeService {
     private final BandeCommandeRepository bcRepository;
     private final AuditService auditService;
     private final ProductService productService;
+    private final ClientService clientService;
+    private final SupplierService supplierService;
     
     public List<BandeCommande> findAll() {
         return bcRepository.findAll();
@@ -32,7 +34,7 @@ public class BandeCommandeService {
     public BandeCommande create(BandeCommande bc) {
         // Générer le numéro BC si non fourni
         if (bc.getNumeroBC() == null || bc.getNumeroBC().isEmpty()) {
-            bc.setNumeroBC(generateBCNumber(bc.getDateBC()));
+            bc.setNumeroBC(generateBCNumber(bc));
         }
         
         // Calculer les totaux
@@ -122,13 +124,135 @@ public class BandeCommandeService {
         bcRepository.deleteById(id);
     }
     
-    private String generateBCNumber(LocalDate date) {
-        String year = String.valueOf(date.getYear());
+    private String generateBCNumber(BandeCommande bc) {
+        if (bc.getDateBC() == null) {
+            throw new IllegalArgumentException("La date BC est requise pour générer le numéro");
+        }
+        
+        // 1. Récupérer le client (premier de clientsVente ou clientId pour rétrocompatibilité)
+        String clientId = null;
+        if (bc.getClientsVente() != null && !bc.getClientsVente().isEmpty()) {
+            clientId = bc.getClientsVente().get(0).getClientId();
+        } else if (bc.getClientId() != null) {
+            clientId = bc.getClientId();
+        }
+        
+        if (clientId == null) {
+            throw new IllegalArgumentException("Un client est requis pour générer le numéro BC");
+        }
+        
+        // 2. Récupérer la référence du client
+        String refClient = clientService.findById(clientId)
+                .map(Client::getReferenceClient)
+                .orElseThrow(() -> new IllegalArgumentException("Client non trouvé: " + clientId));
+        
+        if (refClient == null || refClient.trim().isEmpty()) {
+            // Générer depuis le nom si manquant
+            Client client = clientService.findById(clientId)
+                    .orElseThrow(() -> new IllegalArgumentException("Client non trouvé: " + clientId));
+            refClient = generateReferenceFromName(client.getNom());
+        }
+        
+        // 3. Récupérer la référence du fournisseur
+        if (bc.getFournisseurId() == null) {
+            throw new IllegalArgumentException("Un fournisseur est requis pour générer le numéro BC");
+        }
+        
+        String refFournisseur = supplierService.findById(bc.getFournisseurId())
+                .map(Supplier::getReferenceFournisseur)
+                .orElseThrow(() -> new IllegalArgumentException("Fournisseur non trouvé: " + bc.getFournisseurId()));
+        
+        if (refFournisseur == null || refFournisseur.trim().isEmpty()) {
+            // Générer depuis le nom si manquant
+            Supplier supplier = supplierService.findById(bc.getFournisseurId())
+                    .orElseThrow(() -> new IllegalArgumentException("Fournisseur non trouvé: " + bc.getFournisseurId()));
+            refFournisseur = generateReferenceFromName(supplier.getNom());
+        }
+        
+        // 4. Extraire mois et année
+        int month = bc.getDateBC().getMonthValue();
+        int year = bc.getDateBC().getYear();
+        String mois = String.format("%02d", month);
+        String annee2chiffres = String.valueOf(year).substring(2);
+        
+        // 5. Compter les BC existantes pour ce client + fournisseur + mois + année
         long count = bcRepository.findAll().stream()
-                .filter(bc -> bc.getDateBC() != null && bc.getDateBC().getYear() == date.getYear())
+                .filter(existingBc -> {
+                    if (existingBc.getDateBC() == null) return false;
+                    if (existingBc.getDateBC().getMonthValue() != month) return false;
+                    if (existingBc.getDateBC().getYear() != year) return false;
+                    if (!existingBc.getFournisseurId().equals(bc.getFournisseurId())) return false;
+                    
+                    // Vérifier si cette BC concerne le même client
+                    String existingClientId = null;
+                    if (existingBc.getClientsVente() != null && !existingBc.getClientsVente().isEmpty()) {
+                        existingClientId = existingBc.getClientsVente().get(0).getClientId();
+                    } else if (existingBc.getClientId() != null) {
+                        existingClientId = existingBc.getClientId();
+                    }
+                    
+                    return clientId.equals(existingClientId);
+                })
                 .count();
-        String sequence = String.format("%04d", count + 1);
-        return String.format("BF4-BC-%s-%s", year, sequence);
+        
+        // 6. Générer le numéro d'ordre : "01" si première, sinon "2", "3", etc.
+        String ordre;
+        if (count == 0) {
+            ordre = "01";
+        } else {
+            ordre = String.valueOf(count + 1);
+        }
+        
+        // 7. Assembler : refClient + mois + refFournisseur + ordre + "/" + annee2chiffres
+        return refClient + mois + refFournisseur + ordre + "/" + annee2chiffres;
+    }
+    
+    /**
+     * Génère une référence à partir des 3 premières lettres du nom
+     */
+    private String generateReferenceFromName(String nom) {
+        if (nom == null || nom.trim().isEmpty()) {
+            return "XXX";
+        }
+        
+        // Supprimer les accents et convertir en majuscules
+        String normalized = normalizeReference(nom);
+        
+        // Prendre les 3 premiers caractères (lettres uniquement)
+        StringBuilder ref = new StringBuilder();
+        for (char c : normalized.toCharArray()) {
+            if (Character.isLetter(c)) {
+                ref.append(c);
+                if (ref.length() >= 3) {
+                    break;
+                }
+            }
+        }
+        
+        // Si moins de 3 lettres, compléter avec X
+        while (ref.length() < 3) {
+            ref.append('X');
+        }
+        
+        return ref.toString().substring(0, 3).toUpperCase();
+    }
+    
+    /**
+     * Normalise une référence : supprime accents, espaces, convertit en majuscules
+     */
+    private String normalizeReference(String reference) {
+        if (reference == null) {
+            return "";
+        }
+        
+        // Supprimer les accents
+        String normalized = java.text.Normalizer.normalize(reference, java.text.Normalizer.Form.NFD);
+        normalized = normalized.replaceAll("[\\p{InCombiningDiacriticalMarks}]", "");
+        
+        // Supprimer les espaces et caractères spéciaux, garder seulement lettres et chiffres
+        normalized = normalized.replaceAll("[^a-zA-Z0-9]", "");
+        
+        return normalized.toUpperCase();
     }
     
     /**

@@ -198,12 +198,32 @@ public class FactureVenteService {
     }
     
     private String generateFactureNumber(LocalDate date) {
-        String year = String.valueOf(date.getYear());
+        if (date == null) {
+            throw new IllegalArgumentException("La date de facture est requise pour générer le numéro");
+        }
+        
+        // 1. Extraire le mois (format MM)
+        int month = date.getMonthValue();
+        String mois = String.format("%02d", month);
+        
+        // 2. Extraire l'année (format YYYY)
+        int year = date.getYear();
+        String annee4chiffres = String.valueOf(year);
+        
+        // 3. Compter les factures existantes pour ce mois + année
         long count = factureRepository.findAll().stream()
-                .filter(f -> f.getDateFacture() != null && f.getDateFacture().getYear() == date.getYear())
+                .filter(f -> {
+                    if (f.getDateFacture() == null) return false;
+                    return f.getDateFacture().getMonthValue() == month && 
+                           f.getDateFacture().getYear() == year;
+                })
                 .count();
-        String sequence = String.format("%03d", count + 1);
-        return String.format("FV-%s-%s", year, sequence);
+        
+        // 4. Générer le numéro séquentiel (toujours 2 chiffres : 01, 02, 03, etc.)
+        String numero = String.format("%02d", count + 1);
+        
+        // 5. Assembler : mois + numéro + "/" + annee4chiffres
+        return mois + numero + "/" + annee4chiffres;
     }
     
     private void calculateTotals(FactureVente facture) {

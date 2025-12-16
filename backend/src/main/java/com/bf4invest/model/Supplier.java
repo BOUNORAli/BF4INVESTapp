@@ -22,6 +22,7 @@ public class Supplier {
     
     private String nom;
     private String ice;
+    private String referenceFournisseur; // Référence fournisseur (3 premières lettres du nom par défaut)
     private String contact; // Contact principal
     private String adresse;
     private String telephone;
