@@ -217,8 +217,7 @@ import { StoreService, BC, LigneAchat, LigneVente, ClientVente, Product } from '
             </div>
             
             @if (!form.get('ajouterAuStock')?.value) {
-            
-            <div formArrayName="clientsVente" class="divide-y divide-slate-200">
+              <div formArrayName="clientsVente" class="divide-y divide-slate-200">
               @for (clientForm of clientsVenteArray.controls; track clientForm; let clientIdx = $index) {
                 <div [formGroupName]="clientIdx" class="p-4 md:p-6 bg-white hover:bg-slate-50/30 transition-colors">
                   <!-- Header du bloc client -->
@@ -357,7 +356,15 @@ import { StoreService, BC, LigneAchat, LigneVente, ClientVente, Product } from '
                   </div>
                 </div>
               }
-            </div>
+              </div>
+            } @else {
+              <div class="p-6 text-center">
+                <div class="inline-flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-700 rounded-lg border border-emerald-200">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
+                  <span class="font-semibold">Les quantités achetées seront ajoutées au stock</span>
+                </div>
+              </div>
+            }
           </div>
         </div>
 
@@ -841,11 +848,13 @@ export class BcFormComponent implements OnInit {
 
     const ajouterAuStock = this.form.get('ajouterAuStock')?.value;
     
+    // Définir validClients avant le bloc if pour pouvoir l'utiliser après
+    const clientsVente = this.clientsVenteArray.value;
+    const validClients = clientsVente.filter((c: any) => c.clientId);
+    
     // Si on ajoute au stock, pas besoin de clients
     if (!ajouterAuStock) {
       // Vérifier qu'il y a au moins un client
-      const clientsVente = this.clientsVenteArray.value;
-      const validClients = clientsVente.filter((c: any) => c.clientId);
       if (validClients.length === 0) {
         alert('Veuillez sélectionner au moins un client OU cocher "Ajouter au stock"');
         return;
