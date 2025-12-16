@@ -152,34 +152,55 @@ public class FactureAchatService {
     }
     
     private void calculateTotals(FactureAchat facture) {
-        if (facture.getLignes() == null || facture.getLignes().isEmpty()) {
+        // Si les totaux sont déjà fournis explicitement, les préserver (sauf si des lignes sont aussi fournies)
+        boolean totalsProvided = (facture.getTotalHT() != null && facture.getTotalHT() > 0) || 
+                                 (facture.getTotalTTC() != null && facture.getTotalTTC() > 0);
+        boolean hasLines = facture.getLignes() != null && !facture.getLignes().isEmpty();
+        
+        // Si des lignes sont fournies, calculer à partir des lignes (priorité)
+        if (hasLines) {
+            double totalHT = 0.0;
+            double totalTVA = 0.0;
+            
+            for (LineItem ligne : facture.getLignes()) {
+                double qte = ligne.getQuantiteAchetee() != null ? ligne.getQuantiteAchetee() : 0;
+                double prixHT = ligne.getPrixAchatUnitaireHT() != null ? ligne.getPrixAchatUnitaireHT() : 0;
+                double tvaRate = ligne.getTva() != null ? ligne.getTva() / 100.0 : 0.0;
+                
+                double ht = qte * prixHT;
+                double tva = ht * tvaRate;
+                
+                ligne.setTotalHT(ht);
+                ligne.setTotalTTC(ht + tva);
+                
+                totalHT += ht;
+                totalTVA += tva;
+            }
+            
+            facture.setTotalHT(totalHT);
+            facture.setTotalTVA(totalTVA);
+            facture.setTotalTTC(totalHT + totalTVA);
+        } else if (totalsProvided) {
+            // Pas de lignes mais totaux fournis explicitement, les préserver et calculer TVA si nécessaire
+            if (facture.getTotalHT() == null || facture.getTotalHT() == 0.0) {
+                // Seul TTC fourni, estimer HT (TVA 20% par défaut)
+                double estimatedHT = facture.getTotalTTC() / 1.2;
+                facture.setTotalHT(estimatedHT);
+                facture.setTotalTVA(facture.getTotalTTC() - estimatedHT);
+            } else if (facture.getTotalTTC() == null || facture.getTotalTTC() == 0.0) {
+                // Seul HT fourni, calculer TTC (TVA 20% par défaut)
+                facture.setTotalTVA(facture.getTotalHT() * 0.2);
+                facture.setTotalTTC(facture.getTotalHT() + facture.getTotalTVA());
+            } else {
+                // Les deux fournis, calculer TVA
+                facture.setTotalTVA(facture.getTotalTTC() - facture.getTotalHT());
+            }
+        } else {
+            // Aucune ligne ni total fourni, mettre à 0
             facture.setTotalHT(0.0);
             facture.setTotalTVA(0.0);
             facture.setTotalTTC(0.0);
-            return;
         }
-        
-        double totalHT = 0.0;
-        double totalTVA = 0.0;
-        
-        for (LineItem ligne : facture.getLignes()) {
-            double qte = ligne.getQuantiteAchetee() != null ? ligne.getQuantiteAchetee() : 0;
-            double prixHT = ligne.getPrixAchatUnitaireHT() != null ? ligne.getPrixAchatUnitaireHT() : 0;
-            double tvaRate = ligne.getTva() != null ? ligne.getTva() / 100.0 : 0.0;
-            
-            double ht = qte * prixHT;
-            double tva = ht * tvaRate;
-            
-            ligne.setTotalHT(ht);
-            ligne.setTotalTTC(ht + tva);
-            
-            totalHT += ht;
-            totalTVA += tva;
-        }
-        
-        facture.setTotalHT(totalHT);
-        facture.setTotalTVA(totalTVA);
-        facture.setTotalTTC(totalHT + totalTVA);
         
         calculateMontantRestant(facture);
     }
