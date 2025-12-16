@@ -3,6 +3,7 @@ package com.bf4invest.service;
 import com.bf4invest.config.AppConfig;
 import com.bf4invest.model.FactureAchat;
 import com.bf4invest.model.LineItem;
+import com.bf4invest.model.Product;
 import com.bf4invest.repository.FactureAchatRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
