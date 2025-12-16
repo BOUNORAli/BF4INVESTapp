@@ -28,6 +28,8 @@ public class Product {
     
     private String fournisseurId; // Référence au fournisseur
     
+    private Integer quantiteEnStock; // Quantité en stock (défaut: 0)
+    
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

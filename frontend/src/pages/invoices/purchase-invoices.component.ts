@@ -223,6 +223,16 @@ import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, FormsModule } 
                            </select>
                         </div>
                      </div>
+
+                     <div class="bg-blue-50 p-4 rounded-xl border border-blue-100">
+                        <label class="flex items-center gap-3 cursor-pointer">
+                           <input type="checkbox" formControlName="ajouterAuStock" class="w-5 h-5 text-blue-600 border-blue-300 rounded focus:ring-blue-500 focus:ring-2">
+                           <div>
+                              <span class="text-sm font-semibold text-blue-800">Ajouter les quantités au stock</span>
+                              <p class="text-xs text-blue-600 mt-0.5">Cochez cette option pour incrémenter automatiquement le stock des produits achetés</p>
+                           </div>
+                        </label>
+                     </div>
                   </div>
                </form>
 
@@ -270,7 +280,8 @@ export class PurchaseInvoicesComponent {
     amountHT: [0, [Validators.required, Validators.min(0)]],
     amountTTC: [0, [Validators.required, Validators.min(0)]],
     status: ['pending', Validators.required],
-    paymentMode: ['']
+    paymentMode: [''],
+    ajouterAuStock: [false] // Option pour ajouter au stock
   });
 
   constructor() {
@@ -347,7 +358,8 @@ export class PurchaseInvoicesComponent {
       date: new Date().toISOString().split('T')[0],
       status: 'pending',
       amountHT: 0,
-      amountTTC: 0
+      amountTTC: 0,
+      ajouterAuStock: false
     });
     // Trigger due date calc
     const today = new Date();
@@ -443,7 +455,8 @@ export class PurchaseInvoicesComponent {
       amountHT: inv.amountHT != null && inv.amountHT !== undefined ? Number(inv.amountHT) : 0,
       amountTTC: inv.amountTTC != null && inv.amountTTC !== undefined ? Number(inv.amountTTC) : 0,
       status: inv.status || 'pending',
-      paymentMode: inv.paymentMode || ''
+      paymentMode: inv.paymentMode || '',
+      ajouterAuStock: (inv as any).ajouterAuStock || false
     });
     // Populate BCs if supplier is set
     if (inv.partnerId) {
@@ -508,7 +521,7 @@ export class PurchaseInvoicesComponent {
       'amountTTC type': typeof amountTTC
     });
     
-    const invoice: Invoice = {
+    const invoice: Invoice & { ajouterAuStock?: boolean } = {
       id: this.editingId || `fa-${Date.now()}`,
       type: 'purchase',
       number: val.number,
@@ -519,7 +532,8 @@ export class PurchaseInvoicesComponent {
       amountHT: amountHT,
       amountTTC: amountTTC,
       status: val.status || 'pending',
-      paymentMode: val.paymentMode || undefined
+      paymentMode: val.paymentMode || undefined,
+      ajouterAuStock: val.ajouterAuStock || false
     };
 
     console.log('🟢 purchase-invoices.onSubmit - Invoice final créé:', invoice);

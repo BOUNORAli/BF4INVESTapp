@@ -24,6 +24,10 @@ public class ProductService {
     }
     
     public Product create(Product product) {
+        // Initialiser le stock à 0 si non fourni
+        if (product.getQuantiteEnStock() == null) {
+            product.setQuantiteEnStock(0);
+        }
         product.setCreatedAt(LocalDateTime.now());
         product.setUpdatedAt(LocalDateTime.now());
         return productRepository.save(product);
@@ -39,6 +43,9 @@ public class ProductService {
                     existing.setPrixVenteUnitaireHT(product.getPrixVenteUnitaireHT());
                     existing.setTva(product.getTva());
                     existing.setFournisseurId(product.getFournisseurId());
+                    if (product.getQuantiteEnStock() != null) {
+                        existing.setQuantiteEnStock(product.getQuantiteEnStock());
+                    }
                     existing.setUpdatedAt(LocalDateTime.now());
                     return productRepository.save(existing);
                 })
@@ -47,6 +54,62 @@ public class ProductService {
     
     public void delete(String id) {
         productRepository.deleteById(id);
+    }
+    
+    /**
+     * Met à jour le stock d'un produit en ajoutant ou soustrayant une quantité
+     * @param productId ID du produit
+     * @param quantityChange Quantité à ajouter (positive) ou soustraire (négative)
+     * @return Le produit mis à jour
+     */
+    public Product updateStock(String productId, Integer quantityChange) {
+        return productRepository.findById(productId)
+                .map(product -> {
+                    Integer currentStock = product.getQuantiteEnStock() != null ? product.getQuantiteEnStock() : 0;
+                    product.setQuantiteEnStock(currentStock + quantityChange);
+                    product.setUpdatedAt(LocalDateTime.now());
+                    return productRepository.save(product);
+                })
+                .orElseThrow(() -> new RuntimeException("Product not found with id: " + productId));
+    }
+    
+    /**
+     * Met à jour le stock d'un produit par sa référence article
+     * @param refArticle Référence article du produit
+     * @param quantityChange Quantité à ajouter (positive) ou soustraire (négative)
+     * @return Le produit mis à jour, ou null si le produit n'existe pas
+     */
+    public Product updateStockByRef(String refArticle, Integer quantityChange) {
+        return productRepository.findByRefArticle(refArticle)
+                .map(product -> {
+                    Integer currentStock = product.getQuantiteEnStock() != null ? product.getQuantiteEnStock() : 0;
+                    product.setQuantiteEnStock(currentStock + quantityChange);
+                    product.setUpdatedAt(LocalDateTime.now());
+                    return productRepository.save(product);
+                })
+                .orElse(null); // Retourne null si le produit n'existe pas (ne bloque pas la facture)
+    }
+    
+    /**
+     * Récupère le stock d'un produit
+     * @param productId ID du produit
+     * @return Le stock actuel (0 si null)
+     */
+    public Integer getStock(String productId) {
+        return productRepository.findById(productId)
+                .map(product -> product.getQuantiteEnStock() != null ? product.getQuantiteEnStock() : 0)
+                .orElse(0);
+    }
+    
+    /**
+     * Récupère le stock d'un produit par sa référence article
+     * @param refArticle Référence article du produit
+     * @return Le stock actuel (0 si le produit n'existe pas ou si null)
+     */
+    public Integer getStockByRef(String refArticle) {
+        return productRepository.findByRefArticle(refArticle)
+                .map(product -> product.getQuantiteEnStock() != null ? product.getQuantiteEnStock() : 0)
+                .orElse(0);
     }
 }
 

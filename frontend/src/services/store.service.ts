@@ -8,6 +8,7 @@ export interface Product {
   unit: string;
   priceBuyHT: number;
   priceSellHT: number;
+  stock?: number; // Quantité en stock
 }
 
 export interface Client {
@@ -454,7 +455,8 @@ export class StoreService {
       name: p.designation || p.name,
       unit: p.unite || p.unit,
       priceBuyHT: p.prixAchatUnitaireHT || p.priceBuyHT || 0,
-      priceSellHT: p.prixVenteUnitaireHT || p.priceSellHT || 0
+      priceSellHT: p.prixVenteUnitaireHT || p.priceSellHT || 0,
+      stock: p.quantiteEnStock !== undefined ? p.quantiteEnStock : (p.stock !== undefined ? p.stock : 0)
     };
   }
 
@@ -967,7 +969,7 @@ export class StoreService {
       });
 
       if (inv.type === 'purchase') {
-        const payload = {
+        const payload: any = {
           numeroFactureAchat: inv.number,
           dateFacture: inv.date,
           bandeCommandeId: inv.bcId || null,
@@ -977,6 +979,11 @@ export class StoreService {
           modePaiement: inv.paymentMode || null,
           etatPaiement: inv.status === 'paid' ? 'regle' : 'non_regle'
         };
+        
+        // Ajouter l'option ajouterAuStock si présente
+        if ((inv as any).ajouterAuStock !== undefined) {
+          payload.ajouterAuStock = (inv as any).ajouterAuStock;
+        }
         
         console.log('🟡 store.addInvoice - Payload pour facture achat:', payload);
         console.log('🟡 store.addInvoice - Payload JSON:', JSON.stringify(payload, null, 2));
@@ -1073,6 +1080,11 @@ export class StoreService {
           modePaiement: inv.paymentMode || existingInvoice?.paymentMode || null,
           etatPaiement: inv.status === 'paid' ? 'regle' : (inv.status === 'overdue' ? 'non_regle' : 'non_regle')
         };
+        
+        // Ajouter l'option ajouterAuStock si présente
+        if ((inv as any).ajouterAuStock !== undefined) {
+          payload.ajouterAuStock = (inv as any).ajouterAuStock;
+        }
         
         // Ne pas envoyer les lignes pour préserver les totaux existants
         // Les lignes seront préservées dans le backend si non fournies

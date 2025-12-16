@@ -61,6 +61,12 @@ import { StoreService, Product } from '../../services/store.service';
                   <span class="text-slate-500">Prix Vente</span>
                   <span class="font-bold text-blue-600">{{ prod.priceSellHT }} MAD</span>
                 </div>
+                <div class="flex justify-between items-center text-sm pt-2 border-t border-slate-100">
+                  <span class="text-slate-500">Stock</span>
+                  <span [class]="getStockClass(prod.stock ?? 0)" class="font-bold">
+                    {{ prod.stock ?? 0 }} {{ prod.unit }}
+                  </span>
+                </div>
               </div>
 
               <!-- Margin Bar -->
@@ -191,6 +197,13 @@ export class ProductsComponent {
   getMargin(prod: Product) {
      if (prod.priceBuyHT === 0) return 0;
      return ((prod.priceSellHT - prod.priceBuyHT) / prod.priceBuyHT) * 100;
+  }
+
+  getStockClass(stock: number): string {
+    if (stock < 0) return 'text-red-600';
+    if (stock === 0) return 'text-red-500';
+    if (stock < 10) return 'text-amber-600';
+    return 'text-emerald-600';
   }
 
   calculateFormMargin() {

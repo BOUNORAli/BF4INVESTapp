@@ -27,6 +27,8 @@ public class FactureAchat {
     private String bandeCommandeId; // Optionnel: lié à une BC
     private String fournisseurId;
     
+    private Boolean ajouterAuStock; // Option pour ajouter les quantités au stock (défaut: false)
+    
     private List<LineItem> lignes;
     
     private Double totalHT;

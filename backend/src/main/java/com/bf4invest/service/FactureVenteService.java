@@ -21,6 +21,7 @@ public class FactureVenteService {
     private final FactureVenteRepository factureRepository;
     private final AppConfig appConfig;
     private final AuditService auditService;
+    private final ProductService productService;
     
     public List<FactureVente> findAll() {
         return factureRepository.findAll();
@@ -55,6 +56,11 @@ public class FactureVenteService {
         facture.setUpdatedAt(LocalDateTime.now());
         
         FactureVente saved = factureRepository.save(facture);
+        
+        // Décrémenter le stock des produits vendus
+        if (saved.getLignes() != null && !saved.getLignes().isEmpty()) {
+            updateStockFromFacture(saved);
+        }
         
         // Journaliser la création
         auditService.logCreate("FactureVente", saved.getId(), 
@@ -168,6 +174,11 @@ public class FactureVenteService {
                     log.info("🔵 FactureVenteService.update - Facture sauvegardée: totalHT={}, totalTTC={}", 
                         saved.getTotalHT(), saved.getTotalTTC());
                     
+                    // Décrémenter le stock si les lignes ont été modifiées
+                    if (facture.getLignes() != null && !facture.getLignes().isEmpty()) {
+                        updateStockFromFacture(saved);
+                    }
+                    
                     // Journaliser la modification
                     auditService.logUpdate("FactureVente", saved.getId(), null, 
                         "Facture Vente " + saved.getNumeroFactureVente() + " modifiée - Statut: " + saved.getEtatPaiement());
@@ -271,6 +282,58 @@ public class FactureVenteService {
                 facture.setEtatPaiement("partiellement_regle");
             } else {
                 facture.setEtatPaiement("non_regle");
+            }
+        }
+    }
+    
+    /**
+     * Met à jour le stock des produits à partir des lignes de la facture de vente
+     * Décrémente le stock et avertit si le stock est insuffisant (mais permet la vente)
+     */
+    private void updateStockFromFacture(FactureVente facture) {
+        if (facture.getLignes() == null || facture.getLignes().isEmpty()) {
+            return;
+        }
+        
+        for (LineItem ligne : facture.getLignes()) {
+            if (ligne.getProduitRef() == null || ligne.getProduitRef().isEmpty()) {
+                log.warn("⚠️ FactureVenteService.updateStockFromFacture - Ligne sans produitRef, ignorée");
+                continue;
+            }
+            
+            Integer quantite = ligne.getQuantiteVendue();
+            if (quantite == null || quantite <= 0) {
+                log.warn("⚠️ FactureVenteService.updateStockFromFacture - Quantité invalide pour produitRef: {}, ignorée", ligne.getProduitRef());
+                continue;
+            }
+            
+            try {
+                // Vérifier le stock disponible avant de décrémenter
+                Integer stockActuel = productService.getStockByRef(ligne.getProduitRef());
+                
+                if (stockActuel < quantite) {
+                    log.warn("⚠️ FactureVenteService.updateStockFromFacture - Stock insuffisant pour produitRef: {}. Stock actuel: {}, Quantité demandée: {}. La vente est autorisée mais le stock deviendra négatif.", 
+                        ligne.getProduitRef(), stockActuel, quantite);
+                }
+                
+                // Décrémenter le stock (même si insuffisant, on permet la vente)
+                Product updated = productService.updateStockByRef(ligne.getProduitRef(), -quantite);
+                if (updated != null) {
+                    Integer nouveauStock = updated.getQuantiteEnStock() != null ? updated.getQuantiteEnStock() : 0;
+                    if (nouveauStock < 0) {
+                        log.warn("⚠️ FactureVenteService.updateStockFromFacture - Stock négatif pour produitRef: {}, nouveau stock: {}", 
+                            ligne.getProduitRef(), nouveauStock);
+                    } else {
+                        log.info("✅ FactureVenteService.updateStockFromFacture - Stock mis à jour pour produitRef: {}, quantité vendue: {}, nouveau stock: {}", 
+                            ligne.getProduitRef(), quantite, nouveauStock);
+                    }
+                } else {
+                    log.warn("⚠️ FactureVenteService.updateStockFromFacture - Produit non trouvé avec refArticle: {}", ligne.getProduitRef());
+                }
+            } catch (Exception e) {
+                log.error("❌ FactureVenteService.updateStockFromFacture - Erreur lors de la mise à jour du stock pour produitRef: {}", 
+                    ligne.getProduitRef(), e);
+                // Ne pas bloquer la création de la facture en cas d'erreur
             }
         }
     }

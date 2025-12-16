@@ -262,6 +262,24 @@ import { RouterLink } from '@angular/router';
                            </select>
                         </div>
                      </div>
+
+                     @if (stockWarnings().length > 0) {
+                        <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-2">
+                           <div class="flex items-center gap-2 text-amber-800 font-semibold text-sm">
+                              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                              <span>Stock insuffisant pour certains produits</span>
+                           </div>
+                           <div class="text-xs text-amber-700 space-y-1">
+                              @for (warning of stockWarnings(); track warning.produitRef) {
+                                 <div class="flex items-center justify-between">
+                                    <span class="font-medium">{{ warning.designation || warning.produitRef }}</span>
+                                    <span class="ml-2">Stock: <span class="font-bold">{{ warning.stockActuel }}</span> / Quantité: <span class="font-bold">{{ warning.quantiteDemandee }}</span></span>
+                                 </div>
+                              }
+                           </div>
+                           <p class="text-xs text-amber-600 mt-2 italic">La vente sera autorisée mais le stock deviendra négatif.</p>
+                        </div>
+                     }
                   </div>
                </form>
 
@@ -300,6 +318,63 @@ export class SalesInvoicesComponent {
 
   // Active payment modes
   activePaymentModes = computed(() => this.store.paymentModes().filter(m => m.active));
+
+  // Stock warnings for selected BC
+  stockWarnings = computed(() => {
+    const bcId = this.form.get('bcId')?.value;
+    const clientId = this.form.get('partnerId')?.value;
+    
+    if (!bcId || !clientId) {
+      return [];
+    }
+    
+    const bc = this.store.bcs().find(b => b.id === bcId);
+    if (!bc) {
+      return [];
+    }
+    
+    const warnings: Array<{ produitRef: string; designation: string; stockActuel: number; quantiteDemandee: number }> = [];
+    
+    // Nouvelle structure multi-clients
+    if (bc.clientsVente && bc.clientsVente.length > 0) {
+      const clientVente = bc.clientsVente.find(cv => cv.clientId === clientId);
+      if (clientVente && clientVente.lignesVente) {
+        for (const ligne of clientVente.lignesVente) {
+          if (ligne.produitRef && ligne.quantiteVendue) {
+            const product = this.store.products().find(p => p.ref === ligne.produitRef);
+            const stockActuel = product?.stock ?? 0;
+            if (stockActuel < ligne.quantiteVendue) {
+              warnings.push({
+                produitRef: ligne.produitRef,
+                designation: ligne.designation || ligne.produitRef,
+                stockActuel,
+                quantiteDemandee: ligne.quantiteVendue
+              });
+            }
+          }
+        }
+      }
+    }
+    // Ancienne structure
+    else if (bc.items) {
+      for (const item of bc.items) {
+        if (item.ref && item.qtySell) {
+          const product = this.store.products().find(p => p.ref === item.ref);
+          const stockActuel = product?.stock ?? 0;
+          if (stockActuel < item.qtySell) {
+            warnings.push({
+              produitRef: item.ref,
+              designation: item.name || item.ref,
+              stockActuel,
+              quantiteDemandee: item.qtySell
+            });
+          }
+        }
+      }
+    }
+    
+    return warnings;
+  });
 
   form: FormGroup = this.fb.group({
     number: ['FV-2025-', Validators.required],

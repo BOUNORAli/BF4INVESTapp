@@ -5,6 +5,7 @@ import com.bf4invest.model.FactureAchat;
 import com.bf4invest.model.LineItem;
 import com.bf4invest.repository.FactureAchatRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -12,6 +13,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class FactureAchatService {
@@ -19,6 +21,7 @@ public class FactureAchatService {
     private final FactureAchatRepository factureRepository;
     private final AppConfig appConfig;
     private final AuditService auditService;
+    private final ProductService productService;
     
     public List<FactureAchat> findAll() {
         return factureRepository.findAll();
@@ -53,6 +56,11 @@ public class FactureAchatService {
         
         FactureAchat saved = factureRepository.save(facture);
         
+        // Mettre à jour le stock si demandé
+        if (Boolean.TRUE.equals(saved.getAjouterAuStock()) && saved.getLignes() != null) {
+            updateStockFromFacture(saved);
+        }
+        
         // Journaliser la création
         auditService.logCreate("FactureAchat", saved.getId(), 
             "Facture Achat " + saved.getNumeroFactureAchat() + " créée - Montant: " + saved.getTotalTTC() + " MAD");
@@ -72,6 +80,9 @@ public class FactureAchatService {
                     }
                     if (facture.getFournisseurId() != null) {
                         existing.setFournisseurId(facture.getFournisseurId());
+                    }
+                    if (facture.getAjouterAuStock() != null) {
+                        existing.setAjouterAuStock(facture.getAjouterAuStock());
                     }
                     // Ne mettre à jour les lignes que si elles sont fournies et non vides
                     if (facture.getLignes() != null && !facture.getLignes().isEmpty()) {
@@ -120,6 +131,11 @@ public class FactureAchatService {
                     
                     existing.setUpdatedAt(LocalDateTime.now());
                     FactureAchat saved = factureRepository.save(existing);
+                    
+                    // Mettre à jour le stock si demandé (seulement si ajouterAuStock est passé à true)
+                    if (Boolean.TRUE.equals(facture.getAjouterAuStock()) && saved.getLignes() != null) {
+                        updateStockFromFacture(saved);
+                    }
                     
                     // Journaliser la modification
                     auditService.logUpdate("FactureAchat", saved.getId(), null, 
@@ -228,6 +244,42 @@ public class FactureAchatService {
                 facture.setEtatPaiement("partiellement_regle");
             } else {
                 facture.setEtatPaiement("non_regle");
+            }
+        }
+    }
+    
+    /**
+     * Met à jour le stock des produits à partir des lignes de la facture d'achat
+     */
+    private void updateStockFromFacture(FactureAchat facture) {
+        if (facture.getLignes() == null || facture.getLignes().isEmpty()) {
+            return;
+        }
+        
+        for (LineItem ligne : facture.getLignes()) {
+            if (ligne.getProduitRef() == null || ligne.getProduitRef().isEmpty()) {
+                log.warn("⚠️ FactureAchatService.updateStockFromFacture - Ligne sans produitRef, ignorée");
+                continue;
+            }
+            
+            Integer quantite = ligne.getQuantiteAchetee();
+            if (quantite == null || quantite <= 0) {
+                log.warn("⚠️ FactureAchatService.updateStockFromFacture - Quantité invalide pour produitRef: {}, ignorée", ligne.getProduitRef());
+                continue;
+            }
+            
+            try {
+                Product updated = productService.updateStockByRef(ligne.getProduitRef(), quantite);
+                if (updated != null) {
+                    log.info("✅ FactureAchatService.updateStockFromFacture - Stock mis à jour pour produitRef: {}, quantité ajoutée: {}, nouveau stock: {}", 
+                        ligne.getProduitRef(), quantite, updated.getQuantiteEnStock());
+                } else {
+                    log.warn("⚠️ FactureAchatService.updateStockFromFacture - Produit non trouvé avec refArticle: {}", ligne.getProduitRef());
+                }
+            } catch (Exception e) {
+                log.error("❌ FactureAchatService.updateStockFromFacture - Erreur lors de la mise à jour du stock pour produitRef: {}", 
+                    ligne.getProduitRef(), e);
+                // Ne pas bloquer la création de la facture en cas d'erreur
             }
         }
     }
