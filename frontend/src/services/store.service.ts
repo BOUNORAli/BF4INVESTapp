@@ -1043,7 +1043,8 @@ export class StoreService {
         this.invoices.update(list => [mapped, ...list]);
       } else {
         const payload = {
-          numeroFactureVente: inv.number,
+          // Ne pas envoyer numeroFactureVente si vide - le backend le générera avec la nouvelle logique
+          ...(inv.number && inv.number.trim() ? { numeroFactureVente: inv.number } : {}),
           dateFacture: inv.date,
           bandeCommandeId: inv.bcId || null,
           clientId: inv.partnerId,
