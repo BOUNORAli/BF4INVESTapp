@@ -129,3 +129,4 @@ Après avoir configuré les variables et que Railway a redéployé :
 
 **Résumé** : Remplacez TOUTES les valeurs placeholder par vos vraies valeurs, sauf `SERVER_PORT=8080` que vous pouvez garder tel quel.
 
+

@@ -27,3 +27,4 @@ public class LigneAchat {
     private Double totalTTC;
 }
 
+

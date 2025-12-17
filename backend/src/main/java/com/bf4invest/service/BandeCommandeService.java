@@ -145,15 +145,15 @@ public class BandeCommandeService {
         final String finalClientId = clientId;
         
         // 2. Récupérer la référence du client
-        String refClient = clientService.findById(finalClientId)
-                .map(Client::getReferenceClient)
+        Client client = clientService.findById(finalClientId)
                 .orElseThrow(() -> new IllegalArgumentException("Client non trouvé: " + finalClientId));
         
+        String refClient = client.getReferenceClient();
         if (refClient == null || refClient.trim().isEmpty()) {
-            // Générer depuis le nom si manquant
-            Client client = clientService.findById(finalClientId)
-                    .orElseThrow(() -> new IllegalArgumentException("Client non trouvé: " + finalClientId));
+            // Générer depuis le nom si manquant et sauvegarder
             refClient = generateReferenceFromName(client.getNom());
+            client.setReferenceClient(refClient);
+            clientService.update(finalClientId, client); // Sauvegarder la référence
         }
         
         // 3. Récupérer la référence du fournisseur
@@ -164,15 +164,15 @@ public class BandeCommandeService {
         // Créer une variable finale pour le fournisseurId
         final String fournisseurId = bc.getFournisseurId();
         
-        String refFournisseur = supplierService.findById(fournisseurId)
-                .map(Supplier::getReferenceFournisseur)
+        Supplier supplier = supplierService.findById(fournisseurId)
                 .orElseThrow(() -> new IllegalArgumentException("Fournisseur non trouvé: " + fournisseurId));
         
+        String refFournisseur = supplier.getReferenceFournisseur();
         if (refFournisseur == null || refFournisseur.trim().isEmpty()) {
-            // Générer depuis le nom si manquant
-            Supplier supplier = supplierService.findById(fournisseurId)
-                    .orElseThrow(() -> new IllegalArgumentException("Fournisseur non trouvé: " + fournisseurId));
+            // Générer depuis le nom si manquant et sauvegarder
             refFournisseur = generateReferenceFromName(supplier.getNom());
+            supplier.setReferenceFournisseur(refFournisseur);
+            supplierService.update(fournisseurId, supplier); // Sauvegarder la référence
         }
         
         // 4. Extraire mois et année

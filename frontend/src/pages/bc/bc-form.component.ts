@@ -49,7 +49,8 @@ import { StoreService, BC, LigneAchat, LigneVente, ClientVente, Product } from '
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
               <div>
                 <label class="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Numéro BC</label>
-                <input formControlName="number" type="text" class="w-full px-4 py-2.5 border border-slate-200 rounded-lg bg-slate-50 font-mono text-slate-700 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all">
+                <input formControlName="number" type="text" readonly [placeholder]="isEditMode ? 'Numéro existant' : 'Généré automatiquement'" class="w-full px-4 py-2.5 border border-slate-200 rounded-lg bg-slate-50 font-mono text-slate-700 cursor-not-allowed">
+                <p class="text-xs text-slate-400 mt-1">Le numéro sera généré automatiquement lors de l'enregistrement</p>
               </div>
               <div>
                 <label class="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Date d'émission</label>
@@ -485,7 +486,7 @@ export class BcFormComponent implements OnInit {
 
   constructor() {
     this.form = this.fb.group({
-      number: ['BC-2025-' + Math.floor(Math.random() * 1000), Validators.required],
+      number: [''], // Laisser vide - sera généré par le backend avec la nouvelle logique
       date: [new Date().toISOString().split('T')[0], Validators.required],
       supplierId: ['', Validators.required],
       status: ['draft', Validators.required],
@@ -841,8 +842,8 @@ export class BcFormComponent implements OnInit {
   // === Sauvegarde ===
 
   save() {
-    if (!this.form.get('number')?.value || !this.form.get('date')?.value || !this.form.get('supplierId')?.value) {
-      alert('Veuillez remplir tous les champs obligatoires (Numéro, Date, Fournisseur)');
+    if (!this.form.get('date')?.value || !this.form.get('supplierId')?.value) {
+      alert('Veuillez remplir tous les champs obligatoires (Date, Fournisseur)');
       return;
     }
 

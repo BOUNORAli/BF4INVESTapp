@@ -38,3 +38,4 @@ Après avoir fait cette modification :
 - Si vous définissez un Custom Start Command, il surcharge l'ENTRYPOINT
 - Donc il faut soit le supprimer, soit utiliser `app.jar` au lieu de `target/bf4-invest-backend-1.0.0.jar`
 
+

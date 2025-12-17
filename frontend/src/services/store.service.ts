@@ -733,7 +733,8 @@ export class StoreService {
   async addBC(bc: BC): Promise<void> {
     try {
       const payload: any = {
-        numeroBC: bc.number,
+        // Ne pas envoyer numeroBC si vide - le backend le générera avec la nouvelle logique
+        ...(bc.number && bc.number.trim() ? { numeroBC: bc.number } : {}),
         dateBC: bc.date,
         fournisseurId: bc.supplierId,
         etat: bc.status

@@ -29,3 +29,4 @@ public class LigneVente {
     private Double margePourcentage;   // par rapport au prix d'achat
 }
 
+
