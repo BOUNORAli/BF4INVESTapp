@@ -217,8 +217,9 @@ import { RouterLink } from '@angular/router';
 
                   <div class="space-y-4">
                      <div>
-                       <label class="block text-sm font-semibold text-slate-700 mb-1">Numéro Facture (Interne)</label>
-                       <input formControlName="number" type="text" placeholder="FV-2025-XXX" class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition uppercase">
+                       <label class="block text-sm font-semibold text-slate-700 mb-1">Numéro Facture</label>
+                       <input formControlName="number" type="text" readonly [placeholder]="isEditMode() ? 'Numéro existant' : 'Généré automatiquement'" class="w-full px-4 py-2 border border-slate-200 rounded-lg bg-slate-50 font-mono text-slate-700 cursor-not-allowed">
+                       <p class="text-xs text-slate-400 mt-1">Le numéro sera généré automatiquement au format [mois][numéro]/[année]</p>
                      </div>
 
                      <div class="grid grid-cols-2 gap-4">
@@ -377,7 +378,7 @@ export class SalesInvoicesComponent {
   });
 
   form: FormGroup = this.fb.group({
-    number: ['FV-2025-', Validators.required],
+    number: [''], // Laisser vide - sera généré par le backend avec la nouvelle logique
     partnerId: ['', Validators.required],
     bcId: [''],
     date: [new Date().toISOString().split('T')[0], Validators.required],
@@ -539,9 +540,8 @@ export class SalesInvoicesComponent {
   openForm() {
     this.isEditMode.set(false);
     this.editingId = null;
-    const randomNum = Math.floor(Math.random() * 1000);
     this.form.reset({ 
-      number: `FV-2025-${randomNum}`,
+      number: '', // Laisser vide - sera généré par le backend
       date: new Date().toISOString().split('T')[0],
       status: 'pending',
       amountHT: 0,

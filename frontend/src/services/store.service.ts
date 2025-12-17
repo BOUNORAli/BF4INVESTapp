@@ -1167,7 +1167,9 @@ export class StoreService {
         });
         
         const payload: any = {
-          numeroFactureVente: inv.number || existingInvoice?.number,
+          // Ne pas envoyer numeroFactureVente si vide (sauf en mode édition où on garde l'existant)
+          ...(inv.number && inv.number.trim() ? { numeroFactureVente: inv.number } : 
+              (existingInvoice?.number ? { numeroFactureVente: existingInvoice.number } : {})),
           dateFacture: inv.date || existingInvoice?.date,
           bandeCommandeId: inv.bcId || existingInvoice?.bcId || null,
           clientId: inv.partnerId || existingInvoice?.partnerId,
