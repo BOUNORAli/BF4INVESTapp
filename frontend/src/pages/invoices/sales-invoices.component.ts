@@ -929,10 +929,10 @@ export class SalesInvoicesComponent {
     this.selectedInvoiceForDetails.set(null);
   }
 
-  showPaymentModal(inv: Invoice) {
+  async showPaymentModal(inv: Invoice) {
     this.selectedInvoiceForPayments.set(inv);
     // Charger les paiements pour cette facture
-    this.store.loadPaymentsForInvoice(inv.id);
+    await this.store.loadPaymentsForInvoice(inv.id, 'sale');
     // Réinitialiser le formulaire
     this.paymentForm.reset({
       date: new Date().toISOString().split('T')[0],
@@ -971,7 +971,7 @@ export class SalesInvoicesComponent {
     try {
       await this.store.addPaiement(paymentData);
       // Recharger les paiements
-      await this.store.loadPaymentsForInvoice(inv.id);
+      await this.store.loadPaymentsForInvoice(inv.id, 'sale');
       // Recharger les factures pour mettre à jour le statut
       await this.store.loadInvoices();
       // Réinitialiser le formulaire

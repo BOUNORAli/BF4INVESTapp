@@ -1593,6 +1593,14 @@ export class StoreService {
     return this.payments().get(invoiceId) || [];
   }
 
+  async loadPaymentsForInvoice(invoiceId: string, invoiceType: 'sale' | 'purchase'): Promise<void> {
+    if (invoiceType === 'sale') {
+      await this.loadPaiements(undefined, invoiceId);
+    } else {
+      await this.loadPaiements(invoiceId, undefined);
+    }
+  }
+
   getTotalPaidForInvoice(invoiceId: string): number {
     const payments = this.getPaymentsForInvoice(invoiceId);
     return payments.reduce((sum, p) => sum + (p.montant || 0), 0);
@@ -1828,11 +1836,11 @@ export class StoreService {
 
   async initialiserSoldeDepart(montant: number, dateDebut?: string): Promise<void> {
     try {
-      const params: any = { montant };
+      let url = `/solde/initial?montant=${montant}`;
       if (dateDebut) {
-        params.dateDebut = dateDebut;
+        url += `&dateDebut=${dateDebut}`;
       }
-      const solde = await this.api.put<SoldeGlobal>('/solde/initial', null, { params }).toPromise();
+      const solde = await this.api.put<SoldeGlobal>(url, {}).toPromise();
       if (solde) {
         this.soldeGlobal.set(solde);
         this.showToast('Solde de départ initialisé avec succès', 'success');
