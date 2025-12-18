@@ -26,11 +26,35 @@ public class FactureVenteService {
     private final CalculComptableService calculComptableService;
     
     public List<FactureVente> findAll() {
-        return factureRepository.findAll();
+        List<FactureVente> factures = factureRepository.findAll();
+        // Recalculer les champs comptables pour toutes les factures
+        factures.forEach(facture -> {
+            try {
+                // Toujours recalculer pour s'assurer que les champs sont à jour
+                calculComptableService.calculerFactureVente(facture);
+                // Sauvegarder pour persister les calculs
+                factureRepository.save(facture);
+            } catch (Exception e) {
+                // Ignorer les erreurs de calcul pour ne pas bloquer la récupération
+                log.warn("Erreur lors du calcul comptable pour facture vente {}: {}", facture.getId(), e.getMessage());
+            }
+        });
+        return factures;
     }
     
     public Optional<FactureVente> findById(String id) {
-        return factureRepository.findById(id);
+        return factureRepository.findById(id)
+                .map(facture -> {
+                    // Recalculer les champs comptables
+                    try {
+                        calculComptableService.calculerFactureVente(facture);
+                        // Sauvegarder pour persister les calculs
+                        return factureRepository.save(facture);
+                    } catch (Exception e) {
+                        log.warn("Erreur lors du calcul comptable pour facture vente {}: {}", id, e.getMessage());
+                        return facture;
+                    }
+                });
     }
     
     public FactureVente create(FactureVente facture) {

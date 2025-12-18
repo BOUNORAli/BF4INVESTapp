@@ -40,7 +40,14 @@ public class CalculComptableService {
         
         // Initialiser les valeurs par défaut si nécessaire
         if (facture.getTvaRate() == null) {
-            facture.setTvaRate(0.20); // 20% par défaut
+            // Calculer le taux de TVA à partir des totaux si disponibles
+            if (facture.getTotalHT() != null && facture.getTotalHT() > 0 && 
+                facture.getTotalTTC() != null && facture.getTotalTTC() > 0) {
+                double tvaAmount = facture.getTotalTTC() - facture.getTotalHT();
+                facture.setTvaRate(tvaAmount / facture.getTotalHT());
+            } else {
+                facture.setTvaRate(0.20); // 20% par défaut
+            }
         }
         if (facture.getTauxRG() == null) {
             facture.setTauxRG(0.0); // Pas de remise par défaut
@@ -85,7 +92,14 @@ public class CalculComptableService {
         
         // Initialiser les valeurs par défaut si nécessaire
         if (facture.getTvaRate() == null) {
-            facture.setTvaRate(0.20); // 20% par défaut
+            // Calculer le taux de TVA à partir des totaux si disponibles
+            if (facture.getTotalHT() != null && facture.getTotalHT() > 0 && 
+                facture.getTotalTTC() != null && facture.getTotalTTC() > 0) {
+                double tvaAmount = facture.getTotalTTC() - facture.getTotalHT();
+                facture.setTvaRate(tvaAmount / facture.getTotalHT());
+            } else {
+                facture.setTvaRate(0.20); // 20% par défaut
+            }
         }
         if (facture.getTauxRG() == null) {
             facture.setTauxRG(0.0); // Pas de remise par défaut
