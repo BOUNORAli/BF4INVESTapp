@@ -109,6 +109,9 @@ import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, FormsModule } 
                 </td>
                 <td class="px-6 py-4 text-right">
                    <div class="flex items-center justify-end gap-2 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button (click)="showPaymentModal(inv)" class="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-full transition-all" title="Paiements">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                      </button>
                       <button (click)="showCalculDetails(inv)" class="p-2 text-slate-400 hover:text-purple-600 hover:bg-purple-50 rounded-full transition-all" title="Détails comptables">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
                       </button>
@@ -337,6 +340,118 @@ import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, FormsModule } 
         </div>
       }
 
+      <!-- Modal Paiements -->
+      @if (selectedInvoiceForPayments()) {
+        <div class="fixed inset-0 z-50 flex items-center justify-center" aria-modal="true">
+          <div (click)="closePaymentModal()" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm"></div>
+          <div class="relative bg-white rounded-2xl shadow-2xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+            <div class="flex items-center justify-between p-6 border-b border-slate-100 bg-gradient-to-r from-emerald-50 to-teal-50">
+              <div>
+                <h2 class="text-xl font-bold text-slate-800">Paiements - Facture {{ selectedInvoiceForPayments()?.number }}</h2>
+                <p class="text-sm text-slate-600 mt-1">Historique des paiements avec évolution des soldes</p>
+              </div>
+              <button (click)="closePaymentModal()" class="text-slate-400 hover:text-slate-600 transition">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+              </button>
+            </div>
+            
+            <div class="flex-1 overflow-y-auto p-6 space-y-6">
+              @if (selectedInvoiceForPayments(); as inv) {
+                <!-- Liste des paiements -->
+                <div class="space-y-4">
+                  <h3 class="text-lg font-bold text-slate-800">Historique des Paiements</h3>
+                  @if (paymentsForInvoice().length > 0) {
+                    <div class="overflow-x-auto">
+                      <table class="w-full text-sm">
+                        <thead class="bg-slate-50 border-b border-slate-200">
+                          <tr>
+                            <th class="px-4 py-3 text-left font-semibold text-slate-700">Date</th>
+                            <th class="px-4 py-3 text-left font-semibold text-slate-700">Type</th>
+                            <th class="px-4 py-3 text-left font-semibold text-slate-700">Mode</th>
+                            <th class="px-4 py-3 text-right font-semibold text-slate-700">Montant</th>
+                            <th class="px-4 py-3 text-right font-semibold text-slate-700">Solde Global Après</th>
+                            <th class="px-4 py-3 text-right font-semibold text-slate-700">Solde Fournisseur Après</th>
+                            <th class="px-4 py-3 text-left font-semibold text-slate-700">Référence</th>
+                          </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                          @for (payment of paymentsForInvoice(); track payment.id) {
+                            <tr class="hover:bg-slate-50">
+                              <td class="px-4 py-3">{{ payment.date }}</td>
+                              <td class="px-4 py-3">
+                                <span class="px-2 py-1 bg-red-50 text-red-700 rounded text-xs font-medium">Paiement Fournisseur</span>
+                              </td>
+                              <td class="px-4 py-3">{{ payment.mode }}</td>
+                              <td class="px-4 py-3 text-right font-bold text-red-600">{{ payment.montant | number:'1.2-2' }} MAD</td>
+                              <td class="px-4 py-3 text-right" [class.text-emerald-600]="(payment.soldeGlobalApres || 0) >= 0" [class.text-red-600]="(payment.soldeGlobalApres || 0) < 0">
+                                {{ payment.soldeGlobalApres | number:'1.2-2' }} MAD
+                              </td>
+                              <td class="px-4 py-3 text-right" [class.text-emerald-600]="(payment.soldePartenaireApres || 0) >= 0" [class.text-red-600]="(payment.soldePartenaireApres || 0) < 0">
+                                {{ payment.soldePartenaireApres | number:'1.2-2' }} MAD
+                              </td>
+                              <td class="px-4 py-3 text-xs text-slate-500">{{ payment.reference || '-' }}</td>
+                            </tr>
+                          }
+                        </tbody>
+                      </table>
+                    </div>
+                  } @else {
+                    <div class="text-center py-8 text-slate-500">
+                      <p>Aucun paiement enregistré pour cette facture.</p>
+                    </div>
+                  }
+                </div>
+
+                <!-- Formulaire pour ajouter un paiement -->
+                <div class="bg-slate-50 p-6 rounded-xl border border-slate-200">
+                  <h3 class="text-lg font-bold text-slate-800 mb-4">Ajouter un Paiement</h3>
+                  <form [formGroup]="paymentForm" (ngSubmit)="addPayment()" class="space-y-4">
+                    <div class="grid grid-cols-2 gap-4">
+                      <div>
+                        <label class="block text-sm font-semibold text-slate-700 mb-1">Date</label>
+                        <input formControlName="date" type="date" class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 outline-none">
+                      </div>
+                      <div>
+                        <label class="block text-sm font-semibold text-slate-700 mb-1">Montant (MAD)</label>
+                        <input formControlName="montant" type="number" step="0.01" class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 outline-none text-right">
+                      </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                      <div>
+                        <label class="block text-sm font-semibold text-slate-700 mb-1">Mode de Paiement</label>
+                        <select formControlName="mode" class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 outline-none">
+                          <option value="">Sélectionner</option>
+                          @for (mode of activePaymentModes(); track mode.id) {
+                            <option [value]="mode.name">{{ mode.name }}</option>
+                          }
+                        </select>
+                      </div>
+                      <div>
+                        <label class="block text-sm font-semibold text-slate-700 mb-1">Référence</label>
+                        <input formControlName="reference" type="text" placeholder="N° chèque, virement..." class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 outline-none">
+                      </div>
+                    </div>
+                    <div>
+                      <label class="block text-sm font-semibold text-slate-700 mb-1">Notes</label>
+                      <textarea formControlName="notes" rows="2" class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 outline-none"></textarea>
+                    </div>
+                    <button type="submit" [disabled]="paymentForm.invalid" class="w-full px-4 py-2 bg-emerald-600 text-white font-bold rounded-lg hover:bg-emerald-700 transition disabled:opacity-50">
+                      Enregistrer le Paiement
+                    </button>
+                  </form>
+                </div>
+              }
+            </div>
+
+            <div class="p-6 border-t border-slate-100 bg-slate-50/50">
+              <button (click)="closePaymentModal()" class="w-full px-4 py-2 bg-slate-200 text-slate-700 font-medium rounded-lg hover:bg-slate-300 transition">
+                Fermer
+              </button>
+            </div>
+          </div>
+        </div>
+      }
+
     </div>
   `,
   styles: [`
@@ -355,6 +470,16 @@ export class PurchaseInvoicesComponent {
   editingId: string | null = null;
   availableBCs = signal<BC[]>([]);
   selectedInvoiceForDetails = signal<Invoice | null>(null);
+  selectedInvoiceForPayments = signal<Invoice | null>(null);
+
+  // Payment form
+  paymentForm = this.fb.group({
+    date: [new Date().toISOString().split('T')[0], Validators.required],
+    montant: [0, [Validators.required, Validators.min(0.01)]],
+    mode: ['', Validators.required],
+    reference: [''],
+    notes: ['']
+  });
 
   // Filters
   filterStatus = signal<'all' | 'paid' | 'pending' | 'overdue'>('all');
@@ -582,6 +707,64 @@ export class PurchaseInvoicesComponent {
 
   closeCalculDetails() {
     this.selectedInvoiceForDetails.set(null);
+  }
+
+  async showPaymentModal(inv: Invoice) {
+    this.selectedInvoiceForPayments.set(inv);
+    // Charger les paiements pour cette facture
+    await this.store.loadPaymentsForInvoice(inv.id, 'purchase');
+    // Réinitialiser le formulaire
+    this.paymentForm.reset({
+      date: new Date().toISOString().split('T')[0],
+      montant: 0,
+      mode: '',
+      reference: '',
+      notes: ''
+    });
+  }
+
+  closePaymentModal() {
+    this.selectedInvoiceForPayments.set(null);
+  }
+
+  paymentsForInvoice = computed(() => {
+    const inv = this.selectedInvoiceForPayments();
+    if (!inv) return [];
+    return this.store.payments().get(inv.id) || [];
+  });
+
+  async addPayment() {
+    if (this.paymentForm.invalid || !this.selectedInvoiceForPayments()) {
+      return;
+    }
+
+    const inv = this.selectedInvoiceForPayments()!;
+    const paymentData = {
+      factureAchatId: inv.id,
+      date: this.paymentForm.value.date!,
+      montant: this.paymentForm.value.montant!,
+      mode: this.paymentForm.value.mode!,
+      reference: this.paymentForm.value.reference || '',
+      notes: this.paymentForm.value.notes || ''
+    };
+
+    try {
+      await this.store.addPaiement(paymentData);
+      // Recharger les paiements
+      await this.store.loadPaymentsForInvoice(inv.id, 'purchase');
+      // Recharger les factures pour mettre à jour le statut
+      await this.store.loadInvoices();
+      // Réinitialiser le formulaire
+      this.paymentForm.reset({
+        date: new Date().toISOString().split('T')[0],
+        montant: 0,
+        mode: '',
+        reference: '',
+        notes: ''
+      });
+    } catch (error) {
+      console.error('Error adding payment:', error);
+    }
   }
 
   onSubmit() {
