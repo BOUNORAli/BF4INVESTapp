@@ -120,6 +120,7 @@ export interface Invoice {
   id: string;
   number: string;
   bcId: string;
+  bcReference?: string; // Référence BC (colonne AFFECTATION de l'Excel)
   partnerId?: string;
   date: string;
   amountHT: number;
@@ -128,17 +129,53 @@ export interface Invoice {
   status: 'paid' | 'pending' | 'overdue';
   type: 'purchase' | 'sale';
   paymentMode?: string;
+  
+  // Champs pour les calculs comptables
+  typeMouvement?: string; // "C" = Client, "F" = Fournisseur, "IB", "FB", "CTP", "CTD", etc.
+  nature?: string; // "facture", "paiement", "loy", etc.
+  colA?: string; // Colonne A (ex: "CAPITAL")
+  colB?: string; // Colonne B
+  colD?: string; // Utilisé pour les filtres (ex: "CCA")
+  colF?: string; // Utilisé dans le calcul du solde pour IB
+  tvaRate?: number; // Taux TVA (ex: 0.20 pour 20%)
+  tauxRG?: number; // Taux de remise globale (ex: 0.10 pour 10%)
+  
+  // Champs calculés selon les formules Excel
+  tvaMois?: string; // Format "mois/année" (ex: "01/2025")
+  solde?: number; // Solde calculé selon type mouvement
+  totalTTCApresRG?: number; // TTC après remise globale
+  totalTTCApresRG_SIGNE?: number; // TTC après RG avec signe
+  totalPaiementTTC?: number; // Total paiement TTC
+  rgTTC?: number; // Remise globale TTC
+  rgHT?: number; // Remise globale HT
+  factureHT_YC_RG?: number; // Facture HT incluant RG
+  htPaye?: number; // HT payé
+  tvaFactureYcRg?: number; // TVA facture incluant RG
+  tvaPaye?: number; // TVA payée
+  bilan?: number; // Bilan HT
 }
 
 export interface Payment {
   id?: string;
   factureAchatId?: string;
   factureVenteId?: string;
+  bcReference?: string; // Référence BC associée
   date: string;
   montant: number;
   mode: string;
   reference?: string;
   notes?: string;
+  
+  // Champs pour les calculs comptables
+  typeMouvement?: string; // "C" = Client, "F" = Fournisseur, "FB", "CTP", "CTD", etc.
+  nature?: string; // "paiement", "facture", etc.
+  colD?: string; // Utilisé pour les filtres (ex: "CCA")
+  tvaRate?: number; // Taux TVA (ex: 0.20 pour 20%)
+  
+  // Champs calculés selon les formules Excel
+  totalPaiementTTC?: number; // Total paiement TTC calculé
+  htPaye?: number; // HT payé
+  tvaPaye?: number; // TVA payée
 }
 
 export interface Toast {
@@ -1581,11 +1618,23 @@ export class StoreService {
       id: p.id,
       factureAchatId: p.factureAchatId,
       factureVenteId: p.factureVenteId,
+      bcReference: p.bcReference,
       date: p.date,
       montant: p.montant || 0,
       mode: p.mode,
       reference: p.reference,
-      notes: p.notes
+      notes: p.notes,
+      
+      // Champs pour les calculs comptables
+      typeMouvement: p.typeMouvement,
+      nature: p.nature,
+      colD: p.colD,
+      tvaRate: p.tvaRate,
+      
+      // Champs calculés selon les formules Excel
+      totalPaiementTTC: p.totalPaiementTTC,
+      htPaye: p.htPaye,
+      tvaPaye: p.tvaPaye
     };
   }
 
