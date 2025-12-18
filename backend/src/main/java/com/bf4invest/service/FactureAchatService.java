@@ -23,6 +23,7 @@ public class FactureAchatService {
     private final AppConfig appConfig;
     private final AuditService auditService;
     private final ProductService productService;
+    private final CalculComptableService calculComptableService;
     
     public List<FactureAchat> findAll() {
         return factureRepository.findAll();
@@ -46,6 +47,9 @@ public class FactureAchatService {
         
         // Calculer les totaux
         calculateTotals(facture);
+        
+        // Calculer les champs comptables selon les formules Excel
+        calculComptableService.calculerFactureAchat(facture);
         
         // Initialiser état paiement
         if (facture.getEtatPaiement() == null) {
@@ -124,6 +128,9 @@ public class FactureAchatService {
                     
                     // Ne pas mettre à jour l'état de paiement si l'utilisateur l'a fourni explicitement
                     calculateMontantRestant(existing, !etatPaiementExplicite);
+                    
+                    // Recalculer les champs comptables selon les formules Excel
+                    calculComptableService.calculerFactureAchat(existing);
                     
                     // Restaurer l'état de paiement de l'utilisateur si fourni
                     if (etatPaiementExplicite) {

@@ -109,6 +109,9 @@ import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, FormsModule } 
                 </td>
                 <td class="px-6 py-4 text-right">
                    <div class="flex items-center justify-end gap-2 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button (click)="showCalculDetails(inv)" class="p-2 text-slate-400 hover:text-purple-600 hover:bg-purple-50 rounded-full transition-all" title="Détails comptables">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+                      </button>
                       <button (click)="exportPDF(inv)" class="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-full transition-all" title="Exporter PDF">
                          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
                       </button>
@@ -246,6 +249,94 @@ import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, FormsModule } 
          </div>
       }
 
+      <!-- Modal Détails Comptables -->
+      @if (selectedInvoiceForDetails()) {
+        <div class="fixed inset-0 z-50 flex items-center justify-center" aria-modal="true">
+          <div (click)="closeCalculDetails()" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm"></div>
+          <div class="relative bg-white rounded-2xl shadow-2xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+            <div class="flex items-center justify-between p-6 border-b border-slate-100 bg-gradient-to-r from-purple-50 to-indigo-50">
+              <div>
+                <h2 class="text-xl font-bold text-slate-800">Détails Comptables</h2>
+                <p class="text-sm text-slate-600 mt-1">Facture: {{ selectedInvoiceForDetails()?.number }}</p>
+              </div>
+              <button (click)="closeCalculDetails()" class="text-slate-400 hover:text-slate-600 transition">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+              </button>
+            </div>
+            
+            <div class="flex-1 overflow-y-auto p-6 space-y-6">
+              @if (selectedInvoiceForDetails(); as inv) {
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <!-- Informations de base -->
+                  <div class="bg-slate-50 p-4 rounded-lg">
+                    <h3 class="font-semibold text-slate-700 mb-3">Informations</h3>
+                    <div class="space-y-2 text-sm">
+                      <div><span class="text-slate-500">Référence BC:</span> <span class="font-medium">{{ inv.bcReference || '-' }}</span></div>
+                      <div><span class="text-slate-500">Type Mouvement:</span> <span class="font-medium">{{ inv.typeMouvement || '-' }}</span></div>
+                      <div><span class="text-slate-500">Nature:</span> <span class="font-medium">{{ inv.nature || '-' }}</span></div>
+                      <div><span class="text-slate-500">TVA Mois:</span> <span class="font-medium">{{ inv.tvaMois || '-' }}</span></div>
+                    </div>
+                  </div>
+
+                  <!-- Totaux -->
+                  <div class="bg-blue-50 p-4 rounded-lg">
+                    <h3 class="font-semibold text-blue-700 mb-3">Totaux</h3>
+                    <div class="space-y-2 text-sm">
+                      <div><span class="text-blue-600">TTC après RG:</span> <span class="font-bold">{{ inv.totalTTCApresRG | number:'1.2-2' }} MAD</span></div>
+                      <div><span class="text-blue-600">TTC après RG (signé):</span> <span class="font-bold">{{ inv.totalTTCApresRG_SIGNE | number:'1.2-2' }} MAD</span></div>
+                      <div><span class="text-blue-600">Solde:</span> <span class="font-bold">{{ inv.solde | number:'1.2-2' }} MAD</span></div>
+                    </div>
+                  </div>
+
+                  <!-- Remise Globale -->
+                  <div class="bg-emerald-50 p-4 rounded-lg">
+                    <h3 class="font-semibold text-emerald-700 mb-3">Remise Globale</h3>
+                    <div class="space-y-2 text-sm">
+                      <div><span class="text-emerald-600">RG TTC:</span> <span class="font-bold">{{ inv.rgTTC | number:'1.2-2' }} MAD</span></div>
+                      <div><span class="text-emerald-600">RG HT:</span> <span class="font-bold">{{ inv.rgHT | number:'1.2-2' }} MAD</span></div>
+                      <div><span class="text-emerald-600">Taux RG:</span> <span class="font-bold">{{ (inv.tauxRG || 0) * 100 | number:'1.0-2' }}%</span></div>
+                    </div>
+                  </div>
+
+                  <!-- Facture HT -->
+                  <div class="bg-amber-50 p-4 rounded-lg">
+                    <h3 class="font-semibold text-amber-700 mb-3">Facture HT</h3>
+                    <div class="space-y-2 text-sm">
+                      <div><span class="text-amber-600">HT YC RG:</span> <span class="font-bold">{{ inv.factureHT_YC_RG | number:'1.2-2' }} MAD</span></div>
+                      <div><span class="text-amber-600">TVA Facture YC RG:</span> <span class="font-bold">{{ inv.tvaFactureYcRg | number:'1.2-2' }} MAD</span></div>
+                    </div>
+                  </div>
+
+                  <!-- Paiements -->
+                  <div class="bg-indigo-50 p-4 rounded-lg">
+                    <h3 class="font-semibold text-indigo-700 mb-3">Paiements</h3>
+                    <div class="space-y-2 text-sm">
+                      <div><span class="text-indigo-600">Total Paiement TTC:</span> <span class="font-bold">{{ inv.totalPaiementTTC | number:'1.2-2' }} MAD</span></div>
+                      <div><span class="text-indigo-600">HT Payé:</span> <span class="font-bold">{{ inv.htPaye | number:'1.2-2' }} MAD</span></div>
+                      <div><span class="text-indigo-600">TVA Payée:</span> <span class="font-bold">{{ inv.tvaPaye | number:'1.2-2' }} MAD</span></div>
+                    </div>
+                  </div>
+
+                  <!-- Bilan -->
+                  <div class="bg-purple-50 p-4 rounded-lg">
+                    <h3 class="font-semibold text-purple-700 mb-3">Bilan</h3>
+                    <div class="space-y-2 text-sm">
+                      <div><span class="text-purple-600">Bilan HT:</span> <span class="font-bold text-lg">{{ inv.bilan | number:'1.2-2' }} MAD</span></div>
+                    </div>
+                  </div>
+                </div>
+              }
+            </div>
+
+            <div class="p-6 border-t border-slate-100 bg-slate-50/50">
+              <button (click)="closeCalculDetails()" class="w-full px-4 py-2 bg-slate-200 text-slate-700 font-medium rounded-lg hover:bg-slate-300 transition">
+                Fermer
+              </button>
+            </div>
+          </div>
+        </div>
+      }
+
     </div>
   `,
   styles: [`
@@ -263,6 +354,7 @@ export class PurchaseInvoicesComponent {
   isEditMode = signal(false);
   editingId: string | null = null;
   availableBCs = signal<BC[]>([]);
+  selectedInvoiceForDetails = signal<Invoice | null>(null);
 
   // Filters
   filterStatus = signal<'all' | 'paid' | 'pending' | 'overdue'>('all');
@@ -482,6 +574,14 @@ export class PurchaseInvoicesComponent {
         // Error already handled in store
       }
     }
+  }
+
+  showCalculDetails(inv: Invoice) {
+    this.selectedInvoiceForDetails.set(inv);
+  }
+
+  closeCalculDetails() {
+    this.selectedInvoiceForDetails.set(null);
   }
 
   onSubmit() {

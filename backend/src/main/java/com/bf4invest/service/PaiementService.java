@@ -19,8 +19,12 @@ public class PaiementService {
     private final PaiementRepository paiementRepository;
     private final FactureAchatRepository factureAchatRepository;
     private final FactureVenteRepository factureVenteRepository;
+    private final CalculComptableService calculComptableService;
     
     public Paiement create(Paiement paiement) {
+        // Calculer les champs comptables selon les formules Excel
+        calculComptableService.calculerPaiement(paiement);
+        
         paiement.setCreatedAt(LocalDateTime.now());
         Paiement saved = paiementRepository.save(paiement);
         

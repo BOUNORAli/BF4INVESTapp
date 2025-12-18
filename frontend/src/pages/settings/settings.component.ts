@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, signal, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { StoreService } from '../../services/store.service';
@@ -65,12 +65,102 @@ import { StoreService } from '../../services/store.service';
           </div>
         </div>
       </div>
+
+      <!-- Paramètres de Calcul Card -->
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        <div class="p-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+          <div>
+            <h2 class="text-lg font-bold text-slate-800">Paramètres de Calcul Comptable</h2>
+            <p class="text-xs text-slate-500">Codes spéciaux utilisés dans les formules Excel (équivalents aux cellules $D$2127, $E$2123, etc.)</p>
+          </div>
+        </div>
+        
+        <div class="p-6">
+          @if (isLoadingParams()) {
+            <div class="text-center py-8 text-slate-500">Chargement...</div>
+          } @else {
+            <div class="space-y-4">
+              <div>
+                <label class="block text-sm font-semibold text-slate-700 mb-1">Code D Clôture ($D$2127)</label>
+                <input type="text" [(ngModel)]="parametresCalcul().codeDCloture" 
+                       placeholder="Code d'exclusion pour la colonne D"
+                       class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition">
+                <p class="text-xs text-slate-500 mt-1">Les lignes avec ce code dans la colonne D sont exclues du calcul du bilan</p>
+              </div>
+
+              <div>
+                <label class="block text-sm font-semibold text-slate-700 mb-1">Code E Exclusion 1 ($E$2123)</label>
+                <input type="text" [(ngModel)]="parametresCalcul().codeEExclu1" 
+                       placeholder="Code d'exclusion 1 pour la colonne E"
+                       class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition">
+                <p class="text-xs text-slate-500 mt-1">Les lignes avec ce code dans la colonne E sont exclues du calcul du bilan</p>
+              </div>
+
+              <div>
+                <label class="block text-sm font-semibold text-slate-700 mb-1">Code E Exclusion 2 ($E$2125)</label>
+                <input type="text" [(ngModel)]="parametresCalcul().codeEExclu2" 
+                       placeholder="Code d'exclusion 2 pour la colonne E"
+                       class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition">
+              </div>
+
+              <div>
+                <label class="block text-sm font-semibold text-slate-700 mb-1">Code E Exclusion 3 ($E$2124)</label>
+                <input type="text" [(ngModel)]="parametresCalcul().codeEExclu3" 
+                       placeholder="Code d'exclusion 3 pour la colonne E"
+                       class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition">
+              </div>
+
+              <div class="pt-4 border-t border-slate-100">
+                <button (click)="saveParametresCalcul()" 
+                        class="w-full px-4 py-2 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition shadow-lg shadow-blue-600/20">
+                  Enregistrer les Paramètres
+                </button>
+              </div>
+            </div>
+          }
+        </div>
+      </div>
     </div>
   `
 })
-export class SettingsComponent {
+export class SettingsComponent implements OnInit {
   store = inject(StoreService);
   newModeName = signal('');
+  
+  // Paramètres de calcul
+  parametresCalcul = signal<any>({
+    codeDCloture: '',
+    codeEExclu1: '',
+    codeEExclu2: '',
+    codeEExclu3: ''
+  });
+  isLoadingParams = signal(false);
+
+  async ngOnInit() {
+    await this.loadParametresCalcul();
+  }
+
+  async loadParametresCalcul() {
+    this.isLoadingParams.set(true);
+    try {
+      const params = await this.store.loadParametresCalcul();
+      if (params) {
+        this.parametresCalcul.set(params);
+      }
+    } catch (error) {
+      console.error('Error loading parametres calcul:', error);
+    } finally {
+      this.isLoadingParams.set(false);
+    }
+  }
+
+  async saveParametresCalcul() {
+    try {
+      await this.store.saveParametresCalcul(this.parametresCalcul());
+    } catch (error) {
+      console.error('Error saving parametres calcul:', error);
+    }
+  }
 
   addMode() {
     if (this.newModeName().trim()) {

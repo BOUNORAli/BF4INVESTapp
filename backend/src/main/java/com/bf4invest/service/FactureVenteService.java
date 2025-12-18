@@ -23,6 +23,7 @@ public class FactureVenteService {
     private final AppConfig appConfig;
     private final AuditService auditService;
     private final ProductService productService;
+    private final CalculComptableService calculComptableService;
     
     public List<FactureVente> findAll() {
         return factureRepository.findAll();
@@ -47,6 +48,9 @@ public class FactureVenteService {
         
         // Calculer les totaux
         calculateTotals(facture);
+        
+        // Calculer les champs comptables selon les formules Excel
+        calculComptableService.calculerFactureVente(facture);
         
         // Initialiser état paiement
         if (facture.getEtatPaiement() == null) {
@@ -159,6 +163,10 @@ public class FactureVenteService {
                         existing.getTotalHT(), existing.getTotalTTC());
                     // Ne pas mettre à jour l'état de paiement si l'utilisateur l'a fourni explicitement
                     calculateMontantRestant(existing, !etatPaiementExplicite);
+                    
+                    // Recalculer les champs comptables selon les formules Excel
+                    calculComptableService.calculerFactureVente(existing);
+                    
                     log.info("🔵 FactureVenteService.update - Montants APRÈS calculateMontantRestant: totalHT={}, totalTTC={}", 
                         existing.getTotalHT(), existing.getTotalTTC());
                     

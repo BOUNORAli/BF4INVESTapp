@@ -47,3 +47,4 @@ CORS_ALLOWED_ORIGINS=https://votre-frontend.vercel.app
 **Note** : Le fichier `backend/railway.json` est déjà présent pour aider Railway à comprendre la configuration, mais la méthode la plus fiable est de configurer le Root Directory dans l'interface Railway.
 
 
+
