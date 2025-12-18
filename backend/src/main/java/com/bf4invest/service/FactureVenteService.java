@@ -24,6 +24,8 @@ public class FactureVenteService {
     private final AuditService auditService;
     private final ProductService productService;
     private final CalculComptableService calculComptableService;
+    private final SoldeService soldeService;
+    private final ClientService clientService;
     
     public List<FactureVente> findAll() {
         List<FactureVente> factures = factureRepository.findAll();
@@ -94,6 +96,26 @@ public class FactureVenteService {
         // Journaliser la création
         auditService.logCreate("FactureVente", saved.getId(), 
             "Facture Vente " + saved.getNumeroFactureVente() + " créée - Montant: " + saved.getTotalTTC() + " MAD");
+        
+        // Enregistrer la transaction dans le solde
+        if (saved.getClientId() != null && saved.getTotalTTC() != null) {
+            try {
+                clientService.findById(saved.getClientId()).ifPresent(client -> {
+                    soldeService.enregistrerTransaction(
+                            "FACTURE_VENTE",
+                            saved.getTotalTTC(),
+                            saved.getClientId(),
+                            "CLIENT",
+                            client.getNom(),
+                            saved.getId(),
+                            saved.getNumeroFactureVente(),
+                            "Facture vente " + saved.getNumeroFactureVente()
+                    );
+                });
+            } catch (Exception e) {
+                log.warn("Erreur lors de l'enregistrement de la transaction solde pour facture vente {}: {}", saved.getId(), e.getMessage());
+            }
+        }
         
         return saved;
     }

@@ -32,6 +32,8 @@ public class Supplier {
     
     private LocalDate dateRegulariteFiscale; // Date de régularité fiscale du fournisseur
     
+    private Double soldeFournisseur; // Solde du fournisseur (positif = nous devons de l'argent au fournisseur)
+    
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

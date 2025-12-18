@@ -45,6 +45,10 @@ public class Paiement {
     private Double htPaye; // HT payé (colonne Z)
     private Double tvaPaye; // TVA payée (colonne AB)
     
+    // Soldes après ce paiement
+    private Double soldeGlobalApres; // Solde global après ce paiement
+    private Double soldePartenaireApres; // Solde partenaire (client/fournisseur) après ce paiement
+    
     private String notes;
     
     private LocalDateTime createdAt;

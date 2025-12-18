@@ -28,6 +28,8 @@ public class Client {
     
     private List<Contact> contacts;
     
+    private Double soldeClient; // Solde du client (positif = client nous doit de l'argent)
+    
     @Data
     @Builder
     @NoArgsConstructor

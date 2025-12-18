@@ -1,17 +1,21 @@
 package com.bf4invest.service;
 
+import com.bf4invest.model.Client;
 import com.bf4invest.model.FactureAchat;
 import com.bf4invest.model.FactureVente;
 import com.bf4invest.model.Paiement;
+import com.bf4invest.model.Supplier;
 import com.bf4invest.repository.FactureAchatRepository;
 import com.bf4invest.repository.FactureVenteRepository;
 import com.bf4invest.repository.PaiementRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.List;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class PaiementService {
@@ -20,6 +24,9 @@ public class PaiementService {
     private final FactureAchatRepository factureAchatRepository;
     private final FactureVenteRepository factureVenteRepository;
     private final CalculComptableService calculComptableService;
+    private final SoldeService soldeService;
+    private final ClientService clientService;
+    private final SupplierService supplierService;
     
     public Paiement create(Paiement paiement) {
         // Calculer les champs comptables selon les formules Excel
@@ -30,6 +37,69 @@ public class PaiementService {
         
         // Mettre à jour la facture associée
         updateFacturePaymentStatus(saved);
+        
+        // Enregistrer la transaction dans le solde et mettre à jour les soldes dans le paiement
+        if (saved.getMontant() != null && saved.getMontant() > 0) {
+            try {
+                String typeTransaction;
+                String partenaireId = null;
+                String partenaireType = null;
+                String partenaireNom = null;
+                String referenceNumero = saved.getReference() != null ? saved.getReference() : "Paiement";
+                
+                if (saved.getFactureVenteId() != null) {
+                    // Paiement client
+                    typeTransaction = "PAIEMENT_CLIENT";
+                    factureVenteRepository.findById(saved.getFactureVenteId()).ifPresent(facture -> {
+                        if (facture.getClientId() != null) {
+                            clientService.findById(facture.getClientId()).ifPresent(client -> {
+                                var historique = soldeService.enregistrerTransaction(
+                                        typeTransaction,
+                                        saved.getMontant(),
+                                        facture.getClientId(),
+                                        "CLIENT",
+                                        client.getNom(),
+                                        saved.getId(),
+                                        referenceNumero,
+                                        "Paiement client - " + facture.getNumeroFactureVente()
+                                );
+                                
+                                // Mettre à jour les soldes dans le paiement
+                                saved.setSoldeGlobalApres(historique.getSoldeGlobalApres());
+                                saved.setSoldePartenaireApres(historique.getSoldePartenaireApres());
+                                paiementRepository.save(saved);
+                            });
+                        }
+                    });
+                } else if (saved.getFactureAchatId() != null) {
+                    // Paiement fournisseur
+                    typeTransaction = "PAIEMENT_FOURNISSEUR";
+                    factureAchatRepository.findById(saved.getFactureAchatId()).ifPresent(facture -> {
+                        if (facture.getFournisseurId() != null) {
+                            supplierService.findById(facture.getFournisseurId()).ifPresent(supplier -> {
+                                var historique = soldeService.enregistrerTransaction(
+                                        typeTransaction,
+                                        saved.getMontant(),
+                                        facture.getFournisseurId(),
+                                        "FOURNISSEUR",
+                                        supplier.getNom(),
+                                        saved.getId(),
+                                        referenceNumero,
+                                        "Paiement fournisseur - " + facture.getNumeroFactureAchat()
+                                );
+                                
+                                // Mettre à jour les soldes dans le paiement
+                                saved.setSoldeGlobalApres(historique.getSoldeGlobalApres());
+                                saved.setSoldePartenaireApres(historique.getSoldePartenaireApres());
+                                paiementRepository.save(saved);
+                            });
+                        }
+                    });
+                }
+            } catch (Exception e) {
+                log.warn("Erreur lors de l'enregistrement de la transaction solde pour paiement {}: {}", saved.getId(), e.getMessage());
+            }
+        }
         
         return saved;
     }

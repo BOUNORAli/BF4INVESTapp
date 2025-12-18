@@ -1,5 +1,5 @@
 
-import { Component, inject, computed, OnInit, effect } from '@angular/core';
+import { Component, inject, computed, OnInit, effect, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { StoreService } from '../../services/store.service';
 import { Router, RouterLink } from '@angular/router';
@@ -30,6 +30,32 @@ import { Router, RouterLink } from '@angular/router';
 
       <!-- KPI Cards with Premium Look -->
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+        
+        <!-- Solde Global Card -->
+        <div class="bg-gradient-to-br from-indigo-500 to-purple-600 p-6 rounded-2xl shadow-lg shadow-indigo-500/20 hover-card text-white">
+          <div class="flex flex-col h-full justify-between">
+            <div>
+              <p class="text-sm font-medium text-indigo-100 uppercase tracking-wide">Solde Global</p>
+              @if (isLoadingSolde()) {
+                <div class="animate-pulse">
+                  <div class="h-8 bg-white/20 rounded w-32 mt-2"></div>
+                </div>
+              } @else {
+                <h3 class="text-3xl font-extrabold text-white mt-2 tracking-tight break-words" 
+                    [class.text-emerald-200]="soldeActuel() >= 0" 
+                    [class.text-red-200]="soldeActuel() < 0">
+                  {{ formatCurrency(soldeActuel()) }}
+                </h3>
+              }
+            </div>
+            <div class="mt-4 flex items-center gap-2">
+              <svg class="w-4 h-4 text-indigo-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+              </svg>
+              <span class="text-xs text-indigo-100">Trésorerie</span>
+            </div>
+          </div>
+        </div>
         
         <!-- CA Card -->
         <div class="bg-white p-6 rounded-2xl shadow-[0_2px_15px_-3px_rgba(0,0,0,0.07),0_10px_20px_-2px_rgba(0,0,0,0.04)] hover-card border border-slate-100 relative overflow-hidden group">
@@ -299,6 +325,11 @@ export class DashboardComponent implements OnInit {
   // KPIs from backend
   readonly kpis = computed(() => this.store.dashboardKPIs());
   readonly isLoadingKPIs = computed(() => this.store.dashboardLoading());
+  
+  // Solde global
+  readonly soldeGlobal = computed(() => this.store.soldeGlobal());
+  readonly soldeActuel = computed(() => this.soldeGlobal()?.soldeActuel || 0);
+  readonly isLoadingSolde = signal(false);
 
   // Monthly data for chart
   monthlyData = computed(() => {
@@ -364,6 +395,15 @@ export class DashboardComponent implements OnInit {
   async ngOnInit() {
     // Load KPIs on component initialization (les BCs et factures sont déjà chargés au démarrage)
     await this.store.loadDashboardKPIs();
+    // Charger le solde global
+    this.isLoadingSolde.set(true);
+    try {
+      await this.store.loadSoldeGlobal();
+    } catch (error) {
+      console.error('Error loading solde global:', error);
+    } finally {
+      this.isLoadingSolde.set(false);
+    }
   }
 
   async reloadKPIs(from?: Date, to?: Date) {

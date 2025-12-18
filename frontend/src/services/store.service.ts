@@ -176,6 +176,34 @@ export interface Payment {
   totalPaiementTTC?: number; // Total paiement TTC calculé
   htPaye?: number; // HT payé
   tvaPaye?: number; // TVA payée
+  
+  // Soldes après ce paiement
+  soldeGlobalApres?: number;
+  soldePartenaireApres?: number;
+}
+
+export interface SoldeGlobal {
+  id?: string;
+  soldeInitial: number;
+  soldeActuel: number;
+  dateDebut: string;
+}
+
+export interface HistoriqueSolde {
+  id: string;
+  type: string; // "FACTURE_VENTE", "FACTURE_ACHAT", "PAIEMENT_CLIENT", "PAIEMENT_FOURNISSEUR"
+  montant: number;
+  soldeGlobalAvant: number;
+  soldeGlobalApres: number;
+  soldePartenaireAvant: number;
+  soldePartenaireApres: number;
+  partenaireId?: string;
+  partenaireType?: string; // "CLIENT" ou "FOURNISSEUR"
+  partenaireNom?: string;
+  referenceId?: string;
+  referenceNumero?: string;
+  date: string;
+  description?: string;
 }
 
 export interface Toast {
@@ -355,6 +383,8 @@ export class StoreService {
   readonly dashboardKPIs = signal<DashboardKpiResponse | null>(null);
   readonly dashboardLoading = signal<boolean>(false);
   readonly payments = signal<Map<string, Payment[]>>(new Map()); // Map<invoiceId, Payment[]>
+  readonly soldeGlobal = signal<SoldeGlobal | null>(null);
+  readonly historiqueSolde = signal<HistoriqueSolde[]>([]);
   
   // Flag pour ├®viter les rechargements multiples
   private dataLoaded = false;
@@ -1599,6 +1629,9 @@ export class StoreService {
         
         // Reload invoices to get updated status
         await this.loadInvoices();
+        
+        // Recharger le solde global après un paiement
+        await this.loadSoldeGlobal();
       }
       
       this.showToast('Paiement enregistr├® avec succ├¿s', 'success');
@@ -1634,7 +1667,11 @@ export class StoreService {
       // Champs calculés selon les formules Excel
       totalPaiementTTC: p.totalPaiementTTC,
       htPaye: p.htPaye,
-      tvaPaye: p.tvaPaye
+      tvaPaye: p.tvaPaye,
+      
+      // Soldes après ce paiement
+      soldeGlobalApres: p.soldeGlobalApres,
+      soldePartenaireApres: p.soldePartenaireApres
     };
   }
 
@@ -1764,6 +1801,80 @@ export class StoreService {
       console.error('Error saving parametres calcul:', error);
       this.showToast('Erreur lors de la sauvegarde des paramètres', 'error');
       throw error;
+    }
+  }
+
+  // --- GESTION DES SOLDES ---
+  async loadSoldeGlobal(): Promise<void> {
+    try {
+      const solde = await this.api.get<SoldeGlobal>('/solde/global/complet').toPromise();
+      if (solde) {
+        this.soldeGlobal.set(solde);
+      }
+    } catch (error) {
+      console.error('Error loading solde global:', error);
+    }
+  }
+
+  async getSoldeGlobalActuel(): Promise<number> {
+    try {
+      const solde = await this.api.get<number>('/solde/global').toPromise();
+      return solde || 0;
+    } catch (error) {
+      console.error('Error getting solde global actuel:', error);
+      return 0;
+    }
+  }
+
+  async initialiserSoldeDepart(montant: number, dateDebut?: string): Promise<void> {
+    try {
+      const params: any = { montant };
+      if (dateDebut) {
+        params.dateDebut = dateDebut;
+      }
+      const solde = await this.api.put<SoldeGlobal>('/solde/initial', null, { params }).toPromise();
+      if (solde) {
+        this.soldeGlobal.set(solde);
+        this.showToast('Solde de départ initialisé avec succès', 'success');
+      }
+    } catch (error) {
+      console.error('Error initializing solde depart:', error);
+      this.showToast('Erreur lors de l\'initialisation du solde de départ', 'error');
+      throw error;
+    }
+  }
+
+  async getSoldePartenaire(type: string, id: string): Promise<number> {
+    try {
+      const solde = await this.api.get<number>(`/solde/partenaire/${type}/${id}`).toPromise();
+      return solde || 0;
+    } catch (error) {
+      console.error('Error getting solde partenaire:', error);
+      return 0;
+    }
+  }
+
+  async loadHistoriqueSolde(
+    partenaireId?: string,
+    partenaireType?: string,
+    type?: string,
+    dateDebut?: string,
+    dateFin?: string
+  ): Promise<void> {
+    try {
+      const params: any = {};
+      if (partenaireId) params.partenaireId = partenaireId;
+      if (partenaireType) params.partenaireType = partenaireType;
+      if (type) params.type = type;
+      if (dateDebut) params.dateDebut = dateDebut;
+      if (dateFin) params.dateFin = dateFin;
+      
+      const historique = await this.api.get<HistoriqueSolde[]>('/solde/historique', params).toPromise();
+      if (historique) {
+        this.historiqueSolde.set(historique);
+      }
+    } catch (error) {
+      console.error('Error loading historique solde:', error);
     }
   }
 }

@@ -24,6 +24,8 @@ public class FactureAchatService {
     private final AuditService auditService;
     private final ProductService productService;
     private final CalculComptableService calculComptableService;
+    private final SoldeService soldeService;
+    private final SupplierService supplierService;
     
     public List<FactureAchat> findAll() {
         List<FactureAchat> factures = factureRepository.findAll();
@@ -93,6 +95,26 @@ public class FactureAchatService {
         // Journaliser la création
         auditService.logCreate("FactureAchat", saved.getId(), 
             "Facture Achat " + saved.getNumeroFactureAchat() + " créée - Montant: " + saved.getTotalTTC() + " MAD");
+        
+        // Enregistrer la transaction dans le solde
+        if (saved.getFournisseurId() != null && saved.getTotalTTC() != null) {
+            try {
+                supplierService.findById(saved.getFournisseurId()).ifPresent(supplier -> {
+                    soldeService.enregistrerTransaction(
+                            "FACTURE_ACHAT",
+                            saved.getTotalTTC(),
+                            saved.getFournisseurId(),
+                            "FOURNISSEUR",
+                            supplier.getNom(),
+                            saved.getId(),
+                            saved.getNumeroFactureAchat(),
+                            "Facture achat " + saved.getNumeroFactureAchat()
+                    );
+                });
+            } catch (Exception e) {
+                log.warn("Erreur lors de l'enregistrement de la transaction solde pour facture achat {}: {}", saved.getId(), e.getMessage());
+            }
+        }
         
         return saved;
     }

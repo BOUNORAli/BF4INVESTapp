@@ -66,6 +66,70 @@ import { StoreService } from '../../services/store.service';
         </div>
       </div>
 
+      <!-- Solde de Départ Card -->
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        <div class="p-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+          <div>
+            <h2 class="text-lg font-bold text-slate-800">Solde de Départ</h2>
+            <p class="text-xs text-slate-500">Configurez le solde initial de la trésorerie de l'entreprise.</p>
+          </div>
+        </div>
+        
+        <div class="p-6">
+          @if (isLoadingSolde()) {
+            <div class="text-center py-8 text-slate-500">Chargement...</div>
+          } @else {
+            <div class="space-y-4">
+              <!-- Affichage du solde actuel -->
+              @if (soldeGlobal()) {
+                <div class="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-xl border border-blue-100">
+                  <div class="flex items-center justify-between">
+                    <div>
+                      <p class="text-sm text-slate-600 mb-1">Solde Actuel</p>
+                      <p class="text-3xl font-bold" [class.text-emerald-600]="soldeGlobal()!.soldeActuel >= 0" [class.text-red-600]="soldeGlobal()!.soldeActuel < 0">
+                        {{ soldeGlobal()!.soldeActuel | number:'1.2-2' }} MAD
+                      </p>
+                      <p class="text-xs text-slate-500 mt-2">Solde initial: {{ soldeGlobal()!.soldeInitial | number:'1.2-2' }} MAD</p>
+                      <p class="text-xs text-slate-500">Date de début: {{ soldeGlobal()!.dateDebut | date:'dd/MM/yyyy' }}</p>
+                    </div>
+                    <div class="w-16 h-16 rounded-full flex items-center justify-center" 
+                         [class.bg-emerald-100]="soldeGlobal()!.soldeActuel >= 0" 
+                         [class.bg-red-100]="soldeGlobal()!.soldeActuel < 0">
+                      <svg class="w-8 h-8" [class.text-emerald-600]="soldeGlobal()!.soldeActuel >= 0" [class.text-red-600]="soldeGlobal()!.soldeActuel < 0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+              }
+
+              <!-- Formulaire pour initialiser/modifier le solde -->
+              <div class="bg-slate-50 p-6 rounded-xl border border-slate-200">
+                <h3 class="text-base font-bold text-slate-700 mb-1">Initialiser / Modifier le Solde</h3>
+                <p class="text-sm text-slate-500 mb-4">Définissez le solde de départ de votre trésorerie.</p>
+                <div class="space-y-4">
+                  <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-1">Montant Initial (MAD)</label>
+                    <input type="number" step="0.01" [(ngModel)]="soldeInitial" 
+                           placeholder="0.00"
+                           class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition">
+                  </div>
+                  <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-1">Date de Début (optionnel)</label>
+                    <input type="date" [(ngModel)]="dateDebut" 
+                           class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition">
+                  </div>
+                  <button (click)="saveSoldeDepart()" [disabled]="!soldeInitial || soldeInitial() <= 0"
+                          class="w-full px-4 py-2 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-blue-600/20">
+                    Enregistrer le Solde de Départ
+                  </button>
+                </div>
+              </div>
+            </div>
+          }
+        </div>
+      </div>
+
       <!-- Paramètres de Calcul Card -->
       <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         <div class="p-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
@@ -135,9 +199,46 @@ export class SettingsComponent implements OnInit {
     codeEExclu3: ''
   });
   isLoadingParams = signal(false);
+  
+  // Gestion du solde
+  soldeGlobal = this.store.soldeGlobal;
+  soldeInitial = signal<number | null>(null);
+  dateDebut = signal<string>('');
+  isLoadingSolde = signal(false);
 
   async ngOnInit() {
     await this.loadParametresCalcul();
+    await this.loadSoldeGlobal();
+  }
+  
+  async loadSoldeGlobal() {
+    this.isLoadingSolde.set(true);
+    try {
+      await this.store.loadSoldeGlobal();
+      const solde = this.store.soldeGlobal();
+      if (solde) {
+        this.soldeInitial.set(solde.soldeInitial);
+        this.dateDebut.set(solde.dateDebut);
+      }
+    } catch (error) {
+      console.error('Error loading solde global:', error);
+    } finally {
+      this.isLoadingSolde.set(false);
+    }
+  }
+  
+  async saveSoldeDepart() {
+    if (!this.soldeInitial() || this.soldeInitial()! <= 0) {
+      this.store.showToast('Veuillez entrer un montant valide', 'error');
+      return;
+    }
+    
+    try {
+      await this.store.initialiserSoldeDepart(this.soldeInitial()!, this.dateDebut() || undefined);
+      await this.loadSoldeGlobal();
+    } catch (error) {
+      console.error('Error saving solde depart:', error);
+    }
   }
 
   async loadParametresCalcul() {
