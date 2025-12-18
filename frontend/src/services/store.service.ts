@@ -1127,6 +1127,20 @@ export class StoreService {
         // Les lignes seront pr├®serv├®es dans le backend si non fournies
         
         const updated = await this.api.put<any>(`/factures-achats/${inv.id}`, payload).toPromise();
+        console.log('🟢 store.updateInvoice - Facture retournée par backend:', updated);
+        console.log('🟢 store.updateInvoice - Champs calculés dans updated:', {
+          tvaMois: updated?.tvaMois,
+          solde: updated?.solde,
+          totalTTCApresRG: updated?.totalTTCApresRG,
+          totalTTCApresRG_SIGNE: updated?.totalTTCApresRG_SIGNE,
+          rgTTC: updated?.rgTTC,
+          rgHT: updated?.rgHT,
+          factureHT_YC_RG: updated?.factureHT_YC_RG,
+          bilan: updated?.bilan,
+          typeMouvement: updated?.typeMouvement,
+          nature: updated?.nature,
+          bcReference: updated?.bcReference
+        });
         const mapped = this.mapInvoice(updated, 'purchase');
         this.invoices.update(list => list.map(item => item.id === inv.id ? mapped : item));
       } else {
@@ -1301,10 +1315,11 @@ export class StoreService {
       'amountTTC type': typeof amountTTC
     });
     
-    const mappedInvoice = {
+    const mappedInvoice: Invoice = {
       id: inv.id,
       number: inv.numeroFactureAchat || inv.numeroFactureVente || inv.number,
       bcId: inv.bandeCommandeId || inv.bcId || '',
+      bcReference: inv.bcReference,
       partnerId: inv.fournisseurId || inv.clientId || inv.partnerId,
       date: inv.dateFacture || inv.date,
       amountHT: amountHT,
@@ -1312,7 +1327,31 @@ export class StoreService {
       dueDate: dueDate,
       status: status,
       type: type,
-      paymentMode: inv.modePaiement || inv.paymentMode
+      paymentMode: inv.modePaiement || inv.paymentMode,
+      
+      // Champs pour les calculs comptables
+      typeMouvement: inv.typeMouvement,
+      nature: inv.nature,
+      colA: inv.colA,
+      colB: inv.colB,
+      colD: inv.colD,
+      colF: inv.colF,
+      tvaRate: inv.tvaRate,
+      tauxRG: inv.tauxRG,
+      
+      // Champs calculés selon les formules Excel
+      tvaMois: inv.tvaMois,
+      solde: inv.solde,
+      totalTTCApresRG: inv.totalTTCApresRG,
+      totalTTCApresRG_SIGNE: inv.totalTTCApresRG_SIGNE,
+      totalPaiementTTC: inv.totalPaiementTTC,
+      rgTTC: inv.rgTTC,
+      rgHT: inv.rgHT,
+      factureHT_YC_RG: inv.factureHT_YC_RG,
+      htPaye: inv.htPaye,
+      tvaFactureYcRg: inv.tvaFactureYcRg,
+      tvaPaye: inv.tvaPaye,
+      bilan: inv.bilan
     };
     
     console.log('­ƒƒú store.mapInvoice - Invoice final mapp├®:', mappedInvoice);

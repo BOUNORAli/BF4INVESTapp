@@ -156,6 +156,10 @@ public class FactureAchatService {
                     // Recalculer les champs comptables selon les formules Excel
                     calculComptableService.calculerFactureAchat(existing);
                     
+                    // Log pour déboguer
+                    log.info("🔵 FactureAchatService.update - Champs calculés après calcul: tvaMois={}, solde={}, totalTTCApresRG={}, bilan={}", 
+                        existing.getTvaMois(), existing.getSolde(), existing.getTotalTTCApresRG(), existing.getBilan());
+                    
                     // Restaurer l'état de paiement de l'utilisateur si fourni
                     if (etatPaiementExplicite) {
                         existing.setEtatPaiement(etatPaiementUtilisateur);
@@ -163,6 +167,10 @@ public class FactureAchatService {
                     
                     existing.setUpdatedAt(LocalDateTime.now());
                     FactureAchat saved = factureRepository.save(existing);
+                    
+                    // Log après sauvegarde
+                    log.info("🔵 FactureAchatService.update - Champs calculés après sauvegarde: tvaMois={}, solde={}, totalTTCApresRG={}, bilan={}", 
+                        saved.getTvaMois(), saved.getSolde(), saved.getTotalTTCApresRG(), saved.getBilan());
                     
                     // Mettre à jour le stock si demandé (seulement si ajouterAuStock est passé à true)
                     if (Boolean.TRUE.equals(facture.getAjouterAuStock()) && saved.getLignes() != null) {
