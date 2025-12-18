@@ -357,6 +357,41 @@ import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, FormsModule } 
             
             <div class="flex-1 overflow-y-auto p-6 space-y-6">
               @if (selectedInvoiceForPayments(); as inv) {
+                <!-- Résumé de la facture -->
+                @if (invoicePaymentSummary(); as summary) {
+                  <div class="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-xl border border-blue-100">
+                    <h3 class="text-lg font-bold text-slate-800 mb-4">Résumé de la Facture</h3>
+                    <div class="grid grid-cols-3 gap-4 mb-4">
+                      <div class="bg-white p-4 rounded-lg border border-blue-200">
+                        <p class="text-xs text-slate-600 mb-1">Montant Total</p>
+                        <p class="text-2xl font-bold text-slate-800">{{ summary.montantTotal | number:'1.2-2' }} MAD</p>
+                      </div>
+                      <div class="bg-white p-4 rounded-lg border border-emerald-200">
+                        <p class="text-xs text-slate-600 mb-1">Déjà Payé</p>
+                        <p class="text-2xl font-bold text-emerald-600">{{ summary.montantPaye | number:'1.2-2' }} MAD</p>
+                      </div>
+                      <div class="bg-white p-4 rounded-lg border" [class.border-emerald-200]="summary.resteAPayer <= 0" [class.border-amber-200]="summary.resteAPayer > 0">
+                        <p class="text-xs text-slate-600 mb-1">Reste à Payer</p>
+                        <p class="text-2xl font-bold" [class.text-emerald-600]="summary.resteAPayer <= 0" [class.text-amber-600]="summary.resteAPayer > 0">
+                          {{ summary.resteAPayer | number:'1.2-2' }} MAD
+                        </p>
+                      </div>
+                    </div>
+                    <!-- Barre de progression -->
+                    <div class="w-full bg-slate-200 rounded-full h-3 overflow-hidden">
+                      <div class="h-full bg-gradient-to-r from-emerald-500 to-teal-600 transition-all duration-500" 
+                           [style.width.%]="summary.pourcentagePaye">
+                      </div>
+                    </div>
+                    <p class="text-xs text-slate-600 mt-2 text-center">
+                      {{ summary.pourcentagePaye | number:'1.0-1' }}% payé
+                      @if (summary.resteAPayer <= 0) {
+                        <span class="text-emerald-600 font-bold">✓ Facture réglée</span>
+                      }
+                    </p>
+                  </div>
+                }
+
                 <!-- Liste des paiements -->
                 <div class="space-y-4">
                   <h3 class="text-lg font-bold text-slate-800">Historique des Paiements</h3>
@@ -413,7 +448,12 @@ import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, FormsModule } 
                       </div>
                       <div>
                         <label class="block text-sm font-semibold text-slate-700 mb-1">Montant (MAD)</label>
-                        <input formControlName="montant" type="number" step="0.01" class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 outline-none text-right">
+                        <input formControlName="montant" type="number" step="0.01" 
+                               [max]="invoicePaymentSummary()?.resteAPayer || 0"
+                               class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 outline-none text-right">
+                        @if (invoicePaymentSummary()?.resteAPayer) {
+                          <p class="text-xs text-slate-500 mt-1">Reste à payer: {{ invoicePaymentSummary()!.resteAPayer | number:'1.2-2' }} MAD</p>
+                        }
                       </div>
                     </div>
                     <div class="grid grid-cols-2 gap-4">
@@ -731,6 +771,24 @@ export class PurchaseInvoicesComponent {
     const inv = this.selectedInvoiceForPayments();
     if (!inv) return [];
     return this.store.payments().get(inv.id) || [];
+  });
+
+  invoicePaymentSummary = computed(() => {
+    const inv = this.selectedInvoiceForPayments();
+    if (!inv) return null;
+    
+    const montantTotal = inv.amountTTC || 0;
+    const paiements = this.paymentsForInvoice();
+    const montantPaye = paiements.reduce((sum, p) => sum + (p.montant || 0), 0);
+    const resteAPayer = montantTotal - montantPaye;
+    const pourcentagePaye = montantTotal > 0 ? (montantPaye / montantTotal) * 100 : 0;
+    
+    return {
+      montantTotal,
+      montantPaye,
+      resteAPayer,
+      pourcentagePaye: Math.min(pourcentagePaye, 100)
+    };
   });
 
   async addPayment() {
