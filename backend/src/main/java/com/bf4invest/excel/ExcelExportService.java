@@ -2,8 +2,13 @@ package com.bf4invest.excel;
 
 import com.bf4invest.model.BandeCommande;
 import com.bf4invest.model.Client;
-import com.bf4invest.model.Supplier;
+import com.bf4invest.model.FactureAchat;
+import com.bf4invest.model.FactureVente;
+import com.bf4invest.model.Paiement;
 import com.bf4invest.repository.ClientRepository;
+import com.bf4invest.repository.FactureAchatRepository;
+import com.bf4invest.repository.FactureVenteRepository;
+import com.bf4invest.repository.PaiementRepository;
 import com.bf4invest.repository.SupplierRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,6 +33,9 @@ public class ExcelExportService {
     
     private final ClientRepository clientRepository;
     private final SupplierRepository supplierRepository;
+    private final FactureVenteRepository factureVenteRepository;
+    private final FactureAchatRepository factureAchatRepository;
+    private final PaiementRepository paiementRepository;
     
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy");
     private static final NumberFormat NUMBER_FORMAT = NumberFormat.getNumberInstance(Locale.FRENCH);
@@ -61,7 +69,10 @@ public class ExcelExportService {
                 "Total Vente HT",
                 "Marge (MAD)",
                 "Marge (%)",
-                "Statut"
+                "Statut",
+                "Reste à Payer Factures Vente",
+                "Reste à Payer Factures Achat",
+                "Total Reste à Payer"
             };
             
             for (int i = 0; i < headers.length; i++) {
@@ -149,6 +160,56 @@ public class ExcelExportService {
                 }
                 cell8.setCellValue(status);
                 cell8.setCellStyle(defaultStyle);
+                
+                // Calculer le reste à payer pour les factures liées à ce BC
+                double resteAPayerVente = 0.0;
+                double resteAPayerAchat = 0.0;
+                
+                // Factures de vente liées à ce BC
+                List<FactureVente> facturesVente = factureVenteRepository.findByBandeCommandeId(bc.getId());
+                for (FactureVente fv : facturesVente) {
+                    double totalTTC = fv.getTotalTTC() != null ? fv.getTotalTTC() : 0.0;
+                    // Calculer le total des paiements pour cette facture
+                    List<Paiement> paiementsVente = paiementRepository.findByFactureVenteId(fv.getId());
+                    double totalPaye = paiementsVente.stream()
+                            .mapToDouble(p -> p.getMontant() != null ? p.getMontant() : 0.0)
+                            .sum();
+                    double reste = totalTTC - totalPaye;
+                    if (reste > 0) {
+                        resteAPayerVente += reste;
+                    }
+                }
+                
+                // Factures d'achat liées à ce BC
+                List<FactureAchat> facturesAchat = factureAchatRepository.findByBandeCommandeId(bc.getId());
+                for (FactureAchat fa : facturesAchat) {
+                    double totalTTC = fa.getTotalTTC() != null ? fa.getTotalTTC() : 0.0;
+                    // Calculer le total des paiements pour cette facture
+                    List<Paiement> paiementsAchat = paiementRepository.findByFactureAchatId(fa.getId());
+                    double totalPaye = paiementsAchat.stream()
+                            .mapToDouble(p -> p.getMontant() != null ? p.getMontant() : 0.0)
+                            .sum();
+                    double reste = totalTTC - totalPaye;
+                    if (reste > 0) {
+                        resteAPayerAchat += reste;
+                    }
+                }
+                
+                // Reste à payer Factures Vente
+                Cell cell9 = row.createCell(9);
+                cell9.setCellValue(resteAPayerVente);
+                cell9.setCellStyle(currencyStyle);
+                
+                // Reste à payer Factures Achat
+                Cell cell10 = row.createCell(10);
+                cell10.setCellValue(resteAPayerAchat);
+                cell10.setCellStyle(currencyStyle);
+                
+                // Total Reste à Payer
+                Cell cell11 = row.createCell(11);
+                double totalResteAPayer = resteAPayerVente + resteAPayerAchat;
+                cell11.setCellValue(totalResteAPayer);
+                cell11.setCellStyle(currencyStyle);
             }
             
             // Ajuster la largeur des colonnes

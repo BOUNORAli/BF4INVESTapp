@@ -14,6 +14,7 @@ public interface FactureVenteRepository extends MongoRepository<FactureVente, St
     List<FactureVente> findByClientId(String clientId);
     List<FactureVente> findByEtatPaiement(String etat);
     List<FactureVente> findByDateEcheanceLessThanEqual(LocalDate date);
+    List<FactureVente> findByBandeCommandeId(String bandeCommandeId);
 }
 
 
