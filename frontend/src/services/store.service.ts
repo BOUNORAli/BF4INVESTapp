@@ -595,23 +595,44 @@ export class StoreService {
   });
 
   // --- ACTIONS: PAYMENT MODES ---
-  addPaymentMode(name: string) {
-    const newMode: PaymentMode = {
-      id: `pm-${Date.now()}`,
-      name,
-      active: true
-    };
-    this.paymentModes.update(modes => [...modes, newMode]);
-    this.showToast('Mode de paiement ajout├®');
+  async addPaymentMode(name: string): Promise<void> {
+    try {
+      const response = await this.api.post<PaymentMode>('/settings/payment-modes', { name }).toPromise();
+      if (response) {
+        this.paymentModes.update(modes => [...modes, response]);
+        this.showToast('Mode de paiement ajouté', 'success');
+      }
+    } catch (error) {
+      console.error('Error adding payment mode:', error);
+      this.showToast('Erreur lors de l\'ajout du mode de paiement', 'error');
+      throw error;
+    }
   }
 
-  togglePaymentMode(id: string) {
-    this.paymentModes.update(modes => modes.map(m => m.id === id ? { ...m, active: !m.active } : m));
+  async togglePaymentMode(id: string): Promise<void> {
+    try {
+      const response = await this.api.put<PaymentMode>(`/settings/payment-modes/${id}/toggle`, {}).toPromise();
+      if (response) {
+        this.paymentModes.update(modes => modes.map(m => m.id === id ? response : m));
+        this.showToast(`Mode ${response.active ? 'activé' : 'désactivé'}`, 'success');
+      }
+    } catch (error) {
+      console.error('Error toggling payment mode:', error);
+      this.showToast('Erreur lors de la modification du mode de paiement', 'error');
+      throw error;
+    }
   }
 
-  deletePaymentMode(id: string) {
-    this.paymentModes.update(modes => modes.filter(m => m.id !== id));
-    this.showToast('Mode supprim├®', 'info');
+  async deletePaymentMode(id: string): Promise<void> {
+    try {
+      await this.api.delete(`/settings/payment-modes/${id}`).toPromise();
+      this.paymentModes.update(modes => modes.filter(m => m.id !== id));
+      this.showToast('Mode supprimé', 'success');
+    } catch (error) {
+      console.error('Error deleting payment mode:', error);
+      this.showToast('Erreur lors de la suppression du mode de paiement', 'error');
+      throw error;
+    }
   }
 
   // --- ACTIONS: CLIENTS ---

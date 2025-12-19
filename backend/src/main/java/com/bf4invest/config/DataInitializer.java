@@ -2,6 +2,7 @@ package com.bf4invest.config;
 
 import com.bf4invest.model.User;
 import com.bf4invest.repository.UserRepository;
+import com.bf4invest.service.PaymentModeService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -15,6 +16,7 @@ public class DataInitializer implements CommandLineRunner {
     
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final PaymentModeService paymentModeService;
     
     @Override
     public void run(String... args) {
@@ -27,6 +29,9 @@ public class DataInitializer implements CommandLineRunner {
         // Garder les anciens comptes admin pour compatibilité
         createUserIfNotExists("Administrateur", "admin@bf4invest.ma", "admin123");
         createUserIfNotExists("Administrateur", "admin@bf4.com", "admin123");
+        
+        // Initialiser les modes de paiement par défaut
+        paymentModeService.initializeDefaultModes();
     }
     
     private void createUserIfNotExists(String name, String email, String password) {

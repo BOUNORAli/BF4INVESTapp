@@ -1,29 +1,116 @@
 package com.bf4invest.controller;
 
 import com.bf4invest.dto.PaymentModeDto;
+import com.bf4invest.model.PaymentMode;
+import com.bf4invest.service.PaymentModeService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/settings")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('ADMIN')")
 public class SettingsController {
+    
+    private final PaymentModeService paymentModeService;
     
     @GetMapping("/payment-modes")
     public ResponseEntity<List<PaymentModeDto>> getPaymentModes() {
-        List<PaymentModeDto> modes = new ArrayList<>();
-        modes.add(PaymentModeDto.builder().id("pm1").name("Virement Bancaire").active(true).build());
-        modes.add(PaymentModeDto.builder().id("pm2").name("Chèque").active(true).build());
-        modes.add(PaymentModeDto.builder().id("pm3").name("Espèces").active(true).build());
-        modes.add(PaymentModeDto.builder().id("pm4").name("LCN (Lettre de Change)").active(true).build());
-        modes.add(PaymentModeDto.builder().id("pm5").name("Compensation").active(true).build());
-        return ResponseEntity.ok(modes);
+        List<PaymentMode> modes = paymentModeService.findAll();
+        List<PaymentModeDto> dtos = modes.stream()
+                .map(m -> PaymentModeDto.builder()
+                        .id(m.getId())
+                        .name(m.getName())
+                        .active(m.isActive())
+                        .build())
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(dtos);
+    }
+    
+    @PostMapping("/payment-modes")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<PaymentModeDto> createPaymentMode(@RequestBody CreatePaymentModeRequest request) {
+        try {
+            PaymentMode mode = paymentModeService.create(request.getName());
+            PaymentModeDto dto = PaymentModeDto.builder()
+                    .id(mode.getId())
+                    .name(mode.getName())
+                    .active(mode.isActive())
+                    .build();
+            return ResponseEntity.status(HttpStatus.CREATED).body(dto);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+    
+    @PutMapping("/payment-modes/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<PaymentModeDto> updatePaymentMode(
+            @PathVariable String id,
+            @RequestBody UpdatePaymentModeRequest request) {
+        try {
+            PaymentMode mode = paymentModeService.update(id, request.getName(), request.getActive());
+            PaymentModeDto dto = PaymentModeDto.builder()
+                    .id(mode.getId())
+                    .name(mode.getName())
+                    .active(mode.isActive())
+                    .build();
+            return ResponseEntity.ok(dto);
+        } catch (RuntimeException e) {
+            return ResponseEntity.notFound().build();
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+    
+    @PutMapping("/payment-modes/{id}/toggle")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<PaymentModeDto> togglePaymentMode(@PathVariable String id) {
+        try {
+            paymentModeService.toggleActive(id);
+            PaymentMode mode = paymentModeService.findById(id)
+                    .orElseThrow(() -> new RuntimeException("Mode non trouvé"));
+            PaymentModeDto dto = PaymentModeDto.builder()
+                    .id(mode.getId())
+                    .name(mode.getName())
+                    .active(mode.isActive())
+                    .build();
+            return ResponseEntity.ok(dto);
+        } catch (RuntimeException e) {
+            return ResponseEntity.notFound().build();
+        }
+    }
+    
+    @DeleteMapping("/payment-modes/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Void> deletePaymentMode(@PathVariable String id) {
+        try {
+            paymentModeService.delete(id);
+            return ResponseEntity.noContent().build();
+        } catch (RuntimeException e) {
+            return ResponseEntity.notFound().build();
+        }
+    }
+    
+    // DTOs pour les requêtes
+    @lombok.Data
+    @lombok.NoArgsConstructor
+    @lombok.AllArgsConstructor
+    public static class CreatePaymentModeRequest {
+        private String name;
+    }
+    
+    @lombok.Data
+    @lombok.NoArgsConstructor
+    @lombok.AllArgsConstructor
+    public static class UpdatePaymentModeRequest {
+        private String name;
+        private Boolean active;
     }
 }
 

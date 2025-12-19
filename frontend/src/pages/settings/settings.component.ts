@@ -52,11 +52,11 @@ import { StoreService } from '../../services/store.service';
                   }
                 </div>
                 <div class="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button (click)="store.togglePaymentMode(mode.id)" class="text-xs font-medium px-2 py-1 rounded transition-colors"
+                  <button (click)="toggleMode(mode.id)" class="text-xs font-medium px-2 py-1 rounded transition-colors"
                     [class]="mode.active ? 'text-amber-600 hover:bg-amber-50' : 'text-emerald-600 hover:bg-emerald-50'">
                     {{ mode.active ? 'Désactiver' : 'Activer' }}
                   </button>
-                  <button (click)="store.deletePaymentMode(mode.id)" class="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors">
+                  <button (click)="deleteMode(mode.id)" class="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                   </button>
                 </div>
@@ -300,10 +300,14 @@ export class SettingsComponent implements OnInit {
     }
   }
 
-  addMode() {
+  async addMode() {
     if (this.newModeName().trim()) {
-      this.store.addPaymentMode(this.newModeName().trim());
-      this.newModeName.set('');
+      try {
+        await this.store.addPaymentMode(this.newModeName().trim());
+        this.newModeName.set('');
+      } catch (error) {
+        // Error already handled in store service
+      }
     }
   }
 
@@ -334,6 +338,24 @@ export class SettingsComponent implements OnInit {
       await this.loadSoldeGlobal();
     } catch (error) {
       console.error('Error adding apport externe:', error);
+    }
+  }
+
+  async toggleMode(id: string) {
+    try {
+      await this.store.togglePaymentMode(id);
+    } catch (error) {
+      // Error already handled in store service
+    }
+  }
+
+  async deleteMode(id: string) {
+    if (confirm('Êtes-vous sûr de vouloir supprimer ce mode de paiement ?')) {
+      try {
+        await this.store.deletePaymentMode(id);
+      } catch (error) {
+        // Error already handled in store service
+      }
     }
   }
 }
