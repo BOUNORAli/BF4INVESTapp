@@ -1,6 +1,6 @@
 import { Component, inject, computed, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { StoreService, Invoice, BC } from '../../services/store.service';
+import { StoreService, Invoice, BC, PrevisionPaiement } from '../../services/store.service';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 
@@ -398,15 +398,36 @@ import { RouterLink } from '@angular/router';
           <div class="relative bg-white rounded-2xl shadow-2xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col">
             <div class="flex items-center justify-between p-6 border-b border-slate-100 bg-gradient-to-r from-emerald-50 to-teal-50">
               <div>
-                <h2 class="text-xl font-bold text-slate-800">Paiements - Facture {{ selectedInvoiceForPayments()?.number }}</h2>
-                <p class="text-sm text-slate-600 mt-1">Historique des paiements avec évolution des soldes</p>
+                <h2 class="text-xl font-bold text-slate-800">Facture {{ selectedInvoiceForPayments()?.number }}</h2>
+                <p class="text-sm text-slate-600 mt-1">Gestion des paiements et prévisions</p>
               </div>
               <button (click)="closePaymentModal()" class="text-slate-400 hover:text-slate-600 transition">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
               </button>
             </div>
+
+            <!-- Onglets -->
+            <div class="flex border-b border-slate-200 bg-slate-50">
+              <button (click)="activeTab.set('paiements')" 
+                      [class.bg-white]="activeTab() === 'paiements'"
+                      [class.text-blue-600]="activeTab() === 'paiements'"
+                      [class.border-b-2]="activeTab() === 'paiements'"
+                      [class.border-blue-600]="activeTab() === 'paiements'"
+                      class="flex-1 px-6 py-3 text-sm font-semibold text-slate-600 hover:text-slate-800 transition">
+                Paiements
+              </button>
+              <button (click)="activeTab.set('previsions')" 
+                      [class.bg-white]="activeTab() === 'previsions'"
+                      [class.text-blue-600]="activeTab() === 'previsions'"
+                      [class.border-b-2]="activeTab() === 'previsions'"
+                      [class.border-blue-600]="activeTab() === 'previsions'"
+                      class="flex-1 px-6 py-3 text-sm font-semibold text-slate-600 hover:text-slate-800 transition">
+                Prévisions
+              </button>
+            </div>
             
             <div class="flex-1 overflow-y-auto p-6 space-y-6">
+              @if (activeTab() === 'paiements') {
               @if (selectedInvoiceForPayments(); as inv) {
                 <!-- Résumé de la facture -->
                 @if (invoicePaymentSummary(); as summary) {
@@ -531,6 +552,92 @@ import { RouterLink } from '@angular/router';
                     </button>
                   </form>
                 </div>
+              } @else {
+                <!-- Onglet Prévisions -->
+                <div class="space-y-6">
+                  <h3 class="text-lg font-bold text-slate-800">Prévisions de Paiement</h3>
+                  
+                  <!-- Liste des prévisions -->
+                  @if (previsionsForInvoice().length > 0) {
+                    <div class="overflow-x-auto">
+                      <table class="w-full text-sm">
+                        <thead class="bg-slate-50 border-b border-slate-200">
+                          <tr>
+                            <th class="px-4 py-3 text-left font-semibold text-slate-700">Date Prévue</th>
+                            <th class="px-4 py-3 text-right font-semibold text-slate-700">Montant</th>
+                            <th class="px-4 py-3 text-left font-semibold text-slate-700">Statut</th>
+                            <th class="px-4 py-3 text-left font-semibold text-slate-700">Notes</th>
+                            <th class="px-4 py-3 text-center font-semibold text-slate-700">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                          @for (prev of previsionsForInvoice(); track prev.id) {
+                            <tr class="hover:bg-slate-50">
+                              <td class="px-4 py-3">{{ prev.datePrevue }}</td>
+                              <td class="px-4 py-3 text-right font-bold text-blue-600">{{ prev.montantPrevu | number:'1.2-2' }} MAD</td>
+                              <td class="px-4 py-3">
+                                <span class="px-2 py-1 rounded text-xs font-medium"
+                                      [class.bg-blue-50]="prev.statut === 'PREVU'"
+                                      [class.text-blue-700]="prev.statut === 'PREVU'"
+                                      [class.bg-emerald-50]="prev.statut === 'REALISE'"
+                                      [class.text-emerald-700]="prev.statut === 'REALISE'"
+                                      [class.bg-red-50]="prev.statut === 'EN_RETARD'"
+                                      [class.text-red-700]="prev.statut === 'EN_RETARD'">
+                                  {{ prev.statut }}
+                                </span>
+                              </td>
+                              <td class="px-4 py-3 text-xs text-slate-500">{{ prev.notes || '-' }}</td>
+                              <td class="px-4 py-3 text-center">
+                                <button (click)="editPrevision(prev)" class="text-blue-600 hover:text-blue-800 mr-2">
+                                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                                </button>
+                                <button (click)="deletePrevision(prev.id!)" class="text-red-600 hover:text-red-800">
+                                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                </button>
+                              </td>
+                            </tr>
+                          }
+                        </tbody>
+                      </table>
+                    </div>
+                  } @else {
+                    <div class="text-center py-8 text-slate-500">
+                      <p>Aucune prévision enregistrée pour cette facture.</p>
+                    </div>
+                  }
+
+                  <!-- Formulaire pour ajouter une prévision -->
+                  <div class="bg-slate-50 p-6 rounded-xl border border-slate-200">
+                    <h3 class="text-lg font-bold text-slate-800 mb-4">{{ editingPrevisionId() ? 'Modifier' : 'Ajouter' }} une Prévision</h3>
+                    <form [formGroup]="previsionForm" (ngSubmit)="savePrevision()" class="space-y-4">
+                      <div class="grid grid-cols-2 gap-4">
+                        <div>
+                          <label class="block text-sm font-semibold text-slate-700 mb-1">Date Prévue</label>
+                          <input formControlName="datePrevue" type="date" class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 outline-none">
+                        </div>
+                        <div>
+                          <label class="block text-sm font-semibold text-slate-700 mb-1">Montant Prévu (MAD)</label>
+                          <input formControlName="montantPrevu" type="number" step="0.01" 
+                                 class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 outline-none text-right">
+                        </div>
+                      </div>
+                      <div>
+                        <label class="block text-sm font-semibold text-slate-700 mb-1">Notes (Optionnel)</label>
+                        <textarea formControlName="notes" rows="2" class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 outline-none"></textarea>
+                      </div>
+                      <div class="flex gap-3">
+                        <button type="submit" [disabled]="previsionForm.invalid" class="flex-1 px-4 py-2 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition disabled:opacity-50">
+                          {{ editingPrevisionId() ? 'Modifier' : 'Ajouter' }} la Prévision
+                        </button>
+                        @if (editingPrevisionId()) {
+                          <button type="button" (click)="cancelEditPrevision()" class="px-4 py-2 bg-slate-200 text-slate-700 font-medium rounded-lg hover:bg-slate-300 transition">
+                            Annuler
+                          </button>
+                        }
+                      </div>
+                    </form>
+                  </div>
+                </div>
               }
             </div>
 
@@ -563,6 +670,8 @@ export class SalesInvoicesComponent {
   availableBCs = signal<BC[]>([]);
   selectedInvoiceForDetails = signal<Invoice | null>(null);
   selectedInvoiceForPayments = signal<Invoice | null>(null);
+  activeTab = signal<'paiements' | 'previsions'>('paiements');
+  editingPrevisionId = signal<string | null>(null);
 
   // Payment form
   paymentForm = this.fb.group({
@@ -570,6 +679,13 @@ export class SalesInvoicesComponent {
     montant: [0, [Validators.required, Validators.min(0.01)]],
     mode: ['', Validators.required],
     reference: [''],
+    notes: ['']
+  });
+
+  // Prevision form
+  previsionForm = this.fb.group({
+    datePrevue: [new Date().toISOString().split('T')[0], Validators.required],
+    montantPrevu: [0, [Validators.required, Validators.min(0.01)]],
     notes: ['']
   });
 
@@ -982,9 +1098,12 @@ export class SalesInvoicesComponent {
 
   async showPaymentModal(inv: Invoice) {
     this.selectedInvoiceForPayments.set(inv);
+    this.activeTab.set('paiements');
     // Charger les paiements pour cette facture
     await this.store.loadPaymentsForInvoice(inv.id, 'sale');
-    // Réinitialiser le formulaire
+    // Recharger les factures pour avoir les prévisions
+    await this.store.loadInvoices();
+    // Réinitialiser les formulaires
     this.paymentForm.reset({
       date: new Date().toISOString().split('T')[0],
       montant: 0,
@@ -992,10 +1111,88 @@ export class SalesInvoicesComponent {
       reference: '',
       notes: ''
     });
+    this.previsionForm.reset({
+      datePrevue: new Date().toISOString().split('T')[0],
+      montantPrevu: 0,
+      notes: ''
+    });
+    this.editingPrevisionId.set(null);
   }
 
   closePaymentModal() {
     this.selectedInvoiceForPayments.set(null);
+    this.editingPrevisionId.set(null);
+  }
+
+  previsionsForInvoice = computed(() => {
+    const inv = this.selectedInvoiceForPayments();
+    if (!inv) return [];
+    return inv.previsionsPaiement || [];
+  });
+
+  async savePrevision() {
+    if (this.previsionForm.invalid || !this.selectedInvoiceForPayments()) {
+      return;
+    }
+
+    const inv = this.selectedInvoiceForPayments()!;
+    const previsionData: PrevisionPaiement = {
+      datePrevue: this.previsionForm.value.datePrevue!,
+      montantPrevu: this.previsionForm.value.montantPrevu!,
+      notes: this.previsionForm.value.notes || '',
+      statut: 'PREVU'
+    };
+
+    try {
+      if (this.editingPrevisionId()) {
+        await this.store.updatePrevision(inv.id, this.editingPrevisionId()!, 'vente', previsionData);
+      } else {
+        await this.store.addPrevision(inv.id, 'vente', previsionData);
+      }
+      this.previsionForm.reset({
+        datePrevue: new Date().toISOString().split('T')[0],
+        montantPrevu: 0,
+        notes: ''
+      });
+      this.editingPrevisionId.set(null);
+      await this.store.loadInvoices();
+    } catch (error) {
+      // Error already handled in store
+    }
+  }
+
+  editPrevision(prev: PrevisionPaiement) {
+    this.editingPrevisionId.set(prev.id!);
+    this.previsionForm.patchValue({
+      datePrevue: prev.datePrevue,
+      montantPrevu: prev.montantPrevu,
+      notes: prev.notes || ''
+    });
+  }
+
+  async deletePrevision(id: string) {
+    if (!confirm('Êtes-vous sûr de vouloir supprimer cette prévision ?')) {
+      return;
+    }
+
+    const inv = this.selectedInvoiceForPayments();
+    if (!inv) return;
+
+    try {
+      await this.store.deletePrevision(inv.id, id, 'vente');
+      await this.store.loadInvoices();
+    } catch (error) {
+      // Error already handled in store
+    }
+  }
+
+  cancelEditPrevision() {
+    this.editingPrevisionId.set(null);
+    this.previsionForm.reset({
+      datePrevue: new Date().toISOString().split('T')[0],
+      montantPrevu: 0,
+      notes: ''
+    });
   }
 
   paymentsForInvoice = computed(() => {

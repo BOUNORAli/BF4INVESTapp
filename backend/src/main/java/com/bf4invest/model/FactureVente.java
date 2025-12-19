@@ -69,6 +69,8 @@ public class FactureVente {
     
     private List<Paiement> paiements;
     
+    private List<PrevisionPaiement> previsionsPaiement;
+    
     private Double montantRestant; // Calculé: totalTTC - somme paiements
     
     private LocalDateTime createdAt;

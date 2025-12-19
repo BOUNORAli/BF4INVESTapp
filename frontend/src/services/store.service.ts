@@ -153,6 +153,9 @@ export interface Invoice {
   tvaFactureYcRg?: number; // TVA facture incluant RG
   tvaPaye?: number; // TVA payée
   bilan?: number; // Bilan HT
+  
+  // Prévisions de paiement
+  previsionsPaiement?: PrevisionPaiement[];
 }
 
 export interface Payment {
@@ -180,6 +183,37 @@ export interface Payment {
   // Soldes après ce paiement
   soldeGlobalApres?: number;
   soldePartenaireApres?: number;
+}
+
+export interface PrevisionPaiement {
+  id?: string;
+  datePrevue: string;
+  montantPrevu: number;
+  statut: 'PREVU' | 'REALISE' | 'EN_RETARD';
+  notes?: string;
+}
+
+export interface PrevisionJournaliere {
+  date: string;
+  entreesPrevisionnelles: number;
+  sortiesPrevisionnelles: number;
+  soldePrevu: number;
+}
+
+export interface EcheanceDetail {
+  date: string;
+  type: 'VENTE' | 'ACHAT';
+  numeroFacture: string;
+  partenaire: string;
+  montant: number;
+  statut: string;
+  factureId: string;
+}
+
+export interface PrevisionTresorerieResponse {
+  soldeActuel: number;
+  previsions: PrevisionJournaliere[];
+  echeances: EcheanceDetail[];
 }
 
 export interface SoldeGlobal {
@@ -385,6 +419,7 @@ export class StoreService {
   readonly payments = signal<Map<string, Payment[]>>(new Map()); // Map<invoiceId, Payment[]>
   readonly soldeGlobal = signal<SoldeGlobal | null>(null);
   readonly historiqueSolde = signal<HistoriqueSolde[]>([]);
+  readonly previsionTresorerie = signal<PrevisionTresorerieResponse | null>(null);
   
   // Flag pour ├®viter les rechargements multiples
   private dataLoaded = false;
@@ -1439,7 +1474,14 @@ export class StoreService {
       htPaye: inv.htPaye,
       tvaFactureYcRg: inv.tvaFactureYcRg,
       tvaPaye: inv.tvaPaye,
-      bilan: inv.bilan
+      bilan: inv.bilan,
+      previsionsPaiement: inv.previsionsPaiement ? inv.previsionsPaiement.map((p: any) => ({
+        id: p.id,
+        datePrevue: p.datePrevue,
+        montantPrevu: p.montantPrevu || 0,
+        statut: p.statut || 'PREVU',
+        notes: p.notes
+      })) : undefined
     };
     
     console.log('­ƒƒú store.mapInvoice - Invoice final mapp├®:', mappedInvoice);
@@ -1916,6 +1958,85 @@ export class StoreService {
     } catch (error) {
       console.error('Error getting solde partenaire:', error);
       return 0;
+    }
+  }
+
+  // --- PRÉVISIONS DE TRÉSORERIE ---
+  async loadPrevisionTresorerie(from?: Date, to?: Date): Promise<void> {
+    try {
+      const params: Record<string, string> = {};
+      if (from) {
+        params.from = from.toISOString().split('T')[0];
+      }
+      if (to) {
+        params.to = to.toISOString().split('T')[0];
+      }
+      
+      let url = '/prevision/tresorerie';
+      const queryString = new URLSearchParams(params).toString();
+      if (queryString) {
+        url += '?' + queryString;
+      }
+      
+      const response = await this.api.get<PrevisionTresorerieResponse>(url).toPromise();
+      if (response) {
+        this.previsionTresorerie.set(response);
+      }
+    } catch (error) {
+      console.error('Error loading prevision tresorerie:', error);
+      this.showToast('Erreur lors du chargement de la prévision de trésorerie', 'error');
+    }
+  }
+
+  async addPrevision(factureId: string, type: 'vente' | 'achat', prevision: PrevisionPaiement): Promise<PrevisionPaiement> {
+    try {
+      const endpoint = type === 'vente' 
+        ? `/prevision/facture-vente/${factureId}`
+        : `/prevision/facture-achat/${factureId}`;
+      
+      const saved = await this.api.post<PrevisionPaiement>(endpoint, prevision).toPromise();
+      if (saved) {
+        this.showToast('Prévision ajoutée avec succès', 'success');
+        // Recharger les factures pour mettre à jour les prévisions
+        await this.loadInvoices();
+      }
+      return saved!;
+    } catch (error) {
+      console.error('Error adding prevision:', error);
+      this.showToast('Erreur lors de l\'ajout de la prévision', 'error');
+      throw error;
+    }
+  }
+
+  async updatePrevision(factureId: string, previsionId: string, type: 'vente' | 'achat', prevision: PrevisionPaiement): Promise<PrevisionPaiement> {
+    try {
+      const saved = await this.api.put<PrevisionPaiement>(
+        `/prevision/${factureId}/${previsionId}?type=${type}`, 
+        prevision
+      ).toPromise();
+      if (saved) {
+        this.showToast('Prévision modifiée avec succès', 'success');
+        // Recharger les factures pour mettre à jour les prévisions
+        await this.loadInvoices();
+      }
+      return saved!;
+    } catch (error) {
+      console.error('Error updating prevision:', error);
+      this.showToast('Erreur lors de la modification de la prévision', 'error');
+      throw error;
+    }
+  }
+
+  async deletePrevision(factureId: string, previsionId: string, type: 'vente' | 'achat'): Promise<void> {
+    try {
+      await this.api.delete(`/prevision/${factureId}/${previsionId}?type=${type}`).toPromise();
+      this.showToast('Prévision supprimée avec succès', 'success');
+      // Recharger les factures pour mettre à jour les prévisions
+      await this.loadInvoices();
+    } catch (error) {
+      console.error('Error deleting prevision:', error);
+      this.showToast('Erreur lors de la suppression de la prévision', 'error');
+      throw error;
     }
   }
 

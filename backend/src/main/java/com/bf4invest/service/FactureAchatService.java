@@ -3,6 +3,7 @@ package com.bf4invest.service;
 import com.bf4invest.config.AppConfig;
 import com.bf4invest.model.FactureAchat;
 import com.bf4invest.model.LineItem;
+import com.bf4invest.model.PrevisionPaiement;
 import com.bf4invest.model.Product;
 import com.bf4invest.repository.FactureAchatRepository;
 import lombok.RequiredArgsConstructor;
@@ -344,6 +345,87 @@ public class FactureAchatService {
                 // Ne pas bloquer la création de la facture en cas d'erreur
             }
         }
+    }
+    
+    public PrevisionPaiement addPrevision(String factureId, PrevisionPaiement prevision) {
+        FactureAchat facture = factureRepository.findById(factureId)
+            .orElseThrow(() -> new RuntimeException("Facture achat not found with id: " + factureId));
+        
+        if (facture.getPrevisionsPaiement() == null) {
+            facture.setPrevisionsPaiement(new java.util.ArrayList<>());
+        }
+        
+        // Générer un ID si non fourni
+        if (prevision.getId() == null || prevision.getId().isEmpty()) {
+            prevision.setId(java.util.UUID.randomUUID().toString());
+        }
+        
+        // Initialiser createdAt si non fourni
+        if (prevision.getCreatedAt() == null) {
+            prevision.setCreatedAt(LocalDateTime.now());
+        }
+        
+        // Initialiser statut si non fourni
+        if (prevision.getStatut() == null) {
+            prevision.setStatut("PREVU");
+        }
+        
+        facture.getPrevisionsPaiement().add(prevision);
+        facture.setUpdatedAt(LocalDateTime.now());
+        factureRepository.save(facture);
+        
+        return prevision;
+    }
+    
+    public PrevisionPaiement updatePrevision(String factureId, String previsionId, PrevisionPaiement previsionUpdate) {
+        FactureAchat facture = factureRepository.findById(factureId)
+            .orElseThrow(() -> new RuntimeException("Facture achat not found with id: " + factureId));
+        
+        if (facture.getPrevisionsPaiement() == null) {
+            throw new RuntimeException("Aucune prévision trouvée pour cette facture");
+        }
+        
+        PrevisionPaiement prevision = facture.getPrevisionsPaiement().stream()
+            .filter(p -> previsionId.equals(p.getId()))
+            .findFirst()
+            .orElseThrow(() -> new RuntimeException("Prévision not found with id: " + previsionId));
+        
+        // Mettre à jour les champs
+        if (previsionUpdate.getDatePrevue() != null) {
+            prevision.setDatePrevue(previsionUpdate.getDatePrevue());
+        }
+        if (previsionUpdate.getMontantPrevu() != null) {
+            prevision.setMontantPrevu(previsionUpdate.getMontantPrevu());
+        }
+        if (previsionUpdate.getStatut() != null) {
+            prevision.setStatut(previsionUpdate.getStatut());
+        }
+        if (previsionUpdate.getNotes() != null) {
+            prevision.setNotes(previsionUpdate.getNotes());
+        }
+        
+        facture.setUpdatedAt(LocalDateTime.now());
+        factureRepository.save(facture);
+        
+        return prevision;
+    }
+    
+    public void deletePrevision(String factureId, String previsionId) {
+        FactureAchat facture = factureRepository.findById(factureId)
+            .orElseThrow(() -> new RuntimeException("Facture achat not found with id: " + factureId));
+        
+        if (facture.getPrevisionsPaiement() == null) {
+            throw new RuntimeException("Aucune prévision trouvée pour cette facture");
+        }
+        
+        boolean removed = facture.getPrevisionsPaiement().removeIf(p -> previsionId.equals(p.getId()));
+        
+        if (!removed) {
+            throw new RuntimeException("Prévision not found with id: " + previsionId);
+        }
+        
+        facture.setUpdatedAt(LocalDateTime.now());
+        factureRepository.save(facture);
     }
 }
 
