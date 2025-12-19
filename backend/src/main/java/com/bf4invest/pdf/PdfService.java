@@ -1306,7 +1306,8 @@ public class PdfService {
     
     public byte[] generateDashboardReport(com.bf4invest.dto.DashboardKpiResponse kpis, 
                                           java.time.LocalDate from, 
-                                          java.time.LocalDate to) throws DocumentException, IOException {
+                                          java.time.LocalDate to,
+                                          Double soldeActuel) throws DocumentException, IOException {
         Document document = new Document(PageSize.A4, 40f, 40f, 60f, 60f);
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         PdfWriter writer = PdfWriter.getInstance(document, baos);
@@ -1320,13 +1321,16 @@ public class PdfService {
         // Synthèse exécutive
         addExecutiveSummary(document, kpis);
         
+        // Situation de trésorerie (NOUVEAU)
+        addSoldeSection(document, soldeActuel);
+        
         // Analyse TVA
         addTvaAnalysis(document, kpis);
         
         // Situation des impayés
         addImpayesSection(document, kpis);
         
-        // Évolution mensuelle du CA
+        // Évolution mensuelle du CA (AMÉLIORÉ avec graphiques)
         addMonthlyCaEvolution(document, kpis);
         
         // Top Clients
@@ -1394,52 +1398,112 @@ public class PdfService {
     private void addExecutiveSummary(Document document, com.bf4invest.dto.DashboardKpiResponse kpis) 
             throws DocumentException {
         Paragraph sectionTitle = new Paragraph("1. SYNTHÈSE EXÉCUTIVE", 
-            FontFactory.getFont(FontFactory.HELVETICA_BOLD, 16, Color.BLACK));
+            FontFactory.getFont(FontFactory.HELVETICA_BOLD, 18, BLUE_DARK));
         sectionTitle.setSpacingBefore(20f);
-        sectionTitle.setSpacingAfter(15f);
+        sectionTitle.setSpacingAfter(20f);
         document.add(sectionTitle);
         
         PdfPTable summaryTable = new PdfPTable(2);
         summaryTable.setWidthPercentage(100);
-        summaryTable.setWidths(new float[]{2f, 3f});
+        summaryTable.setWidths(new float[]{2.5f, 2.5f});
+        summaryTable.setSpacingAfter(10f);
         
-        addSummaryRow(summaryTable, "Chiffre d'Affaires HT:", formatCurrency(kpis.getCaHT()));
-        addSummaryRow(summaryTable, "Chiffre d'Affaires TTC:", formatCurrency(kpis.getCaTTC()));
-        addSummaryRow(summaryTable, "Total Achats HT:", formatCurrency(kpis.getTotalAchatsHT()));
-        addSummaryRow(summaryTable, "Total Achats TTC:", formatCurrency(kpis.getTotalAchatsTTC()));
-        addSummaryRow(summaryTable, "Marge Nette:", formatCurrency(kpis.getMargeTotale()));
-        addSummaryRow(summaryTable, "Marge Moyenne:", String.format("%.2f%%", kpis.getMargeMoyenne()));
+        // Utiliser des lignes alternées pour une meilleure lisibilité
+        boolean isEven = false;
+        addSummaryRowStyled(summaryTable, "Chiffre d'Affaires HT:", formatCurrency(kpis.getCaHT()), isEven);
+        isEven = !isEven;
+        addSummaryRowStyled(summaryTable, "Chiffre d'Affaires TTC:", formatCurrency(kpis.getCaTTC()), isEven);
+        isEven = !isEven;
+        addSummaryRowStyled(summaryTable, "Total Achats HT:", formatCurrency(kpis.getTotalAchatsHT()), isEven);
+        isEven = !isEven;
+        addSummaryRowStyled(summaryTable, "Total Achats TTC:", formatCurrency(kpis.getTotalAchatsTTC()), isEven);
+        isEven = !isEven;
+        addSummaryRowStyled(summaryTable, "Marge Nette:", formatCurrency(kpis.getMargeTotale()), isEven);
+        isEven = !isEven;
+        addSummaryRowStyled(summaryTable, "Marge Moyenne:", String.format("%.2f%%", kpis.getMargeMoyenne()), isEven);
         
         document.add(summaryTable);
         document.add(new Paragraph(" ")); // Espacement
     }
     
+    private void addSoldeSection(Document document, Double soldeActuel) throws DocumentException {
+        Paragraph sectionTitle = new Paragraph("2. SITUATION DE TRÉSORERIE", 
+            FontFactory.getFont(FontFactory.HELVETICA_BOLD, 18, BLUE_DARK));
+        sectionTitle.setSpacingBefore(20f);
+        sectionTitle.setSpacingAfter(20f);
+        document.add(sectionTitle);
+        
+        // Tableau avec fond coloré selon le solde
+        PdfPTable soldeTable = new PdfPTable(2);
+        soldeTable.setWidthPercentage(100);
+        soldeTable.setWidths(new float[]{2f, 3f});
+        soldeTable.setSpacingAfter(15f);
+        
+        PdfPCell labelCell = new PdfPCell(new Paragraph("Solde Global Actuel:", 
+            FontFactory.getFont(FontFactory.HELVETICA_BOLD, 14)));
+        labelCell.setBorder(Rectangle.BOX);
+        labelCell.setBorderColor(Color.GRAY);
+        labelCell.setPadding(15f);
+        labelCell.setBackgroundColor(BLUE_LIGHT);
+        soldeTable.addCell(labelCell);
+        
+        PdfPCell valueCell = new PdfPCell(new Paragraph(formatCurrency(soldeActuel != null ? soldeActuel : 0.0), 
+            FontFactory.getFont(FontFactory.HELVETICA_BOLD, 18, 
+                (soldeActuel != null && soldeActuel >= 0) ? new Color(0, 128, 0) : RED)));
+        valueCell.setBorder(Rectangle.BOX);
+        valueCell.setBorderColor(Color.GRAY);
+        valueCell.setPadding(15f);
+        valueCell.setHorizontalAlignment(Element.ALIGN_RIGHT);
+        valueCell.setBackgroundColor((soldeActuel != null && soldeActuel >= 0) ? 
+            new Color(240, 255, 240) : new Color(255, 240, 240));
+        soldeTable.addCell(valueCell);
+        
+        document.add(soldeTable);
+        
+        // Indicateur d'état
+        Paragraph status = new Paragraph(
+            (soldeActuel != null && soldeActuel >= 0) ? 
+                "✓ Trésorerie excédentaire" : "⚠ Trésorerie déficitaire",
+            FontFactory.getFont(FontFactory.HELVETICA, 11, 
+                (soldeActuel != null && soldeActuel >= 0) ? new Color(0, 128, 0) : RED));
+        status.setSpacingBefore(5f);
+        status.setSpacingAfter(15f);
+        document.add(status);
+        
+        document.add(new Paragraph(" ")); // Espacement
+    }
+    
     private void addTvaAnalysis(Document document, com.bf4invest.dto.DashboardKpiResponse kpis) 
             throws DocumentException {
-        Paragraph sectionTitle = new Paragraph("2. ANALYSE TVA", 
-            FontFactory.getFont(FontFactory.HELVETICA_BOLD, 16, Color.BLACK));
+        Paragraph sectionTitle = new Paragraph("3. ANALYSE TVA", 
+            FontFactory.getFont(FontFactory.HELVETICA_BOLD, 18, BLUE_DARK));
         sectionTitle.setSpacingBefore(20f);
-        sectionTitle.setSpacingAfter(15f);
+        sectionTitle.setSpacingAfter(20f);
         document.add(sectionTitle);
         
         PdfPTable tvaTable = new PdfPTable(2);
         tvaTable.setWidthPercentage(100);
-        tvaTable.setWidths(new float[]{2f, 3f});
+        tvaTable.setWidths(new float[]{2.5f, 2.5f});
+        tvaTable.setSpacingAfter(10f);
         
-        addSummaryRow(tvaTable, "TVA Collectée:", formatCurrency(kpis.getTvaCollectee()));
-        addSummaryRow(tvaTable, "TVA Déductible:", formatCurrency(kpis.getTvaDeductible()));
+        addSummaryRowStyled(tvaTable, "TVA Collectée:", formatCurrency(kpis.getTvaCollectee()), false);
+        addSummaryRowStyled(tvaTable, "TVA Déductible:", formatCurrency(kpis.getTvaDeductible()), true);
         
         double soldeTva = kpis.getTvaCollectee() - kpis.getTvaDeductible();
         PdfPCell labelCell = new PdfPCell(new Paragraph("Solde TVA:", 
-            FontFactory.getFont(FontFactory.HELVETICA_BOLD, 11)));
-        labelCell.setBorder(Rectangle.TOP | Rectangle.BOTTOM);
-        labelCell.setPadding(8f);
+            FontFactory.getFont(FontFactory.HELVETICA_BOLD, 12)));
+        labelCell.setBorder(Rectangle.BOX);
+        labelCell.setBorderColor(Color.GRAY);
+        labelCell.setPadding(12f);
+        labelCell.setBackgroundColor(BLUE_LIGHT);
         tvaTable.addCell(labelCell);
         
         PdfPCell valueCell = new PdfPCell(new Paragraph(formatCurrency(soldeTva), 
-            FontFactory.getFont(FontFactory.HELVETICA_BOLD, 11)));
-        valueCell.setBorder(Rectangle.TOP | Rectangle.BOTTOM);
-        valueCell.setPadding(8f);
+            FontFactory.getFont(FontFactory.HELVETICA_BOLD, 12, 
+                soldeTva < 0 ? RED : new Color(0, 128, 0))));
+        valueCell.setBorder(Rectangle.BOX);
+        valueCell.setBorderColor(Color.GRAY);
+        valueCell.setPadding(12f);
         valueCell.setHorizontalAlignment(Element.ALIGN_RIGHT);
         if (soldeTva < 0) {
             valueCell.setBackgroundColor(new Color(255, 240, 240)); // Rouge clair si négatif
@@ -1456,15 +1520,16 @@ public class PdfService {
             throws DocumentException {
         if (kpis.getImpayes() == null) return;
         
-        Paragraph sectionTitle = new Paragraph("3. SITUATION DES IMPAYÉS", 
-            FontFactory.getFont(FontFactory.HELVETICA_BOLD, 16, Color.BLACK));
+        Paragraph sectionTitle = new Paragraph("4. SITUATION DES IMPAYÉS", 
+            FontFactory.getFont(FontFactory.HELVETICA_BOLD, 18, BLUE_DARK));
         sectionTitle.setSpacingBefore(20f);
-        sectionTitle.setSpacingAfter(15f);
+        sectionTitle.setSpacingAfter(20f);
         document.add(sectionTitle);
         
         PdfPTable impayesTable = new PdfPTable(3);
         impayesTable.setWidthPercentage(100);
-        impayesTable.setWidths(new float[]{2f, 2f, 1f});
+        impayesTable.setWidths(new float[]{2.5f, 2f, 1f});
+        impayesTable.setSpacingAfter(10f);
         
         // Header
         addTableHeaderCell(impayesTable, "Tranche", true);
@@ -1476,10 +1541,10 @@ public class PdfService {
         double impayes31_60 = kpis.getImpayes().getImpayes31_60();
         double impayesPlus60 = kpis.getImpayes().getImpayesPlus60();
         
-        // Rows
-        addImpayesRow(impayesTable, "0-30 jours", impayes0_30, totalImpayes);
-        addImpayesRow(impayesTable, "31-60 jours", impayes31_60, totalImpayes);
-        addImpayesRow(impayesTable, "60+ jours", impayesPlus60, totalImpayes);
+        // Rows avec lignes alternées
+        addImpayesRowStyled(impayesTable, "0-30 jours", impayes0_30, totalImpayes, false);
+        addImpayesRowStyled(impayesTable, "31-60 jours", impayes31_60, totalImpayes, true);
+        addImpayesRowStyled(impayesTable, "60+ jours", impayesPlus60, totalImpayes, false);
         
         // Total row
         PdfPCell totalLabelCell = new PdfPCell(new Paragraph("TOTAL", 
@@ -1513,20 +1578,11 @@ public class PdfService {
             throws DocumentException {
         if (kpis.getCaMensuel() == null || kpis.getCaMensuel().isEmpty()) return;
         
-        Paragraph sectionTitle = new Paragraph("4. ÉVOLUTION MENSUELLE DU CA", 
-            FontFactory.getFont(FontFactory.HELVETICA_BOLD, 16, Color.BLACK));
+        Paragraph sectionTitle = new Paragraph("5. ÉVOLUTION MENSUELLE DU CA", 
+            FontFactory.getFont(FontFactory.HELVETICA_BOLD, 18, BLUE_DARK));
         sectionTitle.setSpacingBefore(20f);
-        sectionTitle.setSpacingAfter(15f);
+        sectionTitle.setSpacingAfter(20f);
         document.add(sectionTitle);
-        
-        PdfPTable monthlyTable = new PdfPTable(3);
-        monthlyTable.setWidthPercentage(100);
-        monthlyTable.setWidths(new float[]{2f, 2f, 1f});
-        
-        // Header
-        addTableHeaderCell(monthlyTable, "Mois", true);
-        addTableHeaderCell(monthlyTable, "CA HT", true);
-        addTableHeaderCell(monthlyTable, "Marge %", true);
         
         // Limit to last 12 months
         List<com.bf4invest.dto.DashboardKpiResponse.MonthlyData> monthlyData = kpis.getCaMensuel();
@@ -1534,29 +1590,121 @@ public class PdfService {
             monthlyData = monthlyData.subList(monthlyData.size() - 12, monthlyData.size());
         }
         
+        // Calculer le maximum pour la normalisation des barres
+        double maxCA = monthlyData.stream()
+            .mapToDouble(com.bf4invest.dto.DashboardKpiResponse.MonthlyData::getCaHT)
+            .max()
+            .orElse(1.0);
+        
+        PdfPTable monthlyTable = new PdfPTable(4);
+        monthlyTable.setWidthPercentage(100);
+        monthlyTable.setWidths(new float[]{1.5f, 2f, 1.5f, 1f});
+        monthlyTable.setSpacingAfter(10f);
+        
+        // Header
+        addTableHeaderCell(monthlyTable, "Mois", true);
+        addTableHeaderCell(monthlyTable, "Évolution", true);
+        addTableHeaderCell(monthlyTable, "CA HT", true);
+        addTableHeaderCell(monthlyTable, "Marge %", true);
+        
+        // Rows avec graphiques à barres
+        boolean isEven = false;
         for (com.bf4invest.dto.DashboardKpiResponse.MonthlyData month : monthlyData) {
-            addTableCell(monthlyTable, formatMonth(month.getMois()), false);
-            addTableCell(monthlyTable, formatCurrency(month.getCaHT()), false);
-            addTableCell(monthlyTable, String.format("%.1f%%", month.getMarge()), false);
+            // Mois
+            PdfPCell monthCell = new PdfPCell(new Paragraph(formatMonth(month.getMois()), 
+                FontFactory.getFont(FontFactory.HELVETICA, 10)));
+            monthCell.setBorder(Rectangle.BOX);
+            monthCell.setBorderColor(Color.GRAY);
+            monthCell.setPadding(8f);
+            monthCell.setBackgroundColor(isEven ? new Color(250, 250, 250) : Color.WHITE);
+            monthlyTable.addCell(monthCell);
+            
+            // Barre graphique
+            PdfPCell barCell = createBarChartCell(month.getCaHT(), maxCA, isEven);
+            monthlyTable.addCell(barCell);
+            
+            // CA HT
+            PdfPCell caCell = new PdfPCell(new Paragraph(formatCurrency(month.getCaHT()), 
+                FontFactory.getFont(FontFactory.HELVETICA, 10)));
+            caCell.setBorder(Rectangle.BOX);
+            caCell.setBorderColor(Color.GRAY);
+            caCell.setPadding(8f);
+            caCell.setHorizontalAlignment(Element.ALIGN_RIGHT);
+            caCell.setBackgroundColor(isEven ? new Color(250, 250, 250) : Color.WHITE);
+            monthlyTable.addCell(caCell);
+            
+            // Marge %
+            PdfPCell margeCell = new PdfPCell(new Paragraph(String.format("%.1f%%", month.getMarge()), 
+                FontFactory.getFont(FontFactory.HELVETICA, 10)));
+            margeCell.setBorder(Rectangle.BOX);
+            margeCell.setBorderColor(Color.GRAY);
+            margeCell.setPadding(8f);
+            margeCell.setHorizontalAlignment(Element.ALIGN_CENTER);
+            margeCell.setBackgroundColor(isEven ? new Color(250, 250, 250) : Color.WHITE);
+            monthlyTable.addCell(margeCell);
+            
+            isEven = !isEven;
         }
         
         document.add(monthlyTable);
         document.add(new Paragraph(" "));
     }
     
+    private PdfPCell createBarChartCell(double value, double maxValue, boolean isEven) {
+        PdfPCell cell = new PdfPCell();
+        cell.setBorder(Rectangle.BOX);
+        cell.setBorderColor(Color.GRAY);
+        cell.setPadding(5f);
+        cell.setBackgroundColor(isEven ? new Color(250, 250, 250) : Color.WHITE);
+        cell.setFixedHeight(25f);
+        
+        // Créer une table imbriquée pour la barre
+        PdfPTable barTable = new PdfPTable(2);
+        barTable.setWidthPercentage(100);
+        barTable.setSpacingBefore(0f);
+        barTable.setSpacingAfter(0f);
+        
+        double percentage = maxValue > 0 ? (value / maxValue) * 100 : 0;
+        float barWidth = (float) Math.max(Math.min(percentage, 98), 2); // Entre 2% et 98% pour visibilité
+        float emptyWidth = 100f - barWidth;
+        
+        // Cellule avec la barre colorée
+        PdfPCell barColorCell = new PdfPCell();
+        barColorCell.setBorder(Rectangle.NO_BORDER);
+        barColorCell.setBackgroundColor(BLUE_HEADER);
+        barColorCell.setFixedHeight(15f);
+        barColorCell.setPadding(0f);
+        barTable.addCell(barColorCell);
+        
+        // Cellule vide pour le reste
+        PdfPCell emptyCell = new PdfPCell();
+        emptyCell.setBorder(Rectangle.NO_BORDER);
+        emptyCell.setBackgroundColor(isEven ? new Color(250, 250, 250) : Color.WHITE);
+        emptyCell.setFixedHeight(15f);
+        emptyCell.setPadding(0f);
+        barTable.addCell(emptyCell);
+        
+        // Ajuster les largeurs proportionnellement
+        barTable.setWidths(new float[]{barWidth, emptyWidth});
+        
+        cell.addElement(barTable);
+        return cell;
+    }
+    
     private void addTopClients(Document document, com.bf4invest.dto.DashboardKpiResponse kpis) 
             throws DocumentException {
         if (kpis.getTopClients() == null || kpis.getTopClients().isEmpty()) return;
         
-        Paragraph sectionTitle = new Paragraph("5. TOP 10 CLIENTS", 
-            FontFactory.getFont(FontFactory.HELVETICA_BOLD, 16, Color.BLACK));
+        Paragraph sectionTitle = new Paragraph("6. TOP 10 CLIENTS", 
+            FontFactory.getFont(FontFactory.HELVETICA_BOLD, 18, BLUE_DARK));
         sectionTitle.setSpacingBefore(20f);
-        sectionTitle.setSpacingAfter(15f);
+        sectionTitle.setSpacingAfter(20f);
         document.add(sectionTitle);
         
         PdfPTable clientsTable = new PdfPTable(2);
         clientsTable.setWidthPercentage(100);
         clientsTable.setWidths(new float[]{3f, 2f});
+        clientsTable.setSpacingAfter(10f);
         
         // Header
         addTableHeaderCell(clientsTable, "Client", true);
@@ -1568,9 +1716,12 @@ public class PdfService {
             topClients = topClients.subList(0, 10);
         }
         
+        // Rows avec lignes alternées
+        boolean isEven = false;
         for (com.bf4invest.dto.DashboardKpiResponse.FournisseurClientStat client : topClients) {
-            addTableCell(clientsTable, client.getNom(), false);
-            addTableCell(clientsTable, formatCurrency(client.getMontant()), false);
+            addTableCellStyled(clientsTable, client.getNom(), false, isEven);
+            addTableCellStyled(clientsTable, formatCurrency(client.getMontant()), true, isEven);
+            isEven = !isEven;
         }
         
         document.add(clientsTable);
@@ -1581,15 +1732,16 @@ public class PdfService {
             throws DocumentException {
         if (kpis.getTopFournisseurs() == null || kpis.getTopFournisseurs().isEmpty()) return;
         
-        Paragraph sectionTitle = new Paragraph("6. TOP 10 FOURNISSEURS", 
-            FontFactory.getFont(FontFactory.HELVETICA_BOLD, 16, Color.BLACK));
+        Paragraph sectionTitle = new Paragraph("7. TOP 10 FOURNISSEURS", 
+            FontFactory.getFont(FontFactory.HELVETICA_BOLD, 18, BLUE_DARK));
         sectionTitle.setSpacingBefore(20f);
-        sectionTitle.setSpacingAfter(15f);
+        sectionTitle.setSpacingAfter(20f);
         document.add(sectionTitle);
         
         PdfPTable suppliersTable = new PdfPTable(2);
         suppliersTable.setWidthPercentage(100);
         suppliersTable.setWidths(new float[]{3f, 2f});
+        suppliersTable.setSpacingAfter(10f);
         
         // Header
         addTableHeaderCell(suppliersTable, "Fournisseur", true);
@@ -1601,9 +1753,12 @@ public class PdfService {
             topSuppliers = topSuppliers.subList(0, 10);
         }
         
+        // Rows avec lignes alternées
+        boolean isEven = false;
         for (com.bf4invest.dto.DashboardKpiResponse.FournisseurClientStat supplier : topSuppliers) {
-            addTableCell(suppliersTable, supplier.getNom(), false);
-            addTableCell(suppliersTable, formatCurrency(supplier.getMontant()), false);
+            addTableCellStyled(suppliersTable, supplier.getNom(), false, isEven);
+            addTableCellStyled(suppliersTable, formatCurrency(supplier.getMontant()), true, isEven);
+            isEven = !isEven;
         }
         
         document.add(suppliersTable);
@@ -1612,21 +1767,23 @@ public class PdfService {
     
     private void addAlertsSection(Document document, com.bf4invest.dto.DashboardKpiResponse kpis) 
             throws DocumentException {
-        Paragraph sectionTitle = new Paragraph("7. ALERTES ET ACTIONS REQUISES", 
-            FontFactory.getFont(FontFactory.HELVETICA_BOLD, 16, Color.BLACK));
+        Paragraph sectionTitle = new Paragraph("8. ALERTES ET ACTIONS REQUISES", 
+            FontFactory.getFont(FontFactory.HELVETICA_BOLD, 18, RED));
         sectionTitle.setSpacingBefore(20f);
-        sectionTitle.setSpacingAfter(15f);
+        sectionTitle.setSpacingAfter(20f);
         document.add(sectionTitle);
         
         PdfPTable alertsTable = new PdfPTable(2);
         alertsTable.setWidthPercentage(100);
-        alertsTable.setWidths(new float[]{2f, 3f});
+        alertsTable.setWidths(new float[]{2.5f, 2.5f});
+        alertsTable.setSpacingAfter(10f);
         
-        addSummaryRow(alertsTable, "Factures en retard:", String.valueOf(kpis.getFacturesEnRetard()));
+        addSummaryRowStyled(alertsTable, "Factures en retard:", 
+            String.valueOf(kpis.getFacturesEnRetard()), false);
         
         if (kpis.getImpayes() != null) {
-            addSummaryRow(alertsTable, "Montant total impayé:", 
-                formatCurrency(kpis.getImpayes().getTotalImpayes()));
+            addSummaryRowStyled(alertsTable, "Montant total impayé:", 
+                formatCurrency(kpis.getImpayes().getTotalImpayes()), true);
         }
         
         document.add(alertsTable);
@@ -1656,12 +1813,32 @@ public class PdfService {
         table.addCell(valueCell);
     }
     
+    private void addSummaryRowStyled(PdfPTable table, String label, String value, boolean isEven) {
+        PdfPCell labelCell = new PdfPCell(new Paragraph(label, 
+            FontFactory.getFont(FontFactory.HELVETICA, 11)));
+        labelCell.setBorder(Rectangle.BOX);
+        labelCell.setBorderColor(Color.GRAY);
+        labelCell.setPadding(10f);
+        labelCell.setBackgroundColor(isEven ? new Color(250, 250, 250) : Color.WHITE);
+        table.addCell(labelCell);
+        
+        PdfPCell valueCell = new PdfPCell(new Paragraph(value, 
+            FontFactory.getFont(FontFactory.HELVETICA_BOLD, 11)));
+        valueCell.setBorder(Rectangle.BOX);
+        valueCell.setBorderColor(Color.GRAY);
+        valueCell.setPadding(10f);
+        valueCell.setHorizontalAlignment(Element.ALIGN_RIGHT);
+        valueCell.setBackgroundColor(isEven ? new Color(250, 250, 250) : Color.WHITE);
+        table.addCell(valueCell);
+    }
+    
     private void addTableHeaderCell(PdfPTable table, String text, boolean bold) {
         PdfPCell cell = new PdfPCell(new Paragraph(text, 
-            FontFactory.getFont(bold ? FontFactory.HELVETICA_BOLD : FontFactory.HELVETICA, 10)));
-        cell.setBackgroundColor(BLUE_LIGHT);
+            FontFactory.getFont(bold ? FontFactory.HELVETICA_BOLD : FontFactory.HELVETICA, 11, Color.WHITE)));
+        cell.setBackgroundColor(BLUE_DARK);
         cell.setBorder(Rectangle.BOX);
-        cell.setPadding(8f);
+        cell.setBorderColor(Color.GRAY);
+        cell.setPadding(10f);
         cell.setHorizontalAlignment(Element.ALIGN_CENTER);
         table.addCell(cell);
     }
@@ -1670,8 +1847,20 @@ public class PdfService {
         PdfPCell cell = new PdfPCell(new Paragraph(text, 
             FontFactory.getFont(FontFactory.HELVETICA, 10)));
         cell.setBorder(Rectangle.BOX);
+        cell.setBorderColor(Color.GRAY);
         cell.setPadding(8f);
         cell.setHorizontalAlignment(rightAlign ? Element.ALIGN_RIGHT : Element.ALIGN_LEFT);
+        table.addCell(cell);
+    }
+    
+    private void addTableCellStyled(PdfPTable table, String text, boolean rightAlign, boolean isEven) {
+        PdfPCell cell = new PdfPCell(new Paragraph(text, 
+            FontFactory.getFont(FontFactory.HELVETICA, 10)));
+        cell.setBorder(Rectangle.BOX);
+        cell.setBorderColor(Color.GRAY);
+        cell.setPadding(8f);
+        cell.setHorizontalAlignment(rightAlign ? Element.ALIGN_RIGHT : Element.ALIGN_LEFT);
+        cell.setBackgroundColor(isEven ? new Color(250, 250, 250) : Color.WHITE);
         table.addCell(cell);
     }
     
@@ -1680,6 +1869,13 @@ public class PdfService {
         addTableCell(table, formatCurrency(montant), true);
         double percent = total > 0 ? (montant / total) * 100 : 0;
         addTableCell(table, String.format("%.1f%%", percent), true);
+    }
+    
+    private void addImpayesRowStyled(PdfPTable table, String tranche, double montant, double total, boolean isEven) {
+        addTableCellStyled(table, tranche, false, isEven);
+        addTableCellStyled(table, formatCurrency(montant), true, isEven);
+        double percent = total > 0 ? (montant / total) * 100 : 0;
+        addTableCellStyled(table, String.format("%.1f%%", percent), true, isEven);
     }
     
     private String formatCurrency(double amount) {

@@ -3,6 +3,7 @@ package com.bf4invest.controller;
 import com.bf4invest.dto.DashboardKpiResponse;
 import com.bf4invest.pdf.PdfService;
 import com.bf4invest.service.DashboardService;
+import com.bf4invest.service.SoldeService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpHeaders;
@@ -19,6 +20,7 @@ public class DashboardController {
     
     private final DashboardService dashboardService;
     private final PdfService pdfService;
+    private final SoldeService soldeService;
     
     @GetMapping("/kpis")
     public ResponseEntity<DashboardKpiResponse> getKPIs(
@@ -38,8 +40,11 @@ public class DashboardController {
             // Récupérer les KPIs
             DashboardKpiResponse kpis = dashboardService.getKPIs(from, to);
             
+            // Récupérer le solde global actuel
+            Double soldeActuel = soldeService.getSoldeGlobalActuel();
+            
             // Générer le PDF
-            byte[] pdfBytes = pdfService.generateDashboardReport(kpis, from, to);
+            byte[] pdfBytes = pdfService.generateDashboardReport(kpis, from, to, soldeActuel);
             
             // Préparer les headers pour le téléchargement
             HttpHeaders headers = new HttpHeaders();
