@@ -5,6 +5,7 @@ import com.bf4invest.model.Client;
 import com.bf4invest.model.FactureAchat;
 import com.bf4invest.model.FactureVente;
 import com.bf4invest.model.Paiement;
+import com.bf4invest.model.Supplier;
 import com.bf4invest.repository.ClientRepository;
 import com.bf4invest.repository.FactureAchatRepository;
 import com.bf4invest.repository.FactureVenteRepository;
