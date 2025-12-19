@@ -499,8 +499,9 @@ import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, FormsModule } 
                     <button type="submit" [disabled]="paymentForm.invalid" class="w-full px-4 py-2 bg-emerald-600 text-white font-bold rounded-lg hover:bg-emerald-700 transition disabled:opacity-50">
                       Enregistrer le Paiement
                     </button>
-                  </form>
+                    </form>
                 </div>
+              }
               } @else {
                 <!-- Onglet Prévisions (identique à sales-invoices) -->
                 <div class="space-y-6">
