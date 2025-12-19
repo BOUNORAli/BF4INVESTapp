@@ -82,6 +82,28 @@ public class PdfController {
             return ResponseEntity.internalServerError().build();
         }
     }
+    
+    @GetMapping("/factures-ventes/{id}/bon-de-livraison")
+    public ResponseEntity<byte[]> generateBonDeLivraisonPdf(@PathVariable String id) {
+        try {
+            FactureVente facture = factureVenteService.findById(id)
+                    .orElseThrow(() -> new RuntimeException("Facture not found"));
+            
+            byte[] pdfBytes = pdfService.generateBonDeLivraison(facture);
+            
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_PDF);
+            String blNum = facture.getNumeroFactureVente() != null ? 
+                "BL-" + facture.getNumeroFactureVente() : "BL-" + id;
+            headers.setContentDispositionFormData("attachment", blNum + ".pdf");
+            
+            return ResponseEntity.ok()
+                    .headers(headers)
+                    .body(pdfBytes);
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().build();
+        }
+    }
 }
 
 

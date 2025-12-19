@@ -169,6 +169,33 @@ public class PdfService {
         return baos.toByteArray();
     }
     
+    public byte[] generateBonDeLivraison(FactureVente facture) throws DocumentException, IOException {
+        Document document = new Document(PageSize.A4, 40f, 40f, 60f, 60f);
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        PdfWriter writer = PdfWriter.getInstance(document, baos);
+        
+        document.open();
+        
+        // Récupérer les informations client
+        Client client = facture.getClientId() != null ? 
+            clientRepository.findById(facture.getClientId()).orElse(null) : null;
+        
+        // En-tête avec logo (identique à la facture)
+        addBonDeLivraisonHeader(document, facture, client, writer);
+        
+        // Informations bon de livraison (numéro, date, ref)
+        addBonDeLivraisonInfo(document, facture);
+        
+        // Tableau des lignes (sans prix)
+        addBonDeLivraisonProductTable(document, facture);
+        
+        // Footer
+        addFactureFooter(document);
+        
+        document.close();
+        return baos.toByteArray();
+    }
+    
     // ============ LOGO METHODS ============
     
     /**
@@ -828,6 +855,115 @@ public class PdfService {
         
         footerTable.addCell(footerCell);
         document.add(footerTable);
+    }
+    
+    // ============ BON DE LIVRAISON METHODS ============
+    
+    private void addBonDeLivraisonHeader(Document document, FactureVente facture, Client client, PdfWriter writer) throws DocumentException, IOException {
+        // Identique à addFactureHeader
+        addFactureHeader(document, facture, client, writer);
+    }
+    
+    private void addBonDeLivraisonInfo(Document document, FactureVente facture) throws DocumentException {
+        PdfPTable infoTable = new PdfPTable(3);
+        infoTable.setWidthPercentage(100);
+        infoTable.setSpacingAfter(15);
+        
+        // BON DE LIVRAISON N° avec fond bleu clair
+        PdfPCell blNumCell = new PdfPCell();
+        blNumCell.setBackgroundColor(BLUE_LIGHT);
+        blNumCell.setPadding(8);
+        blNumCell.setBorder(Rectangle.NO_BORDER);
+        
+        Paragraph blLabel = new Paragraph("BON DE LIVRAISON N°", 
+            FontFactory.getFont(FontFactory.HELVETICA_BOLD, 10));
+        blNumCell.addElement(blLabel);
+        
+        // Utiliser le numéro de facture ou générer un numéro de BL
+        String blNum = facture.getNumeroFactureVente() != null ? 
+            "BL-" + facture.getNumeroFactureVente() : "";
+        Paragraph blNumText = new Paragraph(blNum, 
+            FontFactory.getFont(FontFactory.HELVETICA_BOLD, 12));
+        blNumCell.addElement(blNumText);
+        infoTable.addCell(blNumCell);
+        
+        // DU: (date)
+        PdfPCell dateCell = new PdfPCell();
+        dateCell.setBorder(Rectangle.NO_BORDER);
+        dateCell.setPadding(8);
+        Paragraph dateLabel = new Paragraph("DU:", 
+            FontFactory.getFont(FontFactory.HELVETICA_BOLD, 9));
+        dateCell.addElement(dateLabel);
+        
+        String dateStr = facture.getDateFacture() != null ? 
+            facture.getDateFacture().format(DATE_FORMATTER) : "";
+        Paragraph dateText = new Paragraph(dateStr, 
+            FontFactory.getFont(FontFactory.HELVETICA, 9));
+        dateCell.addElement(dateText);
+        infoTable.addCell(dateCell);
+        
+        // Ref: N°
+        PdfPCell refCell = new PdfPCell();
+        refCell.setBorder(Rectangle.NO_BORDER);
+        refCell.setPadding(8);
+        Paragraph refLabel = new Paragraph("Ref: N°", 
+            FontFactory.getFont(FontFactory.HELVETICA_BOLD, 9));
+        refCell.addElement(refLabel);
+        
+        // Récupérer le numéro BC si disponible
+        String refBC = "";
+        if (facture.getBandeCommandeId() != null) {
+            BandeCommande bc = bandeCommandeRepository.findById(facture.getBandeCommandeId()).orElse(null);
+            if (bc != null && bc.getNumeroBC() != null) {
+                refBC = bc.getNumeroBC();
+            }
+        }
+        Paragraph refText = new Paragraph(refBC, 
+            FontFactory.getFont(FontFactory.HELVETICA, 9));
+        refCell.addElement(refText);
+        infoTable.addCell(refCell);
+        
+        document.add(infoTable);
+    }
+    
+    private void addBonDeLivraisonProductTable(Document document, FactureVente facture) throws DocumentException {
+        // Tableau avec 4 colonnes au lieu de 6 (sans PU HT et Prix Total HT)
+        PdfPTable table = new PdfPTable(4);
+        table.setWidthPercentage(100);
+        table.setWidths(new float[]{0.5f, 4f, 1f, 1.5f});
+        table.setSpacingAfter(15);
+        
+        // En-têtes avec fond bleu clair et texte bleu foncé
+        String[] headers = {"N° ARTICLE", "DESIGNATIONS ET PRESTATIONS", "UNITE", "QUANTITE"};
+        Font headerFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 9, BLUE_HEADER);
+        
+        for (String header : headers) {
+            PdfPCell cell = new PdfPCell(new Phrase(header, headerFont));
+            cell.setBackgroundColor(BLUE_LIGHT);
+            cell.setPadding(6);
+            cell.setHorizontalAlignment(Element.ALIGN_CENTER);
+            cell.setBorderColor(Color.WHITE);
+            table.addCell(cell);
+        }
+        
+        // Lignes (sans prix)
+        if (facture.getLignes() != null && !facture.getLignes().isEmpty()) {
+            int lineNum = 1;
+            for (var ligne : facture.getLignes()) {
+                addTableCell(table, String.valueOf(lineNum++), Element.ALIGN_CENTER);
+                addTableCell(table, ligne.getDesignation() != null ? ligne.getDesignation() : "", 
+                    Element.ALIGN_LEFT);
+                addTableCell(table, ligne.getUnite() != null ? ligne.getUnite() : "", 
+                    Element.ALIGN_CENTER);
+                
+                // Quantité (format français avec décimales possibles)
+                Double qtyValue = ligne.getQuantiteVendue() != null ? ligne.getQuantiteVendue().doubleValue() : 0.0;
+                String qty = formatQuantity(qtyValue);
+                addTableCell(table, qty, Element.ALIGN_RIGHT);
+            }
+        }
+        
+        document.add(table);
     }
     
     // ============ FACTURE ACHAT METHODS ============

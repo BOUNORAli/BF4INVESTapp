@@ -1541,6 +1541,23 @@ export class StoreService {
     }
   }
 
+  async downloadBonDeLivraisonPDF(factureId: string): Promise<void> {
+    try {
+      this.showToast('G├®n├®ration du bon de livraison en cours...', 'info');
+      const blob = await this.api.downloadFile(`/pdf/factures-ventes/${factureId}/bon-de-livraison`).toPromise();
+      if (blob) {
+        const invoice = this.invoices().find(i => i.id === factureId);
+        const fileName = `BL-${invoice?.number || factureId}.pdf`;
+        await this.handlePDFDownload(blob, fileName);
+        this.showToast('Bon de livraison g├®n├®r├® avec succ├¿s', 'success');
+      }
+    } catch (error) {
+      console.error('Error downloading Bon de Livraison PDF:', error);
+      this.showToast('Erreur lors de la g├®n├®ration du bon de livraison', 'error');
+      throw error;
+    }
+  }
+
   async downloadFactureAchatPDF(factureId: string): Promise<void> {
     try {
       this.showToast('G├®n├®ration du PDF en cours...', 'info');
