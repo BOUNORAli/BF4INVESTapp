@@ -1869,6 +1869,25 @@ export class StoreService {
     }
   }
 
+  async ajouterApportExterne(montant: number, motif: string, date?: string): Promise<void> {
+    try {
+      let url = `/solde/apport-externe?montant=${montant}&motif=${encodeURIComponent(motif)}`;
+      if (date) {
+        url += `&date=${date}`;
+      }
+      const historique = await this.api.post<HistoriqueSolde>(url, {}).toPromise();
+      if (historique) {
+        // Recharger le solde global pour mettre à jour l'affichage
+        await this.loadSoldeGlobal();
+        this.showToast(`Apport externe de ${montant.toFixed(2)} MAD ajouté avec succès`, 'success');
+      }
+    } catch (error) {
+      console.error('Error adding apport externe:', error);
+      this.showToast('Erreur lors de l\'ajout de l\'apport externe', 'error');
+      throw error;
+    }
+  }
+
   async getSoldePartenaire(type: string, id: string): Promise<number> {
     try {
       const solde = await this.api.get<number>(`/solde/partenaire/${type}/${id}`).toPromise();

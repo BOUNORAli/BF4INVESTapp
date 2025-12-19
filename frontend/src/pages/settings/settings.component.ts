@@ -125,6 +125,38 @@ import { StoreService } from '../../services/store.service';
                   </button>
                 </div>
               </div>
+
+              <!-- Formulaire pour ajouter un apport externe -->
+              <div class="bg-emerald-50 p-6 rounded-xl border border-emerald-200">
+                <h3 class="text-base font-bold text-emerald-800 mb-1">Ajouter un Apport Externe</h3>
+                <p class="text-sm text-emerald-700 mb-4">Enregistrez un apport d'argent depuis l'extérieur (augmentation de capital, prêt, etc.).</p>
+                <div class="space-y-4">
+                  <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-1">Montant (MAD)</label>
+                    <input type="number" step="0.01" [(ngModel)]="apportMontant" 
+                           placeholder="0.00"
+                           class="w-full px-4 py-2 border border-emerald-200 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none transition">
+                  </div>
+                  <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-1">Motif <span class="text-red-500">*</span></label>
+                    <input type="text" [(ngModel)]="apportMotif" 
+                           placeholder="Ex: Augmentation de capital, Prêt, Apport associé..."
+                           class="w-full px-4 py-2 border border-emerald-200 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none transition">
+                    <p class="text-xs text-slate-500 mt-1">Décrivez la raison de cet apport</p>
+                  </div>
+                  <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-1">Date (optionnel)</label>
+                    <input type="date" [(ngModel)]="apportDate" 
+                           class="w-full px-4 py-2 border border-emerald-200 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none transition">
+                    <p class="text-xs text-slate-500 mt-1">Si non renseignée, la date actuelle sera utilisée</p>
+                  </div>
+                  <button (click)="ajouterApportExterne()" 
+                          [disabled]="!apportMontant() || apportMontant()! <= 0 || !apportMotif() || apportMotif().trim().length === 0"
+                          class="w-full px-4 py-2 bg-emerald-600 text-white font-bold rounded-lg hover:bg-emerald-700 transition disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-emerald-600/20">
+                    Ajouter l'Apport
+                  </button>
+                </div>
+              </div>
             </div>
           }
         </div>
@@ -205,6 +237,11 @@ export class SettingsComponent implements OnInit {
   soldeInitial = signal<number | null>(null);
   dateDebut = signal<string>('');
   isLoadingSolde = signal(false);
+  
+  // Gestion des apports externes
+  apportMontant = signal<number | null>(null);
+  apportMotif = signal<string>('');
+  apportDate = signal<string>('');
 
   async ngOnInit() {
     await this.loadParametresCalcul();
@@ -267,6 +304,36 @@ export class SettingsComponent implements OnInit {
     if (this.newModeName().trim()) {
       this.store.addPaymentMode(this.newModeName().trim());
       this.newModeName.set('');
+    }
+  }
+
+  async ajouterApportExterne() {
+    if (!this.apportMontant() || this.apportMontant()! <= 0) {
+      this.store.showToast('Veuillez entrer un montant valide', 'error');
+      return;
+    }
+    
+    if (!this.apportMotif() || this.apportMotif().trim().length === 0) {
+      this.store.showToast('Veuillez spécifier un motif', 'error');
+      return;
+    }
+    
+    try {
+      await this.store.ajouterApportExterne(
+        this.apportMontant()!,
+        this.apportMotif().trim(),
+        this.apportDate() || undefined
+      );
+      
+      // Réinitialiser le formulaire
+      this.apportMontant.set(null);
+      this.apportMotif.set('');
+      this.apportDate.set('');
+      
+      // Recharger le solde global
+      await this.loadSoldeGlobal();
+    } catch (error) {
+      console.error('Error adding apport externe:', error);
     }
   }
 }

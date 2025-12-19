@@ -73,5 +73,21 @@ public class SoldeController {
         );
         return ResponseEntity.ok(historique);
     }
+    
+    @PostMapping("/apport-externe")
+    public ResponseEntity<HistoriqueSolde> ajouterApportExterne(
+            @RequestParam Double montant,
+            @RequestParam String motif,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
+    ) {
+        try {
+            HistoriqueSolde historique = soldeService.ajouterApportExterne(montant, motif, date);
+            return ResponseEntity.ok(historique);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().build();
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().build();
+        }
+    }
 }
 

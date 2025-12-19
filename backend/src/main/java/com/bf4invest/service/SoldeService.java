@@ -155,6 +155,9 @@ public class SoldeService {
             case "PAIEMENT_FOURNISSEUR":
                 // Paiement fournisseur : sortie d'argent, diminue la trésorerie
                 return soldeAvant - montant;
+            case "APPORT_EXTERNE":
+                // Apport externe : entrée d'argent depuis l'extérieur, augmente la trésorerie
+                return soldeAvant + montant;
             default:
                 return soldeAvant;
         }
@@ -251,6 +254,53 @@ public class SoldeService {
      */
     public Optional<SoldeGlobal> getSoldeGlobal() {
         return soldeGlobalRepository.findAll().stream().findFirst();
+    }
+    
+    /**
+     * Ajoute un apport externe (augmentation de capital, prêt, etc.) au solde global
+     * 
+     * @param montant Montant de l'apport
+     * @param motif Motif de l'apport (ex: "Augmentation de capital", "Prêt", etc.)
+     * @param date Date de l'apport (optionnel, défaut = maintenant)
+     * @return HistoriqueSolde créé
+     */
+    @Transactional
+    public HistoriqueSolde ajouterApportExterne(Double montant, String motif, LocalDate date) {
+        if (montant == null || montant <= 0) {
+            throw new IllegalArgumentException("Le montant doit être positif");
+        }
+        if (motif == null || motif.trim().isEmpty()) {
+            throw new IllegalArgumentException("Le motif est requis");
+        }
+        
+        // Récupérer le solde global actuel
+        Double soldeGlobalAvant = getSoldeGlobalActuel();
+        Double soldeGlobalApres = soldeGlobalAvant + montant;
+        
+        // Mettre à jour le solde global
+        mettreAJourSoldeGlobal(soldeGlobalApres);
+        
+        // Créer l'historique
+        HistoriqueSolde historique = HistoriqueSolde.builder()
+                .type("APPORT_EXTERNE")
+                .montant(montant)
+                .soldeGlobalAvant(soldeGlobalAvant)
+                .soldeGlobalApres(soldeGlobalApres)
+                .soldePartenaireAvant(null)
+                .soldePartenaireApres(null)
+                .partenaireId(null)
+                .partenaireType(null)
+                .partenaireNom(null)
+                .referenceId(null)
+                .referenceNumero(null)
+                .description(motif.trim())
+                .date(date != null ? date.atStartOfDay() : LocalDateTime.now())
+                .build();
+        
+        HistoriqueSolde saved = historiqueSoldeRepository.save(historique);
+        log.info("Apport externe enregistré: {} MAD - Motif: {} - Solde après: {}", montant, motif, soldeGlobalApres);
+        
+        return saved;
     }
 }
 
