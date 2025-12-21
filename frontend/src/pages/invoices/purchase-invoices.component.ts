@@ -1019,17 +1019,9 @@ export class PurchaseInvoicesComponent {
       });
       this.editingPrevisionId.set(null);
       
-      // Vérifier l'état actuel des factures
-      console.log('[savePrevision ACHAT] Nombre de factures dans store:', this.store.invoices().length);
-      const invoiceBeforeUpdate = this.store.invoices().find(inv => inv.id === invoiceId);
-      console.log('[savePrevision ACHAT] Facture trouvée avant update:', invoiceBeforeUpdate?.id, 'Prévisions:', invoiceBeforeUpdate?.previsionsPaiement?.length || 0);
-      
-      // addPrevision/updatePrevision appellent déjà loadInvoices()
-      // On attend que la mise à jour soit terminée puis on met à jour la facture sélectionnée
-      // On force la création d'un nouvel objet pour que Angular détecte le changement
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
-      console.log('[savePrevision ACHAT] Après délai, recherche facture mise à jour');
+      // addPrevision/updatePrevision appellent déjà loadInvoices() de manière asynchrone
+      // On met à jour immédiatement la facture sélectionnée avec les nouvelles données
+      console.log('[savePrevision ACHAT] Recherche facture mise à jour');
       const updatedInvoice = this.store.invoices().find(inv => inv.id === invoiceId);
       console.log('[savePrevision ACHAT] Facture mise à jour trouvée:', updatedInvoice?.id, 'Prévisions:', updatedInvoice?.previsionsPaiement?.length || 0);
       if (updatedInvoice) {
