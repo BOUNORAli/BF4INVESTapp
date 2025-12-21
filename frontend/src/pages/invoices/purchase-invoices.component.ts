@@ -1009,7 +1009,7 @@ export class PurchaseInvoicesComponent {
         console.log('[savePrevision ACHAT] Ajout nouvelle prévision');
         await this.store.addPrevision(inv.id, 'achat', previsionData);
       }
-      console.log('[savePrevision ACHAT] Prévision sauvegardée, loadInvoices() devrait être terminé');
+      console.log('[savePrevision ACHAT] Prévision sauvegardée, mise à jour locale effectuée');
       
       this.previsionForm.reset({
         datePrevue: new Date().toISOString().split('T')[0],
@@ -1019,7 +1019,7 @@ export class PurchaseInvoicesComponent {
       });
       this.editingPrevisionId.set(null);
       
-      // addPrevision/updatePrevision appellent déjà loadInvoices() de manière asynchrone
+      // addPrevision/updatePrevision mettent à jour localement la facture
       // On met à jour immédiatement la facture sélectionnée avec les nouvelles données
       console.log('[savePrevision ACHAT] Recherche facture mise à jour');
       const updatedInvoice = this.store.invoices().find(inv => inv.id === invoiceId);
