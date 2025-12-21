@@ -803,20 +803,11 @@ export class StoreService {
 
   // --- ACTIONS: INVOICES ---
   async loadInvoices(): Promise<void> {
-    console.log('[StoreService.loadInvoices] Début');
     try {
       const allInvoices = await this.invoiceService.getInvoices();
-      console.log('[StoreService.loadInvoices] Factures reçues:', allInvoices.length);
       this.invoices.set(allInvoices);
-      console.log('[StoreService.loadInvoices] Signal invoices mis à jour');
-      // Log des prévisions pour chaque facture
-      allInvoices.forEach(inv => {
-        if (inv.previsionsPaiement && inv.previsionsPaiement.length > 0) {
-          console.log(`[StoreService.loadInvoices] Facture ${inv.id} (${inv.number}): ${inv.previsionsPaiement.length} prévisions`);
-        }
-      });
     } catch (error) {
-      console.error('[StoreService.loadInvoices] Erreur:', error);
+      console.error('Error loading invoices:', error);
     }
   }
 
@@ -1309,20 +1300,16 @@ export class StoreService {
   }
 
   async addPrevision(factureId: string, type: 'vente' | 'achat', prevision: PrevisionPaiement): Promise<PrevisionPaiement> {
-    console.log('[StoreService.addPrevision] Début - factureId:', factureId, 'type:', type);
     try {
       const endpoint = type === 'vente' 
         ? `/prevision/facture-vente/${factureId}`
         : `/prevision/facture-achat/${factureId}`;
       
-      console.log('[StoreService.addPrevision] Appel API:', endpoint);
       const saved = await this.api.post<PrevisionPaiement>(endpoint, prevision).toPromise();
-      console.log('[StoreService.addPrevision] Prévision sauvegardée:', saved);
       
       if (saved) {
         this.showToast('Prévision ajoutée avec succès', 'success');
         // Mettre à jour localement la facture au lieu de recharger toutes les factures
-        console.log('[StoreService.addPrevision] Mise à jour locale de la facture');
         this.invoices.update(invoices => {
           const invoiceIndex = invoices.findIndex(inv => inv.id === factureId);
           if (invoiceIndex !== -1) {
@@ -1333,34 +1320,29 @@ export class StoreService {
             updatedInvoice.previsionsPaiement = [...updatedInvoice.previsionsPaiement, saved];
             const newInvoices = [...invoices];
             newInvoices[invoiceIndex] = updatedInvoice;
-            console.log('[StoreService.addPrevision] Facture mise à jour localement, prévisions:', updatedInvoice.previsionsPaiement.length);
             return newInvoices;
           }
-          console.warn('[StoreService.addPrevision] Facture non trouvée pour mise à jour locale');
           return invoices;
         });
       }
       return saved!;
     } catch (error) {
-      console.error('[StoreService.addPrevision] Erreur:', error);
+      console.error('Error adding prevision:', error);
       this.showToast('Erreur lors de l\'ajout de la prévision', 'error');
       throw error;
     }
   }
 
   async updatePrevision(factureId: string, previsionId: string, type: 'vente' | 'achat', prevision: PrevisionPaiement): Promise<PrevisionPaiement> {
-    console.log('[StoreService.updatePrevision] Début - factureId:', factureId, 'previsionId:', previsionId);
     try {
       const saved = await this.api.put<PrevisionPaiement>(
         `/prevision/${factureId}/${previsionId}?type=${type}`, 
         prevision
       ).toPromise();
-      console.log('[StoreService.updatePrevision] Prévision sauvegardée:', saved);
       
       if (saved) {
         this.showToast('Prévision modifiée avec succès', 'success');
         // Mettre à jour localement la facture au lieu de recharger toutes les factures
-        console.log('[StoreService.updatePrevision] Mise à jour locale de la facture');
         this.invoices.update(invoices => {
           const invoiceIndex = invoices.findIndex(inv => inv.id === factureId);
           if (invoiceIndex !== -1) {
@@ -1373,16 +1355,14 @@ export class StoreService {
             );
             const newInvoices = [...invoices];
             newInvoices[invoiceIndex] = updatedInvoice;
-            console.log('[StoreService.updatePrevision] Facture mise à jour localement, prévisions:', updatedInvoice.previsionsPaiement.length);
             return newInvoices;
           }
-          console.warn('[StoreService.updatePrevision] Facture non trouvée pour mise à jour locale');
           return invoices;
         });
       }
       return saved!;
     } catch (error) {
-      console.error('[StoreService.updatePrevision] Erreur:', error);
+      console.error('Error updating prevision:', error);
       this.showToast('Erreur lors de la modification de la prévision', 'error');
       throw error;
     }

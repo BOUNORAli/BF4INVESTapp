@@ -14,6 +14,7 @@ import java.util.Optional;
 public class ProductService {
     
     private final ProductRepository productRepository;
+    private final AuditService auditService;
     
     public List<Product> findAll() {
         return productRepository.findAll();
@@ -30,12 +31,20 @@ public class ProductService {
         }
         product.setCreatedAt(LocalDateTime.now());
         product.setUpdatedAt(LocalDateTime.now());
-        return productRepository.save(product);
+        Product saved = productRepository.save(product);
+        
+        // Log d'audit
+        auditService.logCreate("Produit", saved.getId(), 
+            "Produit " + (saved.getDesignation() != null ? saved.getDesignation() : saved.getRefArticle()) + " créé");
+        
+        return saved;
     }
     
     public Product update(String id, Product product) {
         return productRepository.findById(id)
                 .map(existing -> {
+                    String oldName = existing.getDesignation() != null ? existing.getDesignation() : existing.getRefArticle();
+                    
                     existing.setRefArticle(product.getRefArticle());
                     existing.setDesignation(product.getDesignation());
                     existing.setUnite(product.getUnite());
@@ -47,13 +56,25 @@ public class ProductService {
                         existing.setQuantiteEnStock(product.getQuantiteEnStock());
                     }
                     existing.setUpdatedAt(LocalDateTime.now());
-                    return productRepository.save(existing);
+                    Product saved = productRepository.save(existing);
+                    
+                    // Log d'audit
+                    String newName = saved.getDesignation() != null ? saved.getDesignation() : saved.getRefArticle();
+                    auditService.logUpdate("Produit", id, oldName, newName);
+                    
+                    return saved;
                 })
                 .orElseThrow(() -> new RuntimeException("Product not found with id: " + id));
     }
     
     public void delete(String id) {
-        productRepository.deleteById(id);
+        productRepository.findById(id).ifPresent(product -> {
+            String productName = product.getDesignation() != null ? product.getDesignation() : product.getRefArticle();
+            productRepository.deleteById(id);
+            
+            // Log d'audit
+            auditService.logDelete("Produit", id, "Produit " + productName + " supprimé");
+        });
     }
     
     /**

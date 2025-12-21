@@ -27,6 +27,7 @@ public class PaiementService {
     private final SoldeService soldeService;
     private final ClientService clientService;
     private final SupplierService supplierService;
+    private final AuditService auditService;
     
     public Paiement create(Paiement paiement) {
         // Calculer les champs comptables selon les formules Excel
@@ -37,6 +38,34 @@ public class PaiementService {
         
         // Mettre à jour la facture associée
         updateFacturePaymentStatus(saved);
+        
+        // Log d'audit après avoir mis à jour la facture
+        final String[] factureNumero = {""};
+        final String[] partenaireNom = {""};
+        if (saved.getFactureVenteId() != null) {
+            factureVenteRepository.findById(saved.getFactureVenteId()).ifPresent(facture -> {
+                factureNumero[0] = facture.getNumeroFactureVente();
+                if (facture.getClientId() != null) {
+                    clientService.findById(facture.getClientId()).ifPresent(client -> {
+                        partenaireNom[0] = client.getNom();
+                    });
+                }
+            });
+        } else if (saved.getFactureAchatId() != null) {
+            factureAchatRepository.findById(saved.getFactureAchatId()).ifPresent(facture -> {
+                factureNumero[0] = facture.getNumeroFactureAchat();
+                if (facture.getFournisseurId() != null) {
+                    supplierService.findById(facture.getFournisseurId()).ifPresent(supplier -> {
+                        partenaireNom[0] = supplier.getNom();
+                    });
+                }
+            });
+        }
+        String details = String.format("Paiement de %.2f MAD - %s - Facture: %s", 
+            saved.getMontant() != null ? saved.getMontant() : 0.0,
+            partenaireNom[0].isEmpty() ? "N/A" : partenaireNom[0],
+            factureNumero[0].isEmpty() ? "N/A" : factureNumero[0]);
+        auditService.logCreate("Paiement", saved.getId(), details);
         
         // Enregistrer la transaction dans le solde et mettre à jour les soldes dans le paiement
         if (saved.getMontant() != null && saved.getMontant() > 0) {

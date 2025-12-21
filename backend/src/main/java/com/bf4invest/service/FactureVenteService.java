@@ -441,6 +441,14 @@ public class FactureVenteService {
         facture.setUpdatedAt(LocalDateTime.now());
         factureRepository.save(facture);
         
+        // Log d'audit
+        String details = String.format("Prévision de paiement ajoutée: %.2f MAD prévu le %s%s", 
+            prevision.getMontantPrevu() != null ? prevision.getMontantPrevu() : 0.0,
+            prevision.getDatePrevue() != null ? prevision.getDatePrevue().toString() : "N/A",
+            prevision.getDateRappel() != null ? " (rappel: " + prevision.getDateRappel().toString() + ")" : "");
+        auditService.logCreate("PrevisionPaiement", prevision.getId(), 
+            "Prévision pour facture vente " + facture.getNumeroFactureVente() + " - " + details);
+        
         return prevision;
     }
     
@@ -457,6 +465,12 @@ public class FactureVenteService {
             .findFirst()
             .orElseThrow(() -> new RuntimeException("Prévision not found with id: " + previsionId));
         
+        // Sauvegarder l'ancienne valeur pour l'audit
+        String oldValue = String.format("%.2f MAD le %s%s", 
+            prevision.getMontantPrevu() != null ? prevision.getMontantPrevu() : 0.0,
+            prevision.getDatePrevue() != null ? prevision.getDatePrevue().toString() : "N/A",
+            prevision.getDateRappel() != null ? " (rappel: " + prevision.getDateRappel().toString() + ")" : "");
+        
         // Mettre à jour les champs
         if (previsionUpdate.getDatePrevue() != null) {
             prevision.setDatePrevue(previsionUpdate.getDatePrevue());
@@ -470,9 +484,19 @@ public class FactureVenteService {
         if (previsionUpdate.getNotes() != null) {
             prevision.setNotes(previsionUpdate.getNotes());
         }
+        // dateRappel peut être null pour supprimer le rappel
+        prevision.setDateRappel(previsionUpdate.getDateRappel());
         
         facture.setUpdatedAt(LocalDateTime.now());
         factureRepository.save(facture);
+        
+        // Log d'audit
+        String newValue = String.format("%.2f MAD le %s%s", 
+            prevision.getMontantPrevu() != null ? prevision.getMontantPrevu() : 0.0,
+            prevision.getDatePrevue() != null ? prevision.getDatePrevue().toString() : "N/A",
+            prevision.getDateRappel() != null ? " (rappel: " + prevision.getDateRappel().toString() + ")" : "");
+        auditService.logUpdate("PrevisionPaiement", previsionId, oldValue, 
+            "Prévision pour facture vente " + facture.getNumeroFactureVente() + " - " + newValue);
         
         return prevision;
     }
@@ -485,6 +509,11 @@ public class FactureVenteService {
             throw new RuntimeException("Aucune prévision trouvée pour cette facture");
         }
         
+        PrevisionPaiement previsionToDelete = facture.getPrevisionsPaiement().stream()
+            .filter(p -> previsionId.equals(p.getId()))
+            .findFirst()
+            .orElse(null);
+        
         boolean removed = facture.getPrevisionsPaiement().removeIf(p -> previsionId.equals(p.getId()));
         
         if (!removed) {
@@ -493,6 +522,15 @@ public class FactureVenteService {
         
         facture.setUpdatedAt(LocalDateTime.now());
         factureRepository.save(facture);
+        
+        // Log d'audit
+        if (previsionToDelete != null) {
+            String details = String.format("Prévision de paiement supprimée: %.2f MAD prévu le %s", 
+                previsionToDelete.getMontantPrevu() != null ? previsionToDelete.getMontantPrevu() : 0.0,
+                previsionToDelete.getDatePrevue() != null ? previsionToDelete.getDatePrevue().toString() : "N/A");
+            auditService.logDelete("PrevisionPaiement", previsionId, 
+                "Prévision pour facture vente " + facture.getNumeroFactureVente() + " - " + details);
+        }
     }
 }
 

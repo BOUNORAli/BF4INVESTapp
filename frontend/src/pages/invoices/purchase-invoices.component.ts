@@ -974,23 +974,17 @@ export class PurchaseInvoicesComponent {
 
   previsionsForInvoice = computed(() => {
     const inv = this.selectedInvoiceForPayments();
-    console.log('[previsionsForInvoice computed ACHAT] Recalcul - inv:', inv?.id, 'prévisions:', inv?.previsionsPaiement?.length || 0);
     if (!inv) return [];
-    const previsions = inv.previsionsPaiement || [];
-    console.log('[previsionsForInvoice computed ACHAT] Retour:', previsions.length, 'prévisions');
-    return previsions;
+    return inv.previsionsPaiement || [];
   });
 
   async savePrevision() {
-    console.log('[savePrevision ACHAT] Début');
     if (this.previsionForm.invalid || !this.selectedInvoiceForPayments()) {
-      console.log('[savePrevision ACHAT] Formulaire invalide ou facture non sélectionnée');
       return;
     }
 
     const inv = this.selectedInvoiceForPayments()!;
     const invoiceId = inv.id; // Sauvegarder l'ID avant le rechargement
-    console.log('[savePrevision ACHAT] Facture actuelle:', invoiceId, 'Prévisions avant:', inv.previsionsPaiement?.length || 0);
     
     const previsionData: PrevisionPaiement = {
       datePrevue: this.previsionForm.value.datePrevue!,
@@ -999,17 +993,13 @@ export class PurchaseInvoicesComponent {
       dateRappel: this.previsionForm.value.dateRappel || undefined,
       statut: 'PREVU'
     };
-    console.log('[savePrevision ACHAT] Données prévision:', previsionData);
 
     try {
       if (this.editingPrevisionId()) {
-        console.log('[savePrevision ACHAT] Mise à jour prévision:', this.editingPrevisionId());
         await this.store.updatePrevision(inv.id, this.editingPrevisionId()!, 'achat', previsionData);
       } else {
-        console.log('[savePrevision ACHAT] Ajout nouvelle prévision');
         await this.store.addPrevision(inv.id, 'achat', previsionData);
       }
-      console.log('[savePrevision ACHAT] Prévision sauvegardée, mise à jour locale effectuée');
       
       this.previsionForm.reset({
         datePrevue: new Date().toISOString().split('T')[0],
@@ -1021,21 +1011,12 @@ export class PurchaseInvoicesComponent {
       
       // addPrevision/updatePrevision mettent à jour localement la facture
       // On met à jour immédiatement la facture sélectionnée avec les nouvelles données
-      console.log('[savePrevision ACHAT] Recherche facture mise à jour');
       const updatedInvoice = this.store.invoices().find(inv => inv.id === invoiceId);
-      console.log('[savePrevision ACHAT] Facture mise à jour trouvée:', updatedInvoice?.id, 'Prévisions:', updatedInvoice?.previsionsPaiement?.length || 0);
       if (updatedInvoice) {
-        console.log('[savePrevision ACHAT] Détails prévisions:', updatedInvoice.previsionsPaiement);
         // Créer un nouvel objet pour forcer la détection de changement
         this.selectedInvoiceForPayments.set({ ...updatedInvoice });
-        console.log('[savePrevision ACHAT] selectedInvoiceForPayments mis à jour');
-        console.log('[savePrevision ACHAT] selectedInvoiceForPayments après update:', this.selectedInvoiceForPayments()?.previsionsPaiement?.length || 0);
-        console.log('[savePrevision ACHAT] previsionsForInvoice computed:', this.previsionsForInvoice().length);
-      } else {
-        console.error('[savePrevision ACHAT] ERREUR: Facture mise à jour non trouvée!');
       }
     } catch (error) {
-      console.error('[savePrevision ACHAT] Erreur:', error);
       // Error already handled in store
     }
   }
