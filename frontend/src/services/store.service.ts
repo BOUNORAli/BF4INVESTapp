@@ -803,11 +803,20 @@ export class StoreService {
 
   // --- ACTIONS: INVOICES ---
   async loadInvoices(): Promise<void> {
+    console.log('[StoreService.loadInvoices] Début');
     try {
       const allInvoices = await this.invoiceService.getInvoices();
+      console.log('[StoreService.loadInvoices] Factures reçues:', allInvoices.length);
       this.invoices.set(allInvoices);
+      console.log('[StoreService.loadInvoices] Signal invoices mis à jour');
+      // Log des prévisions pour chaque facture
+      allInvoices.forEach(inv => {
+        if (inv.previsionsPaiement && inv.previsionsPaiement.length > 0) {
+          console.log(`[StoreService.loadInvoices] Facture ${inv.id} (${inv.number}): ${inv.previsionsPaiement.length} prévisions`);
+        }
+      });
     } catch (error) {
-      console.error('Error loading invoices:', error);
+      console.error('[StoreService.loadInvoices] Erreur:', error);
     }
   }
 
@@ -1300,20 +1309,28 @@ export class StoreService {
   }
 
   async addPrevision(factureId: string, type: 'vente' | 'achat', prevision: PrevisionPaiement): Promise<PrevisionPaiement> {
+    console.log('[StoreService.addPrevision] Début - factureId:', factureId, 'type:', type);
     try {
       const endpoint = type === 'vente' 
         ? `/prevision/facture-vente/${factureId}`
         : `/prevision/facture-achat/${factureId}`;
       
+      console.log('[StoreService.addPrevision] Appel API:', endpoint);
       const saved = await this.api.post<PrevisionPaiement>(endpoint, prevision).toPromise();
+      console.log('[StoreService.addPrevision] Prévision sauvegardée:', saved);
+      
       if (saved) {
         this.showToast('Prévision ajoutée avec succès', 'success');
         // Recharger les factures pour mettre à jour les prévisions
+        console.log('[StoreService.addPrevision] Appel loadInvoices()');
         await this.loadInvoices();
+        console.log('[StoreService.addPrevision] loadInvoices() terminé, nombre factures:', this.invoices().length);
+        const facture = this.invoices().find(inv => inv.id === factureId);
+        console.log('[StoreService.addPrevision] Facture après loadInvoices:', facture?.id, 'Prévisions:', facture?.previsionsPaiement?.length || 0);
       }
       return saved!;
     } catch (error) {
-      console.error('Error adding prevision:', error);
+      console.error('[StoreService.addPrevision] Erreur:', error);
       this.showToast('Erreur lors de l\'ajout de la prévision', 'error');
       throw error;
     }

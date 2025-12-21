@@ -1192,17 +1192,24 @@ export class SalesInvoicesComponent {
 
   previsionsForInvoice = computed(() => {
     const inv = this.selectedInvoiceForPayments();
+    console.log('[previsionsForInvoice computed] Recalcul - inv:', inv?.id, 'prévisions:', inv?.previsionsPaiement?.length || 0);
     if (!inv) return [];
-    return inv.previsionsPaiement || [];
+    const previsions = inv.previsionsPaiement || [];
+    console.log('[previsionsForInvoice computed] Retour:', previsions.length, 'prévisions');
+    return previsions;
   });
 
   async savePrevision() {
+    console.log('[savePrevision] Début');
     if (this.previsionForm.invalid || !this.selectedInvoiceForPayments()) {
+      console.log('[savePrevision] Formulaire invalide ou facture non sélectionnée');
       return;
     }
 
     const inv = this.selectedInvoiceForPayments()!;
     const invoiceId = inv.id; // Sauvegarder l'ID avant le rechargement
+    console.log('[savePrevision] Facture actuelle:', invoiceId, 'Prévisions avant:', inv.previsionsPaiement?.length || 0);
+    
     const previsionData: PrevisionPaiement = {
       datePrevue: this.previsionForm.value.datePrevue!,
       montantPrevu: this.previsionForm.value.montantPrevu!,
@@ -1210,13 +1217,18 @@ export class SalesInvoicesComponent {
       dateRappel: this.previsionForm.value.dateRappel || undefined,
       statut: 'PREVU'
     };
+    console.log('[savePrevision] Données prévision:', previsionData);
 
     try {
       if (this.editingPrevisionId()) {
+        console.log('[savePrevision] Mise à jour prévision:', this.editingPrevisionId());
         await this.store.updatePrevision(inv.id, this.editingPrevisionId()!, 'vente', previsionData);
       } else {
+        console.log('[savePrevision] Ajout nouvelle prévision');
         await this.store.addPrevision(inv.id, 'vente', previsionData);
       }
+      console.log('[savePrevision] Prévision sauvegardée, loadInvoices() devrait être terminé');
+      
       this.previsionForm.reset({
         datePrevue: new Date().toISOString().split('T')[0],
         montantPrevu: 0,
@@ -1225,16 +1237,31 @@ export class SalesInvoicesComponent {
       });
       this.editingPrevisionId.set(null);
       
+      // Vérifier l'état actuel des factures
+      console.log('[savePrevision] Nombre de factures dans store:', this.store.invoices().length);
+      const invoiceBeforeUpdate = this.store.invoices().find(inv => inv.id === invoiceId);
+      console.log('[savePrevision] Facture trouvée avant update:', invoiceBeforeUpdate?.id, 'Prévisions:', invoiceBeforeUpdate?.previsionsPaiement?.length || 0);
+      
       // addPrevision/updatePrevision appellent déjà loadInvoices()
       // On attend que la mise à jour soit terminée puis on met à jour la facture sélectionnée
       // On force la création d'un nouvel objet pour que Angular détecte le changement
-      await new Promise(resolve => setTimeout(resolve, 50));
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      console.log('[savePrevision] Après délai, recherche facture mise à jour');
       const updatedInvoice = this.store.invoices().find(inv => inv.id === invoiceId);
+      console.log('[savePrevision] Facture mise à jour trouvée:', updatedInvoice?.id, 'Prévisions:', updatedInvoice?.previsionsPaiement?.length || 0);
       if (updatedInvoice) {
+        console.log('[savePrevision] Détails prévisions:', updatedInvoice.previsionsPaiement);
         // Créer un nouvel objet pour forcer la détection de changement
         this.selectedInvoiceForPayments.set({ ...updatedInvoice });
+        console.log('[savePrevision] selectedInvoiceForPayments mis à jour');
+        console.log('[savePrevision] selectedInvoiceForPayments après update:', this.selectedInvoiceForPayments()?.previsionsPaiement?.length || 0);
+        console.log('[savePrevision] previsionsForInvoice computed:', this.previsionsForInvoice().length);
+      } else {
+        console.error('[savePrevision] ERREUR: Facture mise à jour non trouvée!');
       }
     } catch (error) {
+      console.error('[savePrevision] Erreur:', error);
       // Error already handled in store
     }
   }
