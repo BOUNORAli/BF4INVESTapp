@@ -1,5 +1,10 @@
 ﻿import { Injectable, signal, computed, inject, effect } from '@angular/core';
 import { ApiService } from './api.service';
+import { ToastService, Toast } from './toast.service';
+import { ProductService } from './product.service';
+import { PartnerService } from './partner.service';
+import { BcService } from './bc.service';
+import { InvoiceService } from './invoice.service';
 
 export interface Product {
   id: string;
@@ -240,11 +245,7 @@ export interface HistoriqueSolde {
   description?: string;
 }
 
-export interface Toast {
-  id: number;
-  message: string;
-  type: 'success' | 'error' | 'info';
-}
+export { Toast };
 
 export interface Notification {
   id: string;
@@ -293,19 +294,21 @@ export interface DashboardKpiResponse {
 })
 export class StoreService {
   private api = inject(ApiService);
+  private toastService = inject(ToastService);
+  private productService = inject(ProductService);
+  private partnerService = inject(PartnerService);
+  private bcService = inject(BcService);
+  private invoiceService = inject(InvoiceService);
 
   // --- NOTIFICATIONS SYSTEM (TOASTS) ---
-  readonly toasts = signal<Toast[]>([]);
-  private toastCounter = 0;
+  readonly toasts = this.toastService.toasts;
 
   showToast(message: string, type: 'success' | 'error' | 'info' = 'success') {
-    const id = ++this.toastCounter;
-    this.toasts.update(current => [...current, { id, message, type }]);
-    setTimeout(() => this.removeToast(id), 4000);
+    this.toastService.showToast(message, type);
   }
 
   removeToast(id: number) {
-    this.toasts.update(current => current.filter(t => t.id !== id));
+    this.toastService.removeToast(id);
   }
 
   // --- NOTIFICATION CENTER (HISTORY) ---
@@ -461,8 +464,8 @@ export class StoreService {
 
   private async loadClients(): Promise<void> {
     try {
-      const clients = await this.api.get<any[]>('/clients').toPromise() || [];
-      this.clients.set(clients.map(c => this.mapClient(c)));
+      const clients = await this.partnerService.getClients();
+      this.clients.set(clients);
     } catch (error) {
       console.error('Error loading clients:', error);
     }
@@ -470,8 +473,8 @@ export class StoreService {
 
   private async loadSuppliers(): Promise<void> {
     try {
-      const suppliers = await this.api.get<any[]>('/fournisseurs').toPromise() || [];
-      this.suppliers.set(suppliers.map(s => this.mapSupplier(s)));
+      const suppliers = await this.partnerService.getSuppliers();
+      this.suppliers.set(suppliers);
     } catch (error) {
       console.error('Error loading suppliers:', error);
     }
@@ -528,44 +531,8 @@ export class StoreService {
   }
 
   // --- MAPPERS ---
-  private mapClient(c: any): Client {
-    return {
-      id: c.id,
-      name: c.nom || c.name,
-      ice: c.ice,
-      referenceClient: c.referenceClient,
-      contact: c.contacts?.[0]?.nom,
-      phone: c.telephone || c.phone,
-      email: c.email,
-      address: c.adresse || c.address
-    };
-  }
+  // Mappers removed as they are now in specific services
 
-  private mapSupplier(s: any): Supplier {
-    return {
-      id: s.id,
-      name: s.nom || s.name,
-      ice: s.ice,
-      referenceFournisseur: s.referenceFournisseur,
-      contact: s.contact,
-      phone: s.telephone || s.phone,
-      email: s.email,
-      address: s.adresse || s.address,
-      dateRegulariteFiscale: s.dateRegulariteFiscale || undefined
-    };
-  }
-
-  private mapProduct(p: any): Product {
-    return {
-      id: p.id,
-      ref: p.refArticle || p.ref,
-      name: p.designation || p.name,
-      unit: p.unite || p.unit,
-      priceBuyHT: p.prixAchatUnitaireHT || p.priceBuyHT || 0,
-      priceSellHT: p.prixVenteUnitaireHT || p.priceSellHT || 0,
-      stock: p.quantiteEnStock !== undefined ? p.quantiteEnStock : (p.stock !== undefined ? p.stock : 0)
-    };
-  }
 
   // --- DASHBOARD KPIs ---
   async loadDashboardKPIs(from?: Date, to?: Date): Promise<void> {
@@ -673,21 +640,10 @@ export class StoreService {
   // --- ACTIONS: CLIENTS ---
   async addClient(client: Client): Promise<void> {
     try {
-      const payload = {
-        nom: client.name,
-        ice: client.ice,
-        referenceClient: client.referenceClient || null,
-        telephone: client.phone,
-        email: client.email,
-        adresse: client.address,
-        contacts: client.contact ? [{ nom: client.contact }] : []
-      };
-      
-      const created = await this.api.post<any>('/clients', payload).toPromise();
-      const mapped = this.mapClient(created);
-      this.clients.update(list => [mapped, ...list]);
-      this.showToast('Client ajout├® avec succ├¿s');
-      this.addNotification({ title: 'Nouveau Client', message: `Client ${client.name} ajout├®.`, type: 'info' });
+      const created = await this.partnerService.addClient(client);
+      this.clients.update(list => [created, ...list]);
+      this.showToast('Client ajouté avec succès');
+      this.addNotification({ title: 'Nouveau Client', message: `Client ${client.name} ajouté.`, type: 'info' });
     } catch (error) {
       this.showToast('Erreur lors de l\'ajout du client', 'error');
       throw error;
@@ -696,30 +652,20 @@ export class StoreService {
 
   async updateClient(client: Client): Promise<void> {
     try {
-      const payload = {
-        nom: client.name,
-        ice: client.ice,
-        referenceClient: client.referenceClient || null,
-        telephone: client.phone,
-        email: client.email,
-        adresse: client.address
-      };
-      
-      const updated = await this.api.put<any>(`/clients/${client.id}`, payload).toPromise();
-      const mapped = this.mapClient(updated);
-      this.clients.update(list => list.map(c => c.id === client.id ? mapped : c));
-      this.showToast('Fiche client mise ├á jour');
+      const updated = await this.partnerService.updateClient(client);
+      this.clients.update(list => list.map(c => c.id === client.id ? updated : c));
+      this.showToast('Fiche client mise à jour');
     } catch (error) {
-      this.showToast('Erreur lors de la mise ├á jour', 'error');
+      this.showToast('Erreur lors de la mise à jour', 'error');
       throw error;
     }
   }
 
   async deleteClient(id: string): Promise<boolean> {
     try {
-      await this.api.delete(`/clients/${id}`).toPromise();
+      await this.partnerService.deleteClient(id);
       this.clients.update(list => list.filter(c => c.id !== id));
-      this.showToast('Client supprim├®', 'info');
+      this.showToast('Client supprimé', 'info');
       return true;
     } catch (error) {
       this.showToast('Erreur lors de la suppression', 'error');
@@ -730,22 +676,9 @@ export class StoreService {
   // --- ACTIONS: SUPPLIERS ---
   async addSupplier(supplier: Supplier): Promise<void> {
     try {
-      const payload = {
-        nom: supplier.name,
-        ice: supplier.ice,
-        referenceFournisseur: supplier.referenceFournisseur || null,
-        contact: supplier.contact || null,
-        telephone: supplier.phone,
-        email: supplier.email,
-        adresse: supplier.address,
-        modesPaiementAcceptes: ['virement', 'cheque', 'LCN', 'compensation'],
-        dateRegulariteFiscale: supplier.dateRegulariteFiscale || null
-      };
-      
-      const created = await this.api.post<any>('/fournisseurs', payload).toPromise();
-      const mapped = this.mapSupplier(created);
-      this.suppliers.update(list => [mapped, ...list]);
-      this.showToast('Fournisseur ajout├® avec succ├¿s');
+      const created = await this.partnerService.addSupplier(supplier);
+      this.suppliers.update(list => [created, ...list]);
+      this.showToast('Fournisseur ajouté avec succès');
     } catch (error) {
       this.showToast('Erreur lors de l\'ajout du fournisseur', 'error');
       throw error;
@@ -754,32 +687,20 @@ export class StoreService {
 
   async updateSupplier(supplier: Supplier): Promise<void> {
     try {
-      const payload = {
-        nom: supplier.name,
-        ice: supplier.ice,
-        referenceFournisseur: supplier.referenceFournisseur || null,
-        contact: supplier.contact || null,
-        telephone: supplier.phone,
-        email: supplier.email,
-        adresse: supplier.address,
-        dateRegulariteFiscale: supplier.dateRegulariteFiscale || null
-      };
-      
-      const updated = await this.api.put<any>(`/fournisseurs/${supplier.id}`, payload).toPromise();
-      const mapped = this.mapSupplier(updated);
-      this.suppliers.update(list => list.map(s => s.id === supplier.id ? mapped : s));
-      this.showToast('Fiche fournisseur mise ├á jour');
+      const updated = await this.partnerService.updateSupplier(supplier);
+      this.suppliers.update(list => list.map(s => s.id === supplier.id ? updated : s));
+      this.showToast('Fiche fournisseur mise à jour');
     } catch (error) {
-      this.showToast('Erreur lors de la mise ├á jour', 'error');
+      this.showToast('Erreur lors de la mise à jour', 'error');
       throw error;
     }
   }
 
   async deleteSupplier(id: string): Promise<boolean> {
     try {
-      await this.api.delete(`/fournisseurs/${id}`).toPromise();
+      await this.partnerService.deleteSupplier(id);
       this.suppliers.update(list => list.filter(s => s.id !== id));
-      this.showToast('Fournisseur supprim├®', 'info');
+      this.showToast('Fournisseur supprimé', 'info');
       return true;
     } catch (error) {
       this.showToast('Erreur lors de la suppression', 'error');
@@ -846,8 +767,8 @@ export class StoreService {
   // --- ACTIONS: BC ---
   async loadBCs(): Promise<void> {
     try {
-      const bcs = await this.api.get<any[]>('/bandes-commandes').toPromise() || [];
-      this.bcs.set(bcs.map(bc => this.mapBC(bc)));
+      const bcs = await this.bcService.getBCs();
+      this.bcs.set(bcs);
     } catch (error) {
       console.error('Error loading BCs:', error);
     }
@@ -855,166 +776,43 @@ export class StoreService {
 
   async addBC(bc: BC): Promise<void> {
     try {
-      const payload: any = {
-        // Ne pas envoyer numeroBC si vide - le backend le g├®n├®rera avec la nouvelle logique
-        ...(bc.number && bc.number.trim() ? { numeroBC: bc.number } : {}),
-        dateBC: bc.date,
-        fournisseurId: bc.supplierId,
-        etat: bc.status
-      };
+      const created = await this.bcService.addBC(bc);
+      this.bcs.update(list => [created, ...list]);
       
-      if (bc.ajouterAuStock !== undefined) {
-        payload.ajouterAuStock = bc.ajouterAuStock;
-      }
-      
-      // Nouvelle structure multi-clients
-      if (bc.lignesAchat && bc.lignesAchat.length > 0) {
-        payload.lignesAchat = bc.lignesAchat.map(l => ({
-          produitRef: l.produitRef,
-          designation: l.designation,
-          unite: l.unite,
-          quantiteAchetee: l.quantiteAchetee,
-          prixAchatUnitaireHT: l.prixAchatUnitaireHT,
-          tva: l.tva
-        }));
-      }
-      
-      if (bc.clientsVente && bc.clientsVente.length > 0) {
-        payload.clientsVente = bc.clientsVente.map(cv => ({
-          clientId: cv.clientId,
-          lignesVente: (cv.lignesVente || []).map(lv => ({
-            produitRef: lv.produitRef,
-            designation: lv.designation,
-            unite: lv.unite,
-            quantiteVendue: lv.quantiteVendue,
-            prixVenteUnitaireHT: lv.prixVenteUnitaireHT,
-            tva: lv.tva
-          }))
-        }));
-      }
-      
-      // R├®trocompatibilit├® ancienne structure
-      if (bc.clientId) {
-        payload.clientId = bc.clientId;
-      }
-      if (bc.items && bc.items.length > 0) {
-        payload.lignes = bc.items.map(item => ({
-          produitRef: item.ref,
-          designation: item.name,
-          unite: item.unit,
-          quantiteAchetee: item.qtyBuy,
-          quantiteVendue: item.qtySell,
-          prixAchatUnitaireHT: item.priceBuyHT,
-          prixVenteUnitaireHT: item.priceSellHT,
-          tva: item.tvaRate
-        }));
-      }
-      
-      if (bc.paymentMode) {
-        payload.modePaiement = bc.paymentMode;
-      }
-      
-      const created = await this.api.post<any>('/bandes-commandes', payload).toPromise();
-      console.log('­ƒöÁ BC cr├®├® par le backend:', created);
-      console.log('­ƒöÁ totalAchatHT renvoy├®:', created?.totalAchatHT);
-      const mapped = this.mapBC(created);
-      console.log('­ƒöÁ BC mapp├®:', mapped);
-      console.log('­ƒöÁ totalAchatHT mapp├®:', mapped.totalAchatHT);
-      this.bcs.update(list => [mapped, ...list]);
-      
-      // Recharger les produits si le stock a ├®t├® mis ├á jour
+      // Recharger les produits si le stock a été mis à jour
       if (bc.ajouterAuStock) {
         await this.loadProducts();
       }
       
-      this.showToast('Commande cr├®├®e avec succ├¿s', 'success');
-      this.addNotification({ title: 'Nouvelle Commande', message: `BC ${bc.number} cr├®├®.`, type: 'success' });
+      this.showToast('Commande créée avec succès', 'success');
+      this.addNotification({ title: 'Nouvelle Commande', message: `BC ${bc.number} créée.`, type: 'success' });
     } catch (error) {
-      this.showToast('Erreur lors de la cr├®ation de la commande', 'error');
+      this.showToast('Erreur lors de la création de la commande', 'error');
       throw error;
     }
   }
 
   async updateBC(updatedBc: BC): Promise<void> {
     try {
-      const payload: any = {
-        numeroBC: updatedBc.number,
-        dateBC: updatedBc.date,
-        fournisseurId: updatedBc.supplierId,
-        etat: updatedBc.status
-      };
+      const updated = await this.bcService.updateBC(updatedBc);
+      this.bcs.update(list => list.map(b => b.id === updatedBc.id ? updated : b));
       
-      if (updatedBc.ajouterAuStock !== undefined) {
-        payload.ajouterAuStock = updatedBc.ajouterAuStock;
-      }
-      
-      // Nouvelle structure multi-clients
-      if (updatedBc.lignesAchat && updatedBc.lignesAchat.length > 0) {
-        payload.lignesAchat = updatedBc.lignesAchat.map(l => ({
-          produitRef: l.produitRef,
-          designation: l.designation,
-          unite: l.unite,
-          quantiteAchetee: l.quantiteAchetee,
-          prixAchatUnitaireHT: l.prixAchatUnitaireHT,
-          tva: l.tva
-        }));
-      }
-      
-      if (updatedBc.clientsVente && updatedBc.clientsVente.length > 0) {
-        payload.clientsVente = updatedBc.clientsVente.map(cv => ({
-          clientId: cv.clientId,
-          lignesVente: (cv.lignesVente || []).map(lv => ({
-            produitRef: lv.produitRef,
-            designation: lv.designation,
-            unite: lv.unite,
-            quantiteVendue: lv.quantiteVendue,
-            prixVenteUnitaireHT: lv.prixVenteUnitaireHT,
-            tva: lv.tva
-          }))
-        }));
-      }
-      
-      // R├®trocompatibilit├® ancienne structure
-      if (updatedBc.clientId) {
-        payload.clientId = updatedBc.clientId;
-      }
-      if (updatedBc.items && updatedBc.items.length > 0) {
-        payload.lignes = updatedBc.items.map(item => ({
-          produitRef: item.ref,
-          designation: item.name,
-          unite: item.unit,
-          quantiteAchetee: item.qtyBuy,
-          quantiteVendue: item.qtySell,
-          prixAchatUnitaireHT: item.priceBuyHT,
-          prixVenteUnitaireHT: item.priceSellHT,
-          tva: item.tvaRate
-        }));
-      }
-      
-      if (updatedBc.paymentMode) {
-        payload.modePaiement = updatedBc.paymentMode;
-      }
-      
-      const updated = await this.api.put<any>(`/bandes-commandes/${updatedBc.id}`, payload).toPromise();
-      const mapped = this.mapBC(updated);
-      this.bcs.update(list => list.map(b => b.id === updatedBc.id ? mapped : b));
-      
-      // Recharger les produits si le stock a ├®t├® mis ├á jour
+      // Recharger les produits si le stock a été mis à jour
       if (updatedBc.ajouterAuStock) {
         await this.loadProducts();
       }
-      this.showToast('Commande mise ├á jour', 'success');
+      this.showToast('Commande mise à jour', 'success');
     } catch (error) {
-      this.showToast('Erreur lors de la mise ├á jour', 'error');
+      this.showToast('Erreur lors de la mise à jour', 'error');
       throw error;
     }
   }
 
   async deleteBC(id: string): Promise<boolean> {
     try {
-      await this.api.delete(`/bandes-commandes/${id}`).toPromise();
+      await this.bcService.deleteBC(id);
       this.bcs.update(list => list.filter(b => b.id !== id));
-      this.showToast('Commande supprim├®e', 'info');
+      this.showToast('Commande supprimée', 'info');
       return true;
     } catch (error) {
       this.showToast('Erreur lors de la suppression', 'error');
@@ -1022,83 +820,11 @@ export class StoreService {
     }
   }
 
-  private mapBC(bc: any): BC {
-    // Mapper lignesAchat (nouvelle structure)
-    const lignesAchat: LigneAchat[] = bc.lignesAchat ? bc.lignesAchat.map((l: any) => ({
-      produitRef: l.produitRef || '',
-      designation: l.designation || '',
-      unite: l.unite || 'U',
-      quantiteAchetee: l.quantiteAchetee || 0,
-      prixAchatUnitaireHT: l.prixAchatUnitaireHT || 0,
-      tva: l.tva || 20,
-      totalHT: l.totalHT,
-      totalTTC: l.totalTTC
-    })) : [];
-    
-    // Mapper clientsVente (nouvelle structure)
-    const clientsVente: ClientVente[] = bc.clientsVente ? bc.clientsVente.map((cv: any) => ({
-      clientId: cv.clientId || '',
-      lignesVente: (cv.lignesVente || []).map((lv: any) => ({
-        produitRef: lv.produitRef || '',
-        designation: lv.designation || '',
-        unite: lv.unite || 'U',
-        quantiteVendue: lv.quantiteVendue || 0,
-        prixVenteUnitaireHT: lv.prixVenteUnitaireHT || 0,
-        tva: lv.tva || 20,
-        totalHT: lv.totalHT,
-        totalTTC: lv.totalTTC,
-        margeUnitaire: lv.margeUnitaire,
-        margePourcentage: lv.margePourcentage
-      }))
-    })) : [];
-    
-    // Mapper items (ancienne structure pour r├®trocompatibilit├®)
-    const items: LineItem[] = (bc.lignes || bc.items || []).map((item: any) => ({
-      productId: item.productId || '',
-      ref: item.produitRef || item.ref,
-      name: item.designation || item.name,
-      unit: item.unite || item.unit,
-      qtyBuy: item.quantiteAchetee || item.qtyBuy,
-      qtySell: item.quantiteVendue || item.qtySell,
-      priceBuyHT: item.prixAchatUnitaireHT || item.priceBuyHT,
-      priceSellHT: item.prixVenteUnitaireHT || item.priceSellHT,
-      tvaRate: item.tva || item.tvaRate
-    }));
-    
-    return {
-      id: bc.id,
-      number: bc.numeroBC || bc.number,
-      date: bc.dateBC || bc.date,
-      clientId: bc.clientId, // R├®trocompatibilit├®
-      supplierId: bc.fournisseurId || bc.supplierId,
-      ajouterAuStock: bc.ajouterAuStock || false,
-      status: bc.etat || bc.status,
-      paymentMode: bc.modePaiement || bc.paymentMode,
-      items: items, // R├®trocompatibilit├®
-      // Nouvelle structure
-      lignesAchat: lignesAchat,
-      clientsVente: clientsVente,
-      // Totaux
-      totalAchatHT: bc.totalAchatHT,
-      totalAchatTTC: bc.totalAchatTTC,
-      totalVenteHT: bc.totalVenteHT,
-      totalVenteTTC: bc.totalVenteTTC,
-      margeTotale: bc.margeTotale,
-      margePourcentage: bc.margePourcentage
-    };
-  }
 
   // --- ACTIONS: INVOICES ---
   async loadInvoices(): Promise<void> {
     try {
-      const purchaseInvoices = await this.api.get<any[]>('/factures-achats').toPromise() || [];
-      const salesInvoices = await this.api.get<any[]>('/factures-ventes').toPromise() || [];
-      
-      const allInvoices: Invoice[] = [
-        ...purchaseInvoices.map(inv => this.mapInvoice(inv, 'purchase')),
-        ...salesInvoices.map(inv => this.mapInvoice(inv, 'sale'))
-      ];
-      
+      const allInvoices = await this.invoiceService.getInvoices();
       this.invoices.set(allInvoices);
     } catch (error) {
       console.error('Error loading invoices:', error);
@@ -1106,109 +832,18 @@ export class StoreService {
   }
 
   async addInvoice(inv: Invoice): Promise<void> {
-    console.log('­ƒƒí store.addInvoice - D├ëBUT');
-    console.log('­ƒƒí store.addInvoice - Invoice re├ºue:', inv);
-    console.log('­ƒƒí store.addInvoice - Montants re├ºus:', {
-      amountHT: inv.amountHT,
-      amountTTC: inv.amountTTC,
-      'amountHT type': typeof inv.amountHT,
-      'amountTTC type': typeof inv.amountTTC
-    });
-    
     try {
-      // S'assurer que les montants sont des nombres
-      const amountHT = inv.amountHT != null && inv.amountHT !== undefined ? Number(inv.amountHT) : 0;
-      const amountTTC = inv.amountTTC != null && inv.amountTTC !== undefined ? Number(inv.amountTTC) : 0;
-
-      console.log('­ƒƒí store.addInvoice - Montants convertis:', {
-        amountHT,
-        amountTTC,
-        'amountHT type': typeof amountHT,
-        'amountTTC type': typeof amountTTC
-      });
-
-      if (inv.type === 'purchase') {
-        const payload: any = {
-          numeroFactureAchat: inv.number,
-          dateFacture: inv.date,
-          bandeCommandeId: inv.bcId || null,
-          fournisseurId: inv.partnerId,
-          totalHT: amountHT,
-          totalTTC: amountTTC,
-          modePaiement: inv.paymentMode || null,
-          etatPaiement: inv.status === 'paid' ? 'regle' : 'non_regle'
-        };
-        
-        // Ajouter l'option ajouterAuStock si pr├®sente
-        if ((inv as any).ajouterAuStock !== undefined) {
-          payload.ajouterAuStock = (inv as any).ajouterAuStock;
-        }
-        
-        console.log('­ƒƒí store.addInvoice - Payload pour facture achat:', payload);
-        console.log('­ƒƒí store.addInvoice - Payload JSON:', JSON.stringify(payload, null, 2));
-        
-        const created = await this.api.post<any>('/factures-achats', payload).toPromise();
-        console.log('­ƒƒí store.addInvoice - R├®ponse backend (facture achat):', created);
-        console.log('­ƒƒí store.addInvoice - Montants dans r├®ponse:', {
-          totalHT: created?.totalHT,
-          totalTTC: created?.totalTTC,
-          'totalHT type': typeof created?.totalHT,
-          'totalTTC type': typeof created?.totalTTC
-        });
-        
-        const mapped = this.mapInvoice(created, 'purchase');
-        console.log('­ƒƒí store.addInvoice - Invoice mapp├®e (facture achat):', mapped);
-        console.log('­ƒƒí store.addInvoice - Montants dans invoice mapp├®e:', {
-          amountHT: mapped.amountHT,
-          amountTTC: mapped.amountTTC
-        });
-        
-        this.invoices.update(list => [mapped, ...list]);
-      } else {
-        const payload = {
-          // Ne pas envoyer numeroFactureVente si vide - le backend le g├®n├®rera avec la nouvelle logique
-          ...(inv.number && inv.number.trim() ? { numeroFactureVente: inv.number } : {}),
-          dateFacture: inv.date,
-          bandeCommandeId: inv.bcId || null,
-          clientId: inv.partnerId,
-          totalHT: amountHT,
-          totalTTC: amountTTC,
-          modePaiement: inv.paymentMode || null,
-          etatPaiement: inv.status === 'paid' ? 'regle' : 'non_regle'
-        };
-        
-        console.log('­ƒƒí store.addInvoice - Payload pour facture vente:', payload);
-        console.log('­ƒƒí store.addInvoice - Payload JSON:', JSON.stringify(payload, null, 2));
-        
-        const created = await this.api.post<any>('/factures-ventes', payload).toPromise();
-        console.log('­ƒƒí store.addInvoice - R├®ponse backend (facture vente):', created);
-        console.log('­ƒƒí store.addInvoice - Montants dans r├®ponse:', {
-          totalHT: created?.totalHT,
-          totalTTC: created?.totalTTC,
-          'totalHT type': typeof created?.totalHT,
-          'totalTTC type': typeof created?.totalTTC
-        });
-        
-        const mapped = this.mapInvoice(created, 'sale');
-        console.log('­ƒƒí store.addInvoice - Invoice mapp├®e (facture vente):', mapped);
-        console.log('­ƒƒí store.addInvoice - Montants dans invoice mapp├®e:', {
-          amountHT: mapped.amountHT,
-          amountTTC: mapped.amountTTC
-        });
-        
-        this.invoices.update(list => [mapped, ...list]);
-      }
+      const created = await this.invoiceService.addInvoice(inv);
+      this.invoices.update(list => [created, ...list]);
       
-      this.showToast(inv.type === 'sale' ? 'Facture vente ├®mise' : 'Facture achat enregistr├®e', 'success');
+      this.showToast(inv.type === 'sale' ? 'Facture vente émise' : 'Facture achat enregistrée', 'success');
       this.addNotification({ 
         title: inv.type === 'sale' ? 'Facture Vente' : 'Facture Achat', 
-        message: `${inv.number} enregistr├®e pour ${amountTTC} MAD.`, 
+        message: `${inv.number} enregistrée pour ${created.amountTTC} MAD.`, 
         type: 'info' 
       });
-      
-      console.log('­ƒƒí store.addInvoice - FIN - Succ├¿s');
     } catch (error) {
-      console.error('ÔØî store.addInvoice - ERREUR:', error);
+      console.error('❌ store.addInvoice - ERREUR:', error);
       this.showToast('Erreur lors de l\'enregistrement de la facture', 'error');
       throw error;
     }
@@ -1216,173 +851,29 @@ export class StoreService {
 
   async updateInvoice(inv: Invoice): Promise<void> {
     try {
-      if (inv.type === 'purchase') {
-        // R├®cup├®rer la facture existante pour pr├®server les montants si non fournis
-        const existingInvoice = this.invoices().find(i => i.id === inv.id);
-        
-        // Utiliser les valeurs fournies dans inv (qui viennent de originalInvoice dans le composant)
-        // Si elles sont null/undefined, utiliser les valeurs existantes
-        // Note: on accepte 0 comme valeur valide
-        const amountHT = (inv.amountHT != null && inv.amountHT !== undefined) 
-          ? Number(inv.amountHT) 
-          : (existingInvoice && existingInvoice.amountHT != null && existingInvoice.amountHT !== undefined ? Number(existingInvoice.amountHT) : 0);
-        const amountTTC = (inv.amountTTC != null && inv.amountTTC !== undefined) 
-          ? Number(inv.amountTTC) 
-          : (existingInvoice && existingInvoice.amountTTC != null && existingInvoice.amountTTC !== undefined ? Number(existingInvoice.amountTTC) : 0);
-        
-        const payload: any = {
-          numeroFactureAchat: inv.number || existingInvoice?.number,
-          dateFacture: inv.date || existingInvoice?.date,
-          bandeCommandeId: inv.bcId || existingInvoice?.bcId || null,
-          fournisseurId: inv.partnerId || existingInvoice?.partnerId,
-          totalHT: amountHT,
-          totalTTC: amountTTC,
-          modePaiement: inv.paymentMode || existingInvoice?.paymentMode || null,
-          etatPaiement: inv.status === 'paid' ? 'regle' : (inv.status === 'overdue' ? 'non_regle' : 'non_regle')
-        };
-        
-        // Ajouter l'option ajouterAuStock si pr├®sente
-        if ((inv as any).ajouterAuStock !== undefined) {
-          payload.ajouterAuStock = (inv as any).ajouterAuStock;
-        }
-        
-        // Ne pas envoyer les lignes pour pr├®server les totaux existants
-        // Les lignes seront pr├®serv├®es dans le backend si non fournies
-        
-        const updated = await this.api.put<any>(`/factures-achats/${inv.id}`, payload).toPromise();
-        console.log('🟢 store.updateInvoice - Facture retournée par backend:', updated);
-        console.log('🟢 store.updateInvoice - Champs calculés dans updated:', {
-          tvaMois: updated?.tvaMois,
-          solde: updated?.solde,
-          totalTTCApresRG: updated?.totalTTCApresRG,
-          totalTTCApresRG_SIGNE: updated?.totalTTCApresRG_SIGNE,
-          rgTTC: updated?.rgTTC,
-          rgHT: updated?.rgHT,
-          factureHT_YC_RG: updated?.factureHT_YC_RG,
-          bilan: updated?.bilan,
-          typeMouvement: updated?.typeMouvement,
-          nature: updated?.nature,
-          bcReference: updated?.bcReference
-        });
-        const mapped = this.mapInvoice(updated, 'purchase');
-        this.invoices.update(list => list.map(item => item.id === inv.id ? mapped : item));
-      } else {
-        console.log('­ƒƒí store.updateInvoice - Type: sale');
-        console.log('­ƒƒí store.updateInvoice - Invoice re├ºue:', inv);
-        console.log('­ƒƒí store.updateInvoice - Montants re├ºus:', { 
-          amountHT: inv.amountHT, 
-          amountTTC: inv.amountTTC,
-          amountHTType: typeof inv.amountHT,
-          amountTTCType: typeof inv.amountTTC
-        });
-        
-        // R├®cup├®rer la facture existante pour pr├®server les montants si non fournis
-        const existingInvoice = this.invoices().find(i => i.id === inv.id);
-        console.log('­ƒƒí store.updateInvoice - Facture existante trouv├®e:', existingInvoice);
-        if (existingInvoice) {
-          console.log('­ƒƒí store.updateInvoice - Montants existants:', { 
-            amountHT: existingInvoice.amountHT, 
-            amountTTC: existingInvoice.amountTTC 
-          });
-        }
-        
-        // Utiliser les valeurs fournies dans inv (qui viennent de originalInvoice dans le composant)
-        // Si elles sont null/undefined, utiliser les valeurs existantes
-        // Note: on accepte 0 comme valeur valide
-        const amountHT = (inv.amountHT != null && inv.amountHT !== undefined) 
-          ? Number(inv.amountHT) 
-          : (existingInvoice && existingInvoice.amountHT != null && existingInvoice.amountHT !== undefined ? Number(existingInvoice.amountHT) : 0);
-        const amountTTC = (inv.amountTTC != null && inv.amountTTC !== undefined) 
-          ? Number(inv.amountTTC) 
-          : (existingInvoice && existingInvoice.amountTTC != null && existingInvoice.amountTTC !== undefined ? Number(existingInvoice.amountTTC) : 0);
-        
-        console.log('­ƒƒí store.updateInvoice - Montants calcul├®s:', { 
-          amountHT, 
-          amountTTC,
-          amountHTType: typeof amountHT,
-          amountTTCType: typeof amountTTC
-        });
-        
-        const payload: any = {
-          // Ne pas envoyer numeroFactureVente si vide (sauf en mode ├®dition o├╣ on garde l'existant)
-          ...(inv.number && inv.number.trim() ? { numeroFactureVente: inv.number } : 
-              (existingInvoice?.number ? { numeroFactureVente: existingInvoice.number } : {})),
-          dateFacture: inv.date || existingInvoice?.date,
-          bandeCommandeId: inv.bcId || existingInvoice?.bcId || null,
-          clientId: inv.partnerId || existingInvoice?.partnerId,
-          totalHT: amountHT,
-          totalTTC: amountTTC,
-          modePaiement: inv.paymentMode || existingInvoice?.paymentMode || null,
-          etatPaiement: inv.status === 'paid' ? 'regle' : (inv.status === 'overdue' ? 'non_regle' : 'non_regle')
-        };
-        
-        console.log('­ƒƒí store.updateInvoice - Payload ├á envoyer au backend:', payload);
-        console.log('­ƒƒí store.updateInvoice - Payload JSON stringifi├®:', JSON.stringify(payload, null, 2));
-        console.log('­ƒƒí store.updateInvoice - Montants dans payload:', { 
-          totalHT: payload.totalHT, 
-          totalTTC: payload.totalTTC,
-          'payload.totalHT type': typeof payload.totalHT,
-          'payload.totalTTC type': typeof payload.totalTTC
-        });
-        
-        // Ne pas envoyer les lignes pour pr├®server les totaux existants
-        // Les lignes seront pr├®serv├®es dans le backend si non fournies
-        
-        const updated = await this.api.put<any>(`/factures-ventes/${inv.id}`, payload).toPromise();
-        console.log('­ƒƒí store.updateInvoice - R├®ponse compl├¿te du backend:', JSON.stringify(updated, null, 2));
-        console.log('­ƒƒí store.updateInvoice - Montants dans la r├®ponse:', { 
-          totalHT: updated?.totalHT, 
-          totalTTC: updated?.totalTTC,
-          'updated?.totalHT type': typeof updated?.totalHT,
-          'updated?.totalTTC type': typeof updated?.totalTTC
-        });
-        
-        // Log pour v├®rifier si les valeurs sont ailleurs dans la r├®ponse
-        console.log('­ƒƒí store.updateInvoice - Tous les champs num├®riques:', {
-          totalHT: updated?.totalHT,
-          totalTTC: updated?.totalTTC,
-          totalTVA: updated?.totalTVA,
-          montantRestant: updated?.montantRestant
-        });
-        
-        const mapped = this.mapInvoice(updated, 'sale');
-        console.log('­ƒƒí store.updateInvoice - Invoice mapp├®e:', mapped);
-        console.log('­ƒƒí store.updateInvoice - Montants dans invoice mapp├®e:', { 
-          amountHT: mapped.amountHT, 
-          amountTTC: mapped.amountTTC 
-        });
-        
-        this.invoices.update(list => list.map(item => item.id === inv.id ? mapped : item));
-        console.log('­ƒƒí store.updateInvoice - Liste mise ├á jour');
-      }
+      const existingInvoice = this.invoices().find(i => i.id === inv.id);
+      const updated = await this.invoiceService.updateInvoice(inv, existingInvoice);
+      this.invoices.update(list => list.map(item => item.id === inv.id ? updated : item));
       
-      this.showToast('Facture mise ├á jour avec succ├¿s', 'success');
+      this.showToast('Facture mise à jour avec succès', 'success');
     } catch (error) {
       console.error('Error updating invoice:', error);
-      this.showToast('Erreur lors de la mise ├á jour de la facture', 'error');
+      this.showToast('Erreur lors de la mise à jour de la facture', 'error');
       throw error;
     }
   }
 
   async deleteInvoice(id: string): Promise<boolean> {
     try {
-      // Trouver la facture pour d├®terminer son type
       const invoice = this.invoices().find(inv => inv.id === id);
       if (!invoice) {
-        this.showToast('Facture non trouv├®e', 'error');
+        this.showToast('Facture non trouvée', 'error');
         return false;
       }
       
-      // Appeler l'API appropri├®e selon le type
-      if (invoice.type === 'purchase') {
-        await this.api.delete(`/factures-achats/${id}`).toPromise();
-      } else {
-        await this.api.delete(`/factures-ventes/${id}`).toPromise();
-      }
-      
-      // Mettre ├á jour la liste locale
+      await this.invoiceService.deleteInvoice(id, invoice.type);
       this.invoices.update(list => list.filter(inv => inv.id !== id));
-      this.showToast('Facture supprim├®e', 'info');
+      this.showToast('Facture supprimée', 'info');
       return true;
     } catch (error) {
       this.showToast('Erreur lors de la suppression', 'error');
@@ -1390,109 +881,6 @@ export class StoreService {
     }
   }
 
-  private mapInvoice(inv: any, type: 'purchase' | 'sale'): Invoice {
-    console.log('­ƒƒú store.mapInvoice - D├ëBUT mapping', type);
-    console.log('­ƒƒú store.mapInvoice - Objet inv re├ºu:', inv);
-    console.log('­ƒƒú store.mapInvoice - Tous les champs num├®riques dans inv:', {
-      totalHT: inv?.totalHT,
-      totalTTC: inv?.totalTTC,
-      amountHT: inv?.amountHT,
-      amountTTC: inv?.amountTTC,
-      montantHT: inv?.montantHT,
-      montantTTC: inv?.montantTTC,
-      'totalHT type': typeof inv?.totalHT,
-      'totalTTC type': typeof inv?.totalTTC
-    });
-    
-    const today = new Date().toISOString().split('T')[0];
-    const dueDate = inv.dateEcheance || inv.dueDate || today;
-    
-    // Mapper le statut depuis le backend vers le frontend
-    let status: 'paid' | 'pending' | 'overdue' = 'pending';
-    if (inv.etatPaiement === 'regle') {
-      status = 'paid';
-    } else if (inv.etatPaiement === 'partiellement_regle') {
-      // Si partiellement pay├®, on consid├¿re comme pending
-      status = dueDate < today ? 'overdue' : 'pending';
-    } else if (inv.etatPaiement === 'non_regle') {
-      status = dueDate < today ? 'overdue' : 'pending';
-    } else {
-      // Si pas de statut d├®fini, d├®terminer selon la date d'├®ch├®ance
-      status = dueDate < today ? 'overdue' : 'pending';
-    }
-    
-    // Extraire les montants avec plusieurs noms possibles et g├®rer les valeurs null/undefined
-    const amountHT = (inv.totalHT != null && inv.totalHT !== undefined) ? Number(inv.totalHT) : 
-                     (inv.amountHT != null && inv.amountHT !== undefined) ? Number(inv.amountHT) : 
-                     (inv.montantHT != null && inv.montantHT !== undefined) ? Number(inv.montantHT) : 0;
-    
-    const amountTTC = (inv.totalTTC != null && inv.totalTTC !== undefined) ? Number(inv.totalTTC) : 
-                      (inv.amountTTC != null && inv.amountTTC !== undefined) ? Number(inv.amountTTC) : 
-                      (inv.montantTTC != null && inv.montantTTC !== undefined) ? Number(inv.montantTTC) : 
-                      amountHT; // Fallback sur HT si TTC non disponible
-    
-    console.log('­ƒƒú store.mapInvoice - Montants extraits:', {
-      amountHT,
-      amountTTC,
-      'amountHT type': typeof amountHT,
-      'amountTTC type': typeof amountTTC
-    });
-    
-    const mappedInvoice: Invoice = {
-      id: inv.id,
-      number: inv.numeroFactureAchat || inv.numeroFactureVente || inv.number,
-      bcId: inv.bandeCommandeId || inv.bcId || '',
-      bcReference: inv.bcReference,
-      partnerId: inv.fournisseurId || inv.clientId || inv.partnerId,
-      date: inv.dateFacture || inv.date,
-      amountHT: amountHT,
-      amountTTC: amountTTC,
-      dueDate: dueDate,
-      status: status,
-      type: type,
-      paymentMode: inv.modePaiement || inv.paymentMode,
-      
-      // Champs pour les calculs comptables
-      typeMouvement: inv.typeMouvement,
-      nature: inv.nature,
-      colA: inv.colA,
-      colB: inv.colB,
-      colD: inv.colD,
-      colF: inv.colF,
-      tvaRate: inv.tvaRate,
-      tauxRG: inv.tauxRG,
-      
-      // Champs calculés selon les formules Excel
-      tvaMois: inv.tvaMois,
-      solde: inv.solde,
-      totalTTCApresRG: inv.totalTTCApresRG,
-      totalTTCApresRG_SIGNE: inv.totalTTCApresRG_SIGNE,
-      totalPaiementTTC: inv.totalPaiementTTC,
-      rgTTC: inv.rgTTC,
-      rgHT: inv.rgHT,
-      factureHT_YC_RG: inv.factureHT_YC_RG,
-      htPaye: inv.htPaye,
-      tvaFactureYcRg: inv.tvaFactureYcRg,
-      tvaPaye: inv.tvaPaye,
-      bilan: inv.bilan,
-      previsionsPaiement: inv.previsionsPaiement ? inv.previsionsPaiement.map((p: any) => ({
-        id: p.id,
-        datePrevue: p.datePrevue,
-        montantPrevu: p.montantPrevu || 0,
-        statut: p.statut || 'PREVU',
-        notes: p.notes
-      })) : undefined
-    };
-    
-    console.log('­ƒƒú store.mapInvoice - Invoice final mapp├®:', mappedInvoice);
-    console.log('­ƒƒú store.mapInvoice - Montants dans invoice final:', {
-      amountHT: mappedInvoice.amountHT,
-      amountTTC: mappedInvoice.amountTTC
-    });
-    console.log('­ƒƒú store.mapInvoice - FIN mapping');
-    
-    return mappedInvoice;
-  }
 
   // --- HELPERS ---
   getClientName(id: string) {
@@ -1529,7 +917,7 @@ export class StoreService {
         } catch (error: any) {
           // Si l'utilisateur annule le partage ou erreur, continuer avec l'ouverture
           if (error.name !== 'AbortError') {
-            console.log('Web Share API not available or user cancelled, falling back to window.open');
+            // Web Share API not available or user cancelled, falling back to window.open
           }
         }
       }
@@ -1568,72 +956,72 @@ export class StoreService {
 
   async downloadBCPDF(bcId: string): Promise<void> {
     try {
-      this.showToast('G├®n├®ration du PDF en cours...', 'info');
-      const blob = await this.api.downloadFile(`/pdf/bandes-commandes/${bcId}`).toPromise();
+      this.showToast('Génération du PDF en cours...', 'info');
+      const blob = await this.bcService.downloadBCPDF(bcId);
       if (blob) {
         const fileName = `BC-${this.getBCNumber(bcId)}.pdf`;
         await this.handlePDFDownload(blob, fileName);
-        this.showToast('PDF g├®n├®r├® avec succ├¿s', 'success');
+        this.showToast('PDF généré avec succès', 'success');
         this.addNotification({
           title: 'Export PDF',
-          message: `BC ${this.getBCNumber(bcId)} export├®e en PDF.`,
+          message: `BC ${this.getBCNumber(bcId)} exportée en PDF.`,
           type: 'success'
         });
       }
     } catch (error) {
       console.error('Error downloading BC PDF:', error);
-      this.showToast('Erreur lors de la g├®n├®ration du PDF', 'error');
+      this.showToast('Erreur lors de la génération du PDF', 'error');
       throw error;
     }
   }
 
   async downloadFactureVentePDF(factureId: string): Promise<void> {
     try {
-      this.showToast('G├®n├®ration du PDF en cours...', 'info');
-      const blob = await this.api.downloadFile(`/pdf/factures-ventes/${factureId}`).toPromise();
+      this.showToast('Génération du PDF en cours...', 'info');
+      const blob = await this.invoiceService.downloadFactureVentePDF(factureId);
       if (blob) {
         const invoice = this.invoices().find(i => i.id === factureId);
         const fileName = `FV-${invoice?.number || factureId}.pdf`;
         await this.handlePDFDownload(blob, fileName);
-        this.showToast('PDF g├®n├®r├® avec succ├¿s', 'success');
+        this.showToast('PDF généré avec succès', 'success');
       }
     } catch (error) {
       console.error('Error downloading Facture Vente PDF:', error);
-      this.showToast('Erreur lors de la g├®n├®ration du PDF', 'error');
+      this.showToast('Erreur lors de la génération du PDF', 'error');
       throw error;
     }
   }
 
   async downloadBonDeLivraisonPDF(factureId: string): Promise<void> {
     try {
-      this.showToast('G├®n├®ration du bon de livraison en cours...', 'info');
-      const blob = await this.api.downloadFile(`/pdf/factures-ventes/${factureId}/bon-de-livraison`).toPromise();
+      this.showToast('Génération du bon de livraison en cours...', 'info');
+      const blob = await this.invoiceService.downloadBonDeLivraisonPDF(factureId);
       if (blob) {
         const invoice = this.invoices().find(i => i.id === factureId);
         const fileName = `BL-${invoice?.number || factureId}.pdf`;
         await this.handlePDFDownload(blob, fileName);
-        this.showToast('Bon de livraison g├®n├®r├® avec succ├¿s', 'success');
+        this.showToast('Bon de livraison généré avec succès', 'success');
       }
     } catch (error) {
       console.error('Error downloading Bon de Livraison PDF:', error);
-      this.showToast('Erreur lors de la g├®n├®ration du bon de livraison', 'error');
+      this.showToast('Erreur lors de la génération du bon de livraison', 'error');
       throw error;
     }
   }
 
   async downloadFactureAchatPDF(factureId: string): Promise<void> {
     try {
-      this.showToast('G├®n├®ration du PDF en cours...', 'info');
-      const blob = await this.api.downloadFile(`/pdf/factures-achats/${factureId}`).toPromise();
+      this.showToast('Génération du PDF en cours...', 'info');
+      const blob = await this.invoiceService.downloadFactureAchatPDF(factureId);
       if (blob) {
         const invoice = this.invoices().find(i => i.id === factureId);
         const fileName = `FA-${invoice?.number || factureId}.pdf`;
         await this.handlePDFDownload(blob, fileName);
-        this.showToast('PDF g├®n├®r├® avec succ├¿s', 'success');
+        this.showToast('PDF généré avec succès', 'success');
       }
     } catch (error) {
       console.error('Error downloading Facture Achat PDF:', error);
-      this.showToast('Erreur lors de la g├®n├®ration du PDF', 'error');
+      this.showToast('Erreur lors de la génération du PDF', 'error');
       throw error;
     }
   }
@@ -1734,34 +1122,6 @@ export class StoreService {
     }
   }
 
-  private mapPayment(p: any): Payment {
-    return {
-      id: p.id,
-      factureAchatId: p.factureAchatId,
-      factureVenteId: p.factureVenteId,
-      bcReference: p.bcReference,
-      date: p.date,
-      montant: p.montant || 0,
-      mode: p.mode,
-      reference: p.reference,
-      notes: p.notes,
-      
-      // Champs pour les calculs comptables
-      typeMouvement: p.typeMouvement,
-      nature: p.nature,
-      colD: p.colD,
-      tvaRate: p.tvaRate,
-      
-      // Champs calculés selon les formules Excel
-      totalPaiementTTC: p.totalPaiementTTC,
-      htPaye: p.htPaye,
-      tvaPaye: p.tvaPaye,
-      
-      // Soldes après ce paiement
-      soldeGlobalApres: p.soldeGlobalApres,
-      soldePartenaireApres: p.soldePartenaireApres
-    };
-  }
 
   // T├®l├®charger le rapport complet du dashboard
   async downloadDashboardReport(from?: Date, to?: Date): Promise<void> {
@@ -1815,44 +1175,15 @@ export class StoreService {
     status?: string 
   }): Promise<void> {
     try {
-      this.showToast('G├®n├®ration de l\'export Excel en cours...', 'info');
-      
-      // Construire les param├¿tres de requ├¬te
-      const queryParams = new URLSearchParams();
-      if (params?.clientId) {
-        queryParams.append('clientId', params.clientId);
-      }
-      if (params?.supplierId) {
-        queryParams.append('fournisseurId', params.supplierId);
-      }
-      if (params?.dateMin) {
-        queryParams.append('dateMin', params.dateMin);
-      }
-      if (params?.dateMax) {
-        queryParams.append('dateMax', params.dateMax);
-      }
-      if (params?.status) {
-        // Mapper le statut frontend vers backend
-        let etat = params.status;
-        if (params.status === 'sent') {
-          etat = 'envoyee';
-        } else if (params.status === 'completed') {
-          etat = 'complete';
-        } else if (params.status === 'draft') {
-          etat = 'brouillon';
-        }
-        queryParams.append('etat', etat);
-      }
-
-      const url = `/bandes-commandes/export/excel${queryParams.toString() ? '?' + queryParams.toString() : ''}`;
-      const blob = await this.api.downloadFile(url).toPromise();
+      this.showToast('Génération de l\'export Excel en cours...', 'info');
+      const blob = await this.bcService.exportBCsToExcel(params);
       
       if (blob) {
         const urlObj = window.URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = urlObj;
         
-        // Extraire le nom de fichier depuis les headers ou utiliser un nom par d├®faut
+        // Extraire le nom de fichier depuis les headers ou utiliser un nom par défaut
         const today = new Date().toISOString().split('T')[0];
         link.download = `Export_BCs_${today}.xlsx`;
         
@@ -1861,7 +1192,7 @@ export class StoreService {
         document.body.removeChild(link);
         window.URL.revokeObjectURL(urlObj);
         
-        this.showToast('Export Excel t├®l├®charg├® avec succ├¿s', 'success');
+        this.showToast('Export Excel téléchargé avec succès', 'success');
       }
     } catch (error) {
       console.error('Error exporting BCs to Excel:', error);

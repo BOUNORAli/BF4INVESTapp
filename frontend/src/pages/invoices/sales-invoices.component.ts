@@ -109,7 +109,7 @@ import { RouterLink } from '@angular/router';
               </tr>
             </thead>
             <tbody class="divide-y divide-slate-100">
-              @for (inv of filteredInvoices(); track inv.id) {
+              @for (inv of paginatedInvoices(); track inv.id) {
                 <tr class="bg-white hover:bg-slate-50 transition-colors group" [attr.data-item-id]="inv.id">
                   <td class="px-6 py-4">
                     <div class="font-bold text-slate-800 text-base mb-0.5">{{ inv.number }}</div>
@@ -171,7 +171,7 @@ import { RouterLink } from '@angular/router';
                   </td>
                 </tr>
               }
-              @if (filteredInvoices().length === 0) {
+              @if (paginatedInvoices().length === 0) {
                 <tr>
                   <td colspan="8" class="px-6 py-12 text-center text-slate-500">
                     Aucune facture trouvée.
@@ -180,6 +180,22 @@ import { RouterLink } from '@angular/router';
               }
             </tbody>
           </table>
+        </div>
+
+        <!-- Pagination Controls -->
+        <div class="p-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
+          <div class="text-xs text-slate-500">
+            Affichage de {{ (currentPage() - 1) * pageSize() + 1 }} à {{ Math.min(currentPage() * pageSize(), filteredInvoices().length) }} sur {{ filteredInvoices().length }} résultats
+          </div>
+          <div class="flex items-center gap-2">
+            <button (click)="prevPage()" [disabled]="currentPage() === 1" class="p-2 border border-slate-200 rounded-lg hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+            </button>
+            <span class="text-sm font-medium text-slate-700">Page {{ currentPage() }} sur {{ totalPages() || 1 }}</span>
+            <button (click)="nextPage()" [disabled]="currentPage() === totalPages() || totalPages() === 0" class="p-2 border border-slate-200 rounded-lg hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -205,13 +221,18 @@ import { RouterLink } from '@angular/router';
                   <!-- Section Link -->
                   <div class="bg-indigo-50 p-4 rounded-xl border border-indigo-100 space-y-4">
                      <div>
-                        <label class="block text-xs font-bold text-indigo-700 uppercase mb-1">Client</label>
-                        <select formControlName="partnerId" (change)="onPartnerChange()" class="w-full p-2 border border-indigo-200 rounded-lg bg-white focus:ring-2 focus:ring-blue-500/20 outline-none">
+                        <label class="block text-xs font-bold text-indigo-700 uppercase mb-1">Client <span class="text-red-500">*</span></label>
+                        <select formControlName="partnerId" (change)="onPartnerChange()" 
+                                [class.border-red-300]="isFieldInvalid('partnerId')"
+                                class="w-full p-2 border border-indigo-200 rounded-lg bg-white focus:ring-2 focus:ring-blue-500/20 outline-none">
                            <option value="">Sélectionner un client</option>
                            @for (c of store.clients(); track c.id) {
                               <option [value]="c.id">{{ c.name }}</option>
                            }
                         </select>
+                        @if (isFieldInvalid('partnerId')) {
+                           <p class="text-xs text-red-500 mt-1">Le client est requis</p>
+                        }
                      </div>
                      <div>
                         <label class="block text-xs font-bold text-indigo-700 uppercase mb-1">Basé sur BC (Optionnel)</label>
@@ -233,23 +254,43 @@ import { RouterLink } from '@angular/router';
 
                      <div class="grid grid-cols-2 gap-4">
                         <div>
-                          <label class="block text-sm font-semibold text-slate-700 mb-1">Date Émission</label>
-                          <input formControlName="date" type="date" class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition">
+                          <label class="block text-sm font-semibold text-slate-700 mb-1">Date Émission <span class="text-red-500">*</span></label>
+                          <input formControlName="date" type="date" 
+                                 [class.border-red-300]="isFieldInvalid('date')"
+                                 class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition">
+                          @if (isFieldInvalid('date')) {
+                             <p class="text-xs text-red-500 mt-1">Date requise</p>
+                          }
                         </div>
                         <div>
-                          <label class="block text-sm font-semibold text-slate-700 mb-1">Date Échéance</label>
-                          <input formControlName="dueDate" type="date" class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition">
+                          <label class="block text-sm font-semibold text-slate-700 mb-1">Date Échéance <span class="text-red-500">*</span></label>
+                          <input formControlName="dueDate" type="date" 
+                                 [class.border-red-300]="isFieldInvalid('dueDate')"
+                                 class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition">
+                          @if (isFieldInvalid('dueDate')) {
+                             <p class="text-xs text-red-500 mt-1">Date requise</p>
+                          }
                         </div>
                      </div>
                      
                      <div class="grid grid-cols-2 gap-4">
                         <div>
-                           <label class="block text-sm font-semibold text-slate-700 mb-1">Montant HT</label>
-                           <input formControlName="amountHT" type="number" step="0.01" class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition text-right">
+                           <label class="block text-sm font-semibold text-slate-700 mb-1">Montant HT <span class="text-red-500">*</span></label>
+                           <input formControlName="amountHT" type="number" step="0.01" 
+                                  [class.border-red-300]="isFieldInvalid('amountHT')"
+                                  class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition text-right">
+                           @if (isFieldInvalid('amountHT')) {
+                              <p class="text-xs text-red-500 mt-1">Montant requis (>0)</p>
+                           }
                         </div>
                         <div>
-                           <label class="block text-sm font-semibold text-slate-700 mb-1">Montant TTC</label>
-                           <input formControlName="amountTTC" type="number" step="0.01" class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition text-right font-bold text-slate-800">
+                           <label class="block text-sm font-semibold text-slate-700 mb-1">Montant TTC <span class="text-red-500">*</span></label>
+                           <input formControlName="amountTTC" type="number" step="0.01" 
+                                  [class.border-red-300]="isFieldInvalid('amountTTC')"
+                                  class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition text-right font-bold text-slate-800">
+                           @if (isFieldInvalid('amountTTC')) {
+                              <p class="text-xs text-red-500 mt-1">Montant requis (>0)</p>
+                           }
                         </div>
                      </div>
 
@@ -661,6 +702,8 @@ import { RouterLink } from '@angular/router';
   `]
 })
 export class SalesInvoicesComponent {
+  Math = Math; // Make Math available in template
+
   store = inject(StoreService);
   fb = inject(FormBuilder);
 
@@ -693,6 +736,10 @@ export class SalesInvoicesComponent {
   // Filters
   filterStatus = signal<'all' | 'paid' | 'pending' | 'overdue'>('all');
   searchTerm = signal('');
+
+  // Pagination
+  currentPage = signal(1);
+  pageSize = signal(10);
 
   // Active payment modes
   activePaymentModes = computed(() => this.store.paymentModes().filter(m => m.active));
@@ -799,8 +846,19 @@ export class SalesInvoicesComponent {
       );
     }
     
-    return list;
+    // Sort by date desc
+    return list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   });
+
+  // Paginated List
+  paginatedInvoices = computed(() => {
+    const list = this.filteredInvoices();
+    const start = (this.currentPage() - 1) * this.pageSize();
+    const end = start + this.pageSize();
+    return list.slice(start, end);
+  });
+
+  totalPages = computed(() => Math.ceil(this.filteredInvoices().length / this.pageSize()));
 
   totalSales = computed(() => {
     const invoices = this.allSalesInvoices();
@@ -896,6 +954,20 @@ export class SalesInvoicesComponent {
 
   setFilter(status: 'all' | 'paid' | 'pending' | 'overdue') {
     this.filterStatus.set(status);
+    this.currentPage.set(1); // Reset page on filter change
+  }
+
+  // Pagination Actions
+  nextPage() {
+    if (this.currentPage() < this.totalPages()) {
+      this.currentPage.update(p => p + 1);
+    }
+  }
+
+  prevPage() {
+    if (this.currentPage() > 1) {
+      this.currentPage.update(p => p - 1);
+    }
   }
 
   getStatusClass(status: string): string {
@@ -960,9 +1032,7 @@ export class SalesInvoicesComponent {
   onBCChange() {
     const bcId = this.form.get('bcId')?.value;
     const clientId = this.form.get('partnerId')?.value;
-    console.log('🔵 sales-invoices.onBCChange - bcId:', bcId, 'clientId:', clientId);
     const bc = this.store.bcs().find(b => b.id === bcId);
-    console.log('🔵 sales-invoices.onBCChange - BC trouvé:', bc);
     
     if (bc) {
       let totalHT = 0;
@@ -970,21 +1040,14 @@ export class SalesInvoicesComponent {
 
       // Nouvelle structure multi-clients
       if (bc.clientsVente && bc.clientsVente.length > 0) {
-        console.log('🔵 sales-invoices.onBCChange - Utilisation nouvelle structure (clientsVente)');
         // Trouver le client spécifique dans le BC
         const clientVente = bc.clientsVente.find(cv => cv.clientId === clientId);
-        console.log('🔵 sales-invoices.onBCChange - ClientVente trouvé:', clientVente);
         if (clientVente && clientVente.lignesVente) {
           // Utiliser les totaux pré-calculés si disponibles
           if (clientVente.totalVenteHT !== undefined && clientVente.totalVenteTTC !== undefined) {
-            console.log('🔵 sales-invoices.onBCChange - Utilisation totaux pré-calculés:', {
-              totalVenteHT: clientVente.totalVenteHT,
-              totalVenteTTC: clientVente.totalVenteTTC
-            });
             totalHT = clientVente.totalVenteHT;
             totalTva = (clientVente.totalVenteTTC || 0) - totalHT;
           } else {
-            console.log('🔵 sales-invoices.onBCChange - Calcul depuis lignesVente');
             // Calculer à partir des lignes de vente
             totalHT = clientVente.lignesVente.reduce((acc, l) => 
               acc + (l.quantiteVendue || 0) * (l.prixVenteUnitaireHT || 0), 0);
@@ -997,25 +1060,13 @@ export class SalesInvoicesComponent {
       } 
       // Ancienne structure
       else if (bc.items) {
-        console.log('🔵 sales-invoices.onBCChange - Utilisation ancienne structure (items)');
         totalHT = bc.items.reduce((acc, i) => acc + (i.qtySell * i.priceSellHT), 0);
         totalTva = bc.items.reduce((acc, i) => acc + (i.qtySell * i.priceSellHT * (i.tvaRate/100)), 0);
       }
       
-      console.log('🔵 sales-invoices.onBCChange - Montants calculés:', {
-        totalHT,
-        totalTva,
-        totalTTC: totalHT + totalTva
-      });
-      
       this.form.patchValue({
         amountHT: totalHT,
         amountTTC: totalHT + totalTva
-      });
-      
-      console.log('🔵 sales-invoices.onBCChange - Formulaire mis à jour, valeurs actuelles:', {
-        amountHT: this.form.get('amountHT')?.value,
-        amountTTC: this.form.get('amountTTC')?.value
       });
     } else {
       console.warn('🔵 sales-invoices.onBCChange - BC non trouvé pour id:', bcId);
@@ -1023,18 +1074,10 @@ export class SalesInvoicesComponent {
   }
 
   editInvoice(inv: Invoice) {
-    console.log('🔵 editInvoice - Facture reçue:', inv);
-    console.log('🔵 editInvoice - Montants:', { amountHT: inv.amountHT, amountTTC: inv.amountTTC });
-    
     this.isEditMode.set(true);
     this.editingId = inv.id;
     // Stocker la facture originale pour préserver les valeurs
     this.originalInvoice = { ...inv };
-    console.log('🔵 editInvoice - originalInvoice sauvegardé:', this.originalInvoice);
-    console.log('🔵 editInvoice - Montants dans originalInvoice:', { 
-      amountHT: this.originalInvoice.amountHT, 
-      amountTTC: this.originalInvoice.amountTTC 
-    });
     
     // S'assurer que tous les champs sont bien remplis, notamment les montants
     const formValues = {
@@ -1048,13 +1091,7 @@ export class SalesInvoicesComponent {
       status: inv.status || 'pending',
       paymentMode: inv.paymentMode || ''
     };
-    console.log('🔵 editInvoice - Valeurs du formulaire:', formValues);
     this.form.patchValue(formValues);
-    
-    // Vérifier les valeurs après patchValue
-    setTimeout(() => {
-      console.log('🔵 editInvoice - Valeurs du formulaire APRÈS patchValue:', this.form.value);
-    }, 100);
     
     if (inv.partnerId) {
       const bcs = this.store.bcs().filter(b => b.clientId === inv.partnerId);
@@ -1254,45 +1291,28 @@ export class SalesInvoicesComponent {
     }
   }
 
+  isFieldInvalid(fieldName: string): boolean {
+    const field = this.form.get(fieldName);
+    return !!(field && field.invalid && (field.dirty || field.touched));
+  }
+
   async onSubmit() {
-    console.log('🟢 onSubmit - Début');
-    console.log('🟢 onSubmit - isEditMode:', this.isEditMode());
-    console.log('🟢 onSubmit - editingId:', this.editingId);
-    console.log('🟢 onSubmit - originalInvoice:', this.originalInvoice);
-    
     if (this.form.invalid) {
+      this.form.markAllAsTouched();
+      this.store.showToast('Veuillez corriger les erreurs dans le formulaire', 'error');
       console.warn('🟡 onSubmit - Formulaire invalide');
       return;
     }
     
     const val = this.form.value;
-    console.log('🟢 onSubmit - Valeurs du formulaire:', val);
-    console.log('🟢 onSubmit - Montants du formulaire:', { 
-      amountHT: val.amountHT, 
-      amountTTC: val.amountTTC,
-      amountHTType: typeof val.amountHT,
-      amountTTCType: typeof val.amountTTC
-    });
     
     // En mode édition, toujours préserver les montants et autres valeurs de la facture originale
     if (this.isEditMode() && this.editingId && this.originalInvoice) {
-      console.log('🟢 onSubmit - Mode édition détecté');
-      console.log('🟢 onSubmit - Montants dans originalInvoice:', { 
-        amountHT: this.originalInvoice.amountHT, 
-        amountTTC: this.originalInvoice.amountTTC 
-      });
       
       // TOUJOURS utiliser les montants de la facture originale, jamais ceux du formulaire
       // Le formulaire peut avoir des valeurs vides ou 0 à cause du formatage
       const originalHT = this.originalInvoice.amountHT;
       const originalTTC = this.originalInvoice.amountTTC;
-      
-      console.log('🟢 onSubmit - Utilisation des montants originaux:', { 
-        originalHT, 
-        originalTTC,
-        originalHTType: typeof originalHT,
-        originalTTCType: typeof originalTTC
-      });
       
       val.amountHT = originalHT;
       val.amountTTC = originalTTC;
@@ -1306,12 +1326,6 @@ export class SalesInvoicesComponent {
       
       // Le statut peut être modifié, on utilise la valeur du formulaire
       val.status = val.status || this.originalInvoice.status || 'pending';
-      
-      console.log('🟢 onSubmit - Valeurs finales après préservation:', val);
-      console.log('🟢 onSubmit - Montants finaux:', { 
-        amountHT: val.amountHT, 
-        amountTTC: val.amountTTC 
-      });
     }
     
     // S'assurer que les montants sont des nombres (important pour la création)
@@ -1332,15 +1346,8 @@ export class SalesInvoicesComponent {
       paymentMode: val.paymentMode || undefined
     };
     
-    console.log('🟢 onSubmit - Invoice final à envoyer:', invoice);
-    console.log('🟢 onSubmit - Montants dans invoice final:', { 
-      amountHT: invoice.amountHT, 
-      amountTTC: invoice.amountTTC 
-    });
-
     try {
       if (this.isEditMode()) {
-        console.log('🟢 onSubmit - Appel à store.updateInvoice');
         await this.store.updateInvoice(invoice);
       } else {
         await this.store.addInvoice(invoice);

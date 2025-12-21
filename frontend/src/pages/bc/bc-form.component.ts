@@ -53,17 +53,31 @@ import { StoreService, BC, LigneAchat, LigneVente, ClientVente, Product } from '
                 <p class="text-xs text-slate-400 mt-1">Le numéro sera généré automatiquement lors de l'enregistrement</p>
               </div>
               <div>
-                <label class="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Date d'émission</label>
-                <input formControlName="date" type="date" class="w-full px-4 py-2.5 border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-slate-700">
+                <label class="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Date d'émission <span class="text-red-500">*</span></label>
+                <input formControlName="date" type="date" 
+                       [class.border-red-300]="isFieldInvalid('date')"
+                       [class.focus:border-red-500]="isFieldInvalid('date')"
+                       [class.focus:ring-red-500/20]="isFieldInvalid('date')"
+                       class="w-full px-4 py-2.5 border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-slate-700">
+                @if (isFieldInvalid('date')) {
+                  <p class="text-xs text-red-500 mt-1">La date est requise</p>
+                }
               </div>
               <div>
-                <label class="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Fournisseur</label>
-                <select formControlName="supplierId" class="w-full px-4 py-2.5 border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-slate-700 cursor-pointer">
+                <label class="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Fournisseur <span class="text-red-500">*</span></label>
+                <select formControlName="supplierId" 
+                        [class.border-red-300]="isFieldInvalid('supplierId')"
+                        [class.focus:border-red-500]="isFieldInvalid('supplierId')"
+                        [class.focus:ring-red-500/20]="isFieldInvalid('supplierId')"
+                        class="w-full px-4 py-2.5 border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-slate-700 cursor-pointer">
                   <option value="">Sélectionner...</option>
                   @for (s of store.suppliers(); track s.id) {
                     <option [value]="s.id">{{ s.name }}</option>
                   }
                 </select>
+                @if (isFieldInvalid('supplierId')) {
+                  <p class="text-xs text-red-500 mt-1">Le fournisseur est requis</p>
+                }
               </div>
                <div>
                 <label class="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Statut</label>
@@ -597,24 +611,24 @@ export class BcFormComponent implements OnInit {
   createLigneAchatGroup(data?: any): FormGroup {
     return this.fb.group({
       produitRef: [data?.produitRef || ''],
-      productSearch: [data?.designation || ''],
+      productSearch: [data?.designation || '', Validators.required],
       designation: [data?.designation || ''],
       unite: [data?.unite || 'U'],
-      quantiteAchetee: [data?.quantiteAchetee || 1],
-      prixAchatUnitaireHT: [data?.prixAchatUnitaireHT || 0],
-      tva: [data?.tva || 20]
+      quantiteAchetee: [data?.quantiteAchetee || 1, [Validators.required, Validators.min(0.01)]],
+      prixAchatUnitaireHT: [data?.prixAchatUnitaireHT || 0, [Validators.required, Validators.min(0)]],
+      tva: [data?.tva || 20, [Validators.required, Validators.min(0)]]
     });
   }
 
   createLigneVenteGroup(data?: any): FormGroup {
     return this.fb.group({
       produitRef: [data?.produitRef || ''],
-      productSearch: [data?.designation || ''],
+      productSearch: [data?.designation || '', Validators.required],
       designation: [data?.designation || ''],
       unite: [data?.unite || 'U'],
-      quantiteVendue: [data?.quantiteVendue || 1],
-      prixVenteUnitaireHT: [data?.prixVenteUnitaireHT || 0],
-      tva: [data?.tva || 20]
+      quantiteVendue: [data?.quantiteVendue || 1, [Validators.required, Validators.min(0.01)]],
+      prixVenteUnitaireHT: [data?.prixVenteUnitaireHT || 0, [Validators.required, Validators.min(0)]],
+      tva: [data?.tva || 20, [Validators.required, Validators.min(0)]]
     });
   }
 
@@ -841,9 +855,20 @@ export class BcFormComponent implements OnInit {
 
   // === Sauvegarde ===
 
+  isFieldInvalid(fieldName: string): boolean {
+    const field = this.form.get(fieldName);
+    return !!(field && field.invalid && (field.dirty || field.touched));
+  }
+
   save() {
+    if (this.form.invalid) {
+      this.form.markAllAsTouched();
+      this.store.showToast('Veuillez corriger les erreurs dans le formulaire', 'error');
+      return;
+    }
+
     if (!this.form.get('date')?.value || !this.form.get('supplierId')?.value) {
-      alert('Veuillez remplir tous les champs obligatoires (Date, Fournisseur)');
+      this.store.showToast('Veuillez remplir tous les champs obligatoires (Date, Fournisseur)', 'error');
       return;
     }
 
@@ -857,50 +882,47 @@ export class BcFormComponent implements OnInit {
     if (!ajouterAuStock) {
       // Vérifier qu'il y a au moins un client
       if (validClients.length === 0) {
-        alert('Veuillez sélectionner au moins un client OU cocher "Ajouter au stock"');
+        this.store.showToast('Veuillez sélectionner au moins un client OU cocher "Ajouter au stock"', 'error');
         return;
       }
 
       // Vérifier que la somme des quantités vendues aux clients
-    // est égale aux quantités achetées auprès du fournisseur (par produit)
-    const achatsMap = new Map<string, number>();
-    const ventesMap = new Map<string, number>();
+      // est égale aux quantités achetées auprès du fournisseur (par produit)
+      const achatsMap = new Map<string, number>();
+      const ventesMap = new Map<string, number>();
 
-    // 1) Quantités achetées par produit
-    this.lignesAchatArray.controls.forEach(control => {
-      const val = control.value;
-      const ref: string = val.produitRef || val.designation;
-      const qte: number = val.quantiteAchetee || 0;
-      if (!ref) {
-        return;
-      }
-      achatsMap.set(ref, (achatsMap.get(ref) || 0) + qte);
-    });
-
-    // 2) Quantités vendues (tous les clients) par produit
-    this.clientsVenteArray.controls.forEach(clientControl => {
-      const lignesArray = clientControl.get('lignesVente') as FormArray;
-      lignesArray.controls.forEach(ligneControl => {
-        const val = ligneControl.value;
+      // 1) Quantités achetées par produit
+      this.lignesAchatArray.controls.forEach(control => {
+        const val = control.value;
         const ref: string = val.produitRef || val.designation;
-        const qte: number = val.quantiteVendue || 0;
+        const qte: number = val.quantiteAchetee || 0;
         if (!ref) {
           return;
         }
-        ventesMap.set(ref, (ventesMap.get(ref) || 0) + qte);
+        achatsMap.set(ref, (achatsMap.get(ref) || 0) + qte);
       });
-    });
+
+      // 2) Quantités vendues (tous les clients) par produit
+      this.clientsVenteArray.controls.forEach(clientControl => {
+        const lignesArray = clientControl.get('lignesVente') as FormArray;
+        lignesArray.controls.forEach(ligneControl => {
+          const val = ligneControl.value;
+          const ref: string = val.produitRef || val.designation;
+          const qte: number = val.quantiteVendue || 0;
+          if (!ref) {
+            return;
+          }
+          ventesMap.set(ref, (ventesMap.get(ref) || 0) + qte);
+        });
+      });
 
       // 3) Comparer pour chaque produit (seulement si pas d'ajout au stock)
       for (const [ref, qteAchat] of achatsMap.entries()) {
         const qteVente = ventesMap.get(ref) || 0;
         if (qteVente !== qteAchat) {
-          alert(
-            `Incohérence sur le produit "${ref}" :\n` +
-            `- Quantité achetée fournisseur : ${qteAchat}\n` +
-            `- Quantité répartie chez les clients : ${qteVente}\n\n` +
-            `La somme des quantités vendues aux clients doit être ÉGALE à la quantité achetée.\n` +
-            `Merci d'ajuster les quantités avant d'enregistrer.`
+          this.store.showToast(
+            `Incohérence produit "${ref}": Achat (${qteAchat}) != Vente (${qteVente})`, 
+            'error'
           );
           return;
         }
@@ -955,8 +977,6 @@ export class BcFormComponent implements OnInit {
     }));
 
     // Debug: vérifier les lignes d'achat
-    console.log('🔵 Lignes d\'achat avant envoi:', lignesAchat);
-    console.log('🔵 Total achat calculé:', this.buyTotal());
     
     const bcData: BC = {
       id: this.bcId || `bc-${Date.now()}`,

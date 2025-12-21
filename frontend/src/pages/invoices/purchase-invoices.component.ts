@@ -73,7 +73,7 @@ import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, FormsModule } 
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-100">
-            @for (inv of filteredInvoices(); track inv.id) {
+            @for (inv of paginatedInvoices(); track inv.id) {
               <tr class="bg-white hover:bg-slate-50 transition-colors group" [attr.data-item-id]="inv.id">
                 <td class="px-6 py-4 font-medium text-slate-900">{{ inv.number }}</td>
                 <td class="px-6 py-4">
@@ -128,17 +128,33 @@ import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, FormsModule } 
                 </td>
               </tr>
             }
-            @if (filteredInvoices().length === 0) {
-                <tr>
-                  <td colspan="8" class="px-6 py-12 text-center text-slate-500">
-                    Aucune facture trouvée.
-                  </td>
-                </tr>
-              }
+            @if (paginatedInvoices().length === 0) {
+              <tr>
+                <td colspan="8" class="px-6 py-12 text-center text-slate-500">
+                  Aucune facture trouvée.
+                </td>
+              </tr>
+            }
           </tbody>
         </table>
+      </div>
+
+      <!-- Pagination Controls -->
+      <div class="p-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
+        <div class="text-xs text-slate-500">
+          Affichage de {{ (currentPage() - 1) * pageSize() + 1 }} à {{ Math.min(currentPage() * pageSize(), filteredInvoices().length) }} sur {{ filteredInvoices().length }} résultats
+        </div>
+        <div class="flex items-center gap-2">
+          <button (click)="prevPage()" [disabled]="currentPage() === 1" class="p-2 border border-slate-200 rounded-lg hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+          </button>
+          <span class="text-sm font-medium text-slate-700">Page {{ currentPage() }} sur {{ totalPages() || 1 }}</span>
+          <button (click)="nextPage()" [disabled]="currentPage() === totalPages() || totalPages() === 0" class="p-2 border border-slate-200 rounded-lg hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+          </button>
         </div>
       </div>
+    </div>
 
       <!-- SLIDE OVER FORM -->
       @if (isFormOpen()) {
@@ -162,13 +178,18 @@ import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, FormsModule } 
                   <!-- Section Link -->
                   <div class="bg-blue-50 p-4 rounded-xl border border-blue-100 space-y-4">
                      <div>
-                        <label class="block text-xs font-bold text-blue-700 uppercase mb-1">Fournisseur</label>
-                        <select formControlName="partnerId" (change)="onPartnerChange()" class="w-full p-2 border border-blue-200 rounded-lg bg-white focus:ring-2 focus:ring-blue-500/20 outline-none">
+                        <label class="block text-xs font-bold text-blue-700 uppercase mb-1">Fournisseur <span class="text-red-500">*</span></label>
+                        <select formControlName="partnerId" (change)="onPartnerChange()" 
+                                [class.border-red-300]="isFieldInvalid('partnerId')"
+                                class="w-full p-2 border border-blue-200 rounded-lg bg-white focus:ring-2 focus:ring-blue-500/20 outline-none">
                            <option value="">Sélectionner un fournisseur</option>
                            @for (s of store.suppliers(); track s.id) {
                               <option [value]="s.id">{{ s.name }}</option>
                            }
                         </select>
+                        @if (isFieldInvalid('partnerId')) {
+                           <p class="text-xs text-red-500 mt-1">Le fournisseur est requis</p>
+                        }
                      </div>
                      <div>
                         <label class="block text-xs font-bold text-blue-700 uppercase mb-1">Lier à un BC (Optionnel)</label>
@@ -189,24 +210,44 @@ import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, FormsModule } 
 
                      <div class="grid grid-cols-2 gap-4">
                         <div>
-                          <label class="block text-sm font-semibold text-slate-700 mb-1">Date Facture</label>
-                          <input formControlName="date" type="date" class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition">
+                          <label class="block text-sm font-semibold text-slate-700 mb-1">Date Facture <span class="text-red-500">*</span></label>
+                          <input formControlName="date" type="date" 
+                                 [class.border-red-300]="isFieldInvalid('date')"
+                                 class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition">
+                          @if (isFieldInvalid('date')) {
+                             <p class="text-xs text-red-500 mt-1">Date requise</p>
+                          }
                         </div>
                         <div>
-                          <label class="block text-sm font-semibold text-slate-700 mb-1">Date Échéance</label>
-                          <input formControlName="dueDate" type="date" class="w-full px-4 py-2 border border-slate-200 rounded-lg bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition">
+                          <label class="block text-sm font-semibold text-slate-700 mb-1">Date Échéance <span class="text-red-500">*</span></label>
+                          <input formControlName="dueDate" type="date" 
+                                 [class.border-red-300]="isFieldInvalid('dueDate')"
+                                 class="w-full px-4 py-2 border border-slate-200 rounded-lg bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition">
                           <p class="text-[10px] text-slate-400 mt-1">Calcul auto: Date + 60 jours</p>
+                          @if (isFieldInvalid('dueDate')) {
+                             <p class="text-xs text-red-500 mt-1">Date requise</p>
+                          }
                         </div>
                      </div>
                      
                      <div class="grid grid-cols-2 gap-4">
                         <div>
-                           <label class="block text-sm font-semibold text-slate-700 mb-1">Montant HT</label>
-                           <input formControlName="amountHT" type="number" class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition text-right">
+                           <label class="block text-sm font-semibold text-slate-700 mb-1">Montant HT <span class="text-red-500">*</span></label>
+                           <input formControlName="amountHT" type="number" step="0.01"
+                                  [class.border-red-300]="isFieldInvalid('amountHT')"
+                                  class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition text-right">
+                           @if (isFieldInvalid('amountHT')) {
+                              <p class="text-xs text-red-500 mt-1">Montant requis (>0)</p>
+                           }
                         </div>
                         <div>
-                           <label class="block text-sm font-semibold text-slate-700 mb-1">Montant TTC</label>
-                           <input formControlName="amountTTC" type="number" class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition text-right font-bold text-slate-800">
+                           <label class="block text-sm font-semibold text-slate-700 mb-1">Montant TTC <span class="text-red-500">*</span></label>
+                           <input formControlName="amountTTC" type="number" step="0.01"
+                                  [class.border-red-300]="isFieldInvalid('amountTTC')"
+                                  class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition text-right font-bold text-slate-800">
+                           @if (isFieldInvalid('amountTTC')) {
+                              <p class="text-xs text-red-500 mt-1">Montant requis (>0)</p>
+                           }
                         </div>
                      </div>
 
@@ -608,6 +649,8 @@ import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, FormsModule } 
   `]
 })
 export class PurchaseInvoicesComponent {
+  Math = Math; // Make Math available in template
+
   store = inject(StoreService);
   fb = inject(FormBuilder);
 
@@ -639,6 +682,10 @@ export class PurchaseInvoicesComponent {
   // Filters
   filterStatus = signal<'all' | 'paid' | 'pending' | 'overdue'>('all');
   searchTerm = signal('');
+
+  // Pagination
+  currentPage = signal(1);
+  pageSize = signal(10);
 
   // Active payment modes
   activePaymentModes = computed(() => this.store.paymentModes().filter(m => m.active));
@@ -689,11 +736,36 @@ export class PurchaseInvoicesComponent {
       );
     }
     
-    return list;
+    // Sort by date desc
+    return list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   });
+
+  // Paginated List
+  paginatedInvoices = computed(() => {
+    const list = this.filteredInvoices();
+    const start = (this.currentPage() - 1) * this.pageSize();
+    const end = start + this.pageSize();
+    return list.slice(start, end);
+  });
+
+  totalPages = computed(() => Math.ceil(this.filteredInvoices().length / this.pageSize()));
 
   setFilter(status: 'all' | 'paid' | 'pending' | 'overdue') {
     this.filterStatus.set(status);
+    this.currentPage.set(1); // Reset page on filter change
+  }
+
+  // Pagination Actions
+  nextPage() {
+    if (this.currentPage() < this.totalPages()) {
+      this.currentPage.update(p => p + 1);
+    }
+  }
+
+  prevPage() {
+    if (this.currentPage() > 1) {
+      this.currentPage.update(p => p - 1);
+    }
   }
 
   getDueDateClass(dateStr: string): string {
@@ -759,9 +831,7 @@ export class PurchaseInvoicesComponent {
 
   onBCChange() {
     const bcId = this.form.get('bcId')?.value;
-    console.log('🔵 purchase-invoices.onBCChange - bcId sélectionné:', bcId);
     const bc = this.store.bcs().find(b => b.id === bcId);
-    console.log('🔵 purchase-invoices.onBCChange - BC trouvé:', bc);
     
     if (bc) {
       let totalHT = 0;
@@ -769,17 +839,11 @@ export class PurchaseInvoicesComponent {
 
       // Nouvelle structure: lignesAchat
       if (bc.lignesAchat && bc.lignesAchat.length > 0) {
-        console.log('🔵 purchase-invoices.onBCChange - Utilisation nouvelle structure (lignesAchat)');
         // Utiliser les totaux pré-calculés si disponibles
         if (bc.totalAchatHT !== undefined && bc.totalAchatTTC !== undefined) {
-          console.log('🔵 purchase-invoices.onBCChange - Utilisation totaux pré-calculés:', {
-            totalAchatHT: bc.totalAchatHT,
-            totalAchatTTC: bc.totalAchatTTC
-          });
           totalHT = bc.totalAchatHT;
           totalTva = bc.totalAchatTTC - totalHT;
         } else {
-          console.log('🔵 purchase-invoices.onBCChange - Calcul depuis lignesAchat');
           // Calculer à partir des lignes d'achat
           totalHT = bc.lignesAchat.reduce((acc, l) => 
             acc + (l.quantiteAchetee || 0) * (l.prixAchatUnitaireHT || 0), 0);
@@ -789,25 +853,13 @@ export class PurchaseInvoicesComponent {
       } 
       // Ancienne structure: items
       else if (bc.items) {
-        console.log('🔵 purchase-invoices.onBCChange - Utilisation ancienne structure (items)');
         totalHT = bc.items.reduce((acc, i) => acc + (i.qtyBuy * i.priceBuyHT), 0);
         totalTva = bc.items.reduce((acc, i) => acc + (i.qtyBuy * i.priceBuyHT * (i.tvaRate/100)), 0);
       }
       
-      console.log('🔵 purchase-invoices.onBCChange - Montants calculés:', {
-        totalHT,
-        totalTva,
-        totalTTC: totalHT + totalTva
-      });
-      
       this.form.patchValue({
         amountHT: totalHT,
         amountTTC: totalHT + totalTva
-      });
-      
-      console.log('🔵 purchase-invoices.onBCChange - Formulaire mis à jour, valeurs actuelles:', {
-        amountHT: this.form.get('amountHT')?.value,
-        amountTTC: this.form.get('amountTTC')?.value
       });
     } else {
       console.warn('🔵 purchase-invoices.onBCChange - BC non trouvé pour id:', bcId);
@@ -1021,23 +1073,19 @@ export class PurchaseInvoicesComponent {
     }
   }
 
+  isFieldInvalid(fieldName: string): boolean {
+    const field = this.form.get(fieldName);
+    return !!(field && field.invalid && (field.dirty || field.touched));
+  }
+
   onSubmit() {
-    console.log('🟢 purchase-invoices.onSubmit - DÉBUT');
-    const val = this.form.value;
-    console.log('🟢 purchase-invoices.onSubmit - Valeurs du formulaire:', val);
-    console.log('🟢 purchase-invoices.onSubmit - Montants dans formulaire:', {
-      amountHT: val.amountHT,
-      amountTTC: val.amountTTC,
-      'amountHT type': typeof val.amountHT,
-      'amountTTC type': typeof val.amountTTC
-    });
-    
-    // Validation manuelle des champs essentiels
-    if (!val.number || !val.date || !val.partnerId) {
-      this.store.showToast('Veuillez remplir tous les champs obligatoires (Numéro, Date, Fournisseur).', 'error');
+    if (this.form.invalid) {
       this.form.markAllAsTouched();
+      this.store.showToast('Veuillez corriger les erreurs dans le formulaire', 'error');
       return;
     }
+
+    const val = this.form.value;
     
     // S'assurer que dueDate est rempli
     if (!val.dueDate) {
@@ -1050,13 +1098,6 @@ export class PurchaseInvoicesComponent {
     // S'assurer que les montants sont des nombres
     const amountHT = val.amountHT != null && val.amountHT !== undefined ? Number(val.amountHT) : 0;
     const amountTTC = val.amountTTC != null && val.amountTTC !== undefined ? Number(val.amountTTC) : 0;
-    
-    console.log('🟢 purchase-invoices.onSubmit - Montants convertis:', {
-      amountHT,
-      amountTTC,
-      'amountHT type': typeof amountHT,
-      'amountTTC type': typeof amountTTC
-    });
     
     const invoice: Invoice & { ajouterAuStock?: boolean } = {
       id: this.editingId || `fa-${Date.now()}`,
@@ -1073,18 +1114,9 @@ export class PurchaseInvoicesComponent {
       ajouterAuStock: val.ajouterAuStock || false
     };
 
-    console.log('🟢 purchase-invoices.onSubmit - Invoice final créé:', invoice);
-    console.log('🟢 purchase-invoices.onSubmit - Montants dans invoice:', {
-      amountHT: invoice.amountHT,
-      amountTTC: invoice.amountTTC
-    });
-    console.log('🟢 purchase-invoices.onSubmit - isEditMode:', this.isEditMode());
-
     if (this.isEditMode()) {
-      console.log('🟢 purchase-invoices.onSubmit - Appel updateInvoice');
       this.store.updateInvoice(invoice);
     } else {
-      console.log('🟢 purchase-invoices.onSubmit - Appel addInvoice');
       this.store.addInvoice(invoice);
     }
     this.closeForm();

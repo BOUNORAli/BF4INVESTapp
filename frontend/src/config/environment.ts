@@ -39,4 +39,3 @@ export function getApiBaseUrlDynamic(): string {
 // Pour la compatibilité, on garde une constante mais elle sera réévaluée si nécessaire
 export const API_BASE_URL = getApiBaseUrl();
 
-console.log('API Base URL:', API_BASE_URL);
