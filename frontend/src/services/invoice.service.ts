@@ -151,6 +151,35 @@ export class InvoiceService {
     return await this.api.downloadFile(`/pdf/factures-achats/${factureId}`).toPromise();
   }
 
+  private mapPayment(p: any): Payment {
+    return {
+      id: p.id,
+      factureAchatId: p.factureAchatId,
+      factureVenteId: p.factureVenteId,
+      bcReference: p.bcReference,
+      date: p.date,
+      montant: p.montant || 0,
+      mode: p.mode,
+      reference: p.reference,
+      notes: p.notes,
+      
+      // Champs pour les calculs comptables
+      typeMouvement: p.typeMouvement,
+      nature: p.nature,
+      colD: p.colD,
+      tvaRate: p.tvaRate,
+      
+      // Champs calculés selon les formules Excel
+      totalPaiementTTC: p.totalPaiementTTC,
+      htPaye: p.htPaye,
+      tvaPaye: p.tvaPaye,
+      
+      // Soldes après ce paiement
+      soldeGlobalApres: p.soldeGlobalApres,
+      soldePartenaireApres: p.soldePartenaireApres
+    };
+  }
+
   private mapInvoice(inv: any, type: 'purchase' | 'sale'): Invoice {
     const today = new Date().toISOString().split('T')[0];
     const dueDate = inv.dateEcheance || inv.dueDate || today;

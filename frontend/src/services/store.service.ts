@@ -1038,7 +1038,7 @@ export class StoreService {
       }
       
       const paiements = await this.api.get<any[]>('/paiements', params).toPromise() || [];
-      const mapped = paiements.map(p => this.mapPayment(p));
+      const mapped = await this.invoiceService.getPayments(factureAchatId, factureVenteId);
       
       // Update payments map
       const invoiceId = factureAchatId || factureVenteId || '';
@@ -1091,7 +1091,7 @@ export class StoreService {
         notes: payment.notes || ''
       };
       
-      const created = await this.api.post<any>('/paiements', payload).toPromise();
+      const created = await this.invoiceService.addPayment(payment);
       
       // Update local payments map
       const invoiceId = payment.factureAchatId || payment.factureVenteId || '';
@@ -1099,7 +1099,7 @@ export class StoreService {
         this.payments.update(map => {
           const newMap = new Map(map);
           const existing = newMap.get(invoiceId) || [];
-          newMap.set(invoiceId, [...existing, this.mapPayment(created)]);
+          newMap.set(invoiceId, [...existing, created]);
           return newMap;
         });
         
