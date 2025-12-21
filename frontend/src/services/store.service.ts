@@ -482,8 +482,8 @@ export class StoreService {
 
   private async loadProducts(): Promise<void> {
     try {
-      const products = await this.api.get<any[]>('/produits').toPromise() || [];
-      this.products.set(products.map(p => this.mapProduct(p)));
+      const products = await this.productService.getProducts();
+      this.products.set(products);
     } catch (error) {
       console.error('Error loading products:', error);
     }
@@ -711,20 +711,9 @@ export class StoreService {
   // --- ACTIONS: PRODUCTS ---
   async addProduct(product: Product): Promise<void> {
     try {
-      const payload = {
-        refArticle: product.ref,
-        designation: product.name,
-        unite: product.unit,
-        prixAchatUnitaireHT: product.priceBuyHT,
-        prixVenteUnitaireHT: product.priceSellHT,
-        quantiteEnStock: product.stock !== undefined ? product.stock : 0,
-        tva: 20.0
-      };
-      
-      const created = await this.api.post<any>('/produits', payload).toPromise();
-      const mapped = this.mapProduct(created);
-      this.products.update(list => [mapped, ...list]);
-      this.showToast('Produit ajout├® au catalogue');
+      const created = await this.productService.addProduct(product);
+      this.products.update(list => [created, ...list]);
+      this.showToast('Produit ajouté au catalogue');
     } catch (error) {
       this.showToast('Erreur lors de l\'ajout du produit', 'error');
       throw error;
@@ -733,30 +722,20 @@ export class StoreService {
 
   async updateProduct(product: Product): Promise<void> {
     try {
-      const payload = {
-        refArticle: product.ref,
-        designation: product.name,
-        unite: product.unit,
-        prixAchatUnitaireHT: product.priceBuyHT,
-        prixVenteUnitaireHT: product.priceSellHT,
-        quantiteEnStock: product.stock !== undefined ? product.stock : 0
-      };
-      
-      const updated = await this.api.put<any>(`/produits/${product.id}`, payload).toPromise();
-      const mapped = this.mapProduct(updated);
-      this.products.update(list => list.map(p => p.id === product.id ? mapped : p));
-      this.showToast('Produit mis ├á jour');
+      const updated = await this.productService.updateProduct(product);
+      this.products.update(list => list.map(p => p.id === product.id ? updated : p));
+      this.showToast('Produit mis à jour');
     } catch (error) {
-      this.showToast('Erreur lors de la mise ├á jour', 'error');
+      this.showToast('Erreur lors de la mise à jour', 'error');
       throw error;
     }
   }
 
   async deleteProduct(id: string): Promise<boolean> {
     try {
-      await this.api.delete(`/produits/${id}`).toPromise();
+      await this.productService.deleteProduct(id);
       this.products.update(list => list.filter(p => p.id !== id));
-      this.showToast('Produit retir├® du catalogue', 'info');
+      this.showToast('Produit retiré du catalogue', 'info');
       return true;
     } catch (error) {
       this.showToast('Erreur lors de la suppression', 'error');
