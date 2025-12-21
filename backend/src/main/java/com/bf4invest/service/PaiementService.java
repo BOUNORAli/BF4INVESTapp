@@ -71,9 +71,6 @@ public class PaiementService {
         if (saved.getMontant() != null && saved.getMontant() > 0) {
             try {
                 String typeTransaction;
-                String partenaireId = null;
-                String partenaireType = null;
-                String partenaireNom = null;
                 String referenceNumero = saved.getReference() != null ? saved.getReference() : "Paiement";
                 
                 if (saved.getFactureVenteId() != null) {
