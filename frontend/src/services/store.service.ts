@@ -245,7 +245,7 @@ export interface HistoriqueSolde {
   description?: string;
 }
 
-export { Toast };
+export type { Toast };
 
 export interface Notification {
   id: string;
