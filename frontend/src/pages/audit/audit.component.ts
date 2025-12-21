@@ -56,6 +56,9 @@ interface AuditLog {
               <option value="FactureAchat">Factures Achat</option>
               <option value="Client">Clients</option>
               <option value="Fournisseur">Fournisseurs</option>
+              <option value="PrevisionPaiement">Prévisions de Paiement</option>
+              <option value="Paiement">Paiements</option>
+              <option value="Produit">Produits</option>
             </select>
           </div>
 
@@ -127,7 +130,7 @@ interface AuditLog {
               </thead>
               <tbody class="divide-y divide-slate-100">
                 @for (log of filteredLogs(); track log.id) {
-                  <tr class="hover:bg-slate-50/50 transition-colors">
+                  <tr class="hover:bg-slate-50/50 transition-colors cursor-pointer" (click)="selectLog(log)">
                     <td class="px-4 py-3 whitespace-nowrap">
                       <div class="text-sm font-medium text-slate-800">{{ formatDate(log.timestamp) }}</div>
                       <div class="text-xs text-slate-500">{{ formatTime(log.timestamp) }}</div>
@@ -167,6 +170,88 @@ interface AuditLog {
           </div>
         }
       </div>
+
+      <!-- Modal Détails -->
+      @if (selectedLog()) {
+        <div class="fixed inset-0 z-50 flex items-center justify-center" aria-modal="true">
+          <div (click)="closeDetails()" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm"></div>
+          <div class="relative bg-white rounded-2xl shadow-2xl max-w-3xl w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+            <div class="flex items-center justify-between p-6 border-b border-slate-100 bg-gradient-to-r from-blue-50 to-indigo-50">
+              <div>
+                <h2 class="text-xl font-bold text-slate-800">Détails de l'Activité</h2>
+                <p class="text-sm text-slate-600 mt-1">{{ getEntityLabel(selectedLog()!.entityType) }} - {{ getActionLabel(selectedLog()!.action) }}</p>
+              </div>
+              <button (click)="closeDetails()" class="text-slate-400 hover:text-slate-600 transition">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+              </button>
+            </div>
+            
+            <div class="flex-1 overflow-y-auto p-6 space-y-6">
+              @if (selectedLog(); as log) {
+                <!-- Informations générales -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div class="bg-slate-50 p-4 rounded-lg">
+                    <h3 class="font-semibold text-slate-700 mb-3">Informations Générales</h3>
+                    <div class="space-y-2 text-sm">
+                      <div><span class="text-slate-500">Date/Heure:</span> <span class="font-medium">{{ formatDate(log.timestamp) }} à {{ formatTime(log.timestamp) }}</span></div>
+                      <div><span class="text-slate-500">Utilisateur:</span> <span class="font-medium">{{ log.userName || log.userId }}</span></div>
+                      <div><span class="text-slate-500">Action:</span> <span [class]="getActionBadgeClass(log.action)" class="px-2 py-1 rounded-full text-xs font-semibold ml-2">{{ getActionLabel(log.action) }}</span></div>
+                      <div><span class="text-slate-500">Type d'entité:</span> <span class="font-medium">{{ getEntityLabel(log.entityType) }}</span></div>
+                      <div><span class="text-slate-500">ID Entité:</span> <span class="font-medium font-mono text-xs">{{ log.entityId }}</span></div>
+                    </div>
+                  </div>
+
+                  <div class="bg-slate-50 p-4 rounded-lg">
+                    <h3 class="font-semibold text-slate-700 mb-3">Informations Techniques</h3>
+                    <div class="space-y-2 text-sm">
+                      <div><span class="text-slate-500">Adresse IP:</span> <span class="font-medium font-mono text-xs">{{ log.ipAddress || 'N/A' }}</span></div>
+                      <div><span class="text-slate-500">User Agent:</span> <span class="font-medium text-xs break-all">{{ log.userAgent || 'N/A' }}</span></div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Détails de l'action -->
+                <div class="space-y-4">
+                  @if (log.action === 'UPDATE' && log.oldValue) {
+                    <div class="bg-amber-50 p-4 rounded-lg border border-amber-200">
+                      <h3 class="font-semibold text-amber-700 mb-3">Ancienne Valeur</h3>
+                      <div class="text-sm text-amber-800 whitespace-pre-wrap break-words font-mono bg-white p-3 rounded border border-amber-200 max-h-48 overflow-y-auto">
+                        {{ formatValue(log.oldValue) }}
+                      </div>
+                    </div>
+                  }
+                  
+                  @if (log.newValue) {
+                    <div class="bg-emerald-50 p-4 rounded-lg border border-emerald-200">
+                      <h3 class="font-semibold text-emerald-700 mb-3">{{ log.action === 'UPDATE' ? 'Nouvelle Valeur' : 'Détails' }}</h3>
+                      <div class="text-sm text-emerald-800 whitespace-pre-wrap break-words font-mono bg-white p-3 rounded border border-emerald-200 max-h-48 overflow-y-auto">
+                        {{ formatValue(log.newValue) }}
+                      </div>
+                    </div>
+                  }
+                  
+                  @if (log.action === 'DELETE' && log.oldValue) {
+                    <div class="bg-red-50 p-4 rounded-lg border border-red-200">
+                      <h3 class="font-semibold text-red-700 mb-3">Valeur Supprimée</h3>
+                      <div class="text-sm text-red-800 whitespace-pre-wrap break-words font-mono bg-white p-3 rounded border border-red-200 max-h-48 overflow-y-auto">
+                        {{ formatValue(log.oldValue) }}
+                      </div>
+                    </div>
+                  }
+                </div>
+              }
+            </div>
+
+            <div class="p-6 border-t border-slate-100 bg-slate-50/50">
+              <button (click)="closeDetails()" class="w-full px-4 py-2 bg-slate-200 text-slate-700 font-medium rounded-lg hover:bg-slate-300 transition">
+                Fermer
+              </button>
+            </div>
+          </div>
+        </div>
+      }
     </div>
   `
 })
@@ -176,6 +261,7 @@ export class AuditComponent implements OnInit {
 
   auditLogs = signal<AuditLog[]>([]);
   loading = signal(false);
+  selectedLog = signal<AuditLog | null>(null);
   
   filterUser = '';
   filterEntityType = '';
@@ -294,6 +380,9 @@ export class AuditComponent implements OnInit {
       case 'FactureAchat': return 'bg-orange-100 text-orange-600';
       case 'Client': return 'bg-blue-100 text-blue-600';
       case 'Fournisseur': return 'bg-indigo-100 text-indigo-600';
+      case 'PrevisionPaiement': return 'bg-amber-100 text-amber-600';
+      case 'Paiement': return 'bg-teal-100 text-teal-600';
+      case 'Produit': return 'bg-rose-100 text-rose-600';
       default: return 'bg-slate-100 text-slate-600';
     }
   }
@@ -305,6 +394,9 @@ export class AuditComponent implements OnInit {
       case 'FactureAchat': return 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2';
       case 'Client': return 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z';
       case 'Fournisseur': return 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4';
+      case 'PrevisionPaiement': return 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z';
+      case 'Paiement': return 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z';
+      case 'Produit': return 'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4';
       default: return 'M4 6h16M4 12h16M4 18h16';
     }
   }
@@ -316,6 +408,9 @@ export class AuditComponent implements OnInit {
       case 'FactureAchat': return 'Facture Achat';
       case 'Client': return 'Client';
       case 'Fournisseur': return 'Fournisseur';
+      case 'PrevisionPaiement': return 'Prévision de Paiement';
+      case 'Paiement': return 'Paiement';
+      case 'Produit': return 'Produit';
       default: return entityType;
     }
   }
@@ -328,6 +423,31 @@ export class AuditComponent implements OnInit {
       return log.oldValue;
     }
     return log.entityId ? `ID: ${log.entityId}` : '-';
+  }
+
+  selectLog(log: AuditLog) {
+    this.selectedLog.set(log);
+  }
+
+  closeDetails() {
+    this.selectedLog.set(null);
+  }
+
+  formatValue(value: any): string {
+    if (!value) return 'N/A';
+    if (typeof value === 'string') {
+      // Essayer de parser si c'est du JSON
+      try {
+        const parsed = JSON.parse(value);
+        return JSON.stringify(parsed, null, 2);
+      } catch {
+        return value;
+      }
+    }
+    if (typeof value === 'object') {
+      return JSON.stringify(value, null, 2);
+    }
+    return String(value);
   }
 }
 
