@@ -556,6 +556,7 @@ import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, FormsModule } 
                             <th class="px-4 py-3 text-left font-semibold text-slate-700">Date Prévue</th>
                             <th class="px-4 py-3 text-right font-semibold text-slate-700">Montant</th>
                             <th class="px-4 py-3 text-left font-semibold text-slate-700">Statut</th>
+                            <th class="px-4 py-3 text-left font-semibold text-slate-700">Date de Rappel</th>
                             <th class="px-4 py-3 text-left font-semibold text-slate-700">Notes</th>
                             <th class="px-4 py-3 text-center font-semibold text-slate-700">Actions</th>
                           </tr>
@@ -575,6 +576,21 @@ import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, FormsModule } 
                                       [class.text-red-700]="prev.statut === 'EN_RETARD'">
                                   {{ prev.statut }}
                                 </span>
+                              </td>
+                              <td class="px-4 py-3">
+                                @if (prev.dateRappel) {
+                                  <div class="flex items-center gap-2">
+                                    <svg class="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
+                                    </svg>
+                                    <span class="text-xs text-slate-600">{{ prev.dateRappel }}</span>
+                                    @if (store.isReminderToday(prev.dateRappel)) {
+                                      <span class="px-2 py-0.5 bg-amber-100 text-amber-700 rounded text-xs font-bold">Aujourd'hui</span>
+                                    }
+                                  </div>
+                                } @else {
+                                  <span class="text-xs text-slate-400">-</span>
+                                }
                               </td>
                               <td class="px-4 py-3 text-xs text-slate-500">{{ prev.notes || '-' }}</td>
                               <td class="px-4 py-3 text-center">
@@ -613,6 +629,16 @@ import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, FormsModule } 
                       <div>
                         <label class="block text-sm font-semibold text-slate-700 mb-1">Notes (Optionnel)</label>
                         <textarea formControlName="notes" rows="2" class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 outline-none"></textarea>
+                      </div>
+                      <div>
+                        <label class="block text-sm font-semibold text-slate-700 mb-1">
+                          Date de Rappel (Optionnel)
+                          <span class="text-xs text-slate-500 font-normal ml-2">
+                            Vous recevrez une notification le jour du rappel
+                          </span>
+                        </label>
+                        <input formControlName="dateRappel" type="date" 
+                               class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 outline-none">
                       </div>
                       <div class="flex gap-3">
                         <button type="submit" [disabled]="previsionForm.invalid" class="flex-1 px-4 py-2 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 transition disabled:opacity-50">
@@ -676,7 +702,8 @@ export class PurchaseInvoicesComponent {
   previsionForm = this.fb.group({
     datePrevue: [new Date().toISOString().split('T')[0], Validators.required],
     montantPrevu: [0, [Validators.required, Validators.min(0.01)]],
-    notes: ['']
+    notes: [''],
+    dateRappel: ['']
   });
 
   // Filters
@@ -934,7 +961,8 @@ export class PurchaseInvoicesComponent {
     this.previsionForm.reset({
       datePrevue: new Date().toISOString().split('T')[0],
       montantPrevu: 0,
-      notes: ''
+      notes: '',
+      dateRappel: ''
     });
     this.editingPrevisionId.set(null);
   }
@@ -960,6 +988,7 @@ export class PurchaseInvoicesComponent {
       datePrevue: this.previsionForm.value.datePrevue!,
       montantPrevu: this.previsionForm.value.montantPrevu!,
       notes: this.previsionForm.value.notes || '',
+      dateRappel: this.previsionForm.value.dateRappel || undefined,
       statut: 'PREVU'
     };
 
@@ -972,7 +1001,8 @@ export class PurchaseInvoicesComponent {
       this.previsionForm.reset({
         datePrevue: new Date().toISOString().split('T')[0],
         montantPrevu: 0,
-        notes: ''
+        notes: '',
+        dateRappel: ''
       });
       this.editingPrevisionId.set(null);
       await this.store.loadInvoices();
@@ -986,7 +1016,8 @@ export class PurchaseInvoicesComponent {
     this.previsionForm.patchValue({
       datePrevue: prev.datePrevue,
       montantPrevu: prev.montantPrevu,
-      notes: prev.notes || ''
+      notes: prev.notes || '',
+      dateRappel: prev.dateRappel || ''
     });
   }
 
@@ -1011,7 +1042,8 @@ export class PurchaseInvoicesComponent {
     this.previsionForm.reset({
       datePrevue: new Date().toISOString().split('T')[0],
       montantPrevu: 0,
-      notes: ''
+      notes: '',
+      dateRappel: ''
     });
   }
 

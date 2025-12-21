@@ -188,6 +188,7 @@ export interface PrevisionPaiement {
   montantPrevu: number;
   statut: 'PREVU' | 'REALISE' | 'EN_RETARD';
   notes?: string;
+  dateRappel?: string; // Date de rappel optionnelle (format ISO: YYYY-MM-DD)
 }
 
 export interface PrevisionJournaliere {

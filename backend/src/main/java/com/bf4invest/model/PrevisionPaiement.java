@@ -18,6 +18,7 @@ public class PrevisionPaiement {
     private Double montantPrevu;
     private String statut; // PREVU, REALISE, EN_RETARD
     private String notes;
+    private LocalDate dateRappel; // Date de rappel optionnelle
     private LocalDateTime createdAt;
 }
 

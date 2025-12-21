@@ -244,7 +244,8 @@ export class InvoiceService {
         datePrevue: p.datePrevue,
         montantPrevu: p.montantPrevu || 0,
         statut: p.statut || 'PREVU',
-        notes: p.notes
+        notes: p.notes,
+        dateRappel: p.dateRappel
       })) : undefined
     };
   }

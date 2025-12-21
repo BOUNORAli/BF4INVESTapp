@@ -1,5 +1,5 @@
 
-import { Component, inject, signal, effect, OnInit, HostListener, ViewChild, ElementRef, AfterViewChecked } from '@angular/core';
+import { Component, inject, signal, effect, OnInit, OnDestroy, HostListener, ViewChild, ElementRef, AfterViewChecked } from '@angular/core';
 import { RouterOutlet, RouterLink, RouterLinkActive, Router, NavigationEnd } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -23,7 +23,7 @@ interface SearchResult {
   imports: [RouterOutlet, RouterLink, RouterLinkActive, CommonModule, FormsModule],
   templateUrl: './app.component.html'
 })
-export class AppComponent implements OnInit {
+export class AppComponent implements OnInit, OnDestroy {
   auth = inject(AuthService);
   store = inject(StoreService);
   router = inject(Router);
@@ -97,6 +97,8 @@ export class AppComponent implements OnInit {
     await this.store.refreshAllData();
   }
 
+  private reminderCheckInterval: any = null;
+
   async ngOnInit() {
     // Load notifications on app start
     await this.store.loadNotifications(false);
@@ -105,6 +107,20 @@ export class AppComponent implements OnInit {
     setInterval(() => {
       this.store.loadNotifications(false);
     }, 30000);
+
+    // Vérifier les rappels au démarrage
+    await this.store.checkPaymentReminders();
+    
+    // Vérifier les rappels toutes les heures
+    this.reminderCheckInterval = setInterval(() => {
+      this.store.checkPaymentReminders();
+    }, 3600000); // 1 heure = 3600000 ms
+  }
+
+  ngOnDestroy() {
+    if (this.reminderCheckInterval) {
+      clearInterval(this.reminderCheckInterval);
+    }
   }
 
   // Recherche globale

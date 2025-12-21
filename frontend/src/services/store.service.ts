@@ -196,6 +196,7 @@ export interface PrevisionPaiement {
   montantPrevu: number;
   statut: 'PREVU' | 'REALISE' | 'EN_RETARD';
   notes?: string;
+  dateRappel?: string; // Date de rappel optionnelle (format ISO: YYYY-MM-DD)
 }
 
 export interface PrevisionJournaliere {
@@ -1372,5 +1373,51 @@ export class StoreService {
     } catch (error) {
       console.error('Error loading historique solde:', error);
     }
+  }
+
+  // Vérification des rappels de paiement
+  private reminderNotificationsCache = new Set<string>(); // Cache pour éviter les doublons
+
+  async checkPaymentReminders(): Promise<void> {
+    const today = new Date().toISOString().split('T')[0];
+    const invoices = this.invoices();
+    
+    for (const invoice of invoices) {
+      if (!invoice.previsionsPaiement || invoice.previsionsPaiement.length === 0) continue;
+      
+      for (const prevision of invoice.previsionsPaiement) {
+        // Vérifier si le rappel est aujourd'hui et que la prévision n'est pas réalisée
+        if (prevision.dateRappel === today && 
+            prevision.statut !== 'REALISE' && 
+            prevision.dateRappel) {
+          
+          // Créer une clé unique pour ce rappel
+          const reminderKey = `${invoice.id}-${prevision.id || prevision.datePrevue}-${prevision.dateRappel}`;
+          
+          // Vérifier si on a déjà créé une notification pour ce rappel
+          if (!this.reminderNotificationsCache.has(reminderKey)) {
+            const partnerName = invoice.type === 'sale' 
+              ? this.getClientName(invoice.partnerId || '')
+              : this.getSupplierName(invoice.partnerId || '');
+            
+            this.addNotification({
+              title: 'Rappel: Paiement prévu',
+              message: `Facture ${invoice.number} - ${partnerName}: ${prevision.montantPrevu.toFixed(2)} MAD prévu le ${prevision.datePrevue}`,
+              type: 'alert'
+            });
+            
+            // Marquer comme notifié dans le cache
+            this.reminderNotificationsCache.add(reminderKey);
+          }
+        }
+      }
+    }
+  }
+
+  // Helper pour vérifier si une date de rappel est aujourd'hui
+  isReminderToday(dateRappel: string | undefined): boolean {
+    if (!dateRappel) return false;
+    const today = new Date().toISOString().split('T')[0];
+    return dateRappel === today;
   }
 }
