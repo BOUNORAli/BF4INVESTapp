@@ -984,6 +984,7 @@ export class PurchaseInvoicesComponent {
     }
 
     const inv = this.selectedInvoiceForPayments()!;
+    const invoiceId = inv.id; // Sauvegarder l'ID avant le rechargement
     const previsionData: PrevisionPaiement = {
       datePrevue: this.previsionForm.value.datePrevue!,
       montantPrevu: this.previsionForm.value.montantPrevu!,
@@ -1006,6 +1007,12 @@ export class PurchaseInvoicesComponent {
       });
       this.editingPrevisionId.set(null);
       await this.store.loadInvoices();
+      
+      // Mettre à jour la facture sélectionnée avec les nouvelles données
+      const updatedInvoice = this.store.invoices().find(inv => inv.id === invoiceId);
+      if (updatedInvoice) {
+        this.selectedInvoiceForPayments.set(updatedInvoice);
+      }
     } catch (error) {
       // Error already handled in store
     }
