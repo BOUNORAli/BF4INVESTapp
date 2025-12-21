@@ -191,24 +191,13 @@ interface AuditLog {
             <div class="flex-1 overflow-y-auto p-6 space-y-6">
               @if (selectedLog(); as log) {
                 <!-- Informations générales -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div class="bg-slate-50 p-4 rounded-lg">
-                    <h3 class="font-semibold text-slate-700 mb-3">Informations Générales</h3>
-                    <div class="space-y-2 text-sm">
-                      <div><span class="text-slate-500">Date/Heure:</span> <span class="font-medium">{{ formatDate(log.timestamp) }} à {{ formatTime(log.timestamp) }}</span></div>
-                      <div><span class="text-slate-500">Utilisateur:</span> <span class="font-medium">{{ log.userName || log.userId }}</span></div>
-                      <div><span class="text-slate-500">Action:</span> <span [class]="getActionBadgeClass(log.action)" class="px-2 py-1 rounded-full text-xs font-semibold ml-2">{{ getActionLabel(log.action) }}</span></div>
-                      <div><span class="text-slate-500">Type d'entité:</span> <span class="font-medium">{{ getEntityLabel(log.entityType) }}</span></div>
-                      <div><span class="text-slate-500">ID Entité:</span> <span class="font-medium font-mono text-xs">{{ log.entityId }}</span></div>
-                    </div>
-                  </div>
-
-                  <div class="bg-slate-50 p-4 rounded-lg">
-                    <h3 class="font-semibold text-slate-700 mb-3">Informations Techniques</h3>
-                    <div class="space-y-2 text-sm">
-                      <div><span class="text-slate-500">Adresse IP:</span> <span class="font-medium font-mono text-xs">{{ log.ipAddress || 'N/A' }}</span></div>
-                      <div><span class="text-slate-500">User Agent:</span> <span class="font-medium text-xs break-all">{{ log.userAgent || 'N/A' }}</span></div>
-                    </div>
+                <div class="bg-slate-50 p-4 rounded-lg">
+                  <h3 class="font-semibold text-slate-700 mb-3">Informations Générales</h3>
+                  <div class="space-y-2 text-sm">
+                    <div><span class="text-slate-500">Date/Heure:</span> <span class="font-medium">{{ formatDate(log.timestamp) }} à {{ formatTime(log.timestamp) }}</span></div>
+                    <div><span class="text-slate-500">Utilisateur:</span> <span class="font-medium">{{ log.userName || log.userId }}</span></div>
+                    <div><span class="text-slate-500">Action:</span> <span [class]="getActionBadgeClass(log.action)" class="px-2 py-1 rounded-full text-xs font-semibold ml-2">{{ getActionLabel(log.action) }}</span></div>
+                    <div><span class="text-slate-500">Type d'entité:</span> <span class="font-medium">{{ getEntityLabel(log.entityType) }}</span></div>
                   </div>
                 </div>
 
