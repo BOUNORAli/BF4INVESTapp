@@ -1006,12 +1006,15 @@ export class PurchaseInvoicesComponent {
         dateRappel: ''
       });
       this.editingPrevisionId.set(null);
-      await this.store.loadInvoices();
       
-      // Mettre à jour la facture sélectionnée avec les nouvelles données
+      // addPrevision/updatePrevision appellent déjà loadInvoices()
+      // On attend que la mise à jour soit terminée puis on met à jour la facture sélectionnée
+      // On force la création d'un nouvel objet pour que Angular détecte le changement
+      await new Promise(resolve => setTimeout(resolve, 50));
       const updatedInvoice = this.store.invoices().find(inv => inv.id === invoiceId);
       if (updatedInvoice) {
-        this.selectedInvoiceForPayments.set(updatedInvoice);
+        // Créer un nouvel objet pour forcer la détection de changement
+        this.selectedInvoiceForPayments.set({ ...updatedInvoice });
       }
     } catch (error) {
       // Error already handled in store
