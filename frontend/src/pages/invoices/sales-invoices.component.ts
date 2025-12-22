@@ -95,29 +95,29 @@ import { RouterLink } from '@angular/router';
         </div>
 
         <div class="overflow-x-auto">
-          <table class="w-full text-sm text-left min-w-[700px]">
+          <table class="w-full text-sm text-left min-w-[600px]">
             <thead class="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-200">
               <tr>
-                <th class="px-6 py-4 font-semibold">Facture</th>
-                <th class="px-6 py-4 font-semibold">Client & BC</th>
-                <th class="px-6 py-4 font-semibold">Date Émission</th>
-                <th class="px-6 py-4 font-semibold">Échéance</th>
-                <th class="px-6 py-4 font-semibold text-right">Montant TTC</th>
-                <th class="px-6 py-4 font-semibold text-center">Mode Paiement</th>
-                <th class="px-6 py-4 font-semibold text-center">État</th>
-                <th class="px-6 py-4 text-center">Actions</th>
+                <th class="px-4 md:px-6 py-4 font-semibold">Facture</th>
+                <th class="px-4 md:px-6 py-4 font-semibold">Client & BC</th>
+                <th class="px-4 md:px-6 py-4 font-semibold hidden md:table-cell">Date Émission</th>
+                <th class="px-4 md:px-6 py-4 font-semibold">Échéance</th>
+                <th class="px-4 md:px-6 py-4 font-semibold text-right">Montant TTC</th>
+                <th class="px-4 md:px-6 py-4 font-semibold text-center hidden md:table-cell">Mode Paiement</th>
+                <th class="px-4 md:px-6 py-4 font-semibold text-center">État</th>
+                <th class="px-4 md:px-6 py-4 text-center">Actions</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-slate-100">
               @for (inv of paginatedInvoices(); track inv.id) {
                 <tr class="bg-white hover:bg-slate-50 transition-colors group" [attr.data-item-id]="inv.id">
-                  <td class="px-6 py-4">
-                    <div class="font-bold text-slate-800 text-base mb-0.5">{{ inv.number }}</div>
-                    <span class="text-xs text-slate-400">Ref interne</span>
+                  <td class="px-4 md:px-6 py-4">
+                    <div class="font-bold text-slate-800 text-sm md:text-base mb-0.5">{{ inv.number }}</div>
+                    <span class="text-xs text-slate-400 hidden md:inline">Ref interne</span>
                   </td>
-                  <td class="px-6 py-4">
+                  <td class="px-4 md:px-6 py-4">
                     <div class="flex flex-col">
-                       <span class="font-medium text-slate-700 flex items-center gap-1.5">
+                       <span class="font-medium text-slate-700 flex items-center gap-1.5 text-sm">
                          <div class="w-1.5 h-1.5 rounded-full bg-indigo-500"></div>
                          {{ store.getClientName(inv.partnerId || '') }}
                        </span>
@@ -126,14 +126,14 @@ import { RouterLink } from '@angular/router';
                        }
                     </div>
                   </td>
-                  <td class="px-6 py-4 text-slate-600">{{ inv.date }}</td>
-                  <td class="px-6 py-4">
-                    <span class="text-slate-600 font-medium">{{ inv.dueDate }}</span>
+                  <td class="px-4 md:px-6 py-4 text-slate-600 hidden md:table-cell">{{ inv.date }}</td>
+                  <td class="px-4 md:px-6 py-4">
+                    <span class="text-slate-600 font-medium text-sm">{{ inv.dueDate }}</span>
                   </td>
-                  <td class="px-6 py-4 text-right font-bold text-slate-800">
+                  <td class="px-4 md:px-6 py-4 text-right font-bold text-slate-800 text-sm md:text-base">
                     {{ inv.amountTTC | number:'1.2-2' }} MAD
                   </td>
-                  <td class="px-6 py-4 text-center">
+                  <td class="px-4 md:px-6 py-4 text-center hidden md:table-cell">
                     @if (inv.paymentMode) {
                       <span class="inline-flex items-center bg-blue-50 text-blue-700 text-xs px-2.5 py-1 rounded-full font-medium border border-blue-200">
                         {{ inv.paymentMode }}
@@ -142,7 +142,7 @@ import { RouterLink } from '@angular/router';
                       <span class="text-xs text-slate-400 italic">Non défini</span>
                     }
                   </td>
-                  <td class="px-6 py-4 text-center">
+                  <td class="px-4 md:px-6 py-4 text-center">
                     <span [class]="getStatusClass(inv.status)">
                       {{ getStatusLabel(inv.status) }}
                     </span>
@@ -207,8 +207,8 @@ import { RouterLink } from '@angular/router';
             
             <!-- Panel -->
             <div class="relative w-full md:w-[600px] bg-white h-full shadow-2xl flex flex-col transform transition-transform animate-[slideInRight_0.3s_ease-out]">
-               <div class="flex items-center justify-between p-6 border-b border-slate-100 bg-slate-50/50">
-                  <h2 class="text-xl font-bold text-slate-800">
+               <div class="flex items-center justify-between p-4 md:p-6 border-b border-slate-100 bg-slate-50/50">
+                  <h2 class="text-lg md:text-xl font-bold text-slate-800">
                     {{ isEditMode() ? 'Modifier' : 'Créer' }} Facture Vente
                   </h2>
                   <button (click)="closeForm()" class="text-slate-400 hover:text-slate-600 transition">
@@ -216,7 +216,7 @@ import { RouterLink } from '@angular/router';
                   </button>
                </div>
                
-               <form [formGroup]="form" (ngSubmit)="onSubmit()" class="flex-1 overflow-y-auto p-6 space-y-6">
+               <form [formGroup]="form" (ngSubmit)="onSubmit()" class="flex-1 overflow-y-auto p-4 md:p-6 space-y-6">
                   
                   <!-- Section Link -->
                   <div class="bg-indigo-50 p-4 rounded-xl border border-indigo-100 space-y-4">
@@ -252,7 +252,7 @@ import { RouterLink } from '@angular/router';
                        <p class="text-xs text-slate-400 mt-1">Le numéro sera généré automatiquement au format [mois][numéro]/[année]</p>
                      </div>
 
-                     <div class="grid grid-cols-2 gap-4">
+                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                           <label class="block text-sm font-semibold text-slate-700 mb-1">Date Émission <span class="text-red-500">*</span></label>
                           <input formControlName="date" type="date" 
@@ -273,7 +273,7 @@ import { RouterLink } from '@angular/router';
                         </div>
                      </div>
                      
-                     <div class="grid grid-cols-2 gap-4">
+                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                            <label class="block text-sm font-semibold text-slate-700 mb-1">Montant HT <span class="text-red-500">*</span></label>
                            <input formControlName="amountHT" type="number" step="0.01" 
@@ -294,7 +294,7 @@ import { RouterLink } from '@angular/router';
                         </div>
                      </div>
 
-                     <div class="grid grid-cols-2 gap-4">
+                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                            <label class="block text-sm font-semibold text-slate-700 mb-1">Statut Paiement</label>
                            <select formControlName="status" class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition">
@@ -334,9 +334,9 @@ import { RouterLink } from '@angular/router';
                   </div>
                </form>
 
-               <div class="p-6 border-t border-slate-100 bg-slate-50/50 flex gap-3">
-                  <button (click)="closeForm()" class="flex-1 px-4 py-2 bg-white border border-slate-200 text-slate-700 font-medium rounded-lg hover:bg-slate-50 transition">Annuler</button>
-                  <button (click)="onSubmit()" [disabled]="form.invalid" class="flex-1 px-4 py-2 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition shadow-lg disabled:opacity-50 shadow-blue-600/20">
+               <div class="p-4 md:p-6 border-t border-slate-100 bg-slate-50/50 flex gap-3">
+                  <button (click)="closeForm()" class="flex-1 px-4 py-2.5 bg-white border border-slate-200 text-slate-700 font-medium rounded-lg hover:bg-slate-50 transition min-h-[44px]">Annuler</button>
+                  <button (click)="onSubmit()" [disabled]="form.invalid" class="flex-1 px-4 py-2.5 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition shadow-lg disabled:opacity-50 shadow-blue-600/20 min-h-[44px]">
                     {{ isEditMode() ? 'Mettre à jour' : 'Créer Facture' }}
                   </button>
                </div>
@@ -348,18 +348,18 @@ import { RouterLink } from '@angular/router';
       @if (selectedInvoiceForDetails()) {
         <div class="fixed inset-0 z-50 flex items-center justify-center" aria-modal="true">
           <div (click)="closeCalculDetails()" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm"></div>
-          <div class="relative bg-white rounded-2xl shadow-2xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col">
-            <div class="flex items-center justify-between p-6 border-b border-slate-100 bg-gradient-to-r from-purple-50 to-indigo-50">
+          <div class="relative bg-white rounded-2xl shadow-2xl max-w-4xl w-full mx-2 md:mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+            <div class="flex items-center justify-between p-4 md:p-6 border-b border-slate-100 bg-gradient-to-r from-purple-50 to-indigo-50">
               <div>
-                <h2 class="text-xl font-bold text-slate-800">Détails Comptables</h2>
-                <p class="text-sm text-slate-600 mt-1">Facture: {{ selectedInvoiceForDetails()?.number }}</p>
+                <h2 class="text-lg md:text-xl font-bold text-slate-800">Détails Comptables</h2>
+                <p class="text-xs md:text-sm text-slate-600 mt-1">Facture: {{ selectedInvoiceForDetails()?.number }}</p>
               </div>
-              <button (click)="closeCalculDetails()" class="text-slate-400 hover:text-slate-600 transition">
+              <button (click)="closeCalculDetails()" class="text-slate-400 hover:text-slate-600 transition min-h-[44px] min-w-[44px] flex items-center justify-center">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
               </button>
             </div>
             
-            <div class="flex-1 overflow-y-auto p-6 space-y-6">
+            <div class="flex-1 overflow-y-auto p-4 md:p-6 space-y-4 md:space-y-6">
               @if (selectedInvoiceForDetails(); as inv) {
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <!-- Informations de base -->
@@ -423,8 +423,8 @@ import { RouterLink } from '@angular/router';
               }
             </div>
 
-            <div class="p-6 border-t border-slate-100 bg-slate-50/50">
-              <button (click)="closeCalculDetails()" class="w-full px-4 py-2 bg-slate-200 text-slate-700 font-medium rounded-lg hover:bg-slate-300 transition">
+            <div class="p-4 md:p-6 border-t border-slate-100 bg-slate-50/50">
+              <button (click)="closeCalculDetails()" class="w-full px-4 py-2.5 bg-slate-200 text-slate-700 font-medium rounded-lg hover:bg-slate-300 transition min-h-[44px]">
                 Fermer
               </button>
             </div>
@@ -436,8 +436,8 @@ import { RouterLink } from '@angular/router';
       @if (selectedInvoiceForPayments()) {
         <div class="fixed inset-0 z-50 flex items-center justify-center" aria-modal="true">
           <div (click)="closePaymentModal()" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm"></div>
-          <div class="relative bg-white rounded-2xl shadow-2xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col">
-            <div class="flex items-center justify-between p-6 border-b border-slate-100 bg-gradient-to-r from-emerald-50 to-teal-50">
+          <div class="relative bg-white rounded-2xl shadow-2xl max-w-4xl w-full mx-2 md:mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+            <div class="flex items-center justify-between p-4 md:p-6 border-b border-slate-100 bg-gradient-to-r from-emerald-50 to-teal-50">
               <div>
                 <h2 class="text-xl font-bold text-slate-800">Facture {{ selectedInvoiceForPayments()?.number }}</h2>
                 <p class="text-sm text-slate-600 mt-1">Gestion des paiements et prévisions</p>
@@ -467,14 +467,14 @@ import { RouterLink } from '@angular/router';
               </button>
             </div>
             
-            <div class="flex-1 overflow-y-auto p-6 space-y-6">
+            <div class="flex-1 overflow-y-auto p-4 md:p-6 space-y-6">
               @if (activeTab() === 'paiements') {
               @if (selectedInvoiceForPayments(); as inv) {
                 <!-- Résumé de la facture -->
                 @if (invoicePaymentSummary(); as summary) {
-                  <div class="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-xl border border-blue-100">
+                  <div class="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 md:p-6 rounded-xl border border-blue-100">
                     <h3 class="text-lg font-bold text-slate-800 mb-4">Résumé de la Facture</h3>
-                    <div class="grid grid-cols-3 gap-4 mb-4">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                       <div class="bg-white p-4 rounded-lg border border-blue-200">
                         <p class="text-xs text-slate-600 mb-1">Montant Total</p>
                         <p class="text-2xl font-bold text-slate-800">{{ summary.montantTotal | number:'1.2-2' }} MAD</p>
@@ -510,7 +510,7 @@ import { RouterLink } from '@angular/router';
                   <h3 class="text-lg font-bold text-slate-800">Historique des Paiements</h3>
                   @if (paymentsForInvoice().length > 0) {
                     <div class="overflow-x-auto">
-                      <table class="w-full text-sm">
+                      <table class="w-full text-sm min-w-[600px]">
                         <thead class="bg-slate-50 border-b border-slate-200">
                           <tr>
                             <th class="px-4 py-3 text-left font-semibold text-slate-700">Date</th>
@@ -551,10 +551,10 @@ import { RouterLink } from '@angular/router';
                 </div>
 
                 <!-- Formulaire pour ajouter un paiement -->
-                <div class="bg-slate-50 p-6 rounded-xl border border-slate-200">
+                <div class="bg-slate-50 p-4 md:p-6 rounded-xl border border-slate-200">
                   <h3 class="text-lg font-bold text-slate-800 mb-4">Ajouter un Paiement</h3>
                   <form [formGroup]="paymentForm" (ngSubmit)="addPayment()" class="space-y-4">
-                    <div class="grid grid-cols-2 gap-4">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
                         <label class="block text-sm font-semibold text-slate-700 mb-1">Date</label>
                         <input formControlName="date" type="date" class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 outline-none">
@@ -569,7 +569,7 @@ import { RouterLink } from '@angular/router';
                         }
                       </div>
                     </div>
-                    <div class="grid grid-cols-2 gap-4">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
                         <label class="block text-sm font-semibold text-slate-700 mb-1">Mode de Paiement</label>
                         <select formControlName="mode" class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 outline-none">
@@ -602,7 +602,7 @@ import { RouterLink } from '@angular/router';
                   <!-- Liste des prévisions -->
                   @if (previsionsForInvoice().length > 0) {
                     <div class="overflow-x-auto">
-                      <table class="w-full text-sm">
+                      <table class="w-full text-sm min-w-[500px]">
                         <thead class="bg-slate-50 border-b border-slate-200">
                           <tr>
                             <th class="px-4 py-3 text-left font-semibold text-slate-700">Date Prévue</th>
@@ -665,10 +665,10 @@ import { RouterLink } from '@angular/router';
                   }
 
                   <!-- Formulaire pour ajouter une prévision -->
-                  <div class="bg-slate-50 p-6 rounded-xl border border-slate-200">
+                  <div class="bg-slate-50 p-4 md:p-6 rounded-xl border border-slate-200">
                     <h3 class="text-lg font-bold text-slate-800 mb-4">{{ editingPrevisionId() ? 'Modifier' : 'Ajouter' }} une Prévision</h3>
                     <form [formGroup]="previsionForm" (ngSubmit)="savePrevision()" class="space-y-4">
-                      <div class="grid grid-cols-2 gap-4">
+                      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                           <label class="block text-sm font-semibold text-slate-700 mb-1">Date Prévue</label>
                           <input formControlName="datePrevue" type="date" class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 outline-none">
@@ -698,7 +698,7 @@ import { RouterLink } from '@angular/router';
                           {{ editingPrevisionId() ? 'Modifier' : 'Ajouter' }} la Prévision
                         </button>
                         @if (editingPrevisionId()) {
-                          <button type="button" (click)="cancelEditPrevision()" class="px-4 py-2 bg-slate-200 text-slate-700 font-medium rounded-lg hover:bg-slate-300 transition">
+                          <button type="button" (click)="cancelEditPrevision()" class="px-4 py-2.5 bg-slate-200 text-slate-700 font-medium rounded-lg hover:bg-slate-300 transition min-h-[44px]">
                             Annuler
                           </button>
                         }
@@ -709,8 +709,8 @@ import { RouterLink } from '@angular/router';
               }
             </div>
 
-            <div class="p-6 border-t border-slate-100 bg-slate-50/50">
-              <button (click)="closePaymentModal()" class="w-full px-4 py-2 bg-slate-200 text-slate-700 font-medium rounded-lg hover:bg-slate-300 transition">
+            <div class="p-4 md:p-6 border-t border-slate-100 bg-slate-50/50">
+              <button (click)="closePaymentModal()" class="w-full px-4 py-2.5 bg-slate-200 text-slate-700 font-medium rounded-lg hover:bg-slate-300 transition min-h-[44px]">
                 Fermer
               </button>
             </div>

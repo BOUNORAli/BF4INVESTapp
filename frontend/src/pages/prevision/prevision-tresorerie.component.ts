@@ -124,8 +124,8 @@ import { StoreService, PrevisionTresorerieResponse, PrevisionJournaliere, Echean
                   <tbody class="divide-y divide-slate-100">
                     @for (echeance of sortedEcheances(); track echeance.date + echeance.factureId) {
                       <tr class="hover:bg-slate-50">
-                        <td class="px-4 py-3">{{ echeance.date }}</td>
-                        <td class="px-4 py-3">
+                        <td class="px-3 md:px-4 py-3 text-sm">{{ echeance.date }}</td>
+                        <td class="px-3 md:px-4 py-3">
                           <span class="px-2 py-1 rounded text-xs font-medium"
                                 [class.bg-emerald-50]="echeance.type === 'VENTE'"
                                 [class.text-emerald-700]="echeance.type === 'VENTE'"
@@ -134,14 +134,14 @@ import { StoreService, PrevisionTresorerieResponse, PrevisionJournaliere, Echean
                             {{ echeance.type }}
                           </span>
                         </td>
-                        <td class="px-4 py-3">{{ echeance.numeroFacture }}</td>
-                        <td class="px-4 py-3">{{ echeance.partenaire }}</td>
-                        <td class="px-4 py-3 text-right font-bold"
+                        <td class="px-3 md:px-4 py-3 text-sm hidden md:table-cell">{{ echeance.numeroFacture }}</td>
+                        <td class="px-3 md:px-4 py-3 text-sm">{{ echeance.partenaire }}</td>
+                        <td class="px-3 md:px-4 py-3 text-right font-bold text-sm md:text-base"
                             [class.text-emerald-600]="echeance.type === 'VENTE'"
                             [class.text-red-600]="echeance.type === 'ACHAT'">
                           {{ echeance.montant | number:'1.2-2' }} MAD
                         </td>
-                        <td class="px-4 py-3">
+                        <td class="px-3 md:px-4 py-3 hidden md:table-cell">
                           <span class="px-2 py-1 rounded text-xs font-medium"
                                 [class.bg-blue-50]="echeance.statut === 'PREVU'"
                                 [class.text-blue-700]="echeance.statut === 'PREVU'"
@@ -156,7 +156,7 @@ import { StoreService, PrevisionTresorerieResponse, PrevisionJournaliere, Echean
                     }
                     @empty {
                       <tr>
-                        <td colspan="6" class="px-4 py-8 text-center text-slate-500">
+                        <td colspan="6" class="px-3 md:px-4 py-8 text-center text-slate-500">
                           Aucune échéance prévue pour cette période
                         </td>
                       </tr>
@@ -167,9 +167,9 @@ import { StoreService, PrevisionTresorerieResponse, PrevisionJournaliere, Echean
             } @else if (activeView() === 'graphique') {
               <!-- Graphique d'évolution en ligne -->
               <div class="space-y-4">
-                <div class="flex items-center justify-between">
-                  <h3 class="text-lg font-bold text-slate-800">Évolution du Solde Prévisionnel</h3>
-                  <div class="flex items-center gap-4 text-xs text-slate-600">
+                <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+                  <h3 class="text-base md:text-lg font-bold text-slate-800">Évolution du Solde Prévisionnel</h3>
+                  <div class="flex flex-col md:flex-row items-start md:items-center gap-2 md:gap-4 text-xs text-slate-600">
                     <div class="flex items-center gap-2">
                       <div class="w-3 h-3 rounded-full bg-emerald-500"></div>
                       <span>Solde positif</span>
@@ -180,7 +180,7 @@ import { StoreService, PrevisionTresorerieResponse, PrevisionJournaliere, Echean
                     </div>
                   </div>
                 </div>
-                <div class="bg-white rounded-lg border border-slate-200 p-6 min-h-[450px] relative chart-container">
+                <div class="bg-white rounded-lg border border-slate-200 p-3 md:p-6 min-h-[300px] md:min-h-[450px] relative chart-container">
                   <svg [attr.viewBox]="'0 0 ' + chartWidth() + ' ' + chartHeight()" 
                        class="w-full h-full" 
                        preserveAspectRatio="none"
@@ -304,46 +304,48 @@ import { StoreService, PrevisionTresorerieResponse, PrevisionJournaliere, Echean
             } @else {
               <!-- Calendrier -->
               <div class="space-y-4">
-                <div class="flex items-center justify-between mb-4">
-                  <h3 class="text-lg font-bold text-slate-800">Calendrier des Échéances</h3>
+                <div class="flex flex-col md:flex-row items-start md:items-center justify-between mb-4 gap-3">
+                  <h3 class="text-base md:text-lg font-bold text-slate-800">Calendrier des Échéances</h3>
                   <!-- Navigation du calendrier -->
-                  <div class="flex items-center gap-3">
-                    <button (click)="prevMonth()" 
-                            class="p-2 rounded-lg border border-slate-200 hover:bg-slate-50 transition">
-                      <svg class="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
-                      </svg>
-                    </button>
-                    <div class="flex items-center gap-2">
-                      <select [(ngModel)]="selectedMonth" (change)="onMonthChange()" 
-                              class="px-3 py-1.5 border border-slate-200 rounded-lg text-sm font-medium focus:ring-2 focus:ring-blue-500/20 outline-none">
-                        @for (month of months; track month.value) {
-                          <option [value]="month.value">{{ month.label }}</option>
-                        }
-                      </select>
-                      <select [(ngModel)]="selectedYear" (change)="onYearChange()" 
-                              class="px-3 py-1.5 border border-slate-200 rounded-lg text-sm font-medium focus:ring-2 focus:ring-blue-500/20 outline-none">
-                        @for (year of availableYears(); track year) {
-                          <option [value]="year">{{ year }}</option>
-                        }
-                      </select>
+                  <div class="flex flex-col md:flex-row items-stretch md:items-center gap-2 md:gap-3 w-full md:w-auto">
+                    <div class="flex items-center gap-2 justify-center md:justify-start">
+                      <button (click)="prevMonth()" 
+                              class="p-2 rounded-lg border border-slate-200 hover:bg-slate-50 transition min-h-[44px] min-w-[44px]">
+                        <svg class="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                        </svg>
+                      </button>
+                      <div class="flex items-center gap-2 flex-1 md:flex-none">
+                        <select [(ngModel)]="selectedMonth" (change)="onMonthChange()" 
+                                class="flex-1 md:flex-none px-3 py-1.5 border border-slate-200 rounded-lg text-sm font-medium focus:ring-2 focus:ring-blue-500/20 outline-none min-h-[44px]">
+                          @for (month of months; track month.value) {
+                            <option [value]="month.value">{{ month.label }}</option>
+                          }
+                        </select>
+                        <select [(ngModel)]="selectedYear" (change)="onYearChange()" 
+                                class="flex-1 md:flex-none px-3 py-1.5 border border-slate-200 rounded-lg text-sm font-medium focus:ring-2 focus:ring-blue-500/20 outline-none min-h-[44px]">
+                          @for (year of availableYears(); track year) {
+                            <option [value]="year">{{ year }}</option>
+                          }
+                        </select>
+                      </div>
+                      <button (click)="nextMonth()" 
+                              class="p-2 rounded-lg border border-slate-200 hover:bg-slate-50 transition min-h-[44px] min-w-[44px]">
+                        <svg class="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                        </svg>
+                      </button>
                     </div>
-                    <button (click)="nextMonth()" 
-                            class="p-2 rounded-lg border border-slate-200 hover:bg-slate-50 transition">
-                      <svg class="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-                      </svg>
-                    </button>
                   </div>
                 </div>
-                <div class="grid grid-cols-7 gap-2">
+                <div class="grid grid-cols-7 gap-1 md:gap-2">
                   <!-- En-têtes des jours -->
                   @for (day of ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim']; track day) {
-                    <div class="text-center text-sm font-semibold text-slate-600 py-2">{{ day }}</div>
+                    <div class="text-center text-xs md:text-sm font-semibold text-slate-600 py-2">{{ day }}</div>
                   }
                   <!-- Jours du calendrier -->
                   @for (day of calendarDays(); track day.date) {
-                    <div class="border border-slate-200 rounded-lg p-2 min-h-[80px] hover:bg-slate-50 transition"
+                    <div class="border border-slate-200 rounded-lg p-1.5 md:p-2 min-h-[60px] md:min-h-[80px] hover:bg-slate-50 transition"
                          [class.bg-blue-50]="day.hasEcheance"
                          [class.bg-emerald-50]="day.isToday">
                       <div class="text-xs font-semibold mb-1 flex items-center justify-between"
