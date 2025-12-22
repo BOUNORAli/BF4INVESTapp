@@ -98,7 +98,7 @@ import { StoreService, BC } from '../../services/store.service';
               </tr>
             </thead>
             <tbody class="divide-y divide-slate-100">
-              @for (bc of filteredBcs(); track bc.id) {
+              @for (bc of paginatedBcs(); track bc.id) {
                 <tr class="bg-white hover:bg-slate-50 transition-colors group" [attr.data-item-id]="bc.id">
                   <td class="px-6 py-4">
                     <div class="flex flex-col">
@@ -171,7 +171,7 @@ import { StoreService, BC } from '../../services/store.service';
                   </td>
                 </tr>
               }
-              @if (filteredBcs().length === 0) {
+              @if (paginatedBcs().length === 0) {
                 <tr>
                   <td colspan="7" class="px-6 py-16 text-center">
                     <div class="flex flex-col items-center justify-center">
@@ -188,12 +188,31 @@ import { StoreService, BC } from '../../services/store.service';
             </tbody>
           </table>
         </div>
+
+        <!-- Pagination Controls -->
+        @if (filteredBcs().length > 0) {
+          <div class="p-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
+            <div class="text-xs text-slate-500">
+              Affichage de {{ (currentPage() - 1) * pageSize() + 1 }} à {{ Math.min(currentPage() * pageSize(), filteredBcs().length) }} sur {{ filteredBcs().length }} résultats
+            </div>
+            <div class="flex items-center gap-2">
+              <button (click)="prevPage()" [disabled]="currentPage() === 1" class="p-2 border border-slate-200 rounded-lg hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed transition">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+              </button>
+              <span class="text-sm font-medium text-slate-700">Page {{ currentPage() }} sur {{ totalPages() || 1 }}</span>
+              <button (click)="nextPage()" [disabled]="currentPage() === totalPages() || totalPages() === 0" class="p-2 border border-slate-200 rounded-lg hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed transition">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+              </button>
+            </div>
+          </div>
+        }
       </div>
     </div>
   `
 })
 export class BcListComponent {
   store = inject(StoreService);
+  Math = Math; // Expose Math for template
 
   // Filters State
   searchTerm = signal('');
@@ -201,6 +220,10 @@ export class BcListComponent {
   filterClient = signal('');
   dateMin = signal('');
   dateMax = signal('');
+
+  // Pagination State
+  currentPage = signal(1);
+  pageSize = signal(10);
 
   filteredBcs = computed(() => {
     const term = this.searchTerm().toLowerCase();
@@ -229,6 +252,22 @@ export class BcListComponent {
     });
   });
 
+  totalPages = computed(() => {
+    return Math.ceil(this.filteredBcs().length / this.pageSize());
+  });
+
+  paginatedBcs = computed(() => {
+    const filtered = this.filteredBcs();
+    // Reset to page 1 if current page is out of bounds
+    const total = Math.ceil(filtered.length / this.pageSize());
+    if (this.currentPage() > total && total > 0) {
+      this.currentPage.set(1);
+    }
+    const start = (this.currentPage() - 1) * this.pageSize();
+    const end = start + this.pageSize();
+    return filtered.slice(start, end);
+  });
+
   /**
    * Récupère tous les IDs des clients d'un BC (nouvelle et ancienne structure)
    */
@@ -250,6 +289,19 @@ export class BcListComponent {
     this.filterClient.set('');
     this.dateMin.set('');
     this.dateMax.set('');
+    // Page will be reset automatically by the effect
+  }
+
+  prevPage() {
+    if (this.currentPage() > 1) {
+      this.currentPage.update(p => p - 1);
+    }
+  }
+
+  nextPage() {
+    if (this.currentPage() < this.totalPages()) {
+      this.currentPage.update(p => p + 1);
+    }
   }
 
   async exportPDF(bc: BC) {

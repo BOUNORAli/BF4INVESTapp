@@ -49,6 +49,11 @@ public class BandeCommande {
     private String etat; // brouillon, envoyee, complete
     private String notes;
     private String modePaiement; // virement, cheque, LCN, compensation, etc.
+
+    // Infos livraison (doivent venir du BC pour le PDF)
+    private String lieuLivraison;
+    private String conditionLivraison;
+    private String responsableLivraison;
     
     private Boolean ajouterAuStock; // Option pour ajouter les quantités achetées au stock (défaut: false)
     

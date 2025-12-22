@@ -72,6 +72,17 @@ public class BandeCommandeService {
                     if (bc.getModePaiement() != null) {
                         existing.setModePaiement(bc.getModePaiement());
                     }
+
+                    // Infos livraison (nouveaux champs)
+                    if (bc.getLieuLivraison() != null) {
+                        existing.setLieuLivraison(bc.getLieuLivraison());
+                    }
+                    if (bc.getConditionLivraison() != null) {
+                        existing.setConditionLivraison(bc.getConditionLivraison());
+                    }
+                    if (bc.getResponsableLivraison() != null) {
+                        existing.setResponsableLivraison(bc.getResponsableLivraison());
+                    }
                     
                     if (bc.getAjouterAuStock() != null) {
                         existing.setAjouterAuStock(bc.getAjouterAuStock());

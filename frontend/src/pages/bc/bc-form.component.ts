@@ -2,7 +2,8 @@ import { Component, inject, signal, computed, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ReactiveFormsModule, FormBuilder, FormGroup, Validators, FormArray } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
-import { StoreService, BC, LigneAchat, LigneVente, ClientVente, Product } from '../../services/store.service';
+import { StoreService, LigneAchat, LigneVente, ClientVente, Product } from '../../services/store.service';
+import type { BC } from '../../models/types';
 
 @Component({
   selector: 'app-bc-form',
@@ -95,6 +96,31 @@ import { StoreService, BC, LigneAchat, LigneVente, ClientVente, Product } from '
                     <option [value]="mode.name">{{ mode.name }}</option>
                   }
                 </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Card 1bis: Livraison -->
+          <div class="bg-white p-4 md:p-6 rounded-xl shadow-sm border border-slate-100">
+            <h2 class="text-base font-bold text-slate-800 mb-6 flex items-center gap-2">
+              <span class="w-6 h-6 rounded-full bg-amber-50 text-amber-700 flex items-center justify-center text-xs font-bold">1B</span>
+              Livraison & Contact
+            </h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+              <div>
+                <label class="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Lieu de livraison</label>
+                <input formControlName="lieuLivraison" type="text" placeholder="Ex: BENI MELLAL"
+                       class="w-full px-4 py-2.5 border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-slate-700">
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Condition de livraison</label>
+                <input formControlName="conditionLivraison" type="text" placeholder="Ex: LIVRAISON IMMEDIATE"
+                       class="w-full px-4 py-2.5 border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-slate-700">
+              </div>
+              <div class="md:col-span-2">
+                <label class="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Responsable à contacter à la livraison</label>
+                <input formControlName="responsableLivraison" type="text" placeholder="Ex: BOUNOR BOUBKER"
+                       class="w-full px-4 py-2.5 border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-slate-700">
               </div>
             </div>
           </div>
@@ -505,6 +531,9 @@ export class BcFormComponent implements OnInit {
       supplierId: ['', Validators.required],
       status: ['draft', Validators.required],
       paymentMode: [''],
+      lieuLivraison: [''],
+      conditionLivraison: [''],
+      responsableLivraison: [''],
       ajouterAuStock: [false],
       lignesAchat: this.fb.array([]),
       clientsVente: this.fb.array([])
@@ -548,6 +577,9 @@ export class BcFormComponent implements OnInit {
       supplierId: bc.supplierId,
       status: bc.status,
       paymentMode: bc.paymentMode || '',
+      lieuLivraison: bc.lieuLivraison || '',
+      conditionLivraison: bc.conditionLivraison || '',
+      responsableLivraison: bc.responsableLivraison || '',
       ajouterAuStock: bc.ajouterAuStock || false
     });
 
@@ -985,6 +1017,9 @@ export class BcFormComponent implements OnInit {
       supplierId: formVal.supplierId,
       status: formVal.status,
       paymentMode: formVal.paymentMode || undefined,
+      lieuLivraison: formVal.lieuLivraison || undefined,
+      conditionLivraison: formVal.conditionLivraison || undefined,
+      responsableLivraison: formVal.responsableLivraison || undefined,
       ajouterAuStock: ajouterAuStock || false,
       lignesAchat: lignesAchat,
       clientsVente: clientsVenteData.length > 0 ? clientsVenteData : undefined,

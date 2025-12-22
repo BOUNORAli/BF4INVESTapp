@@ -72,6 +72,11 @@ export class BcService {
     if (bc.paymentMode) {
         payload.modePaiement = bc.paymentMode;
     }
+
+    // Infos livraison (BC)
+    if (bc.lieuLivraison) payload.lieuLivraison = bc.lieuLivraison;
+    if (bc.conditionLivraison) payload.conditionLivraison = bc.conditionLivraison;
+    if (bc.responsableLivraison) payload.responsableLivraison = bc.responsableLivraison;
     
     const created = await this.api.post<any>('/bandes-commandes', payload).toPromise();
     return this.mapBC(created);
@@ -135,6 +140,11 @@ export class BcService {
     if (updatedBc.paymentMode) {
         payload.modePaiement = updatedBc.paymentMode;
     }
+
+    // Infos livraison (BC)
+    if (updatedBc.lieuLivraison) payload.lieuLivraison = updatedBc.lieuLivraison;
+    if (updatedBc.conditionLivraison) payload.conditionLivraison = updatedBc.conditionLivraison;
+    if (updatedBc.responsableLivraison) payload.responsableLivraison = updatedBc.responsableLivraison;
     
     const updated = await this.api.put<any>(`/bandes-commandes/${updatedBc.id}`, payload).toPromise();
     return this.mapBC(updated);
@@ -224,6 +234,9 @@ export class BcService {
       ajouterAuStock: bc.ajouterAuStock || false,
       status: bc.etat || bc.status,
       paymentMode: bc.modePaiement || bc.paymentMode,
+      lieuLivraison: bc.lieuLivraison,
+      conditionLivraison: bc.conditionLivraison,
+      responsableLivraison: bc.responsableLivraison,
       items: items, // R├®trocompatibilit├®
       // Nouvelle structure
       lignesAchat: lignesAchat,

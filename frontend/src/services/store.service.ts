@@ -96,6 +96,9 @@ export interface BC {
   supplierId: string;
   status: 'draft' | 'sent' | 'completed';
   paymentMode?: string;
+  lieuLivraison?: string;
+  conditionLivraison?: string;
+  responsableLivraison?: string;
   ajouterAuStock?: boolean; // Option pour ajouter les quantit├®s achet├®es au stock
   
   // Nouvelle structure multi-clients

@@ -100,11 +100,8 @@ public class PdfService {
         // Section Destinataire (fournisseur)
         addBCDestinataire(document, supplier);
         
-        // Tableau des lignes d'achat
+        // Tableau des lignes d'achat + totaux (comme le modèle: totaux dans le tableau)
         addBCProductTable(document, bc);
-        
-        // Totaux
-        addBCTotals(document, bc);
         
         // Informations livraison et paiement
         addBCDeliveryInfo(document, bc, client);
@@ -354,8 +351,8 @@ public class PdfService {
         PdfPCell titleCell = new PdfPCell();
         titleCell.setBorder(Rectangle.NO_BORDER);
         Paragraph title = new Paragraph();
-        // Texte "BON DE COMMANDEN°" en noir
-        Chunk titleChunk = new Chunk("BON DE COMMANDEN°", 
+        // Texte "BON DE COMMANDE N°" en noir
+        Chunk titleChunk = new Chunk("BON DE COMMANDE N°", 
             FontFactory.getFont(FontFactory.HELVETICA_BOLD, 14));
         title.add(titleChunk);
         // Numéro en rouge directement après
@@ -363,7 +360,8 @@ public class PdfService {
         Chunk numeroChunk = new Chunk(" " + numeroBC, 
             FontFactory.getFont(FontFactory.HELVETICA_BOLD, 14, RED));
         title.add(numeroChunk);
-        title.setAlignment(Element.ALIGN_LEFT);
+        title.setAlignment(Element.ALIGN_CENTER);
+        titleCell.setHorizontalAlignment(Element.ALIGN_CENTER);
         titleCell.addElement(title);
         headerTable.addCell(titleCell);
         
@@ -371,16 +369,12 @@ public class PdfService {
         PdfPCell dateCell = new PdfPCell();
         dateCell.setBorder(Rectangle.NO_BORDER);
         dateCell.setHorizontalAlignment(Element.ALIGN_RIGHT);
-        Paragraph dateLabel = new Paragraph("MEKNES LE:", 
-            FontFactory.getFont(FontFactory.HELVETICA, 10));
-        dateLabel.setAlignment(Element.ALIGN_RIGHT);
-        dateCell.addElement(dateLabel);
-        
         String dateStr = bc.getDateBC() != null ? bc.getDateBC().format(DATE_FORMATTER) : "";
-        Paragraph dateValue = new Paragraph(dateStr, 
-            FontFactory.getFont(FontFactory.HELVETICA_BOLD, 10, RED));
-        dateValue.setAlignment(Element.ALIGN_RIGHT);
-        dateCell.addElement(dateValue);
+        Paragraph dateLine = new Paragraph();
+        dateLine.add(new Chunk("MEKNES LE: ", FontFactory.getFont(FontFactory.HELVETICA, 10)));
+        dateLine.add(new Chunk(dateStr, FontFactory.getFont(FontFactory.HELVETICA_BOLD, 10, RED)));
+        dateLine.setAlignment(Element.ALIGN_RIGHT);
+        dateCell.addElement(dateLine);
         headerTable.addCell(dateCell);
         
         document.add(headerTable);
@@ -422,7 +416,7 @@ public class PdfService {
         table.setSpacingAfter(15);
         
         // En-têtes avec fond bleu clair et texte bleu foncé
-        String[] headers = {"N°", "Désignation", "Unité", "Quantité", "PU HT", "PrixTotalHT"};
+        String[] headers = {"N°", "Désignation", "Unité", "Quantité", "PU HT", "Prix Total HT"};
         Font headerFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 9, BLUE_HEADER);
         
         for (String header : headers) {
@@ -434,6 +428,9 @@ public class PdfService {
             table.addCell(cell);
         }
         
+        double totalHT = 0.0;
+        double tauxTVA = 20.0;
+
         // Nouvelle structure: lignesAchat
         if (bc.getLignesAchat() != null && !bc.getLignesAchat().isEmpty()) {
             int lineNum = 1;
@@ -460,9 +457,15 @@ public class PdfService {
                 addTableCell(table, puHT, Element.ALIGN_RIGHT);
                 
                 // Prix Total HT
-                double totalHT = (ligne.getQuantiteAchetee() != null ? ligne.getQuantiteAchetee() : 0) * 
+                double lineTotalHT = (ligne.getQuantiteAchetee() != null ? ligne.getQuantiteAchetee() : 0) * 
                     (ligne.getPrixAchatUnitaireHT() != null ? ligne.getPrixAchatUnitaireHT() : 0);
-                addTableCell(table, formatAmount(totalHT), Element.ALIGN_RIGHT);
+                addTableCell(table, formatAmount(lineTotalHT), Element.ALIGN_RIGHT);
+
+                // Total global + TVA
+                totalHT += lineTotalHT;
+                if (ligne.getTva() != null && ligne.getTva() > 0) {
+                    tauxTVA = ligne.getTva();
+                }
             }
         }
         // Rétrocompatibilité: ancienne structure lignes
@@ -491,13 +494,84 @@ public class PdfService {
                 addTableCell(table, puHT, Element.ALIGN_RIGHT);
                 
                 // Prix Total HT
-                double totalHT = (ligne.getQuantiteAchetee() != null ? ligne.getQuantiteAchetee() : 0) * 
+                double lineTotalHT = (ligne.getQuantiteAchetee() != null ? ligne.getQuantiteAchetee() : 0) * 
                     (ligne.getPrixAchatUnitaireHT() != null ? ligne.getPrixAchatUnitaireHT() : 0);
-                addTableCell(table, formatAmount(totalHT), Element.ALIGN_RIGHT);
+                addTableCell(table, formatAmount(lineTotalHT), Element.ALIGN_RIGHT);
+
+                totalHT += lineTotalHT;
             }
         }
+
+        // Fallback totaux si on n'a aucune ligne mais un total pré-calculé
+        if (totalHT == 0.0 && bc.getTotalAchatHT() != null) {
+            totalHT = bc.getTotalAchatHT();
+        }
+
+        addBCTotalsRowsInProductTable(table, totalHT, tauxTVA);
         
         document.add(table);
+    }
+
+    /**
+     * Ajoute les lignes TOTAL HT / TVA A / TOTAL TTC dans le même tableau que les produits,
+     * pour correspondre au modèle.
+     */
+    private void addBCTotalsRowsInProductTable(PdfPTable table, double totalHT, double tauxTVA) {
+        double montantTVA = totalHT * (tauxTVA / 100.0);
+        double totalTTC = totalHT + montantTVA;
+
+        Font labelFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 9);
+        Font valueFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 9);
+        Font valueFontStrong = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 10);
+        Font tvaRateFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 9, RED);
+
+        // TOTAL HT (label sur 5 colonnes + montant sur la dernière colonne)
+        PdfPCell totalHtLabel = new PdfPCell(new Phrase("TOTAL HT", labelFont));
+        totalHtLabel.setColspan(5);
+        totalHtLabel.setPadding(6);
+        totalHtLabel.setBorder(Rectangle.BOX);
+        totalHtLabel.setHorizontalAlignment(Element.ALIGN_LEFT);
+        table.addCell(totalHtLabel);
+
+        PdfPCell totalHtValue = new PdfPCell(new Phrase(formatAmount(totalHT), valueFont));
+        totalHtValue.setPadding(6);
+        totalHtValue.setBorder(Rectangle.BOX);
+        totalHtValue.setHorizontalAlignment(Element.ALIGN_RIGHT);
+        table.addCell(totalHtValue);
+
+        // TVA A (label sur 4 colonnes + taux sur 1 colonne + montant sur la dernière colonne)
+        PdfPCell tvaLabel = new PdfPCell(new Phrase("TVA A", labelFont));
+        tvaLabel.setColspan(4);
+        tvaLabel.setPadding(6);
+        tvaLabel.setBorder(Rectangle.BOX);
+        tvaLabel.setHorizontalAlignment(Element.ALIGN_LEFT);
+        table.addCell(tvaLabel);
+
+        PdfPCell tvaRateCell = new PdfPCell(new Phrase(String.format("%.0f%%", tauxTVA), tvaRateFont));
+        tvaRateCell.setPadding(6);
+        tvaRateCell.setBorder(Rectangle.BOX);
+        tvaRateCell.setHorizontalAlignment(Element.ALIGN_RIGHT);
+        table.addCell(tvaRateCell);
+
+        PdfPCell tvaValue = new PdfPCell(new Phrase(formatAmount(montantTVA), valueFont));
+        tvaValue.setPadding(6);
+        tvaValue.setBorder(Rectangle.BOX);
+        tvaValue.setHorizontalAlignment(Element.ALIGN_RIGHT);
+        table.addCell(tvaValue);
+
+        // TOTAL TTC
+        PdfPCell totalTtcLabel = new PdfPCell(new Phrase("TOTAL TTC", labelFont));
+        totalTtcLabel.setColspan(5);
+        totalTtcLabel.setPadding(6);
+        totalTtcLabel.setBorder(Rectangle.BOX);
+        totalTtcLabel.setHorizontalAlignment(Element.ALIGN_LEFT);
+        table.addCell(totalTtcLabel);
+
+        PdfPCell totalTtcValue = new PdfPCell(new Phrase(formatAmount(totalTTC), valueFontStrong));
+        totalTtcValue.setPadding(6);
+        totalTtcValue.setBorder(Rectangle.BOX);
+        totalTtcValue.setHorizontalAlignment(Element.ALIGN_RIGHT);
+        table.addCell(totalTtcValue);
     }
     
     private void addBCTotals(Document document, BandeCommande bc) throws DocumentException {
@@ -577,19 +651,19 @@ public class PdfService {
         Font valueFont = FontFactory.getFont(FontFactory.HELVETICA, 9);
         Font valueFontRed = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 9, RED);
         
-        // LIEU DE LIVRAISON
-        addInfoRowWithBackground(infoTable, "LIEU DE LIVRAISON:", 
-            client != null && client.getAdresse() != null ? client.getAdresse() : "", 
+        // LIEU DE LIVRAISON (vient du BC)
+        addInfoRowWithBackground(infoTable, "LIEU DE LIVRAISON:",
+            bc.getLieuLivraison() != null ? bc.getLieuLivraison() : "",
             labelFont, valueFontRed);
         
-        // CONDITION DE LIVRAISON
-        addInfoRowWithBackground(infoTable, "CONDITION DE LIVRAISON:", "LIVRAISON IMMEDIATE", 
+        // CONDITION DE LIVRAISON (vient du BC)
+        addInfoRowWithBackground(infoTable, "CONDITION DE LIVRAISON:",
+            bc.getConditionLivraison() != null ? bc.getConditionLivraison() : "LIVRAISON IMMEDIATE",
             labelFont, valueFontRed);
         
-        // RESPONSABLE A CONTACTER
-        String responsable = client != null && client.getContacts() != null && !client.getContacts().isEmpty() ?
-            client.getContacts().get(0).getNom() : "N/A";
-        addInfoRowWithBackground(infoTable, "RESPONSABLE A CONTACTER A LA\nLIVRAISON", responsable, 
+        // RESPONSABLE A CONTACTER (vient du BC)
+        String responsable = bc.getResponsableLivraison() != null ? bc.getResponsableLivraison() : "N/A";
+        addInfoRowWithBackground(infoTable, "RESPONSABLE A CONTACTER A LA\nLIVRAISON", responsable,
             labelFont, valueFontRed);
         
         // MODE PAIEMENT (récupérer depuis la BC ou utiliser une valeur par défaut)
@@ -1891,3 +1965,4 @@ public class PdfService {
         }
     }
 }
+
