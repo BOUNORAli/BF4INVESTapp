@@ -98,8 +98,8 @@ public class PdfService {
         // En-tête avec logo et numéro
         addBCHeader(document, bc, writer);
         
-        // Section Destinataire (fournisseur)
-        addBCDestinataire(document, supplier);
+        // Section Destinataire (fournisseur) avec date au même niveau
+        addBCDestinataire(document, bc, supplier);
         
         // Tableau des lignes d'achat + totaux (comme le modèle: totaux dans le tableau)
         addBCProductTable(document, bc);
@@ -107,8 +107,8 @@ public class PdfService {
         // Informations livraison et paiement
         addBCDeliveryInfo(document, bc, client);
         
-        // Footer
-        addBCFooter(document);
+        // Footer absolu en bas de page
+        addBCFooterAbsolute(document, writer);
         
         document.close();
         return baos.toByteArray();
@@ -344,17 +344,18 @@ public class PdfService {
         headerTable.setWidths(new float[]{2f, 8f});
         headerTable.setSpacingAfter(10);
         
-        // Logo stylisé avec lignes courbes
-        PdfPCell logoCell = createLogoCell(writer, 80f, 60f);
+        // Logo stylisé avec lignes courbes - plus grand et en haut
+        PdfPCell logoCell = createLogoCell(writer, 100f, 75f);
+        logoCell.setVerticalAlignment(Element.ALIGN_TOP);
         headerTable.addCell(logoCell);
         
-        // Contenu à droite : titre + numéro, puis date
+        // Contenu à droite : titre + numéro
         PdfPCell contentCell = new PdfPCell();
         contentCell.setBorder(Rectangle.NO_BORDER);
         contentCell.setPadding(0);
         contentCell.setVerticalAlignment(Element.ALIGN_TOP);
         
-        // Ligne 1 : "BON DE COMMANDE N° [numéro]" centré
+        // "BON DE COMMANDE N° [numéro]" centré
         Paragraph title = new Paragraph();
         Chunk titleChunk = new Chunk("BON DE COMMANDE N°", 
             FontFactory.getFont(FontFactory.HELVETICA_BOLD, 14));
@@ -364,31 +365,21 @@ public class PdfService {
             FontFactory.getFont(FontFactory.HELVETICA_BOLD, 14, RED));
         title.add(numeroChunk);
         title.setAlignment(Element.ALIGN_CENTER);
-        title.setSpacingAfter(8);
+        title.setSpacingAfter(0);
         contentCell.addElement(title);
-        
-        // Ligne 2 : "MEKNES LE: [date]" aligné à droite
-        LocalDate dateBC = bc.getDateBC() != null ? bc.getDateBC() : LocalDate.now();
-        String dateStr = dateBC.format(DATE_FORMATTER);
-        Paragraph dateLine = new Paragraph();
-        dateLine.add(new Chunk("MEKNES LE: ", FontFactory.getFont(FontFactory.HELVETICA, 10)));
-        dateLine.add(new Chunk(dateStr, FontFactory.getFont(FontFactory.HELVETICA_BOLD, 10, RED)));
-        dateLine.setAlignment(Element.ALIGN_RIGHT);
-        dateLine.setSpacingAfter(0);
-        contentCell.addElement(dateLine);
         
         headerTable.addCell(contentCell);
         
         document.add(headerTable);
     }
     
-    private void addBCDestinataire(Document document, Supplier supplier) throws DocumentException {
-        PdfPTable destTable = new PdfPTable(2);
+    private void addBCDestinataire(Document document, BandeCommande bc, Supplier supplier) throws DocumentException {
+        PdfPTable destTable = new PdfPTable(3);
         destTable.setWidthPercentage(100);
         destTable.setSpacingAfter(15);
-        destTable.setWidths(new float[]{2f, 5f});
+        destTable.setWidths(new float[]{2f, 4f, 4f});
         
-        // Cellule gauche avec fond bleu clair
+        // Cellule gauche avec fond bleu clair - "DESTINATAIRE :"
         PdfPCell labelCell = new PdfPCell(new Phrase("DESTINATAIRE :", 
             FontFactory.getFont(FontFactory.HELVETICA_BOLD, 10)));
         labelCell.setBackgroundColor(BLUE_LIGHT);
@@ -398,18 +389,33 @@ public class PdfService {
         labelCell.setVerticalAlignment(Element.ALIGN_MIDDLE);
         destTable.addCell(labelCell);
         
-        // Cellule droite avec nom du fournisseur en rouge et souligné
+        // Cellule milieu avec nom du fournisseur en rouge et souligné
         PdfPCell nameCell = new PdfPCell();
         nameCell.setBorder(Rectangle.BOX);
         nameCell.setBorderColor(Color.WHITE);
         nameCell.setPadding(8);
         nameCell.setVerticalAlignment(Element.ALIGN_MIDDLE);
+        nameCell.setHorizontalAlignment(Element.ALIGN_LEFT);
         String supplierName = supplier != null ? supplier.getNom() : "";
         Font nameFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 12, Font.UNDERLINE, RED);
-        Paragraph name = new Paragraph(supplierName, nameFont);
-        name.setAlignment(Element.ALIGN_LEFT);
+        Phrase name = new Phrase(supplierName, nameFont);
         nameCell.addElement(name);
         destTable.addCell(nameCell);
+        
+        // Cellule droite avec "MEKNES LE: [date]" aligné à droite
+        PdfPCell dateCell = new PdfPCell();
+        dateCell.setBorder(Rectangle.NO_BORDER);
+        dateCell.setPadding(8);
+        dateCell.setVerticalAlignment(Element.ALIGN_MIDDLE);
+        dateCell.setHorizontalAlignment(Element.ALIGN_RIGHT);
+        LocalDate dateBC = bc.getDateBC() != null ? bc.getDateBC() : LocalDate.now();
+        String dateStr = dateBC.format(DATE_FORMATTER);
+        Paragraph dateLine = new Paragraph();
+        dateLine.add(new Chunk("MEKNES LE: ", FontFactory.getFont(FontFactory.HELVETICA, 10)));
+        dateLine.add(new Chunk(dateStr, FontFactory.getFont(FontFactory.HELVETICA_BOLD, 10, RED)));
+        dateLine.setAlignment(Element.ALIGN_RIGHT);
+        dateCell.addElement(dateLine);
+        destTable.addCell(dateCell);
         
         document.add(destTable);
     }
@@ -712,6 +718,47 @@ public class PdfService {
         
         footerTable.addCell(footerCell);
         document.add(footerTable);
+    }
+    
+    private void addBCFooterAbsolute(Document document, PdfWriter writer) throws DocumentException {
+        // Créer le footer en position absolue en bas de page
+        PdfPTable footerTable = new PdfPTable(1);
+        float tableWidth = document.getPageSize().getWidth() - document.leftMargin() - document.rightMargin();
+        footerTable.setTotalWidth(tableWidth);
+        footerTable.setLockedWidth(true);
+        
+        PdfPCell footerCell = new PdfPCell();
+        footerCell.setBackgroundColor(BLUE_LIGHT);
+        footerCell.setPadding(10);
+        footerCell.setBorder(Rectangle.NO_BORDER);
+        footerCell.setHorizontalAlignment(Element.ALIGN_CENTER);
+        
+        Font footerFont = FontFactory.getFont(FontFactory.HELVETICA, 8);
+        
+        Paragraph footer1 = new Paragraph("ICE: 002889872000062", footerFont);
+        footer1.setAlignment(Element.ALIGN_CENTER);
+        footer1.setSpacingAfter(3);
+        
+        Paragraph footer2 = new Paragraph("BF4 INVEST SARL au capital de 2.000.000,00 Dhs, Tel: 06 61 51 11 91", footerFont);
+        footer2.setAlignment(Element.ALIGN_CENTER);
+        footer2.setSpacingAfter(3);
+        
+        Paragraph footer3 = new Paragraph("RC de Meknes: 54287 - IF: 50499801 - TP: 17101980", footerFont);
+        footer3.setAlignment(Element.ALIGN_CENTER);
+        footer3.setSpacingAfter(0);
+        
+        footerCell.addElement(footer1);
+        footerCell.addElement(footer2);
+        footerCell.addElement(footer3);
+        
+        footerTable.addCell(footerCell);
+        
+        // Positionner le footer en bas de page avec position absolue
+        PdfContentByte canvas = writer.getDirectContent();
+        // Calculer la hauteur du footer (approximativement 60 points pour 3 lignes + padding)
+        float footerHeight = 60f;
+        float yPosition = document.bottomMargin() + footerHeight;
+        footerTable.writeSelectedRows(0, -1, document.leftMargin(), yPosition, canvas);
     }
     
     // ============ FACTURE VENTE METHODS ============
