@@ -1075,6 +1075,11 @@ public class PdfService {
         tvaRate.setPadding(5);
         totalsTable.addCell(tvaRate);
         
+        // Cellule vide pour que le montant TVA soit aligné verticalement avec les montants TOTAL HT / TOTAL TTC
+        PdfPCell tvaEmpty = new PdfPCell();
+        tvaEmpty.setBorder(Rectangle.NO_BORDER);
+        totalsTable.addCell(tvaEmpty);
+        
         PdfPCell tvaAmount = new PdfPCell(new Phrase(formatAmount(montantTVA), 
             FontFactory.getFont(FontFactory.HELVETICA_BOLD, 10)));
         tvaAmount.setBorder(Rectangle.NO_BORDER);
@@ -1082,14 +1087,7 @@ public class PdfService {
         tvaAmount.setPadding(5);
         totalsTable.addCell(tvaAmount);
         
-        // Ligne vide pour séparer visuellement le TOTAL TTC
-        for (int i = 0; i < 4; i++) {
-            PdfPCell empty = new PdfPCell(new Phrase(" "));
-            empty.setBorder(Rectangle.NO_BORDER);
-            totalsTable.addCell(empty);
-        }
-        
-        // TOTAL TTC mis en valeur (nouvelle ligne dédiée)
+        // TOTAL TTC (sur une nouvelle ligne, même alignement que TOTAL HT)
         addTotalsRow(totalsTable, "TOTAL TTC", formatAmount(totalTTC), true);
         
         document.add(totalsTable);
@@ -1612,6 +1610,10 @@ public class PdfService {
         PdfPCell labelCell = new PdfPCell(new Phrase(label, labelFont));
         labelCell.setBorder(Rectangle.NO_BORDER);
         labelCell.setPadding(5);
+        if (isTotal) {
+            // Légère marge supérieure supplémentaire pour détacher visuellement TOTAL TTC
+            labelCell.setPaddingTop(10);
+        }
         table.addCell(labelCell);
         
         // Cellule vide pour aligner avec les 4 colonnes (label, vide, tva%, valeur)
@@ -1627,6 +1629,9 @@ public class PdfService {
         valueCell.setBorder(Rectangle.NO_BORDER);
         valueCell.setHorizontalAlignment(Element.ALIGN_RIGHT);
         valueCell.setPadding(5);
+        if (isTotal) {
+            valueCell.setPaddingTop(10);
+        }
         table.addCell(valueCell);
     }
     
