@@ -38,6 +38,7 @@ export interface Supplier {
   phone: string;
   email: string;
   address: string;
+  rib?: string; // RIB du fournisseur pour les virements
   dateRegulariteFiscale?: string; // Date de r├®gularit├® fiscale (format ISO: YYYY-MM-DD)
 }
 

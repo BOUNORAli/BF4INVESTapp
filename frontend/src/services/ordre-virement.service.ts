@@ -40,7 +40,7 @@ export class OrdreVirementService {
   }
 
   deleteOrdreVirement(id: string): Observable<void> {
-    return this.api.delete<void>(`/ordres-virement/${id}`);
+    return this.api.delete(`/ordres-virement/${id}`);
   }
 
   executerOrdreVirement(id: string): Observable<OrdreVirement> {
