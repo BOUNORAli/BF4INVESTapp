@@ -25,6 +25,7 @@ public class Client {
     private String adresse;
     private String telephone;
     private String email;
+    private String rib; // RIB du client pour les virements
     
     private List<Contact> contacts;
     

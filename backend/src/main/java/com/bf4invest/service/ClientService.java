@@ -53,6 +53,7 @@ public class ClientService {
                     existing.setAdresse(client.getAdresse());
                     existing.setTelephone(client.getTelephone());
                     existing.setEmail(client.getEmail());
+                    existing.setRib(client.getRib());
                     existing.setContacts(client.getContacts());
                     
                     // Gérer la référence

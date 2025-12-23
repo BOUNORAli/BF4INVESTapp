@@ -22,6 +22,7 @@ export class PartnerService {
         telephone: client.phone,
         email: client.email,
         adresse: client.address,
+        rib: client.rib || null,
         contacts: client.contact ? [{ nom: client.contact }] : []
     };
     const created = await this.api.post<any>('/clients', payload).toPromise();
@@ -35,7 +36,8 @@ export class PartnerService {
         referenceClient: client.referenceClient || null,
         telephone: client.phone,
         email: client.email,
-        adresse: client.address
+        adresse: client.address,
+        rib: client.rib || null
     };
     const updated = await this.api.put<any>(`/clients/${client.id}`, payload).toPromise();
     return this.mapClient(updated);
@@ -98,7 +100,8 @@ export class PartnerService {
       contact: c.contacts?.[0]?.nom,
       phone: c.telephone || c.phone,
       email: c.email,
-      address: c.adresse || c.address
+      address: c.adresse || c.address,
+      rib: c.rib
     };
   }
 

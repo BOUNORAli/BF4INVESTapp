@@ -17,6 +17,7 @@ export interface Client {
   phone: string;
   email: string;
   address: string;
+  rib?: string; // RIB du client pour les virements
 }
 
 export interface Supplier {

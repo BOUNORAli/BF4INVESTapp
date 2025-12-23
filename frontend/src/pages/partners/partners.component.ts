@@ -95,6 +95,12 @@ import { StoreService, Client, Supplier } from '../../services/store.service';
                     <svg class="w-4 h-4 text-slate-400 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
                     <span class="text-sm text-slate-600 truncate">{{ client.address }}</span>
                   </div>
+                  @if (client.rib) {
+                    <div class="flex items-start gap-3">
+                      <svg class="w-4 h-4 text-slate-400 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>
+                      <span class="text-sm text-slate-600 font-mono">{{ client.rib }}</span>
+                    </div>
+                  }
                </div>
             </div>
           }
@@ -162,6 +168,12 @@ import { StoreService, Client, Supplier } from '../../services/store.service';
                     <svg class="w-4 h-4 text-slate-400 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
                     <span class="text-sm text-slate-600 truncate">{{ sup.address }}</span>
                   </div>
+                  @if (sup.rib) {
+                    <div class="flex items-start gap-3">
+                      <svg class="w-4 h-4 text-slate-400 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>
+                      <span class="text-sm text-slate-600 font-mono">{{ sup.rib }}</span>
+                    </div>
+                  }
                   @if (sup.dateRegulariteFiscale) {
                     <div class="flex items-start gap-3">
                       <svg class="w-4 h-4 text-slate-400 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
@@ -255,6 +267,11 @@ import { StoreService, Client, Supplier } from '../../services/store.service';
                     <label class="block text-sm font-semibold text-slate-700 mb-1">Adresse</label>
                     <textarea formControlName="address" rows="3" class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition"></textarea>
                   </div>
+                  <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-1">RIB (Relevé d'Identité Bancaire)</label>
+                    <input formControlName="rib" type="text" placeholder="RIB pour les virements" class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition">
+                    <p class="text-xs text-slate-500 mt-1">Optionnel - RIB du client/fournisseur pour les ordres de virement</p>
+                  </div>
                </form>
 
                <div class="p-6 border-t border-slate-100 bg-slate-50/50 flex gap-3">
@@ -295,6 +312,7 @@ export class PartnersComponent {
     phone: [''],
     email: ['', [Validators.email]],
     address: [''],
+    rib: [''], // RIB pour les virements
     dateRegulariteFiscale: [''] // Uniquement pour les fournisseurs
   });
 

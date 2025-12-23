@@ -54,6 +54,7 @@ public class SupplierService {
                     existing.setAdresse(supplier.getAdresse());
                     existing.setTelephone(supplier.getTelephone());
                     existing.setEmail(supplier.getEmail());
+                    existing.setRib(supplier.getRib());
                     existing.setModesPaiementAcceptes(supplier.getModesPaiementAcceptes());
                     existing.setDateRegulariteFiscale(supplier.getDateRegulariteFiscale());
                     
