@@ -77,6 +77,9 @@ public class PdfService {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         PdfWriter writer = PdfWriter.getInstance(document, baos);
         
+        // IMPORTANT: setPageEvent doit être appelé AVANT document.open()
+        writer.setPageEvent(new BCFooterPageEvent());
+        
         document.open();
         
         // Récupérer les informations client et fournisseur
@@ -106,9 +109,6 @@ public class PdfService {
         
         // Informations livraison et paiement
         addBCDeliveryInfo(document, bc, client);
-        
-        // Ajouter le footer sur toutes les pages via un event handler
-        writer.setPageEvent(new BCFooterPageEvent());
         
         document.close();
         return baos.toByteArray();
