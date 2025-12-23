@@ -956,8 +956,9 @@ public class PdfService {
         factNumCell.addElement(factLabel);
         
         String factNum = facture.getNumeroFactureVente() != null ? facture.getNumeroFactureVente() : "";
+        // Mettre en avant le numéro de facture avec une couleur contrastée
         Paragraph factNumText = new Paragraph(factNum, 
-            FontFactory.getFont(FontFactory.HELVETICA_BOLD, 12));
+            FontFactory.getFont(FontFactory.HELVETICA_BOLD, 12, BLUE_DARK));
         factNumCell.addElement(factNumText);
         infoTable.addCell(factNumCell);
         
@@ -1081,6 +1082,14 @@ public class PdfService {
         tvaAmount.setPadding(5);
         totalsTable.addCell(tvaAmount);
         
+        // Ligne vide pour séparer visuellement le TOTAL TTC
+        for (int i = 0; i < 4; i++) {
+            PdfPCell empty = new PdfPCell(new Phrase(" "));
+            empty.setBorder(Rectangle.NO_BORDER);
+            totalsTable.addCell(empty);
+        }
+        
+        // TOTAL TTC mis en valeur (nouvelle ligne dédiée)
         addTotalsRow(totalsTable, "TOTAL TTC", formatAmount(totalTTC), true);
         
         document.add(totalsTable);
@@ -1090,12 +1099,19 @@ public class PdfService {
         double totalTTC = facture.getTotalTTC() != null ? facture.getTotalTTC() : 0.0;
         String amountInWords = convertAmountToFrenchWords(totalTTC);
         
-        Paragraph amountPara = new Paragraph(
-            "Arrêter la présente facture à la somme TTC de :\n" + amountInWords,
-            FontFactory.getFont(FontFactory.HELVETICA, 9));
-        amountPara.setSpacingBefore(15);
-        amountPara.setSpacingAfter(30);
-        document.add(amountPara);
+        // Ligne de titre soulignée
+        Font titleFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 9);
+        titleFont.setStyle(Font.UNDERLINE);
+        Paragraph title = new Paragraph("Arrêter la présente facture à la somme TTC de :", titleFont);
+        title.setSpacingBefore(15);
+        title.setSpacingAfter(5);
+        document.add(title);
+        
+        // Montant en toutes lettres, plus lisible et en bleu foncé
+        Font amountFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 10, BLUE_DARK);
+        Paragraph amountLine = new Paragraph(amountInWords, amountFont);
+        amountLine.setSpacingAfter(25);
+        document.add(amountLine);
     }
     
     private void addFactureFooter(Document document) throws DocumentException {
