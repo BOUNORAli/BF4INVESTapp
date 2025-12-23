@@ -116,9 +116,13 @@ public class PdfService {
     }
     
     public byte[] generateFactureVente(FactureVente facture) throws DocumentException, IOException {
-        Document document = new Document(PageSize.A4, 40f, 40f, 60f, 60f);
+        // Marge supérieure augmentée pour laisser de l'espace au logo, inférieure pour le footer
+        Document document = new Document(PageSize.A4, 40f, 40f, 80f, 70f);
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         PdfWriter writer = PdfWriter.getInstance(document, baos);
+        
+        // IMPORTANT: setPageEvent doit être appelé AVANT document.open()
+        writer.setPageEvent(new FactureVenteFooterPageEvent());
         
         document.open();
         
@@ -141,17 +145,20 @@ public class PdfService {
         // Montant en lettres
         addFactureAmountInWords(document, facture);
         
-        // Footer
-        addFactureFooter(document);
+        // Footer géré par FactureVenteFooterPageEvent
         
         document.close();
         return baos.toByteArray();
     }
     
     public byte[] generateFactureAchat(FactureAchat facture) throws DocumentException, IOException {
-        Document document = new Document(PageSize.A4, 40f, 40f, 60f, 60f);
+        // Marge supérieure augmentée pour laisser de l'espace au logo, inférieure pour le footer
+        Document document = new Document(PageSize.A4, 40f, 40f, 80f, 70f);
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         PdfWriter writer = PdfWriter.getInstance(document, baos);
+        
+        // IMPORTANT: setPageEvent doit être appelé AVANT document.open()
+        writer.setPageEvent(new FactureAchatFooterPageEvent());
         
         document.open();
         
@@ -162,16 +169,21 @@ public class PdfService {
         addFactureAchatInfo(document, facture);
         addFactureAchatProductTable(document, facture);
         addFactureAchatTotals(document, facture);
-        addFactureFooter(document);
+        
+        // Footer géré par FactureAchatFooterPageEvent
         
         document.close();
         return baos.toByteArray();
     }
     
     public byte[] generateBonDeLivraison(FactureVente facture) throws DocumentException, IOException {
-        Document document = new Document(PageSize.A4, 40f, 40f, 60f, 60f);
+        // Marge supérieure augmentée pour laisser de l'espace au logo, inférieure pour le footer
+        Document document = new Document(PageSize.A4, 40f, 40f, 80f, 70f);
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         PdfWriter writer = PdfWriter.getInstance(document, baos);
+        
+        // IMPORTANT: setPageEvent doit être appelé AVANT document.open()
+        writer.setPageEvent(new BonDeLivraisonFooterPageEvent());
         
         document.open();
         
@@ -188,8 +200,7 @@ public class PdfService {
         // Tableau des lignes (sans prix)
         addBonDeLivraisonProductTable(document, facture);
         
-        // Footer
-        addFactureFooter(document);
+        // Footer géré par BonDeLivraisonFooterPageEvent
         
         document.close();
         return baos.toByteArray();
@@ -803,6 +814,81 @@ public class PdfService {
         }
     }
     
+    /**
+     * Classe interne pour gérer le footer et le logo sur toutes les pages de la Facture Vente
+     */
+    private class FactureVenteFooterPageEvent extends PdfPageEventHelper {
+        @Override
+        public void onEndPage(PdfWriter writer, Document document) {
+            try {
+                PdfContentByte canvas = writer.getDirectContent();
+                
+                // Ajouter le logo en haut à gauche sur toutes les pages (sauf la première où il est déjà dans le header)
+                if (writer.getPageNumber() > 1) {
+                    addLogoToPage(canvas, writer, document);
+                }
+                
+                // Ajouter le footer en bas de page
+                PdfPTable footerTable = new PdfPTable(1);
+                float tableWidth = document.getPageSize().getWidth() - document.leftMargin() - document.rightMargin();
+                footerTable.setTotalWidth(tableWidth);
+                footerTable.setLockedWidth(true);
+                
+                PdfPCell footerCell = new PdfPCell();
+                footerCell.setBackgroundColor(BLUE_LIGHT);
+                footerCell.setPadding(10);
+                footerCell.setBorder(Rectangle.NO_BORDER);
+                footerCell.setHorizontalAlignment(Element.ALIGN_CENTER);
+                
+                Font footerFont = FontFactory.getFont(FontFactory.HELVETICA, 8);
+                
+                Paragraph footer1 = new Paragraph("ICE: 002889872000062", footerFont);
+                footer1.setAlignment(Element.ALIGN_CENTER);
+                footer1.setSpacingAfter(3);
+                
+                Paragraph footer2 = new Paragraph("BF4 INVEST SARL au capital de 2.000.000,00 Dhs, Tel: 06 61 51 11 91", footerFont);
+                footer2.setAlignment(Element.ALIGN_CENTER);
+                footer2.setSpacingAfter(3);
+                
+                Paragraph footer3 = new Paragraph("RC de Meknes: 54287 - IF: 50499801 - TP: 17101980", footerFont);
+                footer3.setAlignment(Element.ALIGN_CENTER);
+                footer3.setSpacingAfter(0);
+                
+                footerCell.addElement(footer1);
+                footerCell.addElement(footer2);
+                footerCell.addElement(footer3);
+                
+                footerTable.addCell(footerCell);
+                
+                // Positionner le footer en bas de page
+                float yPosition = document.bottomMargin() + 2f;
+                footerTable.writeSelectedRows(0, -1, document.leftMargin(), yPosition, canvas);
+            } catch (DocumentException | IOException e) {
+                log.error("Error adding Facture Vente footer/logo to page", e);
+            }
+        }
+        
+        private void addLogoToPage(PdfContentByte canvas, PdfWriter writer, Document document) throws DocumentException, IOException {
+            try {
+                float logoWidth = 100f;
+                float logoHeight = 75f;
+                float xPosition = document.leftMargin();
+                float yPosition = document.getPageSize().getHeight() - 2f;
+                
+                PdfPTable logoTable = new PdfPTable(1);
+                logoTable.setTotalWidth(logoWidth);
+                logoTable.setLockedWidth(true);
+                
+                PdfPCell logoCell = createLogoCell(writer, logoWidth, logoHeight);
+                logoTable.addCell(logoCell);
+                
+                logoTable.writeSelectedRows(0, -1, xPosition, yPosition, canvas);
+            } catch (Exception e) {
+                log.error("Error adding logo to Facture Vente page", e);
+            }
+        }
+    }
+    
     // ============ FACTURE VENTE METHODS ============
     
     private void addFactureHeader(Document document, FactureVente facture, Client client, PdfWriter writer) throws DocumentException, IOException {
@@ -811,8 +897,8 @@ public class PdfService {
         headerTable.setWidths(new float[]{2f, 4f, 4f});
         headerTable.setSpacingAfter(15);
         
-        // Logo stylisé avec lignes courbes
-        PdfPCell logoCell = createLogoCell(writer, 80f, 60f);
+        // Logo stylisé avec lignes courbes - agrandi à 100x75
+        PdfPCell logoCell = createLogoCell(writer, 100f, 75f);
         headerTable.addCell(logoCell);
         
         // Espace vide
@@ -1015,17 +1101,24 @@ public class PdfService {
     private void addFactureFooter(Document document) throws DocumentException {
         PdfPTable footerTable = new PdfPTable(1);
         footerTable.setWidthPercentage(100);
+        footerTable.setHorizontalAlignment(Element.ALIGN_CENTER);
         
         PdfPCell footerCell = new PdfPCell();
         footerCell.setBackgroundColor(BLUE_LIGHT);
         footerCell.setPadding(10);
         footerCell.setBorder(Rectangle.NO_BORDER);
+        footerCell.setHorizontalAlignment(Element.ALIGN_CENTER);
         
         Font footerFont = FontFactory.getFont(FontFactory.HELVETICA, 8);
         
         Paragraph footer1 = new Paragraph("ICE: 002889872000062", footerFont);
+        footer1.setAlignment(Element.ALIGN_CENTER);
+        
         Paragraph footer2 = new Paragraph("BF4 INVEST SARL au capital de 2.000.000,00 Dhs, Tél: 06 61 51 11 91", footerFont);
+        footer2.setAlignment(Element.ALIGN_CENTER);
+        
         Paragraph footer3 = new Paragraph("RC de Meknès: 54287 - IF: 50499801 - TP: 17101980", footerFont);
+        footer3.setAlignment(Element.ALIGN_CENTER);
         
         footerCell.addElement(footer1);
         footerCell.addElement(footer2);
@@ -1033,6 +1126,81 @@ public class PdfService {
         
         footerTable.addCell(footerCell);
         document.add(footerTable);
+    }
+    
+    /**
+     * Classe interne pour gérer le footer et le logo sur toutes les pages du Bon de Livraison
+     */
+    private class BonDeLivraisonFooterPageEvent extends PdfPageEventHelper {
+        @Override
+        public void onEndPage(PdfWriter writer, Document document) {
+            try {
+                PdfContentByte canvas = writer.getDirectContent();
+                
+                // Ajouter le logo en haut à gauche sur toutes les pages (sauf la première où il est déjà dans le header)
+                if (writer.getPageNumber() > 1) {
+                    addLogoToPage(canvas, writer, document);
+                }
+                
+                // Ajouter le footer en bas de page
+                PdfPTable footerTable = new PdfPTable(1);
+                float tableWidth = document.getPageSize().getWidth() - document.leftMargin() - document.rightMargin();
+                footerTable.setTotalWidth(tableWidth);
+                footerTable.setLockedWidth(true);
+                
+                PdfPCell footerCell = new PdfPCell();
+                footerCell.setBackgroundColor(BLUE_LIGHT);
+                footerCell.setPadding(10);
+                footerCell.setBorder(Rectangle.NO_BORDER);
+                footerCell.setHorizontalAlignment(Element.ALIGN_CENTER);
+                
+                Font footerFont = FontFactory.getFont(FontFactory.HELVETICA, 8);
+                
+                Paragraph footer1 = new Paragraph("ICE: 002889872000062", footerFont);
+                footer1.setAlignment(Element.ALIGN_CENTER);
+                footer1.setSpacingAfter(3);
+                
+                Paragraph footer2 = new Paragraph("BF4 INVEST SARL au capital de 2.000.000,00 Dhs, Tel: 06 61 51 11 91", footerFont);
+                footer2.setAlignment(Element.ALIGN_CENTER);
+                footer2.setSpacingAfter(3);
+                
+                Paragraph footer3 = new Paragraph("RC de Meknes: 54287 - IF: 50499801 - TP: 17101980", footerFont);
+                footer3.setAlignment(Element.ALIGN_CENTER);
+                footer3.setSpacingAfter(0);
+                
+                footerCell.addElement(footer1);
+                footerCell.addElement(footer2);
+                footerCell.addElement(footer3);
+                
+                footerTable.addCell(footerCell);
+                
+                // Positionner le footer en bas de page
+                float yPosition = document.bottomMargin() + 2f;
+                footerTable.writeSelectedRows(0, -1, document.leftMargin(), yPosition, canvas);
+            } catch (DocumentException | IOException e) {
+                log.error("Error adding Bon de Livraison footer/logo to page", e);
+            }
+        }
+        
+        private void addLogoToPage(PdfContentByte canvas, PdfWriter writer, Document document) throws DocumentException, IOException {
+            try {
+                float logoWidth = 100f;
+                float logoHeight = 75f;
+                float xPosition = document.leftMargin();
+                float yPosition = document.getPageSize().getHeight() - 2f;
+                
+                PdfPTable logoTable = new PdfPTable(1);
+                logoTable.setTotalWidth(logoWidth);
+                logoTable.setLockedWidth(true);
+                
+                PdfPCell logoCell = createLogoCell(writer, logoWidth, logoHeight);
+                logoTable.addCell(logoCell);
+                
+                logoTable.writeSelectedRows(0, -1, xPosition, yPosition, canvas);
+            } catch (Exception e) {
+                log.error("Error adding logo to Bon de Livraison page", e);
+            }
+        }
     }
     
     // ============ BON DE LIVRAISON METHODS ============
@@ -1144,6 +1312,81 @@ public class PdfService {
         document.add(table);
     }
     
+    /**
+     * Classe interne pour gérer le footer et le logo sur toutes les pages de la Facture Achat
+     */
+    private class FactureAchatFooterPageEvent extends PdfPageEventHelper {
+        @Override
+        public void onEndPage(PdfWriter writer, Document document) {
+            try {
+                PdfContentByte canvas = writer.getDirectContent();
+                
+                // Ajouter le logo en haut à gauche sur toutes les pages (sauf la première où il est déjà dans le header)
+                if (writer.getPageNumber() > 1) {
+                    addLogoToPage(canvas, writer, document);
+                }
+                
+                // Ajouter le footer en bas de page
+                PdfPTable footerTable = new PdfPTable(1);
+                float tableWidth = document.getPageSize().getWidth() - document.leftMargin() - document.rightMargin();
+                footerTable.setTotalWidth(tableWidth);
+                footerTable.setLockedWidth(true);
+                
+                PdfPCell footerCell = new PdfPCell();
+                footerCell.setBackgroundColor(BLUE_LIGHT);
+                footerCell.setPadding(10);
+                footerCell.setBorder(Rectangle.NO_BORDER);
+                footerCell.setHorizontalAlignment(Element.ALIGN_CENTER);
+                
+                Font footerFont = FontFactory.getFont(FontFactory.HELVETICA, 8);
+                
+                Paragraph footer1 = new Paragraph("ICE: 002889872000062", footerFont);
+                footer1.setAlignment(Element.ALIGN_CENTER);
+                footer1.setSpacingAfter(3);
+                
+                Paragraph footer2 = new Paragraph("BF4 INVEST SARL au capital de 2.000.000,00 Dhs, Tel: 06 61 51 11 91", footerFont);
+                footer2.setAlignment(Element.ALIGN_CENTER);
+                footer2.setSpacingAfter(3);
+                
+                Paragraph footer3 = new Paragraph("RC de Meknes: 54287 - IF: 50499801 - TP: 17101980", footerFont);
+                footer3.setAlignment(Element.ALIGN_CENTER);
+                footer3.setSpacingAfter(0);
+                
+                footerCell.addElement(footer1);
+                footerCell.addElement(footer2);
+                footerCell.addElement(footer3);
+                
+                footerTable.addCell(footerCell);
+                
+                // Positionner le footer en bas de page
+                float yPosition = document.bottomMargin() + 2f;
+                footerTable.writeSelectedRows(0, -1, document.leftMargin(), yPosition, canvas);
+            } catch (DocumentException | IOException e) {
+                log.error("Error adding Facture Achat footer/logo to page", e);
+            }
+        }
+        
+        private void addLogoToPage(PdfContentByte canvas, PdfWriter writer, Document document) throws DocumentException, IOException {
+            try {
+                float logoWidth = 100f;
+                float logoHeight = 75f;
+                float xPosition = document.leftMargin();
+                float yPosition = document.getPageSize().getHeight() - 2f;
+                
+                PdfPTable logoTable = new PdfPTable(1);
+                logoTable.setTotalWidth(logoWidth);
+                logoTable.setLockedWidth(true);
+                
+                PdfPCell logoCell = createLogoCell(writer, logoWidth, logoHeight);
+                logoTable.addCell(logoCell);
+                
+                logoTable.writeSelectedRows(0, -1, xPosition, yPosition, canvas);
+            } catch (Exception e) {
+                log.error("Error adding logo to Facture Achat page", e);
+            }
+        }
+    }
+    
     // ============ FACTURE ACHAT METHODS ============
     
     private void addFactureAchatHeader(Document document, FactureAchat facture, Supplier supplier, PdfWriter writer) throws DocumentException, IOException {
@@ -1152,8 +1395,8 @@ public class PdfService {
         headerTable.setWidths(new float[]{2f, 4f, 4f});
         headerTable.setSpacingAfter(15);
         
-        // Logo stylisé avec lignes courbes
-        PdfPCell logoCell = createLogoCell(writer, 80f, 60f);
+        // Logo stylisé avec lignes courbes - agrandi à 100x75
+        PdfPCell logoCell = createLogoCell(writer, 100f, 75f);
         headerTable.addCell(logoCell);
         
         // Espace vide
