@@ -482,7 +482,7 @@ export class StoreService {
     }
   }
 
-  private async loadSuppliers(): Promise<void> {
+  async loadSuppliers(): Promise<void> {
     try {
       const suppliers = await this.partnerService.getSuppliers();
       this.suppliers.set(suppliers);
