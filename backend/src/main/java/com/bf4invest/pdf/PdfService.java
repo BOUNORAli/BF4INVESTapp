@@ -2482,7 +2482,11 @@ public class PdfService {
         Font blueBoldFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 11, BLUE_DARK);
         
         // Pour les ordres de virement, on utilise seulement la partie entière sans centimes
-        long wholePart = (long) ov.getMontant();
+        Double montant = ov.getMontant();
+        if (montant == null) {
+            montant = 0.0;
+        }
+        long wholePart = montant.longValue();
         String wholeWords = convertNumberToFrench(wholePart);
         String amountInWords = wholeWords + (wholePart == 1 ? " Dirham" : " Dirhams");
         
