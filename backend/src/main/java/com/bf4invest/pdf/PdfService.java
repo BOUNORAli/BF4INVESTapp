@@ -722,12 +722,20 @@ public class PdfService {
     }
     
     /**
-     * Classe interne pour gérer le footer sur toutes les pages du BC
+     * Classe interne pour gérer le footer et le logo sur toutes les pages du BC
      */
     private class BCFooterPageEvent extends PdfPageEventHelper {
         @Override
         public void onEndPage(PdfWriter writer, Document document) {
             try {
+                PdfContentByte canvas = writer.getDirectContent();
+                
+                // Ajouter le logo en haut à gauche sur toutes les pages (sauf la première où il est déjà dans le header)
+                if (writer.getPageNumber() > 1) {
+                    addLogoToPage(canvas, writer, document);
+                }
+                
+                // Ajouter le footer en bas de page
                 PdfPTable footerTable = new PdfPTable(1);
                 float tableWidth = document.getPageSize().getWidth() - document.leftMargin() - document.rightMargin();
                 footerTable.setTotalWidth(tableWidth);
@@ -760,13 +768,36 @@ public class PdfService {
                 footerTable.addCell(footerCell);
                 
                 // Positionner le footer en bas de page
-                PdfContentByte canvas = writer.getDirectContent();
-                // Positionner le bas du tableau juste au-dessus de la marge inférieure
                 // Le système de coordonnées iText commence en bas à gauche
                 float yPosition = document.bottomMargin() + 2f; // 2 points de marge minimale
                 footerTable.writeSelectedRows(0, -1, document.leftMargin(), yPosition, canvas);
-            } catch (DocumentException e) {
-                log.error("Error adding BC footer to page", e);
+            } catch (DocumentException | IOException e) {
+                log.error("Error adding BC footer/logo to page", e);
+            }
+        }
+        
+        /**
+         * Ajoute le logo en haut à gauche de la page
+         */
+        private void addLogoToPage(PdfContentByte canvas, PdfWriter writer, Document document) throws DocumentException, IOException {
+            try {
+                float logoWidth = 100f;
+                float logoHeight = 75f;
+                float xPosition = document.leftMargin();
+                float yPosition = document.getPageSize().getHeight() - document.topMargin() - logoHeight;
+                
+                // Créer une table temporaire pour le logo
+                PdfPTable logoTable = new PdfPTable(1);
+                logoTable.setTotalWidth(logoWidth);
+                logoTable.setLockedWidth(true);
+                
+                PdfPCell logoCell = createLogoCell(writer, logoWidth, logoHeight);
+                logoTable.addCell(logoCell);
+                
+                // Positionner le logo en haut à gauche
+                logoTable.writeSelectedRows(0, -1, xPosition, yPosition, canvas);
+            } catch (Exception e) {
+                log.error("Error adding logo to page", e);
             }
         }
     }
