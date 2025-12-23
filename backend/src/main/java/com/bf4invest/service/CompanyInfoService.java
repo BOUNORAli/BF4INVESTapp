@@ -46,19 +46,37 @@ public class CompanyInfoService {
     public CompanyInfo saveCompanyInfo(CompanyInfo info) {
         CompanyInfo existing = repository.findFirstByOrderByUpdatedAtDesc()
                 .orElseGet(() -> {
-                    info.setCreatedAt(LocalDateTime.now());
-                    info.setUpdatedAt(LocalDateTime.now());
-                    return repository.save(info);
+                    CompanyInfo newInfo = new CompanyInfo();
+                    newInfo.setCreatedAt(LocalDateTime.now());
+                    newInfo.setUpdatedAt(LocalDateTime.now());
+                    return newInfo;
                 });
 
-        existing.setRaisonSociale(info.getRaisonSociale());
-        existing.setVille(info.getVille());
-        existing.setIce(info.getIce());
-        existing.setCapital(info.getCapital());
-        existing.setTelephone(info.getTelephone());
-        existing.setRc(info.getRc());
-        existing.setIfFiscal(info.getIfFiscal());
-        existing.setTp(info.getTp());
+        // Mettre à jour tous les champs, même s'ils sont null ou vides
+        if (info.getRaisonSociale() != null) {
+            existing.setRaisonSociale(info.getRaisonSociale());
+        }
+        if (info.getVille() != null) {
+            existing.setVille(info.getVille());
+        }
+        if (info.getIce() != null) {
+            existing.setIce(info.getIce());
+        }
+        if (info.getCapital() != null) {
+            existing.setCapital(info.getCapital());
+        }
+        if (info.getTelephone() != null) {
+            existing.setTelephone(info.getTelephone());
+        }
+        if (info.getRc() != null) {
+            existing.setRc(info.getRc());
+        }
+        if (info.getIfFiscal() != null) {
+            existing.setIfFiscal(info.getIfFiscal());
+        }
+        if (info.getTp() != null) {
+            existing.setTp(info.getTp());
+        }
         existing.setUpdatedAt(LocalDateTime.now());
 
         return repository.save(existing);
