@@ -784,8 +784,8 @@ public class PdfService {
                 float logoWidth = 100f;
                 float logoHeight = 75f;
                 float xPosition = document.leftMargin();
-                // Positionner le logo plus haut, juste en dessous du haut de la page
-                float yPosition = document.getPageSize().getHeight() - 10f - logoHeight; // 10 points du haut
+                // Positionner le logo tout en haut de la page, au-dessus du tableau
+                float yPosition = document.getPageSize().getHeight() - 2f; // 2 points sous le bord haut
                 
                 // Créer une table temporaire pour le logo
                 PdfPTable logoTable = new PdfPTable(1);
