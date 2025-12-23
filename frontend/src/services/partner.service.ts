@@ -60,6 +60,7 @@ export class PartnerService {
         telephone: supplier.phone,
         email: supplier.email,
         adresse: supplier.address,
+        rib: supplier.rib || null,
         modesPaiementAcceptes: ['virement', 'cheque', 'LCN', 'compensation'],
         dateRegulariteFiscale: supplier.dateRegulariteFiscale || null
     };
@@ -76,6 +77,7 @@ export class PartnerService {
         telephone: supplier.phone,
         email: supplier.email,
         adresse: supplier.address,
+        rib: supplier.rib || null,
         dateRegulariteFiscale: supplier.dateRegulariteFiscale || null
     };
     const updated = await this.api.put<any>(`/fournisseurs/${supplier.id}`, payload).toPromise();
@@ -110,6 +112,7 @@ export class PartnerService {
       phone: s.telephone || s.phone,
       email: s.email,
       address: s.adresse || s.address,
+      rib: s.rib,
       dateRegulariteFiscale: s.dateRegulariteFiscale || undefined
     };
   }

@@ -31,8 +31,19 @@ public class OrdreVirement {
     private String banqueEmettrice;     // Banque émettrice
     private LocalDate dateExecution;    // Date d'exécution prévue
     private String statut;              // EN_ATTENTE, EXECUTE, ANNULE
+    private String type;                // NORMAL, EXPRESS
+    private List<FactureMontant> facturesMontants; // Liste des factures avec montants partiels
     
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class FactureMontant {
+        private String factureId;
+        private Double montant; // Montant partiel pour cette facture
+    }
 }
 

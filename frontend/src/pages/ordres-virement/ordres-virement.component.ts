@@ -1,7 +1,7 @@
 import { Component, inject, signal, computed, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { StoreService, Invoice, Supplier } from '../../services/store.service';
-import { OrdreVirement } from '../../models/types';
+import { OrdreVirement, FactureMontant } from '../../models/types';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, FormsModule } from '@angular/forms';
 
 @Component({
@@ -94,7 +94,12 @@ import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, FormsModule } 
               @for (ov of paginatedOrdres(); track ov.id) {
                 <tr class="bg-white hover:bg-slate-50 transition-colors group">
                   <td class="px-6 py-4">
-                    <div class="font-bold text-blue-600">{{ ov.numeroOV }}</div>
+                    <div class="flex items-center gap-2">
+                      <span class="font-bold text-blue-600">{{ ov.numeroOV }}</span>
+                      @if (ov.type === 'EXPRESS') {
+                        <span class="px-2 py-0.5 bg-red-50 text-red-600 rounded text-xs font-bold border border-red-200">EXPRESS</span>
+                      }
+                    </div>
                   </td>
                   <td class="px-6 py-4">
                     <div class="flex flex-col">
@@ -214,19 +219,29 @@ import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, FormsModule } 
                 </div>
               </div>
 
-              <div>
-                <label class="block text-xs font-semibold text-slate-600 mb-1">Bénéficiaire <span class="text-red-500">*</span></label>
-                <select formControlName="beneficiaireId" (change)="onBeneficiaireChange()" class="w-full p-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 outline-none">
-                  <option value="">Sélectionner un fournisseur</option>
-                  @for (sup of store.suppliers(); track sup.id) {
-                    <option [value]="sup.id">{{ sup.name }}</option>
-                  }
-                </select>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-xs font-semibold text-slate-600 mb-1">Bénéficiaire <span class="text-red-500">*</span></label>
+                  <select formControlName="beneficiaireId" (change)="onBeneficiaireChange()" class="w-full p-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 outline-none">
+                    <option value="">Sélectionner un fournisseur</option>
+                    @for (sup of store.suppliers(); track sup.id) {
+                      <option [value]="sup.id">{{ sup.name }}</option>
+                    }
+                  </select>
+                </div>
+
+                <div>
+                  <label class="block text-xs font-semibold text-slate-600 mb-1">Type <span class="text-red-500">*</span></label>
+                  <select formControlName="type" class="w-full p-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 outline-none">
+                    <option value="NORMAL">Normal</option>
+                    <option value="EXPRESS">Express</option>
+                  </select>
+                </div>
               </div>
 
               <div>
                 <label class="block text-xs font-semibold text-slate-600 mb-1">RIB Bénéficiaire <span class="text-red-500">*</span></label>
-                <input type="text" formControlName="ribBeneficiaire" placeholder="RIB du bénéficiaire" class="w-full p-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 outline-none">
+                <input type="text" formControlName="ribBeneficiaire" placeholder="RIB du bénéficiaire (auto-rempli depuis le fournisseur)" class="w-full p-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 outline-none">
               </div>
 
               <div>
@@ -246,13 +261,23 @@ import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, FormsModule } 
               
               <div class="space-y-2 max-h-60 overflow-y-auto border border-slate-200 rounded-lg p-3">
                 @for (facture of availableFactures(); track facture.id) {
-                  <label class="flex items-center gap-3 p-2 hover:bg-slate-50 rounded cursor-pointer">
-                    <input type="checkbox" [value]="facture.id" (change)="onFactureToggle(facture.id)" [checked]="isFactureSelected(facture.id)" class="rounded border-slate-300 text-blue-600 focus:ring-blue-500">
-                    <div class="flex-1">
-                      <div class="font-medium text-sm">{{ facture.number }}</div>
-                      <div class="text-xs text-slate-500">{{ store.getSupplierName(facture.partnerId || '') }} - {{ formatCurrency(facture.amountTTC) }}</div>
-                    </div>
-                  </label>
+                  <div class="p-2 hover:bg-slate-50 rounded border border-slate-100">
+                    <label class="flex items-center gap-3 cursor-pointer mb-2">
+                      <input type="checkbox" [value]="facture.id" (change)="onFactureToggle(facture.id)" [checked]="isFactureSelected(facture.id)" class="rounded border-slate-300 text-blue-600 focus:ring-blue-500">
+                      <div class="flex-1">
+                        <div class="font-medium text-sm">{{ facture.number }}</div>
+                        <div class="text-xs text-slate-500">{{ store.getSupplierName(facture.partnerId || '') }} - Total: {{ formatCurrency(facture.amountTTC) }}</div>
+                      </div>
+                    </label>
+                    @if (isFactureSelected(facture.id)) {
+                      <div class="ml-7 mt-2">
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">
+                          Montant partiel (laisser vide pour total)
+                        </label>
+                        <input type="number" step="0.01" [value]="getFactureMontant(facture.id)" (input)="onFactureMontantChange(facture.id, $event)" placeholder="{{ formatCurrency(facture.amountTTC) }}" class="w-full p-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 outline-none text-sm">
+                      </div>
+                    }
+                  </div>
                 }
               </div>
 
@@ -291,6 +316,7 @@ export class OrdresVirementComponent implements OnInit {
   isFormOpen = signal(false);
   isEditMode = signal(false);
   selectedFactures = signal<string[]>([]);
+  facturesMontants = signal<Map<string, number>>(new Map());
   editingOV = signal<OrdreVirement | null>(null);
 
   form: FormGroup;
@@ -303,6 +329,7 @@ export class OrdresVirementComponent implements OnInit {
       ribBeneficiaire: ['', Validators.required],
       banqueEmettrice: ['', Validators.required],
       motif: ['', Validators.required],
+      type: ['NORMAL', Validators.required],
       statut: ['EN_ATTENTE']
     });
   }
@@ -358,7 +385,10 @@ export class OrdresVirementComponent implements OnInit {
 
   calculatedMontant = computed(() => {
     const factures = this.availableFactures().filter(f => this.selectedFactures().includes(f.id));
-    return factures.reduce((sum, f) => sum + f.amountTTC, 0);
+    return factures.reduce((sum, f) => {
+      const montantPartiel = this.facturesMontants().get(f.id);
+      return sum + (montantPartiel !== undefined && montantPartiel > 0 ? montantPartiel : f.amountTTC);
+    }, 0);
   });
 
   // Methods
@@ -387,7 +417,8 @@ export class OrdresVirementComponent implements OnInit {
     this.isFormOpen.set(true);
     this.isEditMode.set(false);
     this.selectedFactures.set([]);
-    this.form.reset({ statut: 'EN_ATTENTE' });
+    this.facturesMontants.set(new Map());
+    this.form.reset({ statut: 'EN_ATTENTE', type: 'NORMAL' });
   }
 
   closeForm() {
@@ -395,6 +426,7 @@ export class OrdresVirementComponent implements OnInit {
     this.isEditMode.set(false);
     this.editingOV.set(null);
     this.selectedFactures.set([]);
+    this.facturesMontants.set(new Map());
     this.form.reset();
   }
 
@@ -404,6 +436,15 @@ export class OrdresVirementComponent implements OnInit {
     this.editingOV.set(ov);
     this.selectedFactures.set(ov.facturesIds || []);
     
+    // Récupérer les montants partiels
+    const montantsMap = new Map<string, number>();
+    if (ov.facturesMontants && ov.facturesMontants.length > 0) {
+      ov.facturesMontants.forEach(fm => {
+        montantsMap.set(fm.factureId, fm.montant);
+      });
+    }
+    this.facturesMontants.set(montantsMap);
+    
     this.form.patchValue({
       dateOV: ov.dateOV,
       dateExecution: ov.dateExecution || '',
@@ -411,6 +452,7 @@ export class OrdresVirementComponent implements OnInit {
       ribBeneficiaire: ov.ribBeneficiaire,
       banqueEmettrice: ov.banqueEmettrice,
       motif: ov.motif,
+      type: ov.type || 'NORMAL',
       statut: ov.statut
     });
   }
@@ -419,8 +461,25 @@ export class OrdresVirementComponent implements OnInit {
     const beneficiaireId = this.form.get('beneficiaireId')?.value;
     if (beneficiaireId) {
       const supplier = this.store.suppliers().find(s => s.id === beneficiaireId);
-      // Auto-remplir le RIB si disponible (à implémenter si le champ existe dans Supplier)
+      if (supplier && supplier.rib) {
+        this.form.patchValue({ ribBeneficiaire: supplier.rib });
+      }
     }
+  }
+
+  onFactureMontantChange(factureId: string, event: any) {
+    const value = parseFloat(event.target.value);
+    const montants = new Map(this.facturesMontants());
+    if (value && value > 0) {
+      montants.set(factureId, value);
+    } else {
+      montants.delete(factureId);
+    }
+    this.facturesMontants.set(montants);
+  }
+
+  getFactureMontant(factureId: string): number | undefined {
+    return this.facturesMontants().get(factureId);
   }
 
   onFactureToggle(factureId: string) {
@@ -443,10 +502,23 @@ export class OrdresVirementComponent implements OnInit {
     }
 
     const formValue = this.form.value;
+    
+    // Construire la liste des factures avec montants
+    const facturesMontants: FactureMontant[] = this.selectedFactures().map(factureId => {
+      const montantPartiel = this.facturesMontants().get(factureId);
+      const facture = this.availableFactures().find(f => f.id === factureId);
+      return {
+        factureId,
+        montant: montantPartiel !== undefined && montantPartiel > 0 ? montantPartiel : (facture?.amountTTC || 0)
+      };
+    });
+
     const ov: OrdreVirement = {
       ...formValue,
       montant: this.calculatedMontant(),
-      facturesIds: this.selectedFactures()
+      facturesIds: this.selectedFactures(),
+      facturesMontants: facturesMontants,
+      type: formValue.type || 'NORMAL'
     };
 
     try {

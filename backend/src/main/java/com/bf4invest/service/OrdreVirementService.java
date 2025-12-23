@@ -44,16 +44,52 @@ public class OrdreVirementService {
             validateFactures(ov.getFacturesIds());
         }
         
-        // Récupérer et dénormaliser le nom du bénéficiaire
+        // Valider facturesMontants si présent
+        if (ov.getFacturesMontants() != null && !ov.getFacturesMontants().isEmpty()) {
+            for (OrdreVirement.FactureMontant fm : ov.getFacturesMontants()) {
+                validateFactures(java.util.Collections.singletonList(fm.getFactureId()));
+                if (fm.getMontant() == null || fm.getMontant() <= 0) {
+                    throw new IllegalArgumentException("Le montant doit être supérieur à 0 pour la facture: " + fm.getFactureId());
+                }
+            }
+        }
+        
+        // Calculer le montant total si facturesMontants est fourni
+        if (ov.getFacturesMontants() != null && !ov.getFacturesMontants().isEmpty()) {
+            double total = ov.getFacturesMontants().stream()
+                    .mapToDouble(OrdreVirement.FactureMontant::getMontant)
+                    .sum();
+            ov.setMontant(total);
+        }
+        
+        // Récupérer et dénormaliser le nom du bénéficiaire et le RIB
         if (ov.getBeneficiaireId() != null) {
             Supplier supplier = supplierService.findById(ov.getBeneficiaireId())
                     .orElseThrow(() -> new IllegalArgumentException("Fournisseur non trouvé: " + ov.getBeneficiaireId()));
             ov.setNomBeneficiaire(supplier.getNom());
+            // Auto-remplir le RIB si non fourni et disponible dans le fournisseur
+            if ((ov.getRibBeneficiaire() == null || ov.getRibBeneficiaire().isEmpty()) && supplier.getRib() != null) {
+                ov.setRibBeneficiaire(supplier.getRib());
+            }
         }
         
         // Initialiser le statut si non fourni
         if (ov.getStatut() == null || ov.getStatut().isEmpty()) {
             ov.setStatut("EN_ATTENTE");
+        }
+        
+        // Initialiser le type si non fourni
+        if (ov.getType() == null || ov.getType().isEmpty()) {
+            ov.setType("NORMAL");
+        }
+        
+        // Construire facturesIds à partir de facturesMontants si nécessaire
+        if (ov.getFacturesMontants() != null && !ov.getFacturesMontants().isEmpty()) {
+            if (ov.getFacturesIds() == null || ov.getFacturesIds().isEmpty()) {
+                ov.setFacturesIds(ov.getFacturesMontants().stream()
+                        .map(OrdreVirement.FactureMontant::getFactureId)
+                        .collect(java.util.stream.Collectors.toList()));
+            }
         }
         
         ov.setCreatedAt(LocalDateTime.now());
@@ -81,8 +117,14 @@ public class OrdreVirementService {
                     existing.setRibBeneficiaire(ov.getRibBeneficiaire());
                     existing.setMotif(ov.getMotif());
                     existing.setFacturesIds(ov.getFacturesIds());
+                    existing.setFacturesMontants(ov.getFacturesMontants());
                     existing.setBanqueEmettrice(ov.getBanqueEmettrice());
                     existing.setDateExecution(ov.getDateExecution());
+                    
+                    // Mettre à jour le type si fourni
+                    if (ov.getType() != null && !ov.getType().isEmpty()) {
+                        existing.setType(ov.getType());
+                    }
                     
                     // Mettre à jour le statut si fourni
                     if (ov.getStatut() != null && !ov.getStatut().isEmpty()) {
@@ -94,11 +136,15 @@ public class OrdreVirementService {
                         validateFactures(existing.getFacturesIds());
                     }
                     
-                    // Récupérer et dénormaliser le nom du bénéficiaire
+                    // Récupérer et dénormaliser le nom du bénéficiaire et le RIB
                     if (existing.getBeneficiaireId() != null) {
                         Supplier supplier = supplierService.findById(existing.getBeneficiaireId())
                                 .orElseThrow(() -> new IllegalArgumentException("Fournisseur non trouvé: " + existing.getBeneficiaireId()));
                         existing.setNomBeneficiaire(supplier.getNom());
+                        // Auto-remplir le RIB si non fourni et disponible dans le fournisseur
+                        if ((existing.getRibBeneficiaire() == null || existing.getRibBeneficiaire().isEmpty()) && supplier.getRib() != null) {
+                            existing.setRibBeneficiaire(supplier.getRib());
+                        }
                     }
                     
                     existing.setUpdatedAt(LocalDateTime.now());

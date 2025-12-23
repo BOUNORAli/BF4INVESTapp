@@ -28,6 +28,7 @@ export interface Supplier {
   phone: string;
   email: string;
   address: string;
+  rib?: string; // RIB du fournisseur pour les virements
   dateRegulariteFiscale?: string; // Date de régularité fiscale (format ISO: YYYY-MM-DD)
 }
 
@@ -259,6 +260,11 @@ export interface Notification {
   type: 'info' | 'alert' | 'success';
 }
 
+export interface FactureMontant {
+  factureId: string;
+  montant: number; // Montant partiel pour cette facture
+}
+
 export interface OrdreVirement {
   id?: string;
   numeroOV: string;
@@ -268,10 +274,12 @@ export interface OrdreVirement {
   nomBeneficiaire?: string;
   ribBeneficiaire: string;
   motif: string;
-  facturesIds: string[];
+  facturesIds: string[]; // Pour rétrocompatibilité
+  facturesMontants?: FactureMontant[]; // Liste des factures avec montants partiels
   banqueEmettrice: string;
   dateExecution?: string;
   statut: 'EN_ATTENTE' | 'EXECUTE' | 'ANNULE';
+  type: 'NORMAL' | 'EXPRESS';
 }
 
 export interface DashboardKpiResponse {
