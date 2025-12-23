@@ -73,8 +73,8 @@ public class PdfService {
     }
     
     public byte[] generateBC(BandeCommande bc) throws DocumentException, IOException {
-        // Marge inférieure augmentée pour laisser de l'espace au footer
-        Document document = new Document(PageSize.A4, 40f, 40f, 60f, 70f);
+        // Marge supérieure augmentée pour laisser de l'espace au logo, inférieure pour le footer
+        Document document = new Document(PageSize.A4, 40f, 40f, 80f, 70f);
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         PdfWriter writer = PdfWriter.getInstance(document, baos);
         
@@ -784,7 +784,8 @@ public class PdfService {
                 float logoWidth = 100f;
                 float logoHeight = 75f;
                 float xPosition = document.leftMargin();
-                float yPosition = document.getPageSize().getHeight() - document.topMargin() - logoHeight;
+                // Positionner le logo plus haut, juste en dessous du haut de la page
+                float yPosition = document.getPageSize().getHeight() - 10f - logoHeight; // 10 points du haut
                 
                 // Créer une table temporaire pour le logo
                 PdfPTable logoTable = new PdfPTable(1);

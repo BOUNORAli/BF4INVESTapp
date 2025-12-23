@@ -526,7 +526,7 @@ export class StoreService {
         this.loadInvoices(),
         this.loadPaymentModes()
       ]);
-      this.showToast('Donn├®es actualis├®es', 'success');
+      this.showToast('Données actualisées', 'success');
     } catch (error) {
       console.error('Error refreshing data:', error);
       this.showToast('Erreur lors du rafra├«chissement', 'error');
