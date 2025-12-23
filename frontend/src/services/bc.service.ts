@@ -77,10 +77,10 @@ export class BcService {
         payload.delaiPaiement = bc.delaiPaiement;
     }
 
-    // Infos livraison (BC)
-    if (bc.lieuLivraison) payload.lieuLivraison = bc.lieuLivraison;
-    if (bc.conditionLivraison) payload.conditionLivraison = bc.conditionLivraison;
-    if (bc.responsableLivraison) payload.responsableLivraison = bc.responsableLivraison;
+    // Infos livraison (BC) - toujours envoyer même si vide pour permettre la suppression
+    payload.lieuLivraison = bc.lieuLivraison != null ? bc.lieuLivraison : "";
+    payload.conditionLivraison = bc.conditionLivraison != null ? bc.conditionLivraison : "";
+    payload.responsableLivraison = bc.responsableLivraison != null ? bc.responsableLivraison : "";
     
     const created = await this.api.post<any>('/bandes-commandes', payload).toPromise();
     return this.mapBC(created);
@@ -149,10 +149,10 @@ export class BcService {
         payload.delaiPaiement = updatedBc.delaiPaiement;
     }
 
-    // Infos livraison (BC)
-    if (updatedBc.lieuLivraison) payload.lieuLivraison = updatedBc.lieuLivraison;
-    if (updatedBc.conditionLivraison) payload.conditionLivraison = updatedBc.conditionLivraison;
-    if (updatedBc.responsableLivraison) payload.responsableLivraison = updatedBc.responsableLivraison;
+    // Infos livraison (BC) - toujours envoyer même si vide pour permettre la suppression
+    payload.lieuLivraison = updatedBc.lieuLivraison != null ? updatedBc.lieuLivraison : "";
+    payload.conditionLivraison = updatedBc.conditionLivraison != null ? updatedBc.conditionLivraison : "";
+    payload.responsableLivraison = updatedBc.responsableLivraison != null ? updatedBc.responsableLivraison : "";
     
     const updated = await this.api.put<any>(`/bandes-commandes/${updatedBc.id}`, payload).toPromise();
     return this.mapBC(updated);

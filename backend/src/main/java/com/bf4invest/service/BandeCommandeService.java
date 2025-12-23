@@ -77,16 +77,13 @@ public class BandeCommandeService {
                         existing.setDelaiPaiement(bc.getDelaiPaiement());
                     }
 
-                    // Infos livraison (nouveaux champs)
-                    if (bc.getLieuLivraison() != null) {
-                        existing.setLieuLivraison(bc.getLieuLivraison());
-                    }
-                    if (bc.getConditionLivraison() != null) {
-                        existing.setConditionLivraison(bc.getConditionLivraison());
-                    }
-                    if (bc.getResponsableLivraison() != null) {
-                        existing.setResponsableLivraison(bc.getResponsableLivraison());
-                    }
+                    // Infos livraison (nouveaux champs) - permettre la suppression (null ou chaîne vide)
+                    existing.setLieuLivraison(bc.getLieuLivraison() != null && !bc.getLieuLivraison().trim().isEmpty() 
+                        ? bc.getLieuLivraison() : null);
+                    existing.setConditionLivraison(bc.getConditionLivraison() != null && !bc.getConditionLivraison().trim().isEmpty() 
+                        ? bc.getConditionLivraison() : null);
+                    existing.setResponsableLivraison(bc.getResponsableLivraison() != null && !bc.getResponsableLivraison().trim().isEmpty() 
+                        ? bc.getResponsableLivraison() : null);
                     
                     if (bc.getAjouterAuStock() != null) {
                         existing.setAjouterAuStock(bc.getAjouterAuStock());
