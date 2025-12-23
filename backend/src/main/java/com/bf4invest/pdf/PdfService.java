@@ -107,8 +107,8 @@ public class PdfService {
         // Informations livraison et paiement
         addBCDeliveryInfo(document, bc, client);
         
-        // Footer absolu en bas de page
-        addBCFooterAbsolute(document, writer);
+        // Ajouter le footer sur toutes les pages via un event handler
+        writer.setPageEvent(new BCFooterPageEvent());
         
         document.close();
         return baos.toByteArray();
@@ -667,20 +667,20 @@ public class PdfService {
             bc.getLieuLivraison() != null ? bc.getLieuLivraison() : "",
             labelFont, valueFontRed);
         
-        // CONDITION DE LIVRAISON (vient du BC)
+        // CONDITION DE LIVRAISON (vient du BC) - laisser vide si non renseigné
         addInfoRowWithBackground(infoTable, "CONDITION DE LIVRAISON:",
-            bc.getConditionLivraison() != null ? bc.getConditionLivraison() : "LIVRAISON IMMEDIATE",
+            bc.getConditionLivraison() != null ? bc.getConditionLivraison() : "",
             labelFont, valueFontRed);
         
-        // RESPONSABLE A CONTACTER (vient du BC)
-        String responsable = bc.getResponsableLivraison() != null ? bc.getResponsableLivraison() : "N/A";
+        // RESPONSABLE A CONTACTER (vient du BC) - laisser vide si non renseigné
+        String responsable = bc.getResponsableLivraison() != null ? bc.getResponsableLivraison() : "";
         addInfoRowWithBackground(infoTable, "RESPONSABLE A CONTACTER A LA\nLIVRAISON", responsable,
             labelFont, valueFontRed);
         
-        // MODE PAIEMENT (délai de paiement en jours, ex: "120J")
+        // MODE PAIEMENT (délai de paiement en jours, ex: "120J") - laisser vide si non renseigné
         String delaiPaiement = bc.getDelaiPaiement() != null && !bc.getDelaiPaiement().isEmpty() 
             ? bc.getDelaiPaiement() 
-            : "120J"; // Valeur par défaut
+            : "";
         addInfoRowWithBackground(infoTable, "MODE PAIEMENT :", delaiPaiement, labelFont, valueFontRed);
         
         document.add(infoTable);
@@ -720,45 +720,53 @@ public class PdfService {
         document.add(footerTable);
     }
     
-    private void addBCFooterAbsolute(Document document, PdfWriter writer) throws DocumentException {
-        // Créer le footer en position absolue en bas de page
-        PdfPTable footerTable = new PdfPTable(1);
-        float tableWidth = document.getPageSize().getWidth() - document.leftMargin() - document.rightMargin();
-        footerTable.setTotalWidth(tableWidth);
-        footerTable.setLockedWidth(true);
-        
-        PdfPCell footerCell = new PdfPCell();
-        footerCell.setBackgroundColor(BLUE_LIGHT);
-        footerCell.setPadding(10);
-        footerCell.setBorder(Rectangle.NO_BORDER);
-        footerCell.setHorizontalAlignment(Element.ALIGN_CENTER);
-        
-        Font footerFont = FontFactory.getFont(FontFactory.HELVETICA, 8);
-        
-        Paragraph footer1 = new Paragraph("ICE: 002889872000062", footerFont);
-        footer1.setAlignment(Element.ALIGN_CENTER);
-        footer1.setSpacingAfter(3);
-        
-        Paragraph footer2 = new Paragraph("BF4 INVEST SARL au capital de 2.000.000,00 Dhs, Tel: 06 61 51 11 91", footerFont);
-        footer2.setAlignment(Element.ALIGN_CENTER);
-        footer2.setSpacingAfter(3);
-        
-        Paragraph footer3 = new Paragraph("RC de Meknes: 54287 - IF: 50499801 - TP: 17101980", footerFont);
-        footer3.setAlignment(Element.ALIGN_CENTER);
-        footer3.setSpacingAfter(0);
-        
-        footerCell.addElement(footer1);
-        footerCell.addElement(footer2);
-        footerCell.addElement(footer3);
-        
-        footerTable.addCell(footerCell);
-        
-        // Positionner le footer en bas de page avec position absolue
-        PdfContentByte canvas = writer.getDirectContent();
-        // Calculer la hauteur du footer (approximativement 60 points pour 3 lignes + padding)
-        float footerHeight = 60f;
-        float yPosition = document.bottomMargin() + footerHeight;
-        footerTable.writeSelectedRows(0, -1, document.leftMargin(), yPosition, canvas);
+    /**
+     * Classe interne pour gérer le footer sur toutes les pages du BC
+     */
+    private class BCFooterPageEvent extends PdfPageEventHelper {
+        @Override
+        public void onEndPage(PdfWriter writer, Document document) {
+            try {
+                PdfPTable footerTable = new PdfPTable(1);
+                float tableWidth = document.getPageSize().getWidth() - document.leftMargin() - document.rightMargin();
+                footerTable.setTotalWidth(tableWidth);
+                footerTable.setLockedWidth(true);
+                
+                PdfPCell footerCell = new PdfPCell();
+                footerCell.setBackgroundColor(BLUE_LIGHT);
+                footerCell.setPadding(10);
+                footerCell.setBorder(Rectangle.NO_BORDER);
+                footerCell.setHorizontalAlignment(Element.ALIGN_CENTER);
+                
+                Font footerFont = FontFactory.getFont(FontFactory.HELVETICA, 8);
+                
+                Paragraph footer1 = new Paragraph("ICE: 002889872000062", footerFont);
+                footer1.setAlignment(Element.ALIGN_CENTER);
+                footer1.setSpacingAfter(3);
+                
+                Paragraph footer2 = new Paragraph("BF4 INVEST SARL au capital de 2.000.000,00 Dhs, Tel: 06 61 51 11 91", footerFont);
+                footer2.setAlignment(Element.ALIGN_CENTER);
+                footer2.setSpacingAfter(3);
+                
+                Paragraph footer3 = new Paragraph("RC de Meknes: 54287 - IF: 50499801 - TP: 17101980", footerFont);
+                footer3.setAlignment(Element.ALIGN_CENTER);
+                footer3.setSpacingAfter(0);
+                
+                footerCell.addElement(footer1);
+                footerCell.addElement(footer2);
+                footerCell.addElement(footer3);
+                
+                footerTable.addCell(footerCell);
+                
+                // Positionner le footer en bas de page
+                PdfContentByte canvas = writer.getDirectContent();
+                float footerHeight = 60f;
+                float yPosition = document.bottomMargin() + footerHeight;
+                footerTable.writeSelectedRows(0, -1, document.leftMargin(), yPosition, canvas);
+            } catch (DocumentException e) {
+                log.error("Error adding BC footer to page", e);
+            }
+        }
     }
     
     // ============ FACTURE VENTE METHODS ============
