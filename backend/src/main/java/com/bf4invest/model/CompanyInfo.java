@@ -1,0 +1,54 @@
+package com.bf4invest.model;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.mapping.Document;
+
+import java.time.LocalDateTime;
+
+/**
+ * Informations légales de la société utilisées notamment dans le footer des PDFs.
+ * Exemple : ICE, capital social, téléphone, RC, IF, TP, etc.
+ */
+@Document(collection = "company_info")
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class CompanyInfo {
+
+    @Id
+    private String id;
+
+    /** Raison sociale de la société (ex: BF4 INVEST SARL) */
+    private String raisonSociale;
+
+    /** Ville utilisée dans le RC (ex: Meknes) */
+    private String ville;
+
+    /** ICE de la société */
+    private String ice;
+
+    /** Capital social affiché (format texte pour garder la mise en forme) */
+    private String capital;
+
+    /** Téléphone principal */
+    private String telephone;
+
+    /** Numéro de RC */
+    private String rc;
+
+    /** Identifiant fiscal */
+    private String ifFiscal;
+
+    /** Numéro de taxe professionnelle */
+    private String tp;
+
+    private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
+}
+
+

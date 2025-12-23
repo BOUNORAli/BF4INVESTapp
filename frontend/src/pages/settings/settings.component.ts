@@ -162,6 +162,75 @@ import { StoreService } from '../../services/store.service';
         </div>
       </div>
 
+      <!-- Informations de l'Entreprise Card -->
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        <div class="p-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+          <div>
+            <h2 class="text-lg font-bold text-slate-800">Informations de l'Entreprise</h2>
+            <p class="text-xs text-slate-500">Ces informations apparaîtront dans le footer de tous les PDFs générés (factures, BC, etc.)</p>
+          </div>
+        </div>
+        
+        <div class="p-6">
+          @if (isLoadingCompanyInfo()) {
+            <div class="text-center py-8 text-slate-500">Chargement...</div>
+          } @else {
+            <div class="space-y-4">
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-sm font-semibold text-slate-700 mb-1">ICE <span class="text-red-500">*</span></label>
+                  <input type="text" [(ngModel)]="companyInfo().ice" 
+                         placeholder="002889872000062"
+                         class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition">
+                </div>
+                
+                <div>
+                  <label class="block text-sm font-semibold text-slate-700 mb-1">Capital</label>
+                  <input type="text" [(ngModel)]="companyInfo().capital" 
+                         placeholder="2.000.000,00 Dhs"
+                         class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition">
+                </div>
+                
+                <div>
+                  <label class="block text-sm font-semibold text-slate-700 mb-1">Téléphone</label>
+                  <input type="text" [(ngModel)]="companyInfo().telephone" 
+                         placeholder="06 61 51 11 91"
+                         class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition">
+                </div>
+                
+                <div>
+                  <label class="block text-sm font-semibold text-slate-700 mb-1">RC (Registre de Commerce)</label>
+                  <input type="text" [(ngModel)]="companyInfo().rc" 
+                         placeholder="54287"
+                         class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition">
+                </div>
+                
+                <div>
+                  <label class="block text-sm font-semibold text-slate-700 mb-1">IF (Identifiant Fiscal)</label>
+                  <input type="text" [(ngModel)]="companyInfo().if" 
+                         placeholder="50499801"
+                         class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition">
+                </div>
+                
+                <div>
+                  <label class="block text-sm font-semibold text-slate-700 mb-1">TP (Patente)</label>
+                  <input type="text" [(ngModel)]="companyInfo().tp" 
+                         placeholder="17101980"
+                         class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition">
+                </div>
+              </div>
+              
+              <div class="pt-4 border-t border-slate-100">
+                <button (click)="saveCompanyInfo()" 
+                        class="w-full px-4 py-2 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition shadow-lg shadow-blue-600/20">
+                  Enregistrer les Informations
+                </button>
+              </div>
+            </div>
+          }
+        </div>
+      </div>
+
       <!-- Paramètres de Calcul Card -->
       <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         <div class="p-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
@@ -223,6 +292,17 @@ export class SettingsComponent implements OnInit {
   store = inject(StoreService);
   newModeName = signal('');
   
+  // Informations de l'entreprise
+  companyInfo = signal<any>({
+    ice: '',
+    capital: '',
+    telephone: '',
+    rc: '',
+    if: '',
+    tp: ''
+  });
+  isLoadingCompanyInfo = signal(false);
+  
   // Paramètres de calcul
   parametresCalcul = signal<any>({
     codeDCloture: '',
@@ -244,6 +324,7 @@ export class SettingsComponent implements OnInit {
   apportDate = signal<string>('');
 
   async ngOnInit() {
+    await this.loadCompanyInfo();
     await this.loadParametresCalcul();
     await this.loadSoldeGlobal();
   }
@@ -289,6 +370,28 @@ export class SettingsComponent implements OnInit {
       console.error('Error loading parametres calcul:', error);
     } finally {
       this.isLoadingParams.set(false);
+    }
+  }
+
+  async loadCompanyInfo() {
+    this.isLoadingCompanyInfo.set(true);
+    try {
+      const info = await this.store.loadCompanyInfo();
+      if (info) {
+        this.companyInfo.set(info);
+      }
+    } catch (error) {
+      console.error('Error loading company info:', error);
+    } finally {
+      this.isLoadingCompanyInfo.set(false);
+    }
+  }
+
+  async saveCompanyInfo() {
+    try {
+      await this.store.saveCompanyInfo(this.companyInfo());
+    } catch (error) {
+      console.error('Error saving company info:', error);
     }
   }
 

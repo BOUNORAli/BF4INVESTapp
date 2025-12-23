@@ -1207,6 +1207,28 @@ export class StoreService {
     }
   }
 
+  // --- INFORMATIONS SOCIETE (FOOTER PDF) ---
+  async loadCompanyInfo(): Promise<any> {
+    try {
+      const info = await this.api.get<any>('/company-info').toPromise();
+      return info;
+    } catch (error) {
+      console.error('Error loading company info:', error);
+      return null;
+    }
+  }
+
+  async saveCompanyInfo(info: any): Promise<void> {
+    try {
+      await this.api.put('/company-info', info).toPromise();
+      this.showToast('Informations de la société mises à jour avec succès', 'success');
+    } catch (error) {
+      console.error('Error saving company info:', error);
+      this.showToast('Erreur lors de la sauvegarde des informations société', 'error');
+      throw error;
+    }
+  }
+
   // --- GESTION DES SOLDES ---
   async loadSoldeGlobal(): Promise<void> {
     try {

@@ -4,6 +4,7 @@ import com.bf4invest.model.*;
 import com.bf4invest.repository.ClientRepository;
 import com.bf4invest.repository.SupplierRepository;
 import com.bf4invest.repository.BandeCommandeRepository;
+import com.bf4invest.service.CompanyInfoService;
 import com.lowagie.text.*;
 import com.lowagie.text.pdf.*;
 import lombok.RequiredArgsConstructor;
@@ -31,6 +32,7 @@ public class PdfService {
     private final ClientRepository clientRepository;
     private final SupplierRepository supplierRepository;
     private final BandeCommandeRepository bandeCommandeRepository;
+    private final CompanyInfoService companyInfoService;
     
     // Cache statique pour le logo (chargé une seule fois)
     private static byte[] cachedLogoBytes = null;
@@ -759,22 +761,7 @@ public class PdfService {
                 footerCell.setHorizontalAlignment(Element.ALIGN_CENTER);
                 
                 Font footerFont = FontFactory.getFont(FontFactory.HELVETICA, 8);
-                
-                Paragraph footer1 = new Paragraph("ICE: 002889872000062", footerFont);
-                footer1.setAlignment(Element.ALIGN_CENTER);
-                footer1.setSpacingAfter(3);
-                
-                Paragraph footer2 = new Paragraph("BF4 INVEST SARL au capital de 2.000.000,00 Dhs, Tel: 06 61 51 11 91", footerFont);
-                footer2.setAlignment(Element.ALIGN_CENTER);
-                footer2.setSpacingAfter(3);
-                
-                Paragraph footer3 = new Paragraph("RC de Meknes: 54287 - IF: 50499801 - TP: 17101980", footerFont);
-                footer3.setAlignment(Element.ALIGN_CENTER);
-                footer3.setSpacingAfter(0);
-                
-                footerCell.addElement(footer1);
-                footerCell.addElement(footer2);
-                footerCell.addElement(footer3);
+                addCompanyFooterParagraphs(footerCell, footerFont);
                 
                 footerTable.addCell(footerCell);
                 
@@ -841,22 +828,7 @@ public class PdfService {
                 footerCell.setHorizontalAlignment(Element.ALIGN_CENTER);
                 
                 Font footerFont = FontFactory.getFont(FontFactory.HELVETICA, 8);
-                
-                Paragraph footer1 = new Paragraph("ICE: 002889872000062", footerFont);
-                footer1.setAlignment(Element.ALIGN_CENTER);
-                footer1.setSpacingAfter(3);
-                
-                Paragraph footer2 = new Paragraph("BF4 INVEST SARL au capital de 2.000.000,00 Dhs, Tel: 06 61 51 11 91", footerFont);
-                footer2.setAlignment(Element.ALIGN_CENTER);
-                footer2.setSpacingAfter(3);
-                
-                Paragraph footer3 = new Paragraph("RC de Meknes: 54287 - IF: 50499801 - TP: 17101980", footerFont);
-                footer3.setAlignment(Element.ALIGN_CENTER);
-                footer3.setSpacingAfter(0);
-                
-                footerCell.addElement(footer1);
-                footerCell.addElement(footer2);
-                footerCell.addElement(footer3);
+                addCompanyFooterParagraphs(footerCell, footerFont);
                 
                 footerTable.addCell(footerCell);
                 
@@ -1124,19 +1096,7 @@ public class PdfService {
         footerCell.setHorizontalAlignment(Element.ALIGN_CENTER);
         
         Font footerFont = FontFactory.getFont(FontFactory.HELVETICA, 8);
-        
-        Paragraph footer1 = new Paragraph("ICE: 002889872000062", footerFont);
-        footer1.setAlignment(Element.ALIGN_CENTER);
-        
-        Paragraph footer2 = new Paragraph("BF4 INVEST SARL au capital de 2.000.000,00 Dhs, Tél: 06 61 51 11 91", footerFont);
-        footer2.setAlignment(Element.ALIGN_CENTER);
-        
-        Paragraph footer3 = new Paragraph("RC de Meknès: 54287 - IF: 50499801 - TP: 17101980", footerFont);
-        footer3.setAlignment(Element.ALIGN_CENTER);
-        
-        footerCell.addElement(footer1);
-        footerCell.addElement(footer2);
-        footerCell.addElement(footer3);
+        addCompanyFooterParagraphs(footerCell, footerFont);
         
         footerTable.addCell(footerCell);
         document.add(footerTable);
@@ -1662,6 +1622,46 @@ public class PdfService {
         valueCell.setHorizontalAlignment(Element.ALIGN_LEFT);
         valueCell.setPadding(5);
         table.addCell(valueCell);
+    }
+    
+    /**
+     * Ajoute dans une cellule les 3 lignes de footer construites à partir des informations société.
+     * Ces informations sont chargées depuis {@link CompanyInfoService} pour éviter le code en dur.
+     */
+    private void addCompanyFooterParagraphs(PdfPCell footerCell, Font footerFont) {
+        try {
+            com.bf4invest.model.CompanyInfo info = companyInfoService.getCompanyInfo();
+
+            String iceText = info.getIce() != null ? info.getIce() : "";
+            String raison = info.getRaisonSociale() != null ? info.getRaisonSociale() : "";
+            String capital = info.getCapital() != null ? info.getCapital() : "";
+            String tel = info.getTelephone() != null ? info.getTelephone() : "";
+            String ville = info.getVille() != null ? info.getVille() : "";
+            String rc = info.getRc() != null ? info.getRc() : "";
+            String ifFiscal = info.getIfFiscal() != null ? info.getIfFiscal() : "";
+            String tp = info.getTp() != null ? info.getTp() : "";
+
+            Paragraph footer1 = new Paragraph("ICE: " + iceText, footerFont);
+            footer1.setAlignment(Element.ALIGN_CENTER);
+            footer1.setSpacingAfter(3);
+
+            String capitalLine = (raison + " au capital de " + capital + " Dhs, Tel: " + tel).trim();
+            Paragraph footer2 = new Paragraph(capitalLine, footerFont);
+            footer2.setAlignment(Element.ALIGN_CENTER);
+            footer2.setSpacingAfter(3);
+
+            String rcLine = ("RC de " + ville + ": " + rc + " - IF: " + ifFiscal + " - TP: " + tp).trim();
+            Paragraph footer3 = new Paragraph(rcLine, footerFont);
+            footer3.setAlignment(Element.ALIGN_CENTER);
+            footer3.setSpacingAfter(0);
+
+            footerCell.addElement(footer1);
+            footerCell.addElement(footer2);
+            footerCell.addElement(footer3);
+        } catch (Exception e) {
+            // En cas de problème inattendu, on ne bloque pas la génération du PDF
+            log.error("Error building company footer paragraphs", e);
+        }
     }
     
     private String convertAmountToFrenchWords(double amount) {
