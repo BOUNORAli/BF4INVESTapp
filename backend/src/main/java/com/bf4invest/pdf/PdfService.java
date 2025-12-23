@@ -2390,44 +2390,60 @@ public class PdfService {
     private void addOrdreVirementHeader(Document document, OrdreVirement ov, 
                                        com.bf4invest.model.CompanyInfo companyInfo, 
                                        PdfWriter writer) throws DocumentException, IOException {
-        PdfPTable headerTable = new PdfPTable(2);
+        // Objectif: bloc banque CENTRÉ comme sur le modèle (logo à gauche, texte banque centré)
+        PdfPTable headerTable = new PdfPTable(3);
         headerTable.setWidthPercentage(100);
-        headerTable.setWidths(new float[]{2f, 8f});
-        headerTable.setSpacingAfter(20);
+        headerTable.setWidths(new float[]{2.2f, 5.6f, 2.2f});
+        headerTable.setSpacingAfter(10);
         
-        // Logo à gauche
+        // Logo à gauche (comme modèle)
         PdfPCell logoCell = createLogoCell(writer, 100f, 75f);
         logoCell.setVerticalAlignment(Element.ALIGN_TOP);
+        logoCell.setHorizontalAlignment(Element.ALIGN_LEFT);
         headerTable.addCell(logoCell);
         
-        // Informations banque à droite
+        // Bloc banque centré
         PdfPCell bankCell = new PdfPCell();
         bankCell.setBorder(Rectangle.NO_BORDER);
-        bankCell.setPadding(0);
+        bankCell.setPaddingTop(5);
+        bankCell.setPaddingBottom(0);
+        bankCell.setPaddingLeft(0);
+        bankCell.setPaddingRight(0);
         bankCell.setVerticalAlignment(Element.ALIGN_TOP);
-        bankCell.setHorizontalAlignment(Element.ALIGN_RIGHT);
+        bankCell.setHorizontalAlignment(Element.ALIGN_CENTER);
         
-        Font bankFont = FontFactory.getFont(FontFactory.HELVETICA, 11, Color.BLACK);
+        Font bankFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 11, Color.BLACK);
         
         Paragraph bankLine1 = new Paragraph("A Mr Le Directeur", bankFont);
-        bankLine1.setAlignment(Element.ALIGN_RIGHT);
+        bankLine1.setAlignment(Element.ALIGN_CENTER);
         bankLine1.setSpacingAfter(2);
         
         String banque = companyInfo.getBanque() != null ? companyInfo.getBanque() : "";
         Paragraph bankLine2 = new Paragraph(banque, bankFont);
-        bankLine2.setAlignment(Element.ALIGN_RIGHT);
+        bankLine2.setAlignment(Element.ALIGN_CENTER);
         bankLine2.setSpacingAfter(2);
         
         String agence = companyInfo.getAgence() != null ? companyInfo.getAgence() : "";
         Paragraph bankLine3 = new Paragraph(agence, bankFont);
-        bankLine3.setAlignment(Element.ALIGN_RIGHT);
+        bankLine3.setAlignment(Element.ALIGN_CENTER);
         
         bankCell.addElement(bankLine1);
         bankCell.addElement(bankLine2);
         bankCell.addElement(bankLine3);
         
         headerTable.addCell(bankCell);
+        
+        // Colonne droite vide (pour centrer visuellement le bloc banque)
+        PdfPCell emptyRight = new PdfPCell();
+        emptyRight.setBorder(Rectangle.NO_BORDER);
+        headerTable.addCell(emptyRight);
+        
         document.add(headerTable);
+        
+        // Petit espace comme sur le modèle avant le titre
+        Paragraph spacer = new Paragraph(" ");
+        spacer.setSpacingAfter(6);
+        document.add(spacer);
     }
     
     private void addOrdreVirementTitle(Document document, OrdreVirement ov) throws DocumentException {
@@ -2436,7 +2452,7 @@ public class PdfService {
         titleFont.setStyle(Font.UNDERLINE);
         Paragraph title = new Paragraph("ORDRE DE VIREMENT", titleFont);
         title.setAlignment(Element.ALIGN_CENTER);
-        title.setSpacingAfter(10);
+        title.setSpacingAfter(0);
         document.add(title);
         
         // Si EXPRESS, ajouter "VIREMENT EXPRESS" en rouge, souligné, centré
@@ -2445,41 +2461,52 @@ public class PdfService {
             expressFont.setStyle(Font.UNDERLINE);
             Paragraph expressTitle = new Paragraph("VIREMENT EXPRESS", expressFont);
             expressTitle.setAlignment(Element.ALIGN_CENTER);
-            expressTitle.setSpacingAfter(15);
+            expressTitle.setSpacingAfter(0);
             document.add(expressTitle);
-        } else {
-            // Espacement si pas EXPRESS
-            Paragraph spacer = new Paragraph(" ");
-            spacer.setSpacingAfter(15);
-            document.add(spacer);
         }
+        
+        // Grand espace vertical (comme le modèle) avant le bloc donneur d'ordre
+        Paragraph spacer = new Paragraph(" ");
+        spacer.setSpacingAfter(60);
+        document.add(spacer);
     }
     
     private void addOrdreVirementDonorInfo(Document document, com.bf4invest.model.CompanyInfo companyInfo) throws DocumentException {
-        Font blueFont = FontFactory.getFont(FontFactory.HELVETICA, 11, BLUE_DARK);
-        Font blueBoldFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 11, BLUE_DARK);
+        // Dans le modèle: ligne plutôt "noire" avec nom en bleu
+        Font labelFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 12, Color.BLACK);
+        Font blueBoldFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 12, BLUE_DARK);
         
         // "NOM DU DONNEUR D'ORDRE : STE BF4 INVEST"
         String raisonSociale = companyInfo.getRaisonSociale() != null ? companyInfo.getRaisonSociale() : "BF4 INVEST SARL";
         Paragraph donorLine = new Paragraph();
-        donorLine.add(new Chunk("NOM DU DONNEUR D'ORDRE : ", blueFont));
+        donorLine.add(new Chunk("NOM DU DONNEUR D'ORDRE : ", labelFont));
         donorLine.add(new Chunk(raisonSociale, blueBoldFont));
-        donorLine.setSpacingAfter(8);
+        donorLine.setSpacingAfter(6);
         document.add(donorLine);
         
         // "Veuillez virer par le débit de notre compte N° [RIB]"
         String rib = companyInfo.getRib() != null ? companyInfo.getRib() : "";
         Paragraph accountLine = new Paragraph();
-        accountLine.add(new Chunk("Veuillez virer par le débit de notre compte N° ", blueFont));
+        accountLine.add(new Chunk("Veuillez virer par le débit de notre compte N° ", labelFont));
         accountLine.add(new Chunk(rib, blueBoldFont));
-        accountLine.setSpacingAfter(15);
+        accountLine.setSpacingAfter(30);
         document.add(accountLine);
     }
     
+    private String formatOvWordsWithSpaces(String rawWords) {
+        if (rawWords == null) return "";
+        // Remplacer les tirets par des espaces, puis restaurer "Quatre-Vingt" comme sur le modèle
+        String s = rawWords.replace("-", " ");
+        s = s.replaceAll("\\s+", " ").trim();
+        // Rétablir l'orthographe attendue dans l'image: "Quatre-Vingt"
+        s = s.replace("Quatre Vingt", "Quatre-Vingt");
+        return s;
+    }
+    
     private void addOrdreVirementAmountInWords(Document document, OrdreVirement ov) throws DocumentException {
-        // "La somme de : [Montant en lettres]" - centré, bleu
-        Font blueFont = FontFactory.getFont(FontFactory.HELVETICA, 11, BLUE_DARK);
-        Font blueBoldFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 11, BLUE_DARK);
+        // "La somme de : [Montant en lettres]" - centré, bleu, comme le modèle
+        Font labelFont = FontFactory.getFont(FontFactory.HELVETICA, 11, Color.BLACK);
+        Font blueBoldFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 13, BLUE_DARK);
         
         // Pour les ordres de virement, on utilise seulement la partie entière sans centimes
         Double montant = ov.getMontant();
@@ -2487,78 +2514,125 @@ public class PdfService {
             montant = 0.0;
         }
         long wholePart = montant.longValue();
-        String wholeWords = convertNumberToFrench(wholePart);
+        String wholeWords = formatOvWordsWithSpaces(convertNumberToFrench(wholePart));
         String amountInWords = wholeWords + (wholePart == 1 ? " Dirham" : " Dirhams");
         
         Paragraph amountLine = new Paragraph();
-        amountLine.add(new Chunk("La somme de : ", blueFont));
+        amountLine.add(new Chunk("La somme de : ", labelFont));
         amountLine.add(new Chunk(amountInWords, blueBoldFont));
         amountLine.setAlignment(Element.ALIGN_CENTER);
-        amountLine.setSpacingAfter(15);
+        amountLine.setSpacingAfter(35);
         document.add(amountLine);
     }
     
     private void addOrdreVirementDetails(Document document, OrdreVirement ov) throws DocumentException {
-        Font labelFont = FontFactory.getFont(FontFactory.HELVETICA, 11, Color.BLACK);
-        Font blueBoldFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 11, BLUE_DARK);
-        Font redBoldFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 11, RED);
-        Font valueFont = FontFactory.getFont(FontFactory.HELVETICA, 11, Color.BLACK);
+        // Utiliser une table 3 colonnes pour verrouiller les alignements (Montant / DHS. / blocs)
+        Font labelFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 12, Color.BLACK);
+        Font valueBold = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 12, Color.BLACK);
+        Font blueValueBold = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 12, BLUE_DARK);
+        Font blueAmountBold = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 14, BLUE_DARK);
+        Font redValueBold = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 12, RED);
         
         boolean isExpress = "EXPRESS".equals(ov.getType());
         
-        // Montant
-        Paragraph montantLine = new Paragraph();
-        montantLine.add(new Chunk("Montant : ", labelFont));
-        montantLine.add(new Chunk(formatAmount(ov.getMontant()) + " DHS.", blueBoldFont));
-        montantLine.setSpacingAfter(8);
-        document.add(montantLine);
+        PdfPTable t = new PdfPTable(3);
+        t.setWidthPercentage(100);
+        t.setWidths(new float[]{2.6f, 5.6f, 1.8f});
+        t.setSpacingAfter(0);
+        
+        // Helpers
+        java.util.function.BiFunction<String, Font, PdfPCell> cell = (txt, font) -> {
+            PdfPCell c = new PdfPCell(new Phrase(txt != null ? txt : "", font));
+            c.setBorder(Rectangle.NO_BORDER);
+            c.setPaddingTop(6);
+            c.setPaddingBottom(6);
+            c.setPaddingLeft(0);
+            c.setPaddingRight(0);
+            c.setVerticalAlignment(Element.ALIGN_MIDDLE);
+            return c;
+        };
+        
+        // Montant row: label | amount | DHS.
+        String amount = formatAmount(ov.getMontant());
+        PdfPCell c1 = cell.apply("Montant :", labelFont);
+        PdfPCell c2 = cell.apply(amount, blueAmountBold);
+        PdfPCell c3 = cell.apply("DHS.", valueBold);
+        c1.setHorizontalAlignment(Element.ALIGN_LEFT);
+        c2.setHorizontalAlignment(Element.ALIGN_CENTER);
+        // "DHS." plus à droite comme sur le modèle
+        c3.setHorizontalAlignment(Element.ALIGN_RIGHT);
+        t.addCell(c1);
+        t.addCell(c2);
+        t.addCell(c3);
         
         // En faveur de
-        Paragraph beneficiaireLine = new Paragraph();
-        beneficiaireLine.add(new Chunk("En faveur de : ", labelFont));
         String nomBeneficiaire = ov.getNomBeneficiaire() != null ? ov.getNomBeneficiaire() : "";
-        if (isExpress) {
-            beneficiaireLine.add(new Chunk(nomBeneficiaire, redBoldFont));
-        } else {
-            beneficiaireLine.add(new Chunk(nomBeneficiaire, valueFont));
-        }
-        beneficiaireLine.setSpacingAfter(8);
-        document.add(beneficiaireLine);
+        Font nomFont = isExpress ? redValueBold : valueBold;
+        PdfPCell b1 = cell.apply("En faveur de :", labelFont);
+        PdfPCell b2 = cell.apply(nomBeneficiaire, nomFont);
+        PdfPCell b3 = cell.apply("", valueBold);
+        b1.setHorizontalAlignment(Element.ALIGN_LEFT);
+        b2.setHorizontalAlignment(Element.ALIGN_LEFT);
+        b3.setHorizontalAlignment(Element.ALIGN_LEFT);
+        t.addCell(b1);
+        t.addCell(b2);
+        t.addCell(b3);
         
         // Domicilié chez
-        Paragraph banqueLine = new Paragraph();
-        banqueLine.add(new Chunk("Domicilié chez : ", labelFont));
         String banqueBeneficiaire = ov.getBanqueBeneficiaire() != null ? ov.getBanqueBeneficiaire() : "";
-        banqueLine.add(new Chunk(banqueBeneficiaire, blueBoldFont));
-        banqueLine.setSpacingAfter(8);
-        document.add(banqueLine);
+        PdfPCell d1 = cell.apply("Domicilié chez :", labelFont);
+        PdfPCell d2 = cell.apply(banqueBeneficiaire, blueValueBold);
+        PdfPCell d3 = cell.apply("", valueBold);
+        d1.setHorizontalAlignment(Element.ALIGN_LEFT);
+        d2.setHorizontalAlignment(Element.ALIGN_LEFT);
+        t.addCell(d1);
+        t.addCell(d2);
+        t.addCell(d3);
         
         // Compte n°
-        Paragraph compteLine = new Paragraph();
-        compteLine.add(new Chunk("Compte n° : ", labelFont));
-        compteLine.add(new Chunk(ov.getRibBeneficiaire(), blueBoldFont));
-        compteLine.setSpacingAfter(8);
-        document.add(compteLine);
+        String rib = ov.getRibBeneficiaire() != null ? ov.getRibBeneficiaire() : "";
+        PdfPCell r1 = cell.apply("Compte n° :", labelFont);
+        PdfPCell r2 = cell.apply(rib, blueValueBold);
+        PdfPCell r3 = cell.apply("", valueBold);
+        r1.setHorizontalAlignment(Element.ALIGN_LEFT);
+        r2.setHorizontalAlignment(Element.ALIGN_LEFT);
+        t.addCell(r1);
+        t.addCell(r2);
+        t.addCell(r3);
         
         // Motif
-        Paragraph motifLine = new Paragraph();
-        motifLine.add(new Chunk("Motif : ", labelFont));
         String motif = ov.getMotif() != null ? ov.getMotif() : "";
-        if (isExpress) {
-            motifLine.add(new Chunk(motif, redBoldFont));
-        } else {
-            motifLine.add(new Chunk(motif, valueFont));
-        }
-        motifLine.setSpacingAfter(20);
-        document.add(motifLine);
+        Font motifFont = isExpress ? redValueBold : valueBold;
+        PdfPCell m1 = cell.apply("Motif :", labelFont);
+        PdfPCell m2 = cell.apply(motif, motifFont);
+        PdfPCell m3 = cell.apply("", valueBold);
+        m1.setHorizontalAlignment(Element.ALIGN_LEFT);
+        m2.setHorizontalAlignment(Element.ALIGN_LEFT);
+        t.addCell(m1);
+        t.addCell(m2);
+        t.addCell(m3);
+        
+        document.add(t);
+        
+        // Espace avant signature (comme modèle)
+        Paragraph spacer = new Paragraph(" ");
+        spacer.setSpacingAfter(55);
+        document.add(spacer);
     }
     
     private void addOrdreVirementSignature(Document document) throws DocumentException {
-        Font signatureFont = FontFactory.getFont(FontFactory.HELVETICA, 11, Color.BLACK);
-        Paragraph signature = new Paragraph("Signature du donneur d'ordre", signatureFont);
-        signature.setAlignment(Element.ALIGN_RIGHT);
-        signature.setSpacingAfter(10);
-        document.add(signature);
+        Font signatureFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 12, Color.BLACK);
+        PdfPTable sig = new PdfPTable(1);
+        sig.setWidthPercentage(100);
+        PdfPCell c = new PdfPCell(new Phrase("Signature du donneur d'ordre", signatureFont));
+        c.setBorder(Rectangle.NO_BORDER);
+        c.setHorizontalAlignment(Element.ALIGN_RIGHT);
+        c.setPaddingRight(10);
+        c.setPaddingTop(0);
+        c.setPaddingBottom(0);
+        sig.addCell(c);
+        sig.setSpacingAfter(0);
+        document.add(sig);
     }
     
     // Page event pour footer et logo sur toutes les pages
@@ -2585,19 +2659,23 @@ public class PdfService {
             // Récupérer les informations société
             com.bf4invest.model.CompanyInfo info = companyInfoService.getCompanyInfo();
             
-            // Créer un tableau pour le footer avec bordure
+            // Créer un tableau pour le footer avec bordure (plus étroit et centré, fond bleu clair)
+            float availableWidth = document.getPageSize().getWidth() - document.leftMargin() - document.rightMargin();
+            float footerWidth = availableWidth * 0.82f;
+            float xPosition = (document.getPageSize().getWidth() - footerWidth) / 2f;
+            
             PdfPTable footerTable = new PdfPTable(1);
-            footerTable.setTotalWidth(document.getPageSize().getWidth() - document.leftMargin() - document.rightMargin());
+            footerTable.setTotalWidth(footerWidth);
             footerTable.setLockedWidth(true);
             
             PdfPCell footerCell = new PdfPCell();
             footerCell.setBorder(Rectangle.BOX);
-            footerCell.setBorderColor(Color.LIGHT_GRAY);
-            footerCell.setBackgroundColor(new Color(240, 240, 240));
-            footerCell.setPadding(8);
+            footerCell.setBorderColor(Color.BLACK);
+            footerCell.setBackgroundColor(BLUE_LIGHT);
+            footerCell.setPadding(6);
             footerCell.setHorizontalAlignment(Element.ALIGN_CENTER);
             
-            Font footerFont = FontFactory.getFont(FontFactory.HELVETICA, 9, Color.BLACK);
+            Font footerFont = FontFactory.getFont(FontFactory.HELVETICA_OBLIQUE, 10, Color.BLACK);
             
             String raison = info.getRaisonSociale() != null ? info.getRaisonSociale() : "";
             String capital = info.getCapital() != null ? info.getCapital() : "";
@@ -2607,9 +2685,9 @@ public class PdfService {
             String ifFiscal = info.getIfFiscal() != null ? info.getIfFiscal() : "";
             String tp = info.getTp() != null ? info.getTp() : "";
             
-            Paragraph footer1 = new Paragraph(raison + " au capital de " + capital + " Dhs, Tél : " + tel, footerFont);
+            Paragraph footer1 = new Paragraph(raison + " au capital de " + capital + " Dhs,  Tél : " + tel, footerFont);
             footer1.setAlignment(Element.ALIGN_CENTER);
-            footer1.setSpacingAfter(3);
+            footer1.setSpacingAfter(2);
             
             Paragraph footer2 = new Paragraph("RC de " + ville + ": " + rc + " - IF: " + ifFiscal + " - TP: " + tp, footerFont);
             footer2.setAlignment(Element.ALIGN_CENTER);
@@ -2618,7 +2696,7 @@ public class PdfService {
             footerCell.addElement(footer2);
             footerTable.addCell(footerCell);
             
-            footerTable.writeSelectedRows(0, -1, document.leftMargin(), yPosition, canvas);
+            footerTable.writeSelectedRows(0, -1, xPosition, yPosition, canvas);
         }
         
         private void addLogoToPage(PdfWriter writer, Document document) {
