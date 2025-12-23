@@ -27,6 +27,7 @@ public class Supplier {
     private String adresse;
     private String telephone;
     private String email;
+    private String banque; // Banque du fournisseur
     private String rib; // RIB du fournisseur pour les virements
     
     private List<String> modesPaiementAcceptes; // virement, chèque, LCN, compensation

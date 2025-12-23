@@ -1716,10 +1716,11 @@ public class PdfService {
             }
             
             String result = tens[(int) tensPart];
-            if (unitsPart == 1 && tensPart == 8) {
-                result += "-Et-Un";
+            if (unitsPart == 1 && (tensPart == 2 || tensPart == 3 || tensPart == 4 || tensPart == 5 || tensPart == 6 || tensPart == 8)) {
+                // "Vingt et Un", "Trente et Un", etc. (mais pas pour Soixante et Quatre-Vingt)
+                result += " et " + units[(int) unitsPart];
             } else if (unitsPart > 0) {
-                result += (unitsPart == 1 ? "-Et-Un" : "-" + units[(int) unitsPart]);
+                result += "-" + units[(int) unitsPart];
             } else if (tensPart == 8) {
                 result += "s";
             }
@@ -1730,12 +1731,12 @@ public class PdfService {
             long hundreds = number / 100;
             long remainder = number % 100;
             
-            String result = (hundreds == 1 ? "Cent" : units[(int) hundreds] + "-Cent");
+            String result = (hundreds == 1 ? "Cent" : units[(int) hundreds] + " Cent");
             if (remainder == 0 && hundreds > 1) {
                 result += "s";
             }
             if (remainder > 0) {
-                result += "-" + convertNumberToFrench(remainder);
+                result += " " + convertNumberToFrench(remainder);
             }
             return result;
         }
@@ -1746,12 +1747,12 @@ public class PdfService {
             
             String result = convertNumberToFrench(thousands);
             if (thousands == 1) {
-                result += "-Mille";
+                result += " Mille";
             } else {
-                result += "-Mille";
+                result += " Mille";
             }
             if (remainder > 0) {
-                result += "-" + convertNumberToFrench(remainder);
+                result += " " + convertNumberToFrench(remainder);
             }
             return result;
         }
@@ -2346,6 +2347,295 @@ public class PdfService {
             return ym.format(java.time.format.DateTimeFormatter.ofPattern("MMM yyyy", Locale.FRENCH));
         } catch (Exception e) {
             return monthStr;
+        }
+    }
+    
+    // ============ ORDRE DE VIREMENT METHODS ============
+    
+    public byte[] generateOrdreVirement(OrdreVirement ov) throws DocumentException, IOException {
+        Document document = new Document(PageSize.A4, 40f, 40f, 80f, 70f);
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        PdfWriter writer = PdfWriter.getInstance(document, baos);
+        
+        // Page event pour footer et logo sur toutes les pages
+        writer.setPageEvent(new OrdreVirementFooterPageEvent());
+        
+        document.open();
+        
+        // Récupérer les informations de l'entreprise
+        com.bf4invest.model.CompanyInfo companyInfo = companyInfoService.getCompanyInfo();
+        
+        // Header avec logo et banque
+        addOrdreVirementHeader(document, ov, companyInfo, writer);
+        
+        // Titre "ORDRE DE VIREMENT"
+        addOrdreVirementTitle(document, ov);
+        
+        // Informations du donneur d'ordre
+        addOrdreVirementDonorInfo(document, companyInfo);
+        
+        // Montant en lettres
+        addOrdreVirementAmountInWords(document, ov);
+        
+        // Détails du virement
+        addOrdreVirementDetails(document, ov);
+        
+        // Signature
+        addOrdreVirementSignature(document);
+        
+        document.close();
+        return baos.toByteArray();
+    }
+    
+    private void addOrdreVirementHeader(Document document, OrdreVirement ov, 
+                                       com.bf4invest.model.CompanyInfo companyInfo, 
+                                       PdfWriter writer) throws DocumentException, IOException {
+        PdfPTable headerTable = new PdfPTable(2);
+        headerTable.setWidthPercentage(100);
+        headerTable.setWidths(new float[]{2f, 8f});
+        headerTable.setSpacingAfter(20);
+        
+        // Logo à gauche
+        PdfPCell logoCell = createLogoCell(writer, 100f, 75f);
+        logoCell.setVerticalAlignment(Element.ALIGN_TOP);
+        headerTable.addCell(logoCell);
+        
+        // Informations banque à droite
+        PdfPCell bankCell = new PdfPCell();
+        bankCell.setBorder(Rectangle.NO_BORDER);
+        bankCell.setPadding(0);
+        bankCell.setVerticalAlignment(Element.ALIGN_TOP);
+        bankCell.setHorizontalAlignment(Element.ALIGN_RIGHT);
+        
+        Font bankFont = FontFactory.getFont(FontFactory.HELVETICA, 11, Color.BLACK);
+        
+        Paragraph bankLine1 = new Paragraph("A Mr Le Directeur", bankFont);
+        bankLine1.setAlignment(Element.ALIGN_RIGHT);
+        bankLine1.setSpacingAfter(2);
+        
+        String banque = companyInfo.getBanque() != null ? companyInfo.getBanque() : "";
+        Paragraph bankLine2 = new Paragraph(banque, bankFont);
+        bankLine2.setAlignment(Element.ALIGN_RIGHT);
+        bankLine2.setSpacingAfter(2);
+        
+        String agence = companyInfo.getAgence() != null ? companyInfo.getAgence() : "";
+        Paragraph bankLine3 = new Paragraph(agence, bankFont);
+        bankLine3.setAlignment(Element.ALIGN_RIGHT);
+        
+        bankCell.addElement(bankLine1);
+        bankCell.addElement(bankLine2);
+        bankCell.addElement(bankLine3);
+        
+        headerTable.addCell(bankCell);
+        document.add(headerTable);
+    }
+    
+    private void addOrdreVirementTitle(Document document, OrdreVirement ov) throws DocumentException {
+        // Titre "ORDRE DE VIREMENT" en bleu, souligné, centré
+        Font titleFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 16, BLUE_DARK);
+        titleFont.setStyle(Font.UNDERLINE);
+        Paragraph title = new Paragraph("ORDRE DE VIREMENT", titleFont);
+        title.setAlignment(Element.ALIGN_CENTER);
+        title.setSpacingAfter(10);
+        document.add(title);
+        
+        // Si EXPRESS, ajouter "VIREMENT EXPRESS" en rouge, souligné, centré
+        if ("EXPRESS".equals(ov.getType())) {
+            Font expressFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 14, RED);
+            expressFont.setStyle(Font.UNDERLINE);
+            Paragraph expressTitle = new Paragraph("VIREMENT EXPRESS", expressFont);
+            expressTitle.setAlignment(Element.ALIGN_CENTER);
+            expressTitle.setSpacingAfter(15);
+            document.add(expressTitle);
+        } else {
+            // Espacement si pas EXPRESS
+            Paragraph spacer = new Paragraph(" ");
+            spacer.setSpacingAfter(15);
+            document.add(spacer);
+        }
+    }
+    
+    private void addOrdreVirementDonorInfo(Document document, com.bf4invest.model.CompanyInfo companyInfo) throws DocumentException {
+        Font blueFont = FontFactory.getFont(FontFactory.HELVETICA, 11, BLUE_DARK);
+        Font blueBoldFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 11, BLUE_DARK);
+        
+        // "NOM DU DONNEUR D'ORDRE : STE BF4 INVEST"
+        String raisonSociale = companyInfo.getRaisonSociale() != null ? companyInfo.getRaisonSociale() : "BF4 INVEST SARL";
+        Paragraph donorLine = new Paragraph();
+        donorLine.add(new Chunk("NOM DU DONNEUR D'ORDRE : ", blueFont));
+        donorLine.add(new Chunk(raisonSociale, blueBoldFont));
+        donorLine.setSpacingAfter(8);
+        document.add(donorLine);
+        
+        // "Veuillez virer par le débit de notre compte N° [RIB]"
+        String rib = companyInfo.getRib() != null ? companyInfo.getRib() : "";
+        Paragraph accountLine = new Paragraph();
+        accountLine.add(new Chunk("Veuillez virer par le débit de notre compte N° ", blueFont));
+        accountLine.add(new Chunk(rib, blueBoldFont));
+        accountLine.setSpacingAfter(15);
+        document.add(accountLine);
+    }
+    
+    private void addOrdreVirementAmountInWords(Document document, OrdreVirement ov) throws DocumentException {
+        // "La somme de : [Montant en lettres]" - centré, bleu
+        Font blueFont = FontFactory.getFont(FontFactory.HELVETICA, 11, BLUE_DARK);
+        Font blueBoldFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 11, BLUE_DARK);
+        
+        // Pour les ordres de virement, on utilise seulement la partie entière sans centimes
+        long wholePart = (long) ov.getMontant();
+        String wholeWords = convertNumberToFrench(wholePart);
+        String amountInWords = wholeWords + (wholePart == 1 ? " Dirham" : " Dirhams");
+        
+        Paragraph amountLine = new Paragraph();
+        amountLine.add(new Chunk("La somme de : ", blueFont));
+        amountLine.add(new Chunk(amountInWords, blueBoldFont));
+        amountLine.setAlignment(Element.ALIGN_CENTER);
+        amountLine.setSpacingAfter(15);
+        document.add(amountLine);
+    }
+    
+    private void addOrdreVirementDetails(Document document, OrdreVirement ov) throws DocumentException {
+        Font labelFont = FontFactory.getFont(FontFactory.HELVETICA, 11, Color.BLACK);
+        Font blueBoldFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 11, BLUE_DARK);
+        Font redBoldFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 11, RED);
+        Font valueFont = FontFactory.getFont(FontFactory.HELVETICA, 11, Color.BLACK);
+        
+        boolean isExpress = "EXPRESS".equals(ov.getType());
+        
+        // Montant
+        Paragraph montantLine = new Paragraph();
+        montantLine.add(new Chunk("Montant : ", labelFont));
+        montantLine.add(new Chunk(formatAmount(ov.getMontant()) + " DHS.", blueBoldFont));
+        montantLine.setSpacingAfter(8);
+        document.add(montantLine);
+        
+        // En faveur de
+        Paragraph beneficiaireLine = new Paragraph();
+        beneficiaireLine.add(new Chunk("En faveur de : ", labelFont));
+        String nomBeneficiaire = ov.getNomBeneficiaire() != null ? ov.getNomBeneficiaire() : "";
+        if (isExpress) {
+            beneficiaireLine.add(new Chunk(nomBeneficiaire, redBoldFont));
+        } else {
+            beneficiaireLine.add(new Chunk(nomBeneficiaire, valueFont));
+        }
+        beneficiaireLine.setSpacingAfter(8);
+        document.add(beneficiaireLine);
+        
+        // Domicilié chez
+        Paragraph banqueLine = new Paragraph();
+        banqueLine.add(new Chunk("Domicilié chez : ", labelFont));
+        String banqueBeneficiaire = ov.getBanqueBeneficiaire() != null ? ov.getBanqueBeneficiaire() : "";
+        banqueLine.add(new Chunk(banqueBeneficiaire, blueBoldFont));
+        banqueLine.setSpacingAfter(8);
+        document.add(banqueLine);
+        
+        // Compte n°
+        Paragraph compteLine = new Paragraph();
+        compteLine.add(new Chunk("Compte n° : ", labelFont));
+        compteLine.add(new Chunk(ov.getRibBeneficiaire(), blueBoldFont));
+        compteLine.setSpacingAfter(8);
+        document.add(compteLine);
+        
+        // Motif
+        Paragraph motifLine = new Paragraph();
+        motifLine.add(new Chunk("Motif : ", labelFont));
+        String motif = ov.getMotif() != null ? ov.getMotif() : "";
+        if (isExpress) {
+            motifLine.add(new Chunk(motif, redBoldFont));
+        } else {
+            motifLine.add(new Chunk(motif, valueFont));
+        }
+        motifLine.setSpacingAfter(20);
+        document.add(motifLine);
+    }
+    
+    private void addOrdreVirementSignature(Document document) throws DocumentException {
+        Font signatureFont = FontFactory.getFont(FontFactory.HELVETICA, 11, Color.BLACK);
+        Paragraph signature = new Paragraph("Signature du donneur d'ordre", signatureFont);
+        signature.setAlignment(Element.ALIGN_RIGHT);
+        signature.setSpacingAfter(10);
+        document.add(signature);
+    }
+    
+    // Page event pour footer et logo sur toutes les pages
+    private class OrdreVirementFooterPageEvent extends PdfPageEventHelper {
+        @Override
+        public void onEndPage(PdfWriter writer, Document document) {
+            try {
+                // Footer avec informations société
+                addOrdreVirementFooter(writer, document);
+                
+                // Logo sur les pages suivantes (page > 1)
+                if (writer.getPageNumber() > 1) {
+                    addLogoToPage(writer, document);
+                }
+            } catch (Exception e) {
+                log.error("Error in OrdreVirementFooterPageEvent", e);
+            }
+        }
+        
+        private void addOrdreVirementFooter(PdfWriter writer, Document document) throws DocumentException {
+            PdfContentByte canvas = writer.getDirectContent();
+            float yPosition = document.bottomMargin() + 2f;
+            
+            // Récupérer les informations société
+            com.bf4invest.model.CompanyInfo info = companyInfoService.getCompanyInfo();
+            
+            // Créer un tableau pour le footer avec bordure
+            PdfPTable footerTable = new PdfPTable(1);
+            footerTable.setTotalWidth(document.getPageSize().getWidth() - document.leftMargin() - document.rightMargin());
+            footerTable.setLockedWidth(true);
+            
+            PdfPCell footerCell = new PdfPCell();
+            footerCell.setBorder(Rectangle.BOX);
+            footerCell.setBorderColor(Color.LIGHT_GRAY);
+            footerCell.setBackgroundColor(new Color(240, 240, 240));
+            footerCell.setPadding(8);
+            footerCell.setHorizontalAlignment(Element.ALIGN_CENTER);
+            
+            Font footerFont = FontFactory.getFont(FontFactory.HELVETICA, 9, Color.BLACK);
+            
+            String raison = info.getRaisonSociale() != null ? info.getRaisonSociale() : "";
+            String capital = info.getCapital() != null ? info.getCapital() : "";
+            String tel = info.getTelephone() != null ? info.getTelephone() : "";
+            String ville = info.getVille() != null ? info.getVille() : "";
+            String rc = info.getRc() != null ? info.getRc() : "";
+            String ifFiscal = info.getIfFiscal() != null ? info.getIfFiscal() : "";
+            String tp = info.getTp() != null ? info.getTp() : "";
+            
+            Paragraph footer1 = new Paragraph(raison + " au capital de " + capital + " Dhs, Tél : " + tel, footerFont);
+            footer1.setAlignment(Element.ALIGN_CENTER);
+            footer1.setSpacingAfter(3);
+            
+            Paragraph footer2 = new Paragraph("RC de " + ville + ": " + rc + " - IF: " + ifFiscal + " - TP: " + tp, footerFont);
+            footer2.setAlignment(Element.ALIGN_CENTER);
+            
+            footerCell.addElement(footer1);
+            footerCell.addElement(footer2);
+            footerTable.addCell(footerCell);
+            
+            footerTable.writeSelectedRows(0, -1, document.leftMargin(), yPosition, canvas);
+        }
+        
+        private void addLogoToPage(PdfWriter writer, Document document) {
+            try {
+                float logoWidth = 100f;
+                float logoHeight = 75f;
+                float xPosition = document.leftMargin();
+                float yPosition = document.getPageSize().getHeight() - 2f;
+                
+                PdfPTable logoTable = new PdfPTable(1);
+                logoTable.setTotalWidth(logoWidth);
+                logoTable.setLockedWidth(true);
+                
+                PdfPCell logoCell = createLogoCell(writer, logoWidth, logoHeight);
+                logoTable.addCell(logoCell);
+                
+                PdfContentByte canvas = writer.getDirectContent();
+                logoTable.writeSelectedRows(0, -1, xPosition, yPosition, canvas);
+            } catch (Exception e) {
+                log.error("Error adding logo to Ordre Virement page", e);
+            }
         }
     }
 }

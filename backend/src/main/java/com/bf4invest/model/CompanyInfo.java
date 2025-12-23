@@ -47,6 +47,15 @@ public class CompanyInfo {
     /** Numéro de taxe professionnelle */
     private String tp;
 
+    /** Banque de l'entreprise (ex: ATTIJARI WAFABANK) */
+    private String banque;
+
+    /** Agence bancaire (ex: CENTRE D AFFAIRE MEKNES) */
+    private String agence;
+
+    /** RIB ou Numéro de compte (ex: 000542H000001759) */
+    private String rib;
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

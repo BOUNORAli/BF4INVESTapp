@@ -221,6 +221,35 @@ import { StoreService } from '../../services/store.service';
               </div>
               
               <div class="pt-4 border-t border-slate-100">
+                <h3 class="text-sm font-bold text-slate-700 mb-3">Informations Bancaires</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-1">Banque</label>
+                    <input type="text" [(ngModel)]="companyInfo().banque" 
+                           placeholder="Ex: ATTIJARI WAFABANK"
+                           class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition">
+                    <p class="text-xs text-slate-500 mt-1">Nom de la banque principale</p>
+                  </div>
+                  
+                  <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-1">Agence</label>
+                    <input type="text" [(ngModel)]="companyInfo().agence" 
+                           placeholder="Ex: CENTRE D AFFAIRE MEKNES"
+                           class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition">
+                    <p class="text-xs text-slate-500 mt-1">Nom de l'agence bancaire</p>
+                  </div>
+                  
+                  <div class="md:col-span-2">
+                    <label class="block text-sm font-semibold text-slate-700 mb-1">RIB / Numéro de Compte</label>
+                    <input type="text" [(ngModel)]="companyInfo().rib" 
+                           placeholder="Ex: 000542H000001759"
+                           class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition">
+                    <p class="text-xs text-slate-500 mt-1">RIB ou numéro de compte utilisé pour les ordres de virement</p>
+                  </div>
+                </div>
+              </div>
+              
+              <div class="pt-4 border-t border-slate-100">
                 <button (click)="saveCompanyInfo()" 
                         class="w-full px-4 py-2 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition shadow-lg shadow-blue-600/20">
                   Enregistrer les Informations
@@ -299,7 +328,10 @@ export class SettingsComponent implements OnInit {
     telephone: '',
     rc: '',
     ifFiscal: '',
-    tp: ''
+    tp: '',
+    banque: '',
+    agence: '',
+    rib: ''
   });
   isLoadingCompanyInfo = signal(false);
   

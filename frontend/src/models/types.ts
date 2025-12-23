@@ -30,6 +30,7 @@ export interface Supplier {
   email: string;
   address: string;
   rib?: string; // RIB du fournisseur pour les virements
+  banque?: string; // Banque du fournisseur
   dateRegulariteFiscale?: string; // Date de régularité fiscale (format ISO: YYYY-MM-DD)
 }
 
@@ -273,6 +274,7 @@ export interface OrdreVirement {
   montant: number;
   beneficiaireId: string;
   nomBeneficiaire?: string;
+  banqueBeneficiaire?: string; // Banque du bénéficiaire
   ribBeneficiaire: string;
   motif: string;
   facturesIds: string[]; // Pour rétrocompatibilité

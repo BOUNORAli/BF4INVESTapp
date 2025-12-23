@@ -77,6 +77,15 @@ public class CompanyInfoService {
         if (info.getTp() != null) {
             existing.setTp(info.getTp());
         }
+        if (info.getBanque() != null) {
+            existing.setBanque(info.getBanque());
+        }
+        if (info.getAgence() != null) {
+            existing.setAgence(info.getAgence());
+        }
+        if (info.getRib() != null) {
+            existing.setRib(info.getRib());
+        }
         existing.setUpdatedAt(LocalDateTime.now());
 
         return repository.save(existing);

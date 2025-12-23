@@ -25,6 +25,7 @@ public class OrdreVirement {
     private Double montant;             // Montant total
     private String beneficiaireId;      // ID du fournisseur
     private String nomBeneficiaire;     // Nom du fournisseur (dénormalisé)
+    private String banqueBeneficiaire;  // Banque du bénéficiaire
     private String ribBeneficiaire;    // RIB du bénéficiaire
     private String motif;               // Libellé/Motif
     private List<String> facturesIds;   // IDs des factures concernées

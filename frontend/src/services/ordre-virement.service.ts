@@ -55,6 +55,10 @@ export class OrdreVirementService {
     );
   }
 
+  downloadOrdreVirementPDF(id: string): Observable<Blob> {
+    return this.api.downloadFile(`/pdf/ordres-virement/${id}`);
+  }
+
   private mapOrdreVirement(ov: any): OrdreVirement {
     return {
       id: ov.id,
@@ -63,6 +67,7 @@ export class OrdreVirementService {
       montant: ov.montant || 0,
       beneficiaireId: ov.beneficiaireId || '',
       nomBeneficiaire: ov.nomBeneficiaire,
+      banqueBeneficiaire: ov.banqueBeneficiaire,
       ribBeneficiaire: ov.ribBeneficiaire || '',
       motif: ov.motif || '',
       facturesIds: ov.facturesIds || [],
@@ -80,6 +85,7 @@ export class OrdreVirementService {
       dateOV: ov.dateOV,
       montant: ov.montant,
       beneficiaireId: ov.beneficiaireId,
+      banqueBeneficiaire: ov.banqueBeneficiaire,
       ribBeneficiaire: ov.ribBeneficiaire,
       motif: ov.motif,
       facturesIds: ov.facturesIds,

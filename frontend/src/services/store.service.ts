@@ -40,7 +40,25 @@ export interface Supplier {
   email: string;
   address: string;
   rib?: string; // RIB du fournisseur pour les virements
+  banque?: string; // Banque du fournisseur
   dateRegulariteFiscale?: string; // Date de r├®gularit├® fiscale (format ISO: YYYY-MM-DD)
+}
+
+export interface CompanyInfo {
+  id?: string;
+  raisonSociale: string;
+  ville: string;
+  ice: string;
+  capital: string;
+  telephone: string;
+  rc: string;
+  ifFiscal: string;
+  tp: string;
+  banque?: string;
+  agence?: string;
+  rib?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface LineItem {
@@ -896,6 +914,23 @@ export class StoreService {
       }
     } catch (error) {
       this.showToast('Erreur lors de l\'annulation', 'error');
+      throw error;
+    }
+  }
+
+  async downloadOrdreVirementPDF(ovId: string): Promise<void> {
+    try {
+      this.showToast('Génération du PDF en cours...', 'info');
+      const blob = await this.ordreVirementService.downloadOrdreVirementPDF(ovId).toPromise();
+      if (blob) {
+        const ov = this.ordresVirement().find(o => o.id === ovId);
+        const fileName = ov?.numeroOV ? `OV-${ov.numeroOV}.pdf` : `OV-${ovId}.pdf`;
+        await this.handlePDFDownload(blob, fileName);
+        this.showToast('PDF généré avec succès', 'success');
+      }
+    } catch (error) {
+      console.error('Error downloading Ordre Virement PDF:', error);
+      this.showToast('Erreur lors de la génération du PDF', 'error');
       throw error;
     }
   }

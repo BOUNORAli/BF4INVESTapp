@@ -71,6 +71,10 @@ public class OrdreVirementService {
             if ((ov.getRibBeneficiaire() == null || ov.getRibBeneficiaire().isEmpty()) && supplier.getRib() != null) {
                 ov.setRibBeneficiaire(supplier.getRib());
             }
+            // Auto-remplir la banque bénéficiaire si non fournie et disponible dans le fournisseur
+            if ((ov.getBanqueBeneficiaire() == null || ov.getBanqueBeneficiaire().isEmpty()) && supplier.getBanque() != null) {
+                ov.setBanqueBeneficiaire(supplier.getBanque());
+            }
         }
         
         // Initialiser le statut si non fourni
@@ -115,6 +119,7 @@ public class OrdreVirementService {
                     existing.setMontant(ov.getMontant());
                     existing.setBeneficiaireId(ov.getBeneficiaireId());
                     existing.setRibBeneficiaire(ov.getRibBeneficiaire());
+                    existing.setBanqueBeneficiaire(ov.getBanqueBeneficiaire());
                     existing.setMotif(ov.getMotif());
                     existing.setFacturesIds(ov.getFacturesIds());
                     existing.setFacturesMontants(ov.getFacturesMontants());
@@ -144,6 +149,10 @@ public class OrdreVirementService {
                         // Auto-remplir le RIB si non fourni et disponible dans le fournisseur
                         if ((existing.getRibBeneficiaire() == null || existing.getRibBeneficiaire().isEmpty()) && supplier.getRib() != null) {
                             existing.setRibBeneficiaire(supplier.getRib());
+                        }
+                        // Auto-remplir la banque bénéficiaire si non fournie et disponible dans le fournisseur
+                        if ((existing.getBanqueBeneficiaire() == null || existing.getBanqueBeneficiaire().isEmpty()) && supplier.getBanque() != null) {
+                            existing.setBanqueBeneficiaire(supplier.getBanque());
                         }
                     }
                     

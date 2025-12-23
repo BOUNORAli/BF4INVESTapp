@@ -63,6 +63,7 @@ export class PartnerService {
         email: supplier.email,
         adresse: supplier.address,
         rib: supplier.rib || null,
+        banque: supplier.banque || null,
         modesPaiementAcceptes: ['virement', 'cheque', 'LCN', 'compensation'],
         dateRegulariteFiscale: supplier.dateRegulariteFiscale || null
     };
@@ -80,6 +81,7 @@ export class PartnerService {
         email: supplier.email,
         adresse: supplier.address,
         rib: supplier.rib || null,
+        banque: supplier.banque || null,
         dateRegulariteFiscale: supplier.dateRegulariteFiscale || null
     };
     const updated = await this.api.put<any>(`/fournisseurs/${supplier.id}`, payload).toPromise();
@@ -116,6 +118,7 @@ export class PartnerService {
       email: s.email,
       address: s.adresse || s.address,
       rib: s.rib,
+      banque: s.banque,
       dateRegulariteFiscale: s.dateRegulariteFiscale || undefined
     };
   }

@@ -3,10 +3,12 @@ package com.bf4invest.controller;
 import com.bf4invest.model.BandeCommande;
 import com.bf4invest.model.FactureAchat;
 import com.bf4invest.model.FactureVente;
+import com.bf4invest.model.OrdreVirement;
 import com.bf4invest.pdf.PdfService;
 import com.bf4invest.service.BandeCommandeService;
 import com.bf4invest.service.FactureAchatService;
 import com.bf4invest.service.FactureVenteService;
+import com.bf4invest.service.OrdreVirementService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -22,6 +24,7 @@ public class PdfController {
     private final BandeCommandeService bcService;
     private final FactureVenteService factureVenteService;
     private final FactureAchatService factureAchatService;
+    private final OrdreVirementService ordreVirementService;
     
     @GetMapping("/bandes-commandes/{id}")
     public ResponseEntity<byte[]> generateBCPdf(@PathVariable String id) {
@@ -96,6 +99,28 @@ public class PdfController {
             String blNum = facture.getNumeroFactureVente() != null ? 
                 "BL-" + facture.getNumeroFactureVente() : "BL-" + id;
             headers.setContentDispositionFormData("attachment", blNum + ".pdf");
+            
+            return ResponseEntity.ok()
+                    .headers(headers)
+                    .body(pdfBytes);
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+    
+    @GetMapping("/ordres-virement/{id}")
+    public ResponseEntity<byte[]> generateOrdreVirementPdf(@PathVariable String id) {
+        try {
+            OrdreVirement ov = ordreVirementService.findById(id)
+                    .orElseThrow(() -> new RuntimeException("Ordre de virement not found"));
+            
+            byte[] pdfBytes = pdfService.generateOrdreVirement(ov);
+            
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_PDF);
+            String fileName = ov.getNumeroOV() != null ? 
+                "OV-" + ov.getNumeroOV() + ".pdf" : "OV-" + id + ".pdf";
+            headers.setContentDispositionFormData("attachment", fileName);
             
             return ResponseEntity.ok()
                     .headers(headers)

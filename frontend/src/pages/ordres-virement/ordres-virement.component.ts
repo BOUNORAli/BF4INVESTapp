@@ -147,6 +147,9 @@ import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, FormsModule } 
                           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                         </button>
                       }
+                      <button (click)="downloadPDF(ov.id!)" class="p-2 text-slate-400 hover:text-purple-600 hover:bg-purple-50 rounded-full transition-all" title="Télécharger PDF">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                      </button>
                       <button (click)="editOV(ov)" class="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-all" title="Modifier">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
                       </button>
@@ -245,6 +248,11 @@ import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, FormsModule } 
               </div>
 
               <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Banque Bénéficiaire <span class="text-red-500">*</span></label>
+                <input type="text" formControlName="banqueBeneficiaire" placeholder="Banque du bénéficiaire (auto-rempli depuis le fournisseur)" class="w-full p-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 outline-none">
+              </div>
+
+              <div>
                 <label class="block text-xs font-semibold text-slate-600 mb-1">Banque Émettrice <span class="text-red-500">*</span></label>
                 <input type="text" formControlName="banqueEmettrice" placeholder="Nom de la banque" class="w-full p-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 outline-none">
               </div>
@@ -327,6 +335,7 @@ export class OrdresVirementComponent implements OnInit {
       dateExecution: [''],
       beneficiaireId: ['', Validators.required],
       ribBeneficiaire: ['', Validators.required],
+      banqueBeneficiaire: ['', Validators.required],
       banqueEmettrice: ['', Validators.required],
       motif: ['', Validators.required],
       type: ['NORMAL', Validators.required],
@@ -450,6 +459,7 @@ export class OrdresVirementComponent implements OnInit {
       dateExecution: ov.dateExecution || '',
       beneficiaireId: ov.beneficiaireId,
       ribBeneficiaire: ov.ribBeneficiaire,
+      banqueBeneficiaire: ov.banqueBeneficiaire || '',
       banqueEmettrice: ov.banqueEmettrice,
       motif: ov.motif,
       type: ov.type || 'NORMAL',
@@ -461,8 +471,17 @@ export class OrdresVirementComponent implements OnInit {
     const beneficiaireId = this.form.get('beneficiaireId')?.value;
     if (beneficiaireId) {
       const supplier = this.store.suppliers().find(s => s.id === beneficiaireId);
-      if (supplier && supplier.rib) {
-        this.form.patchValue({ ribBeneficiaire: supplier.rib });
+      if (supplier) {
+        const updates: any = {};
+        if (supplier.rib) {
+          updates.ribBeneficiaire = supplier.rib;
+        }
+        if (supplier.banque) {
+          updates.banqueBeneficiaire = supplier.banque;
+        }
+        if (Object.keys(updates).length > 0) {
+          this.form.patchValue(updates);
+        }
       }
     }
   }
@@ -564,6 +583,14 @@ export class OrdresVirementComponent implements OnInit {
       } catch (error) {
         console.error('Error deleting ordre virement:', error);
       }
+    }
+  }
+
+  async downloadPDF(id: string) {
+    try {
+      await this.store.downloadOrdreVirementPDF(id);
+    } catch (error) {
+      console.error('Error downloading PDF:', error);
     }
   }
 
