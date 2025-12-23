@@ -100,7 +100,7 @@ import type { BC } from '../../models/types';
             </div>
           </div>
 
-          <!-- Card 1bis: Livraison -->
+          <!-- Card 1bis: Livraison & Contact -->
           <div class="bg-white p-4 md:p-6 rounded-xl shadow-sm border border-slate-100">
             <h2 class="text-base font-bold text-slate-800 mb-6 flex items-center gap-2">
               <span class="w-6 h-6 rounded-full bg-amber-50 text-amber-700 flex items-center justify-center text-xs font-bold">1B</span>
