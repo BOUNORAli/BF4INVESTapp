@@ -122,6 +122,12 @@ import type { BC } from '../../models/types';
                 <input formControlName="responsableLivraison" type="text" placeholder="Ex: BOUNOR BOUBKER"
                        class="w-full px-4 py-2.5 border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-slate-700">
               </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Délai de paiement</label>
+                <input formControlName="delaiPaiement" type="text" placeholder="Ex: 120J"
+                       class="w-full px-4 py-2.5 border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-slate-700">
+                <p class="text-xs text-slate-400 mt-1">Nombre de jours (ex: 120J, 30J)</p>
+              </div>
             </div>
           </div>
 
@@ -530,7 +536,8 @@ export class BcFormComponent implements OnInit {
       date: [new Date().toISOString().split('T')[0], Validators.required],
       supplierId: ['', Validators.required],
       status: ['draft', Validators.required],
-      paymentMode: [''],
+      paymentMode: [''], // Type de paiement (LCN, chèque, etc.)
+      delaiPaiement: [''], // Délai de paiement (ex: "120J")
       lieuLivraison: [''],
       conditionLivraison: [''],
       responsableLivraison: [''],
@@ -577,6 +584,7 @@ export class BcFormComponent implements OnInit {
       supplierId: bc.supplierId,
       status: bc.status,
       paymentMode: bc.paymentMode || '',
+      delaiPaiement: bc.delaiPaiement || '',
       lieuLivraison: bc.lieuLivraison || '',
       conditionLivraison: bc.conditionLivraison || '',
       responsableLivraison: bc.responsableLivraison || '',
@@ -1017,6 +1025,7 @@ export class BcFormComponent implements OnInit {
       supplierId: formVal.supplierId,
       status: formVal.status,
       paymentMode: formVal.paymentMode || undefined,
+      delaiPaiement: formVal.delaiPaiement || undefined,
       lieuLivraison: formVal.lieuLivraison || undefined,
       conditionLivraison: formVal.conditionLivraison || undefined,
       responsableLivraison: formVal.responsableLivraison || undefined,

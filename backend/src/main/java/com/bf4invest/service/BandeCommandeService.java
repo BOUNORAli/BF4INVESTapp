@@ -72,6 +72,10 @@ public class BandeCommandeService {
                     if (bc.getModePaiement() != null) {
                         existing.setModePaiement(bc.getModePaiement());
                     }
+                    
+                    if (bc.getDelaiPaiement() != null) {
+                        existing.setDelaiPaiement(bc.getDelaiPaiement());
+                    }
 
                     // Infos livraison (nouveaux champs)
                     if (bc.getLieuLivraison() != null) {

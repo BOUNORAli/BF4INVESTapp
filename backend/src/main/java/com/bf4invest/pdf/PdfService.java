@@ -677,11 +677,11 @@ public class PdfService {
         addInfoRowWithBackground(infoTable, "RESPONSABLE A CONTACTER A LA\nLIVRAISON", responsable,
             labelFont, valueFontRed);
         
-        // MODE PAIEMENT (récupérer depuis la BC ou utiliser une valeur par défaut)
-        String modePaiement = bc.getModePaiement() != null && !bc.getModePaiement().isEmpty() 
-            ? bc.getModePaiement() 
+        // MODE PAIEMENT (délai de paiement en jours, ex: "120J")
+        String delaiPaiement = bc.getDelaiPaiement() != null && !bc.getDelaiPaiement().isEmpty() 
+            ? bc.getDelaiPaiement() 
             : "120J"; // Valeur par défaut
-        addInfoRowWithBackground(infoTable, "MODE PAIEMENT :", modePaiement, labelFont, valueFontRed);
+        addInfoRowWithBackground(infoTable, "MODE PAIEMENT :", delaiPaiement, labelFont, valueFontRed);
         
         document.add(infoTable);
     }

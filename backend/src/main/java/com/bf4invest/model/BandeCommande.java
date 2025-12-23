@@ -48,7 +48,8 @@ public class BandeCommande {
     
     private String etat; // brouillon, envoyee, complete
     private String notes;
-    private String modePaiement; // virement, cheque, LCN, compensation, etc.
+    private String modePaiement; // virement, cheque, LCN, compensation, etc. (type de paiement)
+    private String delaiPaiement; // Délai de paiement en jours (ex: "120J", "30J", etc.)
 
     // Infos livraison (doivent venir du BC pour le PDF)
     private String lieuLivraison;

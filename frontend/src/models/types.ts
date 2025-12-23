@@ -87,7 +87,8 @@ export interface BC {
   date: string;
   supplierId: string;
   status: 'draft' | 'sent' | 'completed';
-  paymentMode?: string;
+  paymentMode?: string; // Type de paiement (LCN, chèque, virement, etc.)
+  delaiPaiement?: string; // Délai de paiement en jours (ex: "120J", "30J")
   lieuLivraison?: string;
   conditionLivraison?: string;
   responsableLivraison?: string;

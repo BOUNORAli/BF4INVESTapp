@@ -72,6 +72,10 @@ export class BcService {
     if (bc.paymentMode) {
         payload.modePaiement = bc.paymentMode;
     }
+    
+    if (bc.delaiPaiement) {
+        payload.delaiPaiement = bc.delaiPaiement;
+    }
 
     // Infos livraison (BC)
     if (bc.lieuLivraison) payload.lieuLivraison = bc.lieuLivraison;
@@ -139,6 +143,10 @@ export class BcService {
     
     if (updatedBc.paymentMode) {
         payload.modePaiement = updatedBc.paymentMode;
+    }
+    
+    if (updatedBc.delaiPaiement) {
+        payload.delaiPaiement = updatedBc.delaiPaiement;
     }
 
     // Infos livraison (BC)
@@ -234,6 +242,7 @@ export class BcService {
       ajouterAuStock: bc.ajouterAuStock || false,
       status: bc.etat || bc.status,
       paymentMode: bc.modePaiement || bc.paymentMode,
+      delaiPaiement: bc.delaiPaiement,
       lieuLivraison: bc.lieuLivraison,
       conditionLivraison: bc.conditionLivraison,
       responsableLivraison: bc.responsableLivraison,
