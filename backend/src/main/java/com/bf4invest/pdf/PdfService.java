@@ -73,7 +73,8 @@ public class PdfService {
     }
     
     public byte[] generateBC(BandeCommande bc) throws DocumentException, IOException {
-        Document document = new Document(PageSize.A4, 40f, 40f, 60f, 60f);
+        // Marge inférieure augmentée pour laisser de l'espace au footer
+        Document document = new Document(PageSize.A4, 40f, 40f, 60f, 70f);
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         PdfWriter writer = PdfWriter.getInstance(document, baos);
         
@@ -760,8 +761,9 @@ public class PdfService {
                 
                 // Positionner le footer en bas de page
                 PdfContentByte canvas = writer.getDirectContent();
-                float footerHeight = 60f;
-                float yPosition = document.bottomMargin() + footerHeight;
+                // Positionner le bas du tableau juste au-dessus de la marge inférieure
+                // Le système de coordonnées iText commence en bas à gauche
+                float yPosition = document.bottomMargin() + 2f; // 2 points de marge minimale
                 footerTable.writeSelectedRows(0, -1, document.leftMargin(), yPosition, canvas);
             } catch (DocumentException e) {
                 log.error("Error adding BC footer to page", e);
