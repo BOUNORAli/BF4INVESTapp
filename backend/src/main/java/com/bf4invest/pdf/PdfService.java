@@ -132,6 +132,12 @@ public class PdfService {
         Client client = facture.getClientId() != null ? 
             clientRepository.findById(facture.getClientId()).orElse(null) : null;
         
+        if (client != null) {
+            log.debug("Client récupéré pour facture: {} - ICE: {}", client.getNom(), client.getIce());
+        } else {
+            log.warn("Aucun client trouvé pour la facture ID: {}", facture.getId());
+        }
+        
         // En-tête avec logo
         addFactureHeader(document, facture, client, writer);
         
@@ -901,7 +907,17 @@ public class PdfService {
         iceLabel.setSpacingBefore(5);
         clientCell.addElement(iceLabel);
         
-        String ice = client != null && client.getIce() != null ? client.getIce() : "";
+        // Récupérer l'ICE depuis le client dans la base de données
+        String ice = "";
+        if (client != null) {
+            ice = client.getIce() != null ? client.getIce() : "";
+            if (ice.isEmpty()) {
+                log.warn("Client {} n'a pas d'ICE défini", client.getNom());
+            }
+        } else {
+            log.warn("Client est null, impossible de récupérer l'ICE");
+        }
+        
         Paragraph iceText = new Paragraph(ice, 
             FontFactory.getFont(FontFactory.HELVETICA, 9));
         // Souligner l'ICE comme dans l'exemple
