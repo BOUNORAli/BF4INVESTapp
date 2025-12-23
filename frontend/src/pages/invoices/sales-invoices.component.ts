@@ -608,6 +608,7 @@ import { RouterLink } from '@angular/router';
                             <th class="px-4 py-3 text-left font-semibold text-slate-700">Date Prévue</th>
                             <th class="px-4 py-3 text-right font-semibold text-slate-700">Montant</th>
                             <th class="px-4 py-3 text-left font-semibold text-slate-700">Statut</th>
+                            <th class="px-4 py-3 text-left font-semibold text-slate-700">Paiement</th>
                             <th class="px-4 py-3 text-left font-semibold text-slate-700">Date de Rappel</th>
                             <th class="px-4 py-3 text-left font-semibold text-slate-700">Notes</th>
                             <th class="px-4 py-3 text-center font-semibold text-slate-700">Actions</th>
@@ -620,14 +621,27 @@ import { RouterLink } from '@angular/router';
                               <td class="px-4 py-3 text-right font-bold text-blue-600">{{ prev.montantPrevu | number:'1.2-2' }} MAD</td>
                               <td class="px-4 py-3">
                                 <span class="px-2 py-1 rounded text-xs font-medium"
-                                      [class.bg-blue-50]="prev.statut === 'PREVU'"
-                                      [class.text-blue-700]="prev.statut === 'PREVU'"
-                                      [class.bg-emerald-50]="prev.statut === 'REALISE'"
-                                      [class.text-emerald-700]="prev.statut === 'REALISE'"
+                                      [class.bg-blue-50]="prev.statut === 'PREVU' || prev.statut === 'EN_ATTENTE'"
+                                      [class.text-blue-700]="prev.statut === 'PREVU' || prev.statut === 'EN_ATTENTE'"
+                                      [class.bg-emerald-50]="prev.statut === 'REALISE' || prev.statut === 'PAYEE'"
+                                      [class.text-emerald-700]="prev.statut === 'REALISE' || prev.statut === 'PAYEE'"
+                                      [class.bg-orange-50]="prev.statut === 'PARTIELLE'"
+                                      [class.text-orange-700]="prev.statut === 'PARTIELLE'"
                                       [class.bg-red-50]="prev.statut === 'EN_RETARD'"
                                       [class.text-red-700]="prev.statut === 'EN_RETARD'">
-                                  {{ prev.statut }}
+                                  {{ getPrevisionStatutLabel(prev.statut) }}
                                 </span>
+                              </td>
+                              <td class="px-4 py-3 text-xs">
+                                @if (prev.montantPaye !== undefined && prev.montantPaye > 0) {
+                                  <div class="text-emerald-600 font-medium">Payé: {{ prev.montantPaye | number:'1.2-2' }} MAD</div>
+                                }
+                                @if (prev.montantRestant !== undefined && prev.montantRestant > 0) {
+                                  <div class="text-slate-500">Restant: {{ prev.montantRestant | number:'1.2-2' }} MAD</div>
+                                }
+                                @if (!prev.montantPaye || prev.montantPaye === 0) {
+                                  <span class="text-slate-400">Non payé</span>
+                                }
                               </td>
                               <td class="px-4 py-3">
                                 @if (prev.dateRappel) {
@@ -1003,6 +1017,25 @@ export class SalesInvoicesComponent {
       case 'pending': return 'inline-flex items-center bg-amber-100 text-amber-800 text-xs px-3 py-1.5 rounded-full font-bold border border-amber-200 shadow-sm whitespace-nowrap';
       case 'overdue': return 'inline-flex items-center bg-red-100 text-red-800 text-xs px-3 py-1.5 rounded-full font-bold border border-red-200 shadow-sm whitespace-nowrap';
       default: return 'inline-flex items-center text-xs px-3 py-1.5 rounded-full font-bold whitespace-nowrap';
+    }
+  }
+
+  getPrevisionStatutLabel(statut: string): string {
+    switch (statut) {
+      case 'PAYEE':
+        return 'Payée';
+      case 'PARTIELLE':
+        return 'Partielle';
+      case 'EN_ATTENTE':
+        return 'En attente';
+      case 'PREVU':
+        return 'Prévu';
+      case 'REALISE':
+        return 'Réalisé';
+      case 'EN_RETARD':
+        return 'En retard';
+      default:
+        return statut;
     }
   }
 

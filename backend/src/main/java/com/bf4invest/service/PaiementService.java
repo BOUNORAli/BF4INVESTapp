@@ -162,6 +162,9 @@ public class PaiementService {
                         }
                         facture.getPaiements().add(paiement);
                         
+                        // Appliquer la déduction automatique des prévisions
+                        deduirePrevisions(facture.getPrevisionsPaiement(), paiement.getMontant() != null ? paiement.getMontant() : 0.0);
+                        
                         factureAchatRepository.save(facture);
                     });
         }
@@ -188,8 +191,89 @@ public class PaiementService {
                         }
                         facture.getPaiements().add(paiement);
                         
+                        // Appliquer la déduction automatique des prévisions
+                        deduirePrevisions(facture.getPrevisionsPaiement(), paiement.getMontant() != null ? paiement.getMontant() : 0.0);
+                        
                         factureVenteRepository.save(facture);
                     });
+        }
+    }
+    
+    /**
+     * Déduit automatiquement les prévisions selon la logique FIFO par date d'échéance.
+     * Les prévisions sont triées par date d'échéance (la plus proche en premier).
+     * Le montant du paiement est déduit des prévisions dans l'ordre jusqu'à épuisement.
+     */
+    private void deduirePrevisions(List<com.bf4invest.model.PrevisionPaiement> previsions, Double montantPaiement) {
+        if (previsions == null || previsions.isEmpty() || montantPaiement == null || montantPaiement <= 0) {
+            return;
+        }
+        
+        // Initialiser les champs si nécessaire
+        for (com.bf4invest.model.PrevisionPaiement prevision : previsions) {
+            if (prevision.getMontantPaye() == null) {
+                prevision.setMontantPaye(0.0);
+            }
+            if (prevision.getMontantRestant() == null && prevision.getMontantPrevu() != null) {
+                prevision.setMontantRestant(prevision.getMontantPrevu());
+            }
+            if (prevision.getStatut() == null || prevision.getStatut().equals("PREVU") || prevision.getStatut().equals("EN_RETARD")) {
+                // Ne traiter que les prévisions non encore payées
+                if (prevision.getMontantRestant() == null || prevision.getMontantRestant() > 0) {
+                    prevision.setStatut("EN_ATTENTE");
+                }
+            }
+        }
+        
+        // Trier les prévisions par date d'échéance (la plus proche en premier)
+        List<com.bf4invest.model.PrevisionPaiement> previsionsTriees = previsions.stream()
+                .filter(p -> p.getDatePrevue() != null)
+                .sorted((p1, p2) -> p1.getDatePrevue().compareTo(p2.getDatePrevue()))
+                .collect(java.util.stream.Collectors.toList());
+        
+        // Ajouter les prévisions sans date à la fin
+        List<com.bf4invest.model.PrevisionPaiement> previsionsSansDate = previsions.stream()
+                .filter(p -> p.getDatePrevue() == null)
+                .collect(java.util.stream.Collectors.toList());
+        previsionsTriees.addAll(previsionsSansDate);
+        
+        double montantRestant = montantPaiement;
+        
+        // Parcourir les prévisions dans l'ordre et déduire le montant
+        for (com.bf4invest.model.PrevisionPaiement prevision : previsionsTriees) {
+            if (montantRestant <= 0) {
+                break;
+            }
+            
+            // Initialiser montantRestant si null
+            if (prevision.getMontantRestant() == null) {
+                if (prevision.getMontantPrevu() != null) {
+                    prevision.setMontantRestant(prevision.getMontantPrevu());
+                } else {
+                    continue;
+                }
+            }
+            
+            double montantRestantPrevision = prevision.getMontantRestant();
+            
+            if (montantRestantPrevision <= 0) {
+                // Prévision déjà payée, passer à la suivante
+                continue;
+            }
+            
+            if (montantRestant >= montantRestantPrevision) {
+                // Le paiement couvre entièrement cette prévision
+                prevision.setMontantPaye(prevision.getMontantPaye() + montantRestantPrevision);
+                prevision.setMontantRestant(0.0);
+                prevision.setStatut("PAYEE");
+                montantRestant -= montantRestantPrevision;
+            } else {
+                // Le paiement couvre partiellement cette prévision
+                prevision.setMontantPaye(prevision.getMontantPaye() + montantRestant);
+                prevision.setMontantRestant(montantRestantPrevision - montantRestant);
+                prevision.setStatut("PARTIELLE");
+                montantRestant = 0.0;
+            }
         }
     }
 }

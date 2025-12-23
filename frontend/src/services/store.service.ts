@@ -5,6 +5,8 @@ import { ProductService } from './product.service';
 import { PartnerService } from './partner.service';
 import { BcService } from './bc.service';
 import { InvoiceService } from './invoice.service';
+import { OrdreVirementService } from './ordre-virement.service';
+import { OrdreVirement } from '../models/types';
 
 export interface Product {
   id: string;
@@ -198,9 +200,11 @@ export interface PrevisionPaiement {
   id?: string;
   datePrevue: string;
   montantPrevu: number;
-  statut: 'PREVU' | 'REALISE' | 'EN_RETARD';
+  statut: 'PREVU' | 'REALISE' | 'EN_RETARD' | 'EN_ATTENTE' | 'PAYEE' | 'PARTIELLE';
   notes?: string;
   dateRappel?: string; // Date de rappel optionnelle (format ISO: YYYY-MM-DD)
+  montantPaye?: number; // Montant déjà payé sur cette prévision
+  montantRestant?: number; // Montant restant à payer
 }
 
 export interface PrevisionJournaliere {
@@ -304,6 +308,7 @@ export class StoreService {
   private partnerService = inject(PartnerService);
   private bcService = inject(BcService);
   private invoiceService = inject(InvoiceService);
+  private ordreVirementService = inject(OrdreVirementService);
 
   // --- NOTIFICATIONS SYSTEM (TOASTS) ---
   readonly toasts = this.toastService.toasts;
@@ -422,6 +427,7 @@ export class StoreService {
   readonly suppliers = signal<Supplier[]>([]);
   readonly bcs = signal<BC[]>([]);
   readonly invoices = signal<Invoice[]>([]);
+  readonly ordresVirement = signal<OrdreVirement[]>([]);
   readonly dashboardKPIs = signal<DashboardKpiResponse | null>(null);
   readonly dashboardLoading = signal<boolean>(false);
   readonly payments = signal<Map<string, Payment[]>>(new Map()); // Map<invoiceId, Payment[]>
@@ -804,6 +810,93 @@ export class StoreService {
     }
   }
 
+
+  // --- ACTIONS: ORDRES VIREMENT ---
+  async loadOrdresVirement(params?: {
+    beneficiaireId?: string;
+    statut?: string;
+    dateDebut?: string;
+    dateFin?: string;
+  }): Promise<void> {
+    try {
+      const ordres = await this.ordreVirementService.getOrdresVirement(params).toPromise() || [];
+      this.ordresVirement.set(ordres);
+    } catch (error) {
+      console.error('Error loading ordres virement:', error);
+    }
+  }
+
+  async addOrdreVirement(ov: OrdreVirement): Promise<OrdreVirement> {
+    try {
+      const saved = await this.ordreVirementService.addOrdreVirement(ov).toPromise();
+      if (saved) {
+        this.ordresVirement.update(list => [...list, saved]);
+        this.showToast('Ordre de virement créé', 'success');
+      }
+      return saved!;
+    } catch (error) {
+      this.showToast('Erreur lors de la création', 'error');
+      throw error;
+    }
+  }
+
+  async updateOrdreVirement(id: string, ov: OrdreVirement): Promise<OrdreVirement> {
+    try {
+      const updated = await this.ordreVirementService.updateOrdreVirement(id, ov).toPromise();
+      if (updated) {
+        this.ordresVirement.update(list => 
+          list.map(o => o.id === id ? updated : o)
+        );
+        this.showToast('Ordre de virement modifié', 'success');
+      }
+      return updated!;
+    } catch (error) {
+      this.showToast('Erreur lors de la modification', 'error');
+      throw error;
+    }
+  }
+
+  async deleteOrdreVirement(id: string): Promise<boolean> {
+    try {
+      await this.ordreVirementService.deleteOrdreVirement(id).toPromise();
+      this.ordresVirement.update(list => list.filter(o => o.id !== id));
+      this.showToast('Ordre de virement supprimé', 'info');
+      return true;
+    } catch (error) {
+      this.showToast('Erreur lors de la suppression', 'error');
+      throw error;
+    }
+  }
+
+  async executerOrdreVirement(id: string): Promise<void> {
+    try {
+      const updated = await this.ordreVirementService.executerOrdreVirement(id).toPromise();
+      if (updated) {
+        this.ordresVirement.update(list => 
+          list.map(o => o.id === id ? updated : o)
+        );
+        this.showToast('Ordre de virement exécuté', 'success');
+      }
+    } catch (error) {
+      this.showToast('Erreur lors de l\'exécution', 'error');
+      throw error;
+    }
+  }
+
+  async annulerOrdreVirement(id: string): Promise<void> {
+    try {
+      const updated = await this.ordreVirementService.annulerOrdreVirement(id).toPromise();
+      if (updated) {
+        this.ordresVirement.update(list => 
+          list.map(o => o.id === id ? updated : o)
+        );
+        this.showToast('Ordre de virement annulé', 'info');
+      }
+    } catch (error) {
+      this.showToast('Erreur lors de l\'annulation', 'error');
+      throw error;
+    }
+  }
 
   // --- ACTIONS: INVOICES ---
   async loadInvoices(): Promise<void> {

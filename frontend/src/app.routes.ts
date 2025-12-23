@@ -17,6 +17,7 @@ import { SearchComponent } from './pages/search/search.component';
 import { NotificationsComponent } from './pages/notifications/notifications.component';
 import { AuditComponent } from './pages/audit/audit.component';
 import { PrevisionTresorerieComponent } from './pages/prevision/prevision-tresorerie.component';
+import { OrdresVirementComponent } from './pages/ordres-virement/ordres-virement.component';
 
 const authGuard: CanActivateFn = () => {
   const auth = inject(AuthService);
@@ -50,6 +51,7 @@ export const routes: Routes = [
       { path: 'notifications', component: NotificationsComponent },
       { path: 'audit', component: AuditComponent },
       { path: 'prevision', component: PrevisionTresorerieComponent },
+      { path: 'ordres-virement', component: OrdresVirementComponent },
     ]
   },
   { path: '**', redirectTo: 'dashboard' }

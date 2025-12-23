@@ -367,7 +367,15 @@ public class FactureAchatService {
         
         // Initialiser statut si non fourni
         if (prevision.getStatut() == null) {
-            prevision.setStatut("PREVU");
+            prevision.setStatut("EN_ATTENTE");
+        }
+        
+        // Initialiser les champs de suivi de paiement
+        if (prevision.getMontantPaye() == null) {
+            prevision.setMontantPaye(0.0);
+        }
+        if (prevision.getMontantRestant() == null && prevision.getMontantPrevu() != null) {
+            prevision.setMontantRestant(prevision.getMontantPrevu());
         }
         
         facture.getPrevisionsPaiement().add(prevision);

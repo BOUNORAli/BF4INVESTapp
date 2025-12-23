@@ -190,9 +190,11 @@ export interface PrevisionPaiement {
   id?: string;
   datePrevue: string;
   montantPrevu: number;
-  statut: 'PREVU' | 'REALISE' | 'EN_RETARD';
+  statut: 'PREVU' | 'REALISE' | 'EN_RETARD' | 'EN_ATTENTE' | 'PAYEE' | 'PARTIELLE';
   notes?: string;
   dateRappel?: string; // Date de rappel optionnelle (format ISO: YYYY-MM-DD)
+  montantPaye?: number; // Montant déjà payé sur cette prévision
+  montantRestant?: number; // Montant restant à payer
 }
 
 export interface PrevisionJournaliere {
@@ -255,6 +257,21 @@ export interface Notification {
   time: string;
   read: boolean;
   type: 'info' | 'alert' | 'success';
+}
+
+export interface OrdreVirement {
+  id?: string;
+  numeroOV: string;
+  dateOV: string;
+  montant: number;
+  beneficiaireId: string;
+  nomBeneficiaire?: string;
+  ribBeneficiaire: string;
+  motif: string;
+  facturesIds: string[];
+  banqueEmettrice: string;
+  dateExecution?: string;
+  statut: 'EN_ATTENTE' | 'EXECUTE' | 'ANNULE';
 }
 
 export interface DashboardKpiResponse {
