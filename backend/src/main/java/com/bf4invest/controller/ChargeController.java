@@ -61,12 +61,12 @@ public class ChargeController {
         try {
             Charge updated = chargeService.update(id, charge);
             return ResponseEntity.ok(updated);
-        } catch (RuntimeException e) {
-            return ResponseEntity.notFound().build();
         } catch (IllegalStateException e) {
             return ResponseEntity.status(HttpStatus.CONFLICT).build();
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().build();
+        } catch (RuntimeException e) {
+            return ResponseEntity.notFound().build();
         } catch (Exception e) {
             log.error("Erreur lors de la mise à jour de la charge {}", id, e);
             return ResponseEntity.internalServerError().build();
