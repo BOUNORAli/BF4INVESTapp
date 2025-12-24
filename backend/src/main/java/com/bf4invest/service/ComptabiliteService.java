@@ -607,7 +607,32 @@ public class ComptabiliteService {
     /**
      * Récupère toutes les écritures comptables avec filtres optionnels
      */
-    public List<EcritureComptable> getEcritures(LocalDate dateDebut, LocalDate dateFin, String journal, String exerciceId) {
+    public List<EcritureComptable> getEcritures(LocalDate dateDebut, LocalDate dateFin, String journal, String exerciceId, String pieceType, String pieceId) {
+        // Priorité: filtrage par pièce justificative (le plus spécifique)
+        if (pieceType != null && pieceId != null) {
+            List<EcritureComptable> ecritures = ecritureRepository.findByPieceJustificativeTypeAndPieceJustificativeId(pieceType, pieceId);
+            // Appliquer les filtres additionnels si nécessaire
+            if (dateDebut != null && dateFin != null) {
+                ecritures = ecritures.stream()
+                        .filter(e -> e.getDateEcriture() != null && 
+                                !e.getDateEcriture().isBefore(dateDebut) && 
+                                !e.getDateEcriture().isAfter(dateFin))
+                        .toList();
+            }
+            if (journal != null) {
+                ecritures = ecritures.stream()
+                        .filter(e -> journal.equals(e.getJournal()))
+                        .toList();
+            }
+            if (exerciceId != null) {
+                ecritures = ecritures.stream()
+                        .filter(e -> exerciceId.equals(e.getExerciceId()))
+                        .toList();
+            }
+            return ecritures;
+        }
+        
+        // Filtres classiques
         if (dateDebut != null && dateFin != null) {
             if (exerciceId != null) {
                 return ecritureRepository.findByDateEcritureBetweenAndExerciceId(dateDebut, dateFin, exerciceId);

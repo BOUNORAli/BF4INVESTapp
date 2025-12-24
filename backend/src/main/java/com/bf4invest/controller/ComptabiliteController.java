@@ -86,10 +86,12 @@ public class ComptabiliteController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateDebut,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFin,
             @RequestParam(required = false) String journal,
-            @RequestParam(required = false) String exerciceId
+            @RequestParam(required = false) String exerciceId,
+            @RequestParam(required = false) String pieceType,
+            @RequestParam(required = false) String pieceId
     ) {
         try {
-            return ResponseEntity.ok(comptabiliteService.getEcritures(dateDebut, dateFin, journal, exerciceId));
+            return ResponseEntity.ok(comptabiliteService.getEcritures(dateDebut, dateFin, journal, exerciceId, pieceType, pieceId));
         } catch (Exception e) {
             log.error("Erreur lors du chargement des écritures", e);
             return ResponseEntity.internalServerError().build();
@@ -173,15 +175,20 @@ public class ComptabiliteController {
     public ResponseEntity<byte[]> exportJournal(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateDebut,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFin,
-            @RequestParam(required = false) String exerciceId
+            @RequestParam(required = false) String exerciceId,
+            @RequestParam(required = false) String pieceType,
+            @RequestParam(required = false) String pieceId
     ) {
         try {
-            List<com.bf4invest.model.EcritureComptable> ecritures = comptabiliteService.getEcritures(dateDebut, dateFin, null, exerciceId);
+            List<com.bf4invest.model.EcritureComptable> ecritures = comptabiliteService.getEcritures(dateDebut, dateFin, null, exerciceId, pieceType, pieceId);
             byte[] excel = excelExportService.exportJournalComptable(ecritures);
             
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
-            headers.setContentDispositionFormData("attachment", "journal_comptable.xlsx");
+            String fileName = pieceType != null && pieceId != null ? 
+                "journal_" + pieceType + "_" + pieceId + ".xlsx" : 
+                "journal_comptable.xlsx";
+            headers.setContentDispositionFormData("attachment", fileName);
             
             return ResponseEntity.ok().headers(headers).body(excel);
         } catch (Exception e) {

@@ -25,7 +25,7 @@ export class ComptabiliteService {
     return this.api.get<ExerciceComptable>('/comptabilite/exercices/current');
   }
 
-  getEcritures(params?: { dateDebut?: string; dateFin?: string; journal?: string; exerciceId?: string }): Observable<EcritureComptable[]> {
+  getEcritures(params?: { dateDebut?: string; dateFin?: string; journal?: string; exerciceId?: string; pieceType?: string; pieceId?: string }): Observable<EcritureComptable[]> {
     return this.api.get<EcritureComptable[]>('/comptabilite/ecritures', params);
   }
 
@@ -63,6 +63,27 @@ export class ComptabiliteService {
 
   initializePlanComptable(): Observable<void> {
     return this.api.post<void>('/comptabilite/init', {});
+  }
+
+  downloadJournalPdf(params?: { dateDebut?: string; dateFin?: string; exerciceId?: string; pieceType?: string; pieceId?: string }): Observable<Blob> {
+    return this.api.downloadFile('/pdf/comptabilite/journal', params);
+  }
+
+  downloadBalancePdf(params?: { dateDebut?: string; dateFin?: string; exerciceId?: string }): Observable<Blob> {
+    return this.api.downloadFile('/pdf/comptabilite/balance', params);
+  }
+
+  downloadGrandLivrePdf(compteCode: string, params?: { dateDebut?: string; dateFin?: string; exerciceId?: string }): Observable<Blob> {
+    return this.api.downloadFile(`/pdf/comptabilite/grand-livre?compteCode=${compteCode}`, params);
+  }
+
+  downloadBilanPdf(date: string, exerciceId?: string): Observable<Blob> {
+    const params = exerciceId ? { exerciceId } : undefined;
+    return this.api.downloadFile(`/pdf/comptabilite/bilan?date=${date}`, params);
+  }
+
+  downloadCpcPdf(params: { dateDebut: string; dateFin: string; exerciceId?: string }): Observable<Blob> {
+    return this.api.downloadFile('/pdf/comptabilite/cpc', params);
   }
 }
 

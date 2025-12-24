@@ -1,8 +1,10 @@
-import { Component, inject, signal, computed } from '@angular/core';
+import { Component, inject, signal, computed, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { StoreService, Invoice, BC, PrevisionPaiement } from '../../services/store.service';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { Router, ActivatedRoute } from '@angular/router';
+import { ComptabiliteService } from '../../services/comptabilite.service';
+import type { EcritureComptable } from '../../models/types';
 
 @Component({
   selector: 'app-purchase-invoices',
@@ -56,6 +58,13 @@ import { Router } from '@angular/router';
               </span>
               <input type="text" [(ngModel)]="searchTerm" placeholder="Rechercher facture..." class="w-full pl-9 pr-3 py-1.5 rounded-full border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all">
            </div>
+           @if (bcIdFilter()) {
+             <div class="px-4 py-2 bg-indigo-50 border border-indigo-200 rounded-lg text-sm text-indigo-700 flex items-center gap-2">
+               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+               Filtré sur BC: {{ store.getBCNumber(bcIdFilter()!) }}
+               <button (click)="clearBcFilter()" class="text-indigo-600 hover:text-indigo-800 ml-2">✕</button>
+             </div>
+           }
         </div>
 
         <!-- Table wrapper with horizontal scroll -->
@@ -121,6 +130,12 @@ import { Router } from '@angular/router';
                       </button>
                       <button (click)="viewAuditLog(inv)" class="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-full transition-all" title="Voir journal d'activité">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                      </button>
+                      <button (click)="showEcrituresModal(inv)" class="p-2 text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 rounded-full transition-all" title="Voir écritures comptables">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                      </button>
+                      <button (click)="openInComptabilite(inv)" class="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-full transition-all" title="Ouvrir dans Comptabilité">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
                       </button>
                       <button (click)="editInvoice(inv)" class="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-all" title="Modifier">
                          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
@@ -380,6 +395,141 @@ import { Router } from '@angular/router';
               <button (click)="closeCalculDetails()" class="w-full px-4 py-2.5 bg-slate-200 text-slate-700 font-medium rounded-lg hover:bg-slate-300 transition min-h-[44px]">
                 Fermer
               </button>
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- Modal Écritures Comptables -->
+      @if (selectedInvoiceForEcritures()) {
+        <div class="fixed inset-0 z-50 flex items-center justify-center" aria-modal="true">
+          <div (click)="closeEcrituresModal()" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm"></div>
+          <div class="relative bg-white rounded-2xl shadow-2xl max-w-5xl w-full mx-2 md:mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+            <div class="flex items-center justify-between p-4 md:p-6 border-b border-slate-100 bg-gradient-to-r from-cyan-50 to-blue-50">
+              <div>
+                <h2 class="text-xl font-bold text-slate-800">Écritures Comptables</h2>
+                <p class="text-sm text-slate-600 mt-1">Facture: {{ selectedInvoiceForEcritures()?.number }}</p>
+              </div>
+              <div class="flex gap-2">
+                <button (click)="openInComptabilite(selectedInvoiceForEcritures()!)" class="px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition flex items-center gap-2">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+                  Ouvrir dans Comptabilité
+                </button>
+                <button (click)="closeEcrituresModal()" class="text-slate-400 hover:text-slate-600 transition">
+                  <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+              </div>
+            </div>
+            <div class="flex-1 overflow-y-auto p-4 md:p-6">
+              <!-- Tabs -->
+              <div class="border-b border-slate-200 mb-4">
+                <div class="flex gap-4">
+                  <button (click)="activeEcrituresTab.set('ecritures')" [class]="activeEcrituresTab() === 'ecritures' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-slate-600'" class="px-4 py-2 font-semibold">
+                    Écritures
+                  </button>
+                  <button (click)="activeEcrituresTab.set('tva')" [class]="activeEcrituresTab() === 'tva' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-slate-600'" class="px-4 py-2 font-semibold">
+                    TVA
+                  </button>
+                </div>
+              </div>
+
+              <!-- Écritures Tab -->
+              @if (activeEcrituresTab() === 'ecritures') {
+                @if (loadingEcritures()) {
+                  <div class="text-center py-12 text-slate-500">Chargement...</div>
+                } @else if (ecrituresComptables().length > 0) {
+                  <div class="space-y-4">
+                    @for (ecriture of ecrituresComptables(); track ecriture.id) {
+                      <div class="bg-slate-50 rounded-lg p-4 border border-slate-200">
+                        <div class="flex items-center justify-between mb-3">
+                          <div>
+                            <span class="text-sm font-semibold text-slate-700">{{ formatDate(ecriture.dateEcriture) }}</span>
+                            <span class="ml-3 px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-semibold">{{ ecriture.journal }}</span>
+                            <span class="ml-2 text-xs text-slate-500 font-mono">{{ ecriture.numeroPiece }}</span>
+                          </div>
+                          <span class="text-sm text-slate-600">{{ ecriture.libelle }}</span>
+                        </div>
+                        <div class="overflow-x-auto">
+                          <table class="w-full text-sm">
+                            <thead class="bg-slate-100">
+                              <tr>
+                                <th class="px-3 py-2 text-left font-semibold text-slate-700">Compte</th>
+                                <th class="px-3 py-2 text-left font-semibold text-slate-700">Libellé</th>
+                                <th class="px-3 py-2 text-right font-semibold text-slate-700">Débit</th>
+                                <th class="px-3 py-2 text-right font-semibold text-slate-700">Crédit</th>
+                              </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-200">
+                              @for (ligne of ecriture.lignes; track ligne.compteCode + ligne.libelle) {
+                                <tr class="hover:bg-slate-50">
+                                  <td class="px-3 py-2 font-mono text-xs">{{ ligne.compteCode }}</td>
+                                  <td class="px-3 py-2">{{ ligne.libelle }}</td>
+                                  <td class="px-3 py-2 text-right">{{ ligne.debit | number:'1.2-2' }}</td>
+                                  <td class="px-3 py-2 text-right">{{ ligne.credit | number:'1.2-2' }}</td>
+                                </tr>
+                              }
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    }
+                    <div class="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                      <div class="flex justify-between items-center">
+                        <span class="font-semibold text-slate-700">Total Débit:</span>
+                        <span class="font-bold text-blue-700">{{ totalDebitEcritures() | number:'1.2-2' }}</span>
+                      </div>
+                      <div class="flex justify-between items-center mt-2">
+                        <span class="font-semibold text-slate-700">Total Crédit:</span>
+                        <span class="font-bold text-blue-700">{{ totalCreditEcritures() | number:'1.2-2' }}</span>
+                      </div>
+                      @if (isEcrituresBalanced()) {
+                        <div class="mt-3 px-3 py-2 bg-emerald-100 text-emerald-700 rounded-lg text-sm font-semibold flex items-center gap-2">
+                          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                          Écritures équilibrées
+                        </div>
+                      } @else {
+                        <div class="mt-3 px-3 py-2 bg-red-100 text-red-700 rounded-lg text-sm font-semibold flex items-center gap-2">
+                          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                          Écritures non équilibrées (différence: {{ Math.abs(totalDebitEcritures() - totalCreditEcritures()) | number:'1.2-2' }})
+                        </div>
+                      }
+                    </div>
+                  </div>
+                } @else {
+                  <div class="text-center py-12 text-slate-500">
+                    Aucune écriture comptable trouvée pour cette facture
+                  </div>
+                }
+              }
+
+              <!-- TVA Tab -->
+              @if (activeEcrituresTab() === 'tva') {
+                @if (selectedInvoiceForEcritures(); as inv) {
+                  <div class="space-y-4">
+                    <div class="bg-slate-50 rounded-lg p-6 border border-slate-200">
+                      <h3 class="font-bold text-lg mb-4 text-slate-800">Résumé TVA</h3>
+                      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <div class="text-sm text-slate-600 mb-1">Montant HT</div>
+                          <div class="text-2xl font-bold text-slate-800">{{ inv.amountHT | number:'1.2-2' }} DHS</div>
+                        </div>
+                        <div>
+                          <div class="text-sm text-slate-600 mb-1">TVA</div>
+                          <div class="text-2xl font-bold text-blue-600">{{ inv.totalTVA || (inv.amountTTC - inv.amountHT) | number:'1.2-2' }} DHS</div>
+                        </div>
+                        <div>
+                          <div class="text-sm text-slate-600 mb-1">Taux TVA</div>
+                          <div class="text-xl font-semibold text-slate-700">{{ (inv.totalTVA || (inv.amountTTC - inv.amountHT)) / (inv.amountHT || 1) * 100 | number:'1.0-1' }}%</div>
+                        </div>
+                        <div>
+                          <div class="text-sm text-slate-600 mb-1">Montant TTC</div>
+                          <div class="text-2xl font-bold text-emerald-600">{{ inv.amountTTC | number:'1.2-2' }} DHS</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                }
+              }
             </div>
           </div>
         </div>
@@ -694,12 +844,14 @@ import { Router } from '@angular/router';
     }
   `]
 })
-export class PurchaseInvoicesComponent {
+export class PurchaseInvoicesComponent implements OnInit {
   Math = Math; // Make Math available in template
 
   store = inject(StoreService);
   fb = inject(FormBuilder);
   router = inject(Router);
+  route = inject(ActivatedRoute);
+  comptabiliteService = inject(ComptabiliteService);
 
   isFormOpen = signal(false);
   isEditMode = signal(false);
@@ -707,8 +859,12 @@ export class PurchaseInvoicesComponent {
   availableBCs = signal<BC[]>([]);
   selectedInvoiceForDetails = signal<Invoice | null>(null);
   selectedInvoiceForPayments = signal<Invoice | null>(null);
+  selectedInvoiceForEcritures = signal<Invoice | null>(null);
   activeTab = signal<'paiements' | 'previsions'>('paiements');
+  activeEcrituresTab = signal<'ecritures' | 'tva'>('ecritures');
   editingPrevisionId = signal<string | null>(null);
+  ecrituresComptables = signal<EcritureComptable[]>([]);
+  loadingEcritures = signal(false);
 
   // Payment form
   paymentForm = this.fb.group({
@@ -730,6 +886,7 @@ export class PurchaseInvoicesComponent {
   // Filters
   filterStatus = signal<'all' | 'paid' | 'pending' | 'overdue'>('all');
   searchTerm = signal('');
+  bcIdFilter = signal<string | null>(null);
 
   // Pagination
   currentPage = signal(1);
@@ -765,9 +922,24 @@ export class PurchaseInvoicesComponent {
   // Raw List
   allPurchaseInvoices = computed(() => this.store.invoices().filter(i => i.type === 'purchase'));
 
+  ngOnInit() {
+    // Lire les query params pour bcId
+    this.route.queryParams.subscribe(params => {
+      if (params['bcId']) {
+        this.bcIdFilter.set(params['bcId']);
+      }
+    });
+  }
+
   // Filtered List
   filteredInvoices = computed(() => {
     let list = this.allPurchaseInvoices();
+
+    // BC Filter
+    const bcId = this.bcIdFilter();
+    if (bcId) {
+      list = list.filter(i => i.bcId === bcId);
+    }
 
     // Status Filter
     const status = this.filterStatus();
@@ -1211,5 +1383,90 @@ export class PurchaseInvoicesComponent {
       this.store.addInvoice(invoice);
     }
     this.closeForm();
+  }
+
+  async showEcrituresModal(inv: Invoice) {
+    this.selectedInvoiceForEcritures.set(inv);
+    this.activeEcrituresTab.set('ecritures');
+    this.loadingEcritures.set(true);
+    this.ecrituresComptables.set([]);
+
+    try {
+      // Charger les écritures de la facture
+      const ecrituresFacture = await this.comptabiliteService.getEcritures({
+        pieceType: 'FACTURE_ACHAT',
+        pieceId: inv.id
+      }).toPromise();
+
+      // Charger les écritures des paiements associés
+      const payments = this.store.payments().get(inv.id) || [];
+      const ecrituresPaiements = await Promise.all(
+        payments.map(p => 
+          this.comptabiliteService.getEcritures({
+            pieceType: 'PAIEMENT',
+            pieceId: p.id
+          }).toPromise().catch(() => [])
+        )
+      );
+
+      const allEcritures = [
+        ...(ecrituresFacture || []),
+        ...ecrituresPaiements.flat()
+      ];
+      
+      this.ecrituresComptables.set(allEcritures);
+    } catch (error) {
+      this.store.showToast('Erreur lors du chargement des écritures', 'error');
+    } finally {
+      this.loadingEcritures.set(false);
+    }
+  }
+
+  closeEcrituresModal() {
+    this.selectedInvoiceForEcritures.set(null);
+    this.ecrituresComptables.set([]);
+  }
+
+  openInComptabilite(inv: Invoice) {
+    this.router.navigate(['/comptabilite'], {
+      queryParams: {
+        pieceType: 'FACTURE_ACHAT',
+        pieceId: inv.id
+      }
+    });
+  }
+
+  totalDebitEcritures = computed(() => {
+    return this.ecrituresComptables().reduce((sum, ecriture) => {
+      return sum + (ecriture.lignes?.reduce((ligneSum, ligne) => {
+        return ligneSum + (ligne.debit || 0);
+      }, 0) || 0);
+    }, 0);
+  });
+
+  totalCreditEcritures = computed(() => {
+    return this.ecrituresComptables().reduce((sum, ecriture) => {
+      return sum + (ecriture.lignes?.reduce((ligneSum, ligne) => {
+        return ligneSum + (ligne.credit || 0);
+      }, 0) || 0);
+    }, 0);
+  });
+
+  isEcrituresBalanced = computed(() => {
+    const diff = Math.abs(this.totalDebitEcritures() - this.totalCreditEcritures());
+    return diff < 0.01;
+  });
+
+  formatDate(date: string): string {
+    return new Date(date).toLocaleDateString('fr-FR');
+  }
+
+  clearBcFilter() {
+    this.bcIdFilter.set(null);
+    this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: {},
+      replaceUrl: true
+    });
   }
 }

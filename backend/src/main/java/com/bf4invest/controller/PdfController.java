@@ -143,19 +143,23 @@ public class PdfController {
     public ResponseEntity<byte[]> generateJournalComptablePdf(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateDebut,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFin,
-            @RequestParam(required = false) String exerciceId
+            @RequestParam(required = false) String exerciceId,
+            @RequestParam(required = false) String pieceType,
+            @RequestParam(required = false) String pieceId
     ) {
         try {
             if (dateDebut == null) dateDebut = LocalDate.now().withDayOfMonth(1);
             if (dateFin == null) dateFin = LocalDate.now();
             
-            var ecritures = comptabiliteService.getEcritures(dateDebut, dateFin, null, exerciceId);
+            var ecritures = comptabiliteService.getEcritures(dateDebut, dateFin, null, exerciceId, pieceType, pieceId);
             byte[] pdfBytes = pdfService.generateJournalComptable(ecritures, dateDebut, dateFin);
             
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_PDF);
-            headers.setContentDispositionFormData("attachment", 
-                "journal_comptable_" + dateDebut.format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd")) + ".pdf");
+            String fileName = pieceType != null && pieceId != null ? 
+                "journal_" + pieceType + "_" + pieceId + ".pdf" : 
+                "journal_comptable_" + dateDebut.format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd")) + ".pdf";
+            headers.setContentDispositionFormData("attachment", fileName);
             
             return ResponseEntity.ok().headers(headers).body(pdfBytes);
         } catch (Exception e) {
