@@ -2,6 +2,7 @@ package com.bf4invest.service;
 
 import com.bf4invest.model.FactureAchat;
 import com.bf4invest.model.OrdreVirement;
+import com.bf4invest.model.Paiement;
 import com.bf4invest.model.Supplier;
 import com.bf4invest.repository.FactureAchatRepository;
 import com.bf4invest.repository.OrdreVirementRepository;
@@ -24,6 +25,7 @@ public class OrdreVirementService {
     private final FactureAchatRepository factureAchatRepository;
     private final SupplierService supplierService;
     private final AuditService auditService;
+    private final PaiementService paiementService;
     
     public List<OrdreVirement> findAll() {
         return repository.findAll();
@@ -186,9 +188,19 @@ public class OrdreVirementService {
         return repository.findById(id)
                 .map(ov -> {
                     String oldStatut = ov.getStatut();
+                    
+                    // Vérifier si déjà EXECUTE (idempotence)
+                    if ("EXECUTE".equals(oldStatut)) {
+                        log.warn("Ordre de virement {} déjà EXECUTE, aucun nouveau paiement créé", ov.getNumeroOV());
+                        return ov;
+                    }
+                    
                     ov.setStatut("EXECUTE");
                     ov.setUpdatedAt(LocalDateTime.now());
                     OrdreVirement saved = repository.save(ov);
+                    
+                    // Créer automatiquement les paiements pour les factures liées
+                    creerPaiementsPourOV(saved);
                     
                     auditService.logUpdate("OrdreVirement", id, 
                         "Statut: " + oldStatut, "Statut: EXECUTE");
@@ -196,6 +208,116 @@ public class OrdreVirementService {
                     return saved;
                 })
                 .orElseThrow(() -> new IllegalArgumentException("Ordre de virement non trouvé: " + id));
+    }
+    
+    /**
+     * Crée automatiquement des paiements pour les factures achat liées à l'ordre de virement.
+     * Utilise facturesMontants si disponible, sinon répartit le montant total entre facturesIds.
+     * La logique FIFO des prévisions sera appliquée automatiquement via PaiementService.
+     */
+    private void creerPaiementsPourOV(OrdreVirement ov) {
+        if (ov.getMontant() == null || ov.getMontant() <= 0) {
+            log.warn("Ordre de virement {} n'a pas de montant valide, aucun paiement créé", ov.getNumeroOV());
+            return;
+        }
+        
+        // Date du paiement: dateExecution si disponible, sinon dateOV
+        java.time.LocalDate datePaiement = ov.getDateExecution() != null ? ov.getDateExecution() : ov.getDateOV();
+        if (datePaiement == null) {
+            datePaiement = java.time.LocalDate.now();
+        }
+        
+        int paiementsCrees = 0;
+        int erreurs = 0;
+        
+        // Cas 1: facturesMontants existe (montants partiels explicites)
+        if (ov.getFacturesMontants() != null && !ov.getFacturesMontants().isEmpty()) {
+            for (OrdreVirement.FactureMontant fm : ov.getFacturesMontants()) {
+                try {
+                    // Vérifier que la facture existe
+                    Optional<FactureAchat> factureOpt = factureAchatRepository.findById(fm.getFactureId());
+                    if (factureOpt.isEmpty()) {
+                        log.error("Facture {} non trouvée pour l'ordre de virement {}", fm.getFactureId(), ov.getNumeroOV());
+                        erreurs++;
+                        continue;
+                    }
+                    
+                    if (fm.getMontant() == null || fm.getMontant() <= 0) {
+                        log.warn("Montant invalide pour facture {} dans ordre de virement {}", fm.getFactureId(), ov.getNumeroOV());
+                        erreurs++;
+                        continue;
+                    }
+                    
+                    // Créer le paiement
+                    Paiement paiement = Paiement.builder()
+                            .factureAchatId(fm.getFactureId())
+                            .montant(fm.getMontant())
+                            .date(datePaiement)
+                            .mode("virement")
+                            .reference(ov.getNumeroOV())
+                            .nature("paiement")
+                            .typeMouvement("F") // Fournisseur
+                            .build();
+                    
+                    paiementService.create(paiement);
+                    paiementsCrees++;
+                    log.info("Paiement créé pour facture {} (montant: {} MAD) via ordre de virement {}", 
+                            fm.getFactureId(), fm.getMontant(), ov.getNumeroOV());
+                    
+                } catch (Exception e) {
+                    log.error("Erreur lors de la création du paiement pour facture {} dans ordre de virement {}: {}", 
+                            fm.getFactureId(), ov.getNumeroOV(), e.getMessage(), e);
+                    erreurs++;
+                }
+            }
+        }
+        // Cas 2: facturesIds existe mais pas facturesMontants (répartition équitable)
+        else if (ov.getFacturesIds() != null && !ov.getFacturesIds().isEmpty()) {
+            int nbFactures = ov.getFacturesIds().size();
+            double montantParFacture = ov.getMontant() / nbFactures;
+            
+            for (String factureId : ov.getFacturesIds()) {
+                try {
+                    // Vérifier que la facture existe
+                    Optional<FactureAchat> factureOpt = factureAchatRepository.findById(factureId);
+                    if (factureOpt.isEmpty()) {
+                        log.error("Facture {} non trouvée pour l'ordre de virement {}", factureId, ov.getNumeroOV());
+                        erreurs++;
+                        continue;
+                    }
+                    
+                    // Créer le paiement avec montant réparti
+                    Paiement paiement = Paiement.builder()
+                            .factureAchatId(factureId)
+                            .montant(montantParFacture)
+                            .date(datePaiement)
+                            .mode("virement")
+                            .reference(ov.getNumeroOV())
+                            .nature("paiement")
+                            .typeMouvement("F") // Fournisseur
+                            .build();
+                    
+                    paiementService.create(paiement);
+                    paiementsCrees++;
+                    log.info("Paiement créé pour facture {} (montant: {} MAD, réparti) via ordre de virement {}", 
+                            factureId, montantParFacture, ov.getNumeroOV());
+                    
+                } catch (Exception e) {
+                    log.error("Erreur lors de la création du paiement pour facture {} dans ordre de virement {}: {}", 
+                            factureId, ov.getNumeroOV(), e.getMessage(), e);
+                    erreurs++;
+                }
+            }
+        } else {
+            log.warn("Ordre de virement {} n'a pas de factures associées, aucun paiement créé", ov.getNumeroOV());
+        }
+        
+        if (paiementsCrees > 0) {
+            log.info("{} paiement(s) créé(s) pour l'ordre de virement {}", paiementsCrees, ov.getNumeroOV());
+        }
+        if (erreurs > 0) {
+            log.warn("{} erreur(s) lors de la création des paiements pour l'ordre de virement {}", erreurs, ov.getNumeroOV());
+        }
     }
     
     public OrdreVirement marquerAnnule(String id) {
