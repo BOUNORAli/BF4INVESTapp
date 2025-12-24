@@ -18,7 +18,7 @@ export class TVAService {
   }
 
   calculerDeclaration(mois: number, annee: number): Observable<DeclarationTVA> {
-    return this.api.get<DeclarationTVA>(`/tva/declarations/calculer?mois=${mois}&annee=${annee}`);
+    return this.api.post<DeclarationTVA>(`/tva/declarations/calculer?mois=${mois}&annee=${annee}`, {});
   }
 
   validerDeclaration(id: string): Observable<DeclarationTVA> {
