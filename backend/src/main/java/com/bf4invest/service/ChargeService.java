@@ -21,6 +21,7 @@ public class ChargeService {
     private final ChargeRepository chargeRepository;
     private final AuditService auditService;
     private final SoldeService soldeService;
+    private final ComptabiliteService comptabiliteService;
 
     public List<Charge> findAll(
             LocalDate from,
