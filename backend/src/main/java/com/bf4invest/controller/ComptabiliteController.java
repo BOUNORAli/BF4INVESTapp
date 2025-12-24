@@ -253,5 +253,18 @@ public class ComptabiliteController {
             return ResponseEntity.internalServerError().build();
         }
     }
+
+    // ========== RÉGÉNÉRATION DES ÉCRITURES ==========
+
+    @PostMapping("/regenerer-ecritures")
+    public ResponseEntity<Map<String, Integer>> regenererEcrituresManquantes() {
+        try {
+            Map<String, Integer> result = comptabiliteService.regenererEcrituresManquantes();
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            log.error("Erreur lors de la régénération des écritures", e);
+            return ResponseEntity.internalServerError().build();
+        }
+    }
 }
 

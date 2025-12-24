@@ -85,5 +85,9 @@ export class ComptabiliteService {
   downloadCpcPdf(params: { dateDebut: string; dateFin: string; exerciceId?: string }): Observable<Blob> {
     return this.api.downloadFile('/pdf/comptabilite/cpc', params);
   }
+
+  regenererEcrituresManquantes(): Observable<{ facturesVenteTraitees: number; facturesAchatTraitees: number; erreurs: number; total: number }> {
+    return this.api.post<{ facturesVenteTraitees: number; facturesAchatTraitees: number; erreurs: number; total: number }>('/comptabilite/regenerer-ecritures', {});
+  }
 }
 

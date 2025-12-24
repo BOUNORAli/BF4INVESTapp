@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TVAService } from '../../services/tva.service';
 import { StoreService } from '../../services/store.service';
+import { ComptabiliteService } from '../../services/comptabilite.service';
 import type { DeclarationTVA } from '../../models/types';
 
 @Component({
@@ -20,6 +21,13 @@ import type { DeclarationTVA } from '../../models/types';
         <div class="flex gap-3">
           <button (click)="loadDeclarations()" class="px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition font-medium">
             Actualiser
+          </button>
+          <button (click)="regenererEcritures()" [disabled]="regenerating()" class="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition font-medium shadow-lg shadow-amber-600/20 disabled:opacity-50">
+            @if (regenerating()) {
+              Régénération...
+            } @else {
+              Régénérer Écritures
+            }
           </button>
           <button (click)="openCalculModal()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium shadow-lg shadow-blue-600/20">
             Nouvelle Déclaration
@@ -194,6 +202,7 @@ import type { DeclarationTVA } from '../../models/types';
 export class TVAComponent implements OnInit {
   private tvaService = inject(TVAService);
   private store = inject(StoreService);
+  private comptabiliteService = inject(ComptabiliteService);
 
   declarations = signal<DeclarationTVA[]>([]);
   selectedDeclaration = signal<DeclarationTVA | null>(null);
@@ -201,6 +210,7 @@ export class TVAComponent implements OnInit {
   selectedMois: number | null = null;
   selectedAnnee: number = new Date().getFullYear();
   currentYear = signal(new Date().getFullYear());
+  regenerating = signal(false);
 
   moisList = [
     { value: 1, label: 'Janvier' }, { value: 2, label: 'Février' }, { value: 3, label: 'Mars' },
@@ -306,6 +316,25 @@ export class TVAComponent implements OnInit {
         this.store.showToast('Déclarations exportées avec succès', 'success');
       },
       error: (err) => this.store.showToast('Erreur lors de l\'export', 'error')
+    });
+  }
+
+  regenererEcritures() {
+    this.regenerating.set(true);
+    this.comptabiliteService.regenererEcrituresManquantes().subscribe({
+      next: (result) => {
+        this.regenerating.set(false);
+        this.store.showToast(
+          `Écritures régénérées: ${result.total} factures traitées (${result.facturesVenteTraitees} ventes, ${result.facturesAchatTraitees} achats)`,
+          'success'
+        );
+        // Recharger les déclarations pour voir les nouvelles valeurs
+        this.loadDeclarations();
+      },
+      error: (err) => {
+        this.regenerating.set(false);
+        this.store.showToast('Erreur lors de la régénération des écritures', 'error');
+      }
     });
   }
 }

@@ -832,5 +832,64 @@ public class ComptabiliteService {
 
         return cpc;
     }
+
+    /**
+     * Régénère les écritures comptables pour toutes les factures existantes qui n'en ont pas encore
+     */
+    @Transactional
+    public Map<String, Integer> regenererEcrituresManquantes() {
+        int facturesVenteTraitees = 0;
+        int facturesAchatTraitees = 0;
+        int erreurs = 0;
+
+        // Récupérer toutes les factures vente
+        List<FactureVente> facturesVente = factureVenteRepository.findAll();
+        for (FactureVente facture : facturesVente) {
+            try {
+                // Vérifier si une écriture existe déjà
+                List<EcritureComptable> existing = ecritureRepository.findByPieceJustificativeTypeAndPieceJustificativeId(
+                        "FACTURE_VENTE", facture.getId());
+                if (existing.isEmpty()) {
+                    genererEcritureFactureVente(facture);
+                    facturesVenteTraitees++;
+                    log.info("Écriture générée pour facture vente {}", facture.getNumeroFactureVente());
+                }
+            } catch (Exception e) {
+                log.error("Erreur lors de la génération de l'écriture pour facture vente {}: {}", 
+                        facture.getId(), e.getMessage());
+                erreurs++;
+            }
+        }
+
+        // Récupérer toutes les factures achat
+        List<FactureAchat> facturesAchat = factureAchatRepository.findAll();
+        for (FactureAchat facture : facturesAchat) {
+            try {
+                // Vérifier si une écriture existe déjà
+                List<EcritureComptable> existing = ecritureRepository.findByPieceJustificativeTypeAndPieceJustificativeId(
+                        "FACTURE_ACHAT", facture.getId());
+                if (existing.isEmpty()) {
+                    genererEcritureFactureAchat(facture);
+                    facturesAchatTraitees++;
+                    log.info("Écriture générée pour facture achat {}", facture.getNumeroFactureAchat());
+                }
+            } catch (Exception e) {
+                log.error("Erreur lors de la génération de l'écriture pour facture achat {}: {}", 
+                        facture.getId(), e.getMessage());
+                erreurs++;
+            }
+        }
+
+        Map<String, Integer> result = new HashMap<>();
+        result.put("facturesVenteTraitees", facturesVenteTraitees);
+        result.put("facturesAchatTraitees", facturesAchatTraitees);
+        result.put("erreurs", erreurs);
+        result.put("total", facturesVenteTraitees + facturesAchatTraitees);
+
+        log.info("Régénération des écritures terminée: {} factures vente, {} factures achat, {} erreurs", 
+                facturesVenteTraitees, facturesAchatTraitees, erreurs);
+
+        return result;
+    }
 }
 
