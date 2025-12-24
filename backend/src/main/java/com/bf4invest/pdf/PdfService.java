@@ -2396,17 +2396,19 @@ public class PdfService {
         headerTable.setWidths(new float[]{2.2f, 5.6f, 2.2f});
         headerTable.setSpacingAfter(10);
         
-        // Logo à gauche (comme modèle)
+        // Logo à gauche (comme modèle) - collé en haut
         PdfPCell logoCell = createLogoCell(writer, 100f, 75f);
         logoCell.setVerticalAlignment(Element.ALIGN_TOP);
         logoCell.setHorizontalAlignment(Element.ALIGN_LEFT);
+        logoCell.setPaddingTop(0);
+        logoCell.setPaddingBottom(0);
         headerTable.addCell(logoCell);
         
-        // Bloc banque centré
+        // Bloc banque centré - positionné plus bas que le logo
         PdfPCell bankCell = new PdfPCell();
         bankCell.setBorder(Rectangle.NO_BORDER);
-        // Descendre légèrement le bloc banque pour que le logo soit visuellement plus haut (comme le modèle)
-        bankCell.setPaddingTop(18);
+        // Descendre significativement le bloc banque pour que le logo soit visuellement plus haut (comme le modèle)
+        bankCell.setPaddingTop(35);
         bankCell.setPaddingBottom(0);
         bankCell.setPaddingLeft(0);
         bankCell.setPaddingRight(0);
