@@ -2405,7 +2405,8 @@ public class PdfService {
         // Bloc banque centré
         PdfPCell bankCell = new PdfPCell();
         bankCell.setBorder(Rectangle.NO_BORDER);
-        bankCell.setPaddingTop(5);
+        // Descendre légèrement le bloc banque pour que le logo soit visuellement plus haut (comme le modèle)
+        bankCell.setPaddingTop(18);
         bankCell.setPaddingBottom(0);
         bankCell.setPaddingLeft(0);
         bankCell.setPaddingRight(0);
@@ -2641,11 +2642,13 @@ public class PdfService {
     private void addOrdreVirementSignature(Document document) throws DocumentException {
         Font signatureFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 12, Color.BLACK);
         PdfPTable sig = new PdfPTable(1);
-        sig.setWidthPercentage(100);
+        // Même largeur/centrage que le footer (82% de la zone dispo) pour aligner la fin du texte avec le cadre du footer
+        sig.setWidthPercentage(82);
+        sig.setHorizontalAlignment(Element.ALIGN_CENTER);
         PdfPCell c = new PdfPCell(new Phrase("Signature du donneur d'ordre", signatureFont));
         c.setBorder(Rectangle.NO_BORDER);
         c.setHorizontalAlignment(Element.ALIGN_RIGHT);
-        c.setPaddingRight(10);
+        c.setPaddingRight(0);
         c.setPaddingTop(0);
         c.setPaddingBottom(0);
         sig.addCell(c);
