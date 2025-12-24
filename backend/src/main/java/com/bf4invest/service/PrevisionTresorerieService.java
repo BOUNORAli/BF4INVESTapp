@@ -3,10 +3,12 @@ package com.bf4invest.service;
 import com.bf4invest.dto.EcheanceDetail;
 import com.bf4invest.dto.PrevisionJournaliere;
 import com.bf4invest.dto.PrevisionTresorerieResponse;
+import com.bf4invest.model.Charge;
 import com.bf4invest.model.Client;
 import com.bf4invest.model.FactureAchat;
 import com.bf4invest.model.FactureVente;
 import com.bf4invest.model.PrevisionPaiement;
+import com.bf4invest.repository.ChargeRepository;
 import com.bf4invest.repository.ClientRepository;
 import com.bf4invest.repository.FactureAchatRepository;
 import com.bf4invest.repository.FactureVenteRepository;
@@ -31,6 +33,7 @@ public class PrevisionTresorerieService {
     private final ClientRepository clientRepository;
     private final SupplierRepository supplierRepository;
     private final SoldeService soldeService;
+    private final ChargeRepository chargeRepository;
     
     public PrevisionTresorerieResponse getPrevisionTresorerie(LocalDate from, LocalDate to) {
         // Récupérer le solde actuel
@@ -98,6 +101,27 @@ public class PrevisionTresorerieService {
                 }
             }
         }
+
+        // Ajouter les charges (sorties) - uniquement celles PREVUE
+        List<Charge> charges = chargeRepository.findAll();
+        for (Charge charge : charges) {
+            if (charge == null) continue;
+            if (charge.getDateEcheance() == null) continue;
+            if (!"PREVUE".equalsIgnoreCase(charge.getStatut())) continue;
+
+            if (!charge.getDateEcheance().isBefore(from) && !charge.getDateEcheance().isAfter(to)) {
+                String statut = determinerStatutCharge(charge);
+                echeances.add(EcheanceDetail.builder()
+                        .date(charge.getDateEcheance())
+                        .type("CHARGE")
+                        .numeroFacture(charge.getLibelle() != null ? charge.getLibelle() : "Charge")
+                        .partenaire(charge.getCategorie() != null ? charge.getCategorie() : "Charge")
+                        .montant(charge.getMontant() != null ? charge.getMontant() : 0.0)
+                        .statut(statut)
+                        .factureId(charge.getId())
+                        .build());
+            }
+        }
         
         // Trier les échéances par date
         echeances.sort(Comparator.comparing(EcheanceDetail::getDate));
@@ -125,6 +149,14 @@ public class PrevisionTresorerieService {
             return "PREVU";
         }
     }
+
+    private String determinerStatutCharge(Charge charge) {
+        LocalDate aujourdhui = LocalDate.now();
+        if (charge.getDateEcheance() != null && charge.getDateEcheance().isBefore(aujourdhui)) {
+            return "EN_RETARD";
+        }
+        return "PREVU";
+    }
     
     private List<PrevisionJournaliere> calculerPrevisionsJournalieres(
             LocalDate from, LocalDate to, Double soldeInitial, List<EcheanceDetail> echeances) {
@@ -148,7 +180,7 @@ public class PrevisionTresorerieService {
                 .sum();
             
             double sorties = echeancesDuJour.stream()
-                .filter(e -> "ACHAT".equals(e.getType()))
+                .filter(e -> "ACHAT".equals(e.getType()) || "CHARGE".equals(e.getType()))
                 .mapToDouble(e -> e.getMontant() != null ? e.getMontant() : 0.0)
                 .sum();
             

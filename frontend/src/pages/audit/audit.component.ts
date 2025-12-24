@@ -59,6 +59,7 @@ interface AuditLog {
               <option value="PrevisionPaiement">Prévisions de Paiement</option>
               <option value="Paiement">Paiements</option>
               <option value="Produit">Produits</option>
+              <option value="Charge">Charges</option>
             </select>
           </div>
 
@@ -372,6 +373,7 @@ export class AuditComponent implements OnInit {
       case 'PrevisionPaiement': return 'bg-amber-100 text-amber-600';
       case 'Paiement': return 'bg-teal-100 text-teal-600';
       case 'Produit': return 'bg-rose-100 text-rose-600';
+      case 'Charge': return 'bg-yellow-100 text-yellow-700';
       default: return 'bg-slate-100 text-slate-600';
     }
   }
@@ -386,6 +388,7 @@ export class AuditComponent implements OnInit {
       case 'PrevisionPaiement': return 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z';
       case 'Paiement': return 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z';
       case 'Produit': return 'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4';
+      case 'Charge': return 'M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-2m4-5h-4m0 0l2-2m-2 2l2 2';
       default: return 'M4 6h16M4 12h16M4 18h16';
     }
   }
@@ -400,6 +403,7 @@ export class AuditComponent implements OnInit {
       case 'PrevisionPaiement': return 'Prévision de Paiement';
       case 'Paiement': return 'Paiement';
       case 'Produit': return 'Produit';
+      case 'Charge': return 'Charge';
       default: return entityType;
     }
   }

@@ -45,6 +45,8 @@ import { StoreService, HistoriqueSolde } from '../../services/store.service';
               <option value="FACTURE_ACHAT">Facture Achat</option>
               <option value="PAIEMENT_CLIENT">Paiement Client</option>
               <option value="PAIEMENT_FOURNISSEUR">Paiement Fournisseur</option>
+              <option value="CHARGE_IMPOSABLE">Charge Imposable</option>
+              <option value="CHARGE_NON_IMPOSABLE">Charge Non Imposable</option>
               <option value="APPORT_EXTERNE">Apport Externe</option>
             </select>
           </div>
@@ -326,6 +328,8 @@ export class HistoriqueTresorerieComponent implements OnInit {
       'FACTURE_ACHAT': 'Facture Achat',
       'PAIEMENT_CLIENT': 'Paiement Client',
       'PAIEMENT_FOURNISSEUR': 'Paiement Fournisseur',
+      'CHARGE_IMPOSABLE': 'Charge Imposable',
+      'CHARGE_NON_IMPOSABLE': 'Charge Non Imposable',
       'APPORT_EXTERNE': 'Apport Externe'
     };
     return labels[type] || type;
@@ -338,6 +342,8 @@ export class HistoriqueTresorerieComponent implements OnInit {
       'FACTURE_ACHAT': `${baseClass} bg-red-50 text-red-700`,
       'PAIEMENT_CLIENT': `${baseClass} bg-blue-50 text-blue-700`,
       'PAIEMENT_FOURNISSEUR': `${baseClass} bg-orange-50 text-orange-700`,
+      'CHARGE_IMPOSABLE': `${baseClass} bg-amber-50 text-amber-700`,
+      'CHARGE_NON_IMPOSABLE': `${baseClass} bg-slate-100 text-slate-700`,
       'APPORT_EXTERNE': `${baseClass} bg-purple-50 text-purple-700`
     };
     return classes[type] || `${baseClass} bg-slate-50 text-slate-700`;
@@ -349,6 +355,8 @@ export class HistoriqueTresorerieComponent implements OnInit {
       'FACTURE_ACHAT': 'text-red-600',
       'PAIEMENT_CLIENT': 'text-emerald-600',
       'PAIEMENT_FOURNISSEUR': 'text-red-600',
+      'CHARGE_IMPOSABLE': 'text-red-600',
+      'CHARGE_NON_IMPOSABLE': 'text-red-600',
       'APPORT_EXTERNE': 'text-purple-600'
     };
     return classes[type] || 'text-slate-800';

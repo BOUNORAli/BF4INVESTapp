@@ -732,6 +732,8 @@ public class ExcelExportService {
             case "FACTURE_ACHAT": return "Facture Achat";
             case "PAIEMENT_CLIENT": return "Paiement Client";
             case "PAIEMENT_FOURNISSEUR": return "Paiement Fournisseur";
+            case "CHARGE_IMPOSABLE": return "Charge Imposable";
+            case "CHARGE_NON_IMPOSABLE": return "Charge Non Imposable";
             case "APPORT_EXTERNE": return "Apport Externe";
             default: return type;
         }

@@ -302,5 +302,47 @@ public class SoldeService {
         
         return saved;
     }
+
+    /**
+     * Ajoute une charge payée (sortie de trésorerie) et enregistre l'historique.
+     * L'imposable = déductible fiscalement.
+     */
+    @Transactional
+    public HistoriqueSolde ajouterCharge(Double montant, Boolean imposable, String chargeId, String libelle, LocalDate datePaiement) {
+        if (montant == null || montant <= 0) {
+            throw new IllegalArgumentException("Le montant doit être positif");
+        }
+        if (libelle == null || libelle.trim().isEmpty()) {
+            throw new IllegalArgumentException("Le libellé est requis");
+        }
+
+        Double soldeGlobalAvant = getSoldeGlobalActuel();
+        Double soldeGlobalApres = soldeGlobalAvant - montant;
+
+        // Mettre à jour le solde global
+        mettreAJourSoldeGlobal(soldeGlobalApres);
+
+        String type = Boolean.TRUE.equals(imposable) ? "CHARGE_IMPOSABLE" : "CHARGE_NON_IMPOSABLE";
+
+        HistoriqueSolde historique = HistoriqueSolde.builder()
+                .type(type)
+                .montant(montant)
+                .soldeGlobalAvant(soldeGlobalAvant)
+                .soldeGlobalApres(soldeGlobalApres)
+                .soldePartenaireAvant(null)
+                .soldePartenaireApres(null)
+                .partenaireId(null)
+                .partenaireType(null)
+                .partenaireNom(null)
+                .referenceId(chargeId)
+                .referenceNumero(libelle.trim())
+                .description(libelle.trim())
+                .date(datePaiement != null ? datePaiement.atStartOfDay() : LocalDateTime.now())
+                .build();
+
+        HistoriqueSolde saved = historiqueSoldeRepository.save(historique);
+        log.info("Charge payée enregistrée: {} MAD - {} - Solde après: {}", montant, libelle, soldeGlobalApres);
+        return saved;
+    }
 }
 

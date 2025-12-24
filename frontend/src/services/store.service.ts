@@ -236,7 +236,7 @@ export interface PrevisionJournaliere {
 
 export interface EcheanceDetail {
   date: string;
-  type: 'VENTE' | 'ACHAT';
+  type: 'VENTE' | 'ACHAT' | 'CHARGE';
   numeroFacture: string;
   partenaire: string;
   montant: number;
@@ -263,8 +263,8 @@ export interface HistoriqueSolde {
   montant: number;
   soldeGlobalAvant: number;
   soldeGlobalApres: number;
-  soldePartenaireAvant: number;
-  soldePartenaireApres: number;
+  soldePartenaireAvant: number | null;
+  soldePartenaireApres: number | null;
   partenaireId?: string;
   partenaireType?: string; // "CLIENT" ou "FOURNISSEUR"
   partenaireNom?: string;
@@ -272,6 +272,20 @@ export interface HistoriqueSolde {
   referenceNumero?: string;
   date: string;
   description?: string;
+}
+
+export interface Charge {
+  id?: string;
+  libelle: string;
+  categorie?: string;
+  montant: number;
+  dateEcheance: string; // ISO YYYY-MM-DD
+  statut: 'PREVUE' | 'PAYEE';
+  datePaiement?: string; // ISO YYYY-MM-DD
+  imposable: boolean; // Déductible fiscalement
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export type { Toast };
@@ -447,6 +461,7 @@ export class StoreService {
   readonly suppliers = signal<Supplier[]>([]);
   readonly bcs = signal<BC[]>([]);
   readonly invoices = signal<Invoice[]>([]);
+  readonly charges = signal<Charge[]>([]);
   readonly ordresVirement = signal<OrdreVirement[]>([]);
   readonly dashboardKPIs = signal<DashboardKpiResponse | null>(null);
   readonly dashboardLoading = signal<boolean>(false);
@@ -1355,6 +1370,123 @@ export class StoreService {
     } catch (error) {
       console.error('Error saving company info:', error);
       this.showToast('Erreur lors de la sauvegarde des informations société', 'error');
+      throw error;
+    }
+  }
+
+  // --- GESTION DES CHARGES ---
+  private mapCharge(c: any): Charge {
+    return {
+      id: c.id,
+      libelle: c.libelle || '',
+      categorie: c.categorie,
+      montant: Number(c.montant || 0),
+      dateEcheance: c.dateEcheance,
+      statut: (c.statut || 'PREVUE') as 'PREVUE' | 'PAYEE',
+      datePaiement: c.datePaiement,
+      imposable: c.imposable !== false,
+      notes: c.notes,
+      createdAt: c.createdAt,
+      updatedAt: c.updatedAt
+    };
+  }
+
+  async loadCharges(filters?: { from?: string; to?: string; statut?: string; imposable?: boolean; q?: string }): Promise<void> {
+    try {
+      const params: any = {};
+      if (filters?.from) params.from = filters.from;
+      if (filters?.to) params.to = filters.to;
+      if (filters?.statut) params.statut = filters.statut;
+      if (filters?.imposable !== undefined) params.imposable = filters.imposable;
+      if (filters?.q) params.q = filters.q;
+
+      const charges = await this.api.get<any[]>('/charges', params).toPromise();
+      this.charges.set((charges || []).map(c => this.mapCharge(c)));
+    } catch (error) {
+      console.error('Error loading charges:', error);
+      this.showToast('Erreur lors du chargement des charges', 'error');
+    }
+  }
+
+  async addCharge(charge: Charge): Promise<Charge> {
+    try {
+      const payload: any = {
+        libelle: charge.libelle,
+        categorie: charge.categorie,
+        montant: charge.montant,
+        dateEcheance: charge.dateEcheance,
+        statut: charge.statut || 'PREVUE',
+        imposable: charge.imposable,
+        notes: charge.notes
+      };
+
+      const created = await this.api.post<any>('/charges', payload).toPromise();
+      const mapped = this.mapCharge(created);
+      this.charges.set([mapped, ...this.charges()]);
+      this.showToast('Charge ajoutée avec succès', 'success');
+      return mapped;
+    } catch (error) {
+      console.error('Error adding charge:', error);
+      this.showToast('Erreur lors de l\'ajout de la charge', 'error');
+      throw error;
+    }
+  }
+
+  async updateCharge(id: string, charge: Partial<Charge>): Promise<Charge> {
+    try {
+      const payload: any = {
+        libelle: charge.libelle,
+        categorie: charge.categorie,
+        montant: charge.montant,
+        dateEcheance: charge.dateEcheance,
+        statut: charge.statut,
+        datePaiement: charge.datePaiement,
+        imposable: charge.imposable,
+        notes: charge.notes
+      };
+
+      const updated = await this.api.put<any>(`/charges/${id}`, payload).toPromise();
+      const mapped = this.mapCharge(updated);
+      this.charges.update(list => list.map(c => c.id === id ? mapped : c));
+      this.showToast('Charge mise à jour avec succès', 'success');
+      return mapped;
+    } catch (error) {
+      console.error('Error updating charge:', error);
+      this.showToast('Erreur lors de la mise à jour de la charge', 'error');
+      throw error;
+    }
+  }
+
+  async deleteCharge(id: string): Promise<void> {
+    try {
+      await this.api.delete(`/charges/${id}`).toPromise();
+      this.charges.update(list => list.filter(c => c.id !== id));
+      this.showToast('Charge supprimée avec succès', 'success');
+    } catch (error) {
+      console.error('Error deleting charge:', error);
+      this.showToast('Erreur lors de la suppression de la charge', 'error');
+      throw error;
+    }
+  }
+
+  async payerCharge(id: string, datePaiement?: string): Promise<Charge> {
+    try {
+      let endpoint = `/charges/${id}/payer`;
+      if (datePaiement) {
+        endpoint += `?datePaiement=${datePaiement}`;
+      }
+      const updated = await this.api.post<any>(endpoint, {}).toPromise();
+      const mapped = this.mapCharge(updated);
+      this.charges.update(list => list.map(c => c.id === id ? mapped : c));
+
+      // Recharger le solde global pour refléter la sortie
+      await this.loadSoldeGlobal();
+
+      this.showToast('Charge marquée payée', 'success');
+      return mapped;
+    } catch (error) {
+      console.error('Error paying charge:', error);
+      this.showToast('Erreur lors du paiement de la charge', 'error');
       throw error;
     }
   }

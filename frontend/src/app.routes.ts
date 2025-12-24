@@ -19,6 +19,7 @@ import { AuditComponent } from './pages/audit/audit.component';
 import { PrevisionTresorerieComponent } from './pages/prevision/prevision-tresorerie.component';
 import { OrdresVirementComponent } from './pages/ordres-virement/ordres-virement.component';
 import { HistoriqueTresorerieComponent } from './pages/historique-tresorerie/historique-tresorerie.component';
+import { ChargesComponent } from './pages/charges/charges.component';
 
 const authGuard: CanActivateFn = () => {
   const auth = inject(AuthService);
@@ -52,6 +53,7 @@ export const routes: Routes = [
       { path: 'notifications', component: NotificationsComponent },
       { path: 'audit', component: AuditComponent },
       { path: 'prevision', component: PrevisionTresorerieComponent },
+      { path: 'charges', component: ChargesComponent },
       { path: 'historique-tresorerie', component: HistoriqueTresorerieComponent },
       { path: 'ordres-virement', component: OrdresVirementComponent },
     ]

@@ -130,7 +130,9 @@ import { StoreService, PrevisionTresorerieResponse, PrevisionJournaliere, Echean
                                 [class.bg-emerald-50]="echeance.type === 'VENTE'"
                                 [class.text-emerald-700]="echeance.type === 'VENTE'"
                                 [class.bg-red-50]="echeance.type === 'ACHAT'"
-                                [class.text-red-700]="echeance.type === 'ACHAT'">
+                                [class.text-red-700]="echeance.type === 'ACHAT'"
+                                [class.bg-amber-50]="echeance.type === 'CHARGE'"
+                                [class.text-amber-700]="echeance.type === 'CHARGE'">
                             {{ echeance.type }}
                           </span>
                         </td>
@@ -138,7 +140,8 @@ import { StoreService, PrevisionTresorerieResponse, PrevisionJournaliere, Echean
                         <td class="px-3 md:px-4 py-3 text-sm">{{ echeance.partenaire }}</td>
                         <td class="px-3 md:px-4 py-3 text-right font-bold text-sm md:text-base"
                             [class.text-emerald-600]="echeance.type === 'VENTE'"
-                            [class.text-red-600]="echeance.type === 'ACHAT'">
+                            [class.text-red-600]="echeance.type === 'ACHAT'"
+                            [class.text-amber-600]="echeance.type === 'CHARGE'">
                           {{ echeance.montant | number:'1.2-2' }} MAD
                         </td>
                         <td class="px-3 md:px-4 py-3 hidden md:table-cell">
@@ -366,6 +369,8 @@ import { StoreService, PrevisionTresorerieResponse, PrevisionJournaliere, Echean
                                  [class.text-emerald-700]="ech.type === 'VENTE'"
                                  [class.bg-red-100]="ech.type === 'ACHAT'"
                                  [class.text-red-700]="ech.type === 'ACHAT'"
+                                 [class.bg-amber-100]="ech.type === 'CHARGE'"
+                                 [class.text-amber-700]="ech.type === 'CHARGE'"
                                  [title]="ech.numeroFacture + ': ' + (ech.montant | number:'1.2-2') + ' MAD'">
                               {{ ech.montant | number:'1.0-0' }} MAD
                             </div>
@@ -417,7 +422,7 @@ import { StoreService, PrevisionTresorerieResponse, PrevisionJournaliere, Echean
                       <div>
                         <span class="text-slate-600">Total Sorties:</span>
                         <span class="font-bold text-red-600 ml-2">
-                          {{ getTotalForDay(selectedDayDetails()!.echeances, 'ACHAT') | number:'1.2-2' }} MAD
+                          {{ getTotalSortiesForDay(selectedDayDetails()!.echeances) | number:'1.2-2' }} MAD
                         </span>
                       </div>
                     </div>
@@ -442,7 +447,9 @@ import { StoreService, PrevisionTresorerieResponse, PrevisionJournaliere, Echean
                                     [class.bg-emerald-50]="ech.type === 'VENTE'"
                                     [class.text-emerald-700]="ech.type === 'VENTE'"
                                     [class.bg-red-50]="ech.type === 'ACHAT'"
-                                    [class.text-red-700]="ech.type === 'ACHAT'">
+                                    [class.text-red-700]="ech.type === 'ACHAT'"
+                                    [class.bg-amber-50]="ech.type === 'CHARGE'"
+                                    [class.text-amber-700]="ech.type === 'CHARGE'">
                                 {{ ech.type }}
                               </span>
                             </td>
@@ -450,7 +457,8 @@ import { StoreService, PrevisionTresorerieResponse, PrevisionJournaliere, Echean
                             <td class="px-4 py-3 text-sm">{{ ech.partenaire }}</td>
                             <td class="px-4 py-3 text-right font-bold"
                                 [class.text-emerald-600]="ech.type === 'VENTE'"
-                                [class.text-red-600]="ech.type === 'ACHAT'">
+                                [class.text-red-600]="ech.type === 'ACHAT'"
+                                [class.text-amber-600]="ech.type === 'CHARGE'">
                               {{ ech.montant | number:'1.2-2' }} MAD
                             </td>
                             <td class="px-4 py-3">
@@ -990,6 +998,12 @@ export class PrevisionTresorerieComponent implements OnInit {
   getTotalForDay(echeances: EcheanceDetail[], type: 'VENTE' | 'ACHAT'): number {
     return echeances
       .filter(e => e.type === type)
+      .reduce((sum, e) => sum + (e.montant || 0), 0);
+  }
+
+  getTotalSortiesForDay(echeances: EcheanceDetail[]): number {
+    return echeances
+      .filter(e => e.type === 'ACHAT' || e.type === 'CHARGE')
       .reduce((sum, e) => sum + (e.montant || 0), 0);
   }
 }

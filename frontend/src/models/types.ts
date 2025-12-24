@@ -209,7 +209,7 @@ export interface PrevisionJournaliere {
 
 export interface EcheanceDetail {
   date: string;
-  type: 'VENTE' | 'ACHAT';
+  type: 'VENTE' | 'ACHAT' | 'CHARGE';
   numeroFacture: string;
   partenaire: string;
   montant: number;
@@ -236,8 +236,8 @@ export interface HistoriqueSolde {
   montant: number;
   soldeGlobalAvant: number;
   soldeGlobalApres: number;
-  soldePartenaireAvant: number;
-  soldePartenaireApres: number;
+  soldePartenaireAvant: number | null;
+  soldePartenaireApres: number | null;
   partenaireId?: string;
   partenaireType?: string; // "CLIENT" ou "FOURNISSEUR"
   partenaireNom?: string;
@@ -245,6 +245,20 @@ export interface HistoriqueSolde {
   referenceNumero?: string;
   date: string;
   description?: string;
+}
+
+export interface Charge {
+  id?: string;
+  libelle: string;
+  categorie?: string;
+  montant: number;
+  dateEcheance: string; // ISO YYYY-MM-DD
+  statut: 'PREVUE' | 'PAYEE';
+  datePaiement?: string; // ISO YYYY-MM-DD
+  imposable: boolean; // Déductible fiscalement
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Toast {
