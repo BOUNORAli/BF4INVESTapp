@@ -28,6 +28,7 @@ public class PaiementService {
     private final ClientService clientService;
     private final SupplierService supplierService;
     private final AuditService auditService;
+    private final ComptabiliteService comptabiliteService;
     
     public Paiement create(Paiement paiement) {
         // Calculer les champs comptables selon les formules Excel
@@ -125,6 +126,13 @@ public class PaiementService {
             } catch (Exception e) {
                 log.warn("Erreur lors de l'enregistrement de la transaction solde pour paiement {}: {}", saved.getId(), e.getMessage());
             }
+        }
+        
+        // Générer l'écriture comptable
+        try {
+            comptabiliteService.genererEcriturePaiement(saved);
+        } catch (Exception e) {
+            log.warn("Erreur lors de la génération de l'écriture comptable pour paiement {}: {}", saved.getId(), e.getMessage());
         }
         
         return saved;

@@ -20,6 +20,9 @@ import { PrevisionTresorerieComponent } from './pages/prevision/prevision-tresor
 import { OrdresVirementComponent } from './pages/ordres-virement/ordres-virement.component';
 import { HistoriqueTresorerieComponent } from './pages/historique-tresorerie/historique-tresorerie.component';
 import { ChargesComponent } from './pages/charges/charges.component';
+import { TVAComponent } from './pages/tva/tva.component';
+import { ComptabiliteComponent } from './pages/comptabilite/comptabilite.component';
+import { ISComponent } from './pages/is/is.component';
 
 const authGuard: CanActivateFn = () => {
   const auth = inject(AuthService);
@@ -56,6 +59,9 @@ export const routes: Routes = [
       { path: 'charges', component: ChargesComponent },
       { path: 'historique-tresorerie', component: HistoriqueTresorerieComponent },
       { path: 'ordres-virement', component: OrdresVirementComponent },
+      { path: 'tva', component: TVAComponent },
+      { path: 'comptabilite', component: ComptabiliteComponent },
+      { path: 'is', component: ISComponent },
     ]
   },
   { path: '**', redirectTo: 'dashboard' }

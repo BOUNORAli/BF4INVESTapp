@@ -2743,5 +2743,484 @@ public class PdfService {
             }
         }
     }
+
+    // ========== EXPORTS PDF COMPTABLES ==========
+
+    /**
+     * Génère un PDF du journal comptable
+     */
+    public byte[] generateJournalComptable(List<com.bf4invest.model.EcritureComptable> ecritures, 
+                                           java.time.LocalDate dateDebut, 
+                                           java.time.LocalDate dateFin) throws DocumentException, IOException {
+        Document document = new Document(PageSize.A4.rotate(), 40f, 40f, 60f, 60f);
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        PdfWriter writer = PdfWriter.getInstance(document, baos);
+        document.open();
+
+        // Titre
+        Font titleFont = new Font(Font.HELVETICA, 18, Font.BOLD, BLUE_DARK);
+        Paragraph title = new Paragraph("JOURNAL COMPTABLE", titleFont);
+        title.setAlignment(Element.ALIGN_CENTER);
+        title.setSpacingAfter(10f);
+        document.add(title);
+
+        // Période
+        Font periodFont = new Font(Font.HELVETICA, 12, Font.NORMAL);
+        Paragraph period = new Paragraph(
+            String.format("Période: %s au %s", 
+                dateDebut.format(DATE_FORMATTER), 
+                dateFin.format(DATE_FORMATTER)), 
+            periodFont);
+        period.setAlignment(Element.ALIGN_CENTER);
+        period.setSpacingAfter(20f);
+        document.add(period);
+
+        // Tableau
+        PdfPTable table = new PdfPTable(7);
+        table.setWidthPercentage(100);
+        table.setWidths(new float[]{1.5f, 1f, 1.5f, 2f, 3f, 1.5f, 1.5f});
+
+        // En-têtes
+        addTableHeader(table, "Date", BLUE_HEADER);
+        addTableHeader(table, "Journal", BLUE_HEADER);
+        addTableHeader(table, "Pièce", BLUE_HEADER);
+        addTableHeader(table, "Compte", BLUE_HEADER);
+        addTableHeader(table, "Libellé", BLUE_HEADER);
+        addTableHeader(table, "Débit", BLUE_HEADER);
+        addTableHeader(table, "Crédit", BLUE_HEADER);
+
+        // Lignes
+        for (com.bf4invest.model.EcritureComptable ecriture : ecritures) {
+            if (ecriture.getLignes() != null) {
+                for (com.bf4invest.model.LigneEcriture ligne : ecriture.getLignes()) {
+                    table.addCell(createCell(ecriture.getDateEcriture().format(DATE_FORMATTER), Font.NORMAL, 10f));
+                    table.addCell(createCell(ecriture.getJournal(), Font.NORMAL, 10f));
+                    table.addCell(createCell(ecriture.getNumeroPiece(), Font.NORMAL, 10f));
+                    table.addCell(createCell(ligne.getCompteCode(), Font.NORMAL, 10f));
+                    table.addCell(createCell(ligne.getLibelle(), Font.NORMAL, 10f));
+                    table.addCell(createCell(
+                        ligne.getDebit() != null && ligne.getDebit() > 0 ? formatAmount(ligne.getDebit()) : "",
+                        Font.NORMAL, 10f, Element.ALIGN_RIGHT));
+                    table.addCell(createCell(
+                        ligne.getCredit() != null && ligne.getCredit() > 0 ? formatAmount(ligne.getCredit()) : "",
+                        Font.NORMAL, 10f, Element.ALIGN_RIGHT));
+                }
+            }
+        }
+
+        document.add(table);
+        document.close();
+        return baos.toByteArray();
+    }
+
+    /**
+     * Génère un PDF de la balance
+     */
+    public byte[] generateBalance(List<com.bf4invest.model.CompteComptable> comptes,
+                                 java.time.LocalDate dateDebut,
+                                 java.time.LocalDate dateFin) throws DocumentException, IOException {
+        Document document = new Document(PageSize.A4.rotate(), 40f, 40f, 60f, 60f);
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        PdfWriter writer = PdfWriter.getInstance(document, baos);
+        document.open();
+
+        // Titre
+        Font titleFont = new Font(Font.HELVETICA, 18, Font.BOLD, BLUE_DARK);
+        Paragraph title = new Paragraph("BALANCE GÉNÉRALE", titleFont);
+        title.setAlignment(Element.ALIGN_CENTER);
+        title.setSpacingAfter(10f);
+        document.add(title);
+
+        // Période
+        Font periodFont = new Font(Font.HELVETICA, 12, Font.NORMAL);
+        Paragraph period = new Paragraph(
+            String.format("Période: %s au %s", 
+                dateDebut.format(DATE_FORMATTER), 
+                dateFin.format(DATE_FORMATTER)), 
+            periodFont);
+        period.setAlignment(Element.ALIGN_CENTER);
+        period.setSpacingAfter(20f);
+        document.add(period);
+
+        // Tableau
+        PdfPTable table = new PdfPTable(6);
+        table.setWidthPercentage(100);
+        table.setWidths(new float[]{1.5f, 4f, 1f, 2f, 2f, 2f});
+
+        // En-têtes
+        addTableHeader(table, "Code", BLUE_HEADER);
+        addTableHeader(table, "Libellé", BLUE_HEADER);
+        addTableHeader(table, "Classe", BLUE_HEADER);
+        addTableHeader(table, "Débit", BLUE_HEADER);
+        addTableHeader(table, "Crédit", BLUE_HEADER);
+        addTableHeader(table, "Solde", BLUE_HEADER);
+
+        // Lignes
+        for (com.bf4invest.model.CompteComptable compte : comptes) {
+            table.addCell(createCell(compte.getCode(), Font.NORMAL, 10f));
+            table.addCell(createCell(compte.getLibelle(), Font.NORMAL, 10f));
+            table.addCell(createCell(compte.getClasse(), Font.NORMAL, 10f));
+            table.addCell(createCell(formatAmount(compte.getSoldeDebit()), Font.NORMAL, 10f, Element.ALIGN_RIGHT));
+            table.addCell(createCell(formatAmount(compte.getSoldeCredit()), Font.NORMAL, 10f, Element.ALIGN_RIGHT));
+            table.addCell(createCell(formatAmount(compte.getSolde()), Font.BOLD, 10f, Element.ALIGN_RIGHT));
+        }
+
+        document.add(table);
+        document.close();
+        return baos.toByteArray();
+    }
+
+    /**
+     * Génère un PDF du grand livre
+     */
+    public byte[] generateGrandLivre(List<com.bf4invest.model.EcritureComptable> ecritures,
+                                    String compteCode,
+                                    String compteLibelle,
+                                    java.time.LocalDate dateDebut,
+                                    java.time.LocalDate dateFin) throws DocumentException, IOException {
+        Document document = new Document(PageSize.A4.rotate(), 40f, 40f, 60f, 60f);
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        PdfWriter writer = PdfWriter.getInstance(document, baos);
+        document.open();
+
+        // Titre
+        Font titleFont = new Font(Font.HELVETICA, 18, Font.BOLD, BLUE_DARK);
+        Paragraph title = new Paragraph("GRAND LIVRE", titleFont);
+        title.setAlignment(Element.ALIGN_CENTER);
+        title.setSpacingAfter(5f);
+        document.add(title);
+
+        // Compte
+        Font compteFont = new Font(Font.HELVETICA, 14, Font.BOLD);
+        Paragraph compte = new Paragraph(
+            String.format("%s - %s", compteCode, compteLibelle), 
+            compteFont);
+        compte.setAlignment(Element.ALIGN_CENTER);
+        compte.setSpacingAfter(10f);
+        document.add(compte);
+
+        // Période
+        Font periodFont = new Font(Font.HELVETICA, 12, Font.NORMAL);
+        Paragraph period = new Paragraph(
+            String.format("Période: %s au %s", 
+                dateDebut.format(DATE_FORMATTER), 
+                dateFin.format(DATE_FORMATTER)), 
+            periodFont);
+        period.setAlignment(Element.ALIGN_CENTER);
+        period.setSpacingAfter(20f);
+        document.add(period);
+
+        // Tableau
+        PdfPTable table = new PdfPTable(7);
+        table.setWidthPercentage(100);
+        table.setWidths(new float[]{1.5f, 1f, 1.5f, 3f, 1.5f, 1.5f, 2f});
+
+        // En-têtes
+        addTableHeader(table, "Date", BLUE_HEADER);
+        addTableHeader(table, "Journal", BLUE_HEADER);
+        addTableHeader(table, "Pièce", BLUE_HEADER);
+        addTableHeader(table, "Libellé", BLUE_HEADER);
+        addTableHeader(table, "Débit", BLUE_HEADER);
+        addTableHeader(table, "Crédit", BLUE_HEADER);
+        addTableHeader(table, "Solde Progressif", BLUE_HEADER);
+
+        // Lignes avec solde progressif
+        double soldeProgressif = 0.0;
+        for (com.bf4invest.model.EcritureComptable ecriture : ecritures) {
+            if (ecriture.getLignes() != null) {
+                for (com.bf4invest.model.LigneEcriture ligne : ecriture.getLignes()) {
+                    if (compteCode.equals(ligne.getCompteCode())) {
+                        double debit = ligne.getDebit() != null ? ligne.getDebit() : 0.0;
+                        double credit = ligne.getCredit() != null ? ligne.getCredit() : 0.0;
+                        soldeProgressif += (debit - credit);
+
+                        table.addCell(createCell(ecriture.getDateEcriture().format(DATE_FORMATTER), Font.NORMAL, 10f));
+                        table.addCell(createCell(ecriture.getJournal(), Font.NORMAL, 10f));
+                        table.addCell(createCell(ecriture.getNumeroPiece(), Font.NORMAL, 10f));
+                        table.addCell(createCell(ligne.getLibelle(), Font.NORMAL, 10f));
+                        table.addCell(createCell(debit > 0 ? formatAmount(debit) : "", Font.NORMAL, 10f, Element.ALIGN_RIGHT));
+                        table.addCell(createCell(credit > 0 ? formatAmount(credit) : "", Font.NORMAL, 10f, Element.ALIGN_RIGHT));
+                        table.addCell(createCell(formatAmount(soldeProgressif), Font.BOLD, 10f, Element.ALIGN_RIGHT));
+                    }
+                }
+            }
+        }
+
+        document.add(table);
+        document.close();
+        return baos.toByteArray();
+    }
+
+    /**
+     * Génère un PDF de déclaration TVA
+     */
+    public byte[] generateDeclarationTVAPDF(com.bf4invest.model.DeclarationTVA declaration) throws DocumentException, IOException {
+        Document document = new Document(PageSize.A4, 40f, 40f, 60f, 60f);
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        PdfWriter writer = PdfWriter.getInstance(document, baos);
+        document.open();
+
+        // Titre
+        Font titleFont = new Font(Font.HELVETICA, 18, Font.BOLD, BLUE_DARK);
+        Paragraph title = new Paragraph("DÉCLARATION TVA", titleFont);
+        title.setAlignment(Element.ALIGN_CENTER);
+        title.setSpacingAfter(10f);
+        document.add(title);
+
+        // Période
+        Font periodFont = new Font(Font.HELVETICA, 14, Font.BOLD);
+        Paragraph period = new Paragraph("Période: " + declaration.getPeriode(), periodFont);
+        period.setAlignment(Element.ALIGN_CENTER);
+        period.setSpacingAfter(20f);
+        document.add(period);
+
+        // TVA Collectée
+        Paragraph collecteeTitle = new Paragraph("TVA COLLECTÉE", new Font(Font.HELVETICA, 12, Font.BOLD));
+        collecteeTitle.setSpacingAfter(10f);
+        document.add(collecteeTitle);
+
+        PdfPTable collecteeTable = new PdfPTable(2);
+        collecteeTable.setWidthPercentage(50);
+        collecteeTable.setWidths(new float[]{2f, 1.5f});
+        addTableRow(collecteeTable, "TVA 20%", formatAmount(declaration.getTvaCollectee20() != null ? declaration.getTvaCollectee20() : 0.0));
+        addTableRow(collecteeTable, "TVA 14%", formatAmount(declaration.getTvaCollectee14() != null ? declaration.getTvaCollectee14() : 0.0));
+        addTableRow(collecteeTable, "TVA 10%", formatAmount(declaration.getTvaCollectee10() != null ? declaration.getTvaCollectee10() : 0.0));
+        addTableRow(collecteeTable, "TVA 7%", formatAmount(declaration.getTvaCollectee7() != null ? declaration.getTvaCollectee7() : 0.0));
+        addTableRow(collecteeTable, "TVA 0%", formatAmount(declaration.getTvaCollectee0() != null ? declaration.getTvaCollectee0() : 0.0));
+        addTableRow(collecteeTable, "TOTAL", formatAmount(declaration.getTvaCollecteeTotale() != null ? declaration.getTvaCollecteeTotale() : 0.0), Font.BOLD);
+        document.add(collecteeTable);
+
+        document.add(new Paragraph(" ")); // Espace
+
+        // TVA Déductible
+        Paragraph deductibleTitle = new Paragraph("TVA DÉDUCTIBLE", new Font(Font.HELVETICA, 12, Font.BOLD));
+        deductibleTitle.setSpacingAfter(10f);
+        document.add(deductibleTitle);
+
+        PdfPTable deductibleTable = new PdfPTable(2);
+        deductibleTable.setWidthPercentage(50);
+        deductibleTable.setWidths(new float[]{2f, 1.5f});
+        addTableRow(deductibleTable, "TVA 20%", formatAmount(declaration.getTvaDeductible20() != null ? declaration.getTvaDeductible20() : 0.0));
+        addTableRow(deductibleTable, "TVA 14%", formatAmount(declaration.getTvaDeductible14() != null ? declaration.getTvaDeductible14() : 0.0));
+        addTableRow(deductibleTable, "TVA 10%", formatAmount(declaration.getTvaDeductible10() != null ? declaration.getTvaDeductible10() : 0.0));
+        addTableRow(deductibleTable, "TVA 7%", formatAmount(declaration.getTvaDeductible7() != null ? declaration.getTvaDeductible7() : 0.0));
+        addTableRow(deductibleTable, "TVA 0%", formatAmount(declaration.getTvaDeductible0() != null ? declaration.getTvaDeductible0() : 0.0));
+        addTableRow(deductibleTable, "TOTAL", formatAmount(declaration.getTvaDeductibleTotale() != null ? declaration.getTvaDeductibleTotale() : 0.0), Font.BOLD);
+        document.add(deductibleTable);
+
+        document.add(new Paragraph(" ")); // Espace
+
+        // Résultat
+        Paragraph resultTitle = new Paragraph("RÉSULTAT", new Font(Font.HELVETICA, 14, Font.BOLD));
+        resultTitle.setSpacingAfter(10f);
+        document.add(resultTitle);
+
+        PdfPTable resultTable = new PdfPTable(2);
+        resultTable.setWidthPercentage(50);
+        resultTable.setWidths(new float[]{2f, 1.5f});
+        addTableRow(resultTable, "TVA à Payer", formatAmount(declaration.getTvaAPayer() != null ? declaration.getTvaAPayer() : 0.0), Font.BOLD);
+        if (declaration.getTvaCredit() != null && declaration.getTvaCredit() > 0) {
+            addTableRow(resultTable, "TVA Crédit", formatAmount(declaration.getTvaCredit()), Font.BOLD);
+        }
+        document.add(resultTable);
+
+        document.close();
+        return baos.toByteArray();
+    }
+
+    // Helpers pour les tableaux PDF
+    private void addTableHeader(PdfPTable table, String text, Color bgColor) {
+        PdfPCell cell = new PdfPCell(new Phrase(text, new Font(Font.HELVETICA, 10, Font.BOLD, Color.WHITE)));
+        cell.setBackgroundColor(bgColor);
+        cell.setHorizontalAlignment(Element.ALIGN_CENTER);
+        cell.setPadding(8f);
+        table.addCell(cell);
+    }
+
+    private PdfPCell createCell(String text, int fontStyle, float fontSize) {
+        return createCell(text, fontStyle, fontSize, Element.ALIGN_LEFT);
+    }
+
+    private PdfPCell createCell(String text, int fontStyle, float fontSize, int alignment) {
+        PdfPCell cell = new PdfPCell(new Phrase(text, new Font(Font.HELVETICA, fontSize, fontStyle)));
+        cell.setHorizontalAlignment(alignment);
+        cell.setPadding(5f);
+        return cell;
+    }
+
+    private void addTableRow(PdfPTable table, String label, String value) {
+        addTableRow(table, label, value, Font.NORMAL);
+    }
+
+    private void addTableRow(PdfPTable table, String label, String value, int fontStyle) {
+        table.addCell(createCell(label, Font.NORMAL, 10f));
+        table.addCell(createCell(value, fontStyle, 10f, Element.ALIGN_RIGHT));
+    }
+
+    /**
+     * Génère un PDF du bilan
+     */
+    public byte[] generateBilanPdf(java.util.Map<String, Object> bilan) throws DocumentException, IOException {
+        Document document = new Document(PageSize.A4, 40f, 40f, 60f, 60f);
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        PdfWriter writer = PdfWriter.getInstance(document, baos);
+        document.open();
+
+        // Titre
+        Font titleFont = new Font(Font.HELVETICA, 18, Font.BOLD, BLUE_DARK);
+        Paragraph title = new Paragraph("BILAN", titleFont);
+        title.setAlignment(Element.ALIGN_CENTER);
+        title.setSpacingAfter(10f);
+        document.add(title);
+
+        // Date
+        java.time.LocalDate date = (java.time.LocalDate) bilan.get("date");
+        Font dateFont = new Font(Font.HELVETICA, 12, Font.NORMAL);
+        Paragraph datePara = new Paragraph("Date: " + date.format(DATE_FORMATTER), dateFont);
+        datePara.setAlignment(Element.ALIGN_CENTER);
+        datePara.setSpacingAfter(20f);
+        document.add(datePara);
+
+        // Tableau Bilan (2 colonnes: Actif et Passif)
+        PdfPTable bilanTable = new PdfPTable(2);
+        bilanTable.setWidthPercentage(100);
+        bilanTable.setWidths(new float[]{1f, 1f});
+
+        // En-têtes
+        PdfPCell actifHeader = new PdfPCell(new Phrase("ACTIF", new Font(Font.HELVETICA, 12, Font.BOLD, Color.WHITE)));
+        actifHeader.setBackgroundColor(BLUE_HEADER);
+        actifHeader.setHorizontalAlignment(Element.ALIGN_CENTER);
+        actifHeader.setPadding(10f);
+        bilanTable.addCell(actifHeader);
+
+        PdfPCell passifHeader = new PdfPCell(new Phrase("PASSIF", new Font(Font.HELVETICA, 12, Font.BOLD, Color.WHITE)));
+        passifHeader.setBackgroundColor(BLUE_HEADER);
+        passifHeader.setHorizontalAlignment(Element.ALIGN_CENTER);
+        passifHeader.setPadding(10f);
+        bilanTable.addCell(passifHeader);
+
+        // Actif
+        addBilanRow(bilanTable, "Actif Immobilisé", (Double) bilan.get("actifImmobilise"));
+        addBilanRow(bilanTable, "Actif Circulant", (Double) bilan.get("actifCirculant"));
+        addBilanRow(bilanTable, "Créances", (Double) bilan.get("creances"));
+        addBilanRow(bilanTable, "TOTAL ACTIF", (Double) bilan.get("totalActif"), Font.BOLD);
+
+        // Passif
+        addBilanRow(bilanTable, "Capitaux Propres", (Double) bilan.get("capitauxPropres"));
+        addBilanRow(bilanTable, "Dettes", (Double) bilan.get("dettes"));
+        addBilanRow(bilanTable, "TOTAL PASSIF", (Double) bilan.get("totalPassif"), Font.BOLD);
+
+        document.add(bilanTable);
+
+        // Résultat
+        Double resultat = (Double) bilan.get("resultat");
+        if (resultat != null) {
+            document.add(new Paragraph(" "));
+            Paragraph resultPara = new Paragraph(
+                "Résultat: " + formatAmount(resultat),
+                new Font(Font.HELVETICA, 12, Font.BOLD));
+            resultPara.setAlignment(Element.ALIGN_CENTER);
+            document.add(resultPara);
+        }
+
+        document.close();
+        return baos.toByteArray();
+    }
+
+    /**
+     * Génère un PDF du CPC (Compte de Produits et Charges)
+     */
+    public byte[] generateCpcPdf(java.util.Map<String, Object> cpc) throws DocumentException, IOException {
+        Document document = new Document(PageSize.A4, 40f, 40f, 60f, 60f);
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        PdfWriter writer = PdfWriter.getInstance(document, baos);
+        document.open();
+
+        // Titre
+        Font titleFont = new Font(Font.HELVETICA, 18, Font.BOLD, BLUE_DARK);
+        Paragraph title = new Paragraph("COMPTE DE PRODUITS ET CHARGES (CPC)", titleFont);
+        title.setAlignment(Element.ALIGN_CENTER);
+        title.setSpacingAfter(10f);
+        document.add(title);
+
+        // Période
+        java.time.LocalDate dateDebut = (java.time.LocalDate) cpc.get("dateDebut");
+        java.time.LocalDate dateFin = (java.time.LocalDate) cpc.get("dateFin");
+        Font periodFont = new Font(Font.HELVETICA, 12, Font.NORMAL);
+        Paragraph period = new Paragraph(
+            String.format("Période: %s au %s", 
+                dateDebut.format(DATE_FORMATTER), 
+                dateFin.format(DATE_FORMATTER)), 
+            periodFont);
+        period.setAlignment(Element.ALIGN_CENTER);
+        period.setSpacingAfter(20f);
+        document.add(period);
+
+        // Tableau CPC
+        PdfPTable cpcTable = new PdfPTable(2);
+        cpcTable.setWidthPercentage(80);
+        cpcTable.setWidths(new float[]{2.5f, 1.5f});
+        cpcTable.setHorizontalAlignment(Element.ALIGN_CENTER);
+
+        // En-tête
+        PdfPCell header1 = new PdfPCell(new Phrase("Poste", new Font(Font.HELVETICA, 11, Font.BOLD, Color.WHITE)));
+        header1.setBackgroundColor(BLUE_HEADER);
+        header1.setHorizontalAlignment(Element.ALIGN_CENTER);
+        header1.setPadding(8f);
+        cpcTable.addCell(header1);
+
+        PdfPCell header2 = new PdfPCell(new Phrase("Montant", new Font(Font.HELVETICA, 11, Font.BOLD, Color.WHITE)));
+        header2.setBackgroundColor(BLUE_HEADER);
+        header2.setHorizontalAlignment(Element.ALIGN_CENTER);
+        header2.setPadding(8f);
+        cpcTable.addCell(header2);
+
+        // Produits d'exploitation
+        addCpcRow(cpcTable, "PRODUITS D'EXPLOITATION", (Double) cpc.get("produitsExploitation"), Font.BOLD);
+        addCpcRow(cpcTable, "Charges d'exploitation", (Double) cpc.get("chargesExploitation"));
+        addCpcRow(cpcTable, "Résultat d'exploitation", (Double) cpc.get("resultatExploitation"), Font.BOLD);
+
+        cpcTable.addCell(createCell(" ", Font.NORMAL, 10f));
+        cpcTable.addCell(createCell(" ", Font.NORMAL, 10f));
+
+        // Produits et charges financiers
+        addCpcRow(cpcTable, "PRODUITS FINANCIERS", (Double) cpc.get("produitsFinanciers"));
+        addCpcRow(cpcTable, "Charges financières", (Double) cpc.get("chargesFinancieres"));
+        addCpcRow(cpcTable, "Résultat financier", (Double) cpc.get("resultatFinancier"), Font.BOLD);
+
+        cpcTable.addCell(createCell(" ", Font.NORMAL, 10f));
+        cpcTable.addCell(createCell(" ", Font.NORMAL, 10f));
+
+        addCpcRow(cpcTable, "Résultat courant", (Double) cpc.get("resultatCourant"), Font.BOLD);
+        addCpcRow(cpcTable, "Impôts sur les bénéfices", (Double) cpc.get("impotBenefices"));
+        addCpcRow(cpcTable, "RÉSULTAT NET", (Double) cpc.get("resultatNet"), Font.BOLD);
+
+        document.add(cpcTable);
+        document.close();
+        return baos.toByteArray();
+    }
+
+    private void addBilanRow(PdfPTable table, String label, Double value) {
+        addBilanRow(table, label, value, Font.NORMAL);
+    }
+
+    private void addBilanRow(PdfPTable table, String label, Double value, int fontStyle) {
+        PdfPCell labelCell = createCell(label, fontStyle, 10f);
+        labelCell.setPadding(8f);
+        table.addCell(labelCell);
+
+        PdfPCell valueCell = createCell(formatAmount(value != null ? value : 0.0), fontStyle, 10f, Element.ALIGN_RIGHT);
+        valueCell.setPadding(8f);
+        table.addCell(valueCell);
+    }
+
+    private void addCpcRow(PdfPTable table, String label, Double value) {
+        addCpcRow(table, label, value, Font.NORMAL);
+    }
+
+    private void addCpcRow(PdfPTable table, String label, Double value, int fontStyle) {
+        table.addCell(createCell(label, fontStyle, 10f));
+        table.addCell(createCell(formatAmount(value != null ? value : 0.0), fontStyle, 10f, Element.ALIGN_RIGHT));
+    }
 }
 

@@ -738,5 +738,236 @@ public class ExcelExportService {
             default: return type;
         }
     }
+
+    // ========== EXPORTS COMPTABLES ==========
+
+    /**
+     * Export du journal comptable (toutes les écritures)
+     */
+    public byte[] exportJournalComptable(List<com.bf4invest.model.EcritureComptable> ecritures) throws IOException {
+        try (XSSFWorkbook workbook = new XSSFWorkbook()) {
+            Sheet sheet = workbook.createSheet("Journal Comptable");
+            
+            CellStyle headerStyle = createHeaderStyle(workbook);
+            CellStyle currencyStyle = createCurrencyStyle(workbook);
+            CellStyle dateStyle = createDateStyle(workbook);
+            
+            int rowNum = 0;
+            Row headerRow = sheet.createRow(rowNum++);
+            String[] headers = {"Date", "Journal", "Pièce", "Compte", "Libellé", "Débit", "Crédit"};
+            for (int i = 0; i < headers.length; i++) {
+                Cell cell = headerRow.createCell(i);
+                cell.setCellValue(headers[i]);
+                cell.setCellStyle(headerStyle);
+            }
+            
+            for (com.bf4invest.model.EcritureComptable ecriture : ecritures) {
+                if (ecriture.getLignes() != null) {
+                    for (com.bf4invest.model.LigneEcriture ligne : ecriture.getLignes()) {
+                        Row row = sheet.createRow(rowNum++);
+                        row.createCell(0).setCellValue(ecriture.getDateEcriture().format(DATE_FORMATTER));
+                        row.createCell(1).setCellValue(ecriture.getJournal());
+                        row.createCell(2).setCellValue(ecriture.getNumeroPiece());
+                        row.createCell(3).setCellValue(ligne.getCompteCode());
+                        row.createCell(4).setCellValue(ligne.getLibelle());
+                        
+                        Cell debitCell = row.createCell(5);
+                        if (ligne.getDebit() != null && ligne.getDebit() > 0) {
+                            debitCell.setCellValue(ligne.getDebit());
+                            debitCell.setCellStyle(currencyStyle);
+                        }
+                        
+                        Cell creditCell = row.createCell(6);
+                        if (ligne.getCredit() != null && ligne.getCredit() > 0) {
+                            creditCell.setCellValue(ligne.getCredit());
+                            creditCell.setCellStyle(currencyStyle);
+                        }
+                    }
+                }
+            }
+            
+            for (int i = 0; i < headers.length; i++) {
+                sheet.autoSizeColumn(i);
+            }
+            
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            workbook.write(out);
+            return out.toByteArray();
+        }
+    }
+
+    /**
+     * Export de la balance
+     */
+    public byte[] exportBalance(List<com.bf4invest.model.CompteComptable> comptes) throws IOException {
+        try (XSSFWorkbook workbook = new XSSFWorkbook()) {
+            Sheet sheet = workbook.createSheet("Balance");
+            
+            CellStyle headerStyle = createHeaderStyle(workbook);
+            CellStyle currencyStyle = createCurrencyStyle(workbook);
+            
+            int rowNum = 0;
+            Row headerRow = sheet.createRow(rowNum++);
+            String[] headers = {"Code", "Libellé", "Classe", "Débit", "Crédit", "Solde"};
+            for (int i = 0; i < headers.length; i++) {
+                Cell cell = headerRow.createCell(i);
+                cell.setCellValue(headers[i]);
+                cell.setCellStyle(headerStyle);
+            }
+            
+            for (com.bf4invest.model.CompteComptable compte : comptes) {
+                Row row = sheet.createRow(rowNum++);
+                row.createCell(0).setCellValue(compte.getCode());
+                row.createCell(1).setCellValue(compte.getLibelle());
+                row.createCell(2).setCellValue(compte.getClasse());
+                
+                Cell debitCell = row.createCell(3);
+                debitCell.setCellValue(compte.getSoldeDebit() != null ? compte.getSoldeDebit() : 0.0);
+                debitCell.setCellStyle(currencyStyle);
+                
+                Cell creditCell = row.createCell(4);
+                creditCell.setCellValue(compte.getSoldeCredit() != null ? compte.getSoldeCredit() : 0.0);
+                creditCell.setCellStyle(currencyStyle);
+                
+                Cell soldeCell = row.createCell(5);
+                soldeCell.setCellValue(compte.getSolde() != null ? compte.getSolde() : 0.0);
+                soldeCell.setCellStyle(currencyStyle);
+            }
+            
+            for (int i = 0; i < headers.length; i++) {
+                sheet.autoSizeColumn(i);
+            }
+            
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            workbook.write(out);
+            return out.toByteArray();
+        }
+    }
+
+    /**
+     * Export du grand livre
+     */
+    public byte[] exportGrandLivre(List<com.bf4invest.model.EcritureComptable> ecritures, String compteCode) throws IOException {
+        try (XSSFWorkbook workbook = new XSSFWorkbook()) {
+            Sheet sheet = workbook.createSheet("Grand Livre - " + compteCode);
+            
+            CellStyle headerStyle = createHeaderStyle(workbook);
+            CellStyle currencyStyle = createCurrencyStyle(workbook);
+            CellStyle dateStyle = createDateStyle(workbook);
+            
+            int rowNum = 0;
+            Row headerRow = sheet.createRow(rowNum++);
+            String[] headers = {"Date", "Journal", "Pièce", "Libellé", "Débit", "Crédit", "Solde Progressif"};
+            for (int i = 0; i < headers.length; i++) {
+                Cell cell = headerRow.createCell(i);
+                cell.setCellValue(headers[i]);
+                cell.setCellStyle(headerStyle);
+            }
+            
+            double soldeProgressif = 0.0;
+            for (com.bf4invest.model.EcritureComptable ecriture : ecritures) {
+                if (ecriture.getLignes() != null) {
+                    for (com.bf4invest.model.LigneEcriture ligne : ecriture.getLignes()) {
+                        if (compteCode.equals(ligne.getCompteCode())) {
+                            Row row = sheet.createRow(rowNum++);
+                            row.createCell(0).setCellValue(ecriture.getDateEcriture().format(DATE_FORMATTER));
+                            row.createCell(1).setCellValue(ecriture.getJournal());
+                            row.createCell(2).setCellValue(ecriture.getNumeroPiece());
+                            row.createCell(3).setCellValue(ligne.getLibelle());
+                            
+                            double debit = ligne.getDebit() != null ? ligne.getDebit() : 0.0;
+                            double credit = ligne.getCredit() != null ? ligne.getCredit() : 0.0;
+                            soldeProgressif += (debit - credit);
+                            
+                            Cell debitCell = row.createCell(4);
+                            if (debit > 0) {
+                                debitCell.setCellValue(debit);
+                                debitCell.setCellStyle(currencyStyle);
+                            }
+                            
+                            Cell creditCell = row.createCell(5);
+                            if (credit > 0) {
+                                creditCell.setCellValue(credit);
+                                creditCell.setCellStyle(currencyStyle);
+                            }
+                            
+                            Cell soldeCell = row.createCell(6);
+                            soldeCell.setCellValue(soldeProgressif);
+                            soldeCell.setCellStyle(currencyStyle);
+                        }
+                    }
+                }
+            }
+            
+            for (int i = 0; i < headers.length; i++) {
+                sheet.autoSizeColumn(i);
+            }
+            
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            workbook.write(out);
+            return out.toByteArray();
+        }
+    }
+
+    /**
+     * Export des déclarations TVA
+     */
+    public byte[] exportDeclarationsTVA(List<com.bf4invest.model.DeclarationTVA> declarations) throws IOException {
+        try (XSSFWorkbook workbook = new XSSFWorkbook()) {
+            Sheet sheet = workbook.createSheet("Déclarations TVA");
+            
+            CellStyle headerStyle = createHeaderStyle(workbook);
+            CellStyle currencyStyle = createCurrencyStyle(workbook);
+            
+            int rowNum = 0;
+            Row headerRow = sheet.createRow(rowNum++);
+            String[] headers = {"Période", "TVA Collectée 20%", "TVA Collectée 14%", "TVA Collectée 10%", "TVA Collectée 7%", 
+                                "TVA Collectée Totale", "TVA Déductible 20%", "TVA Déductible 14%", "TVA Déductible 10%", 
+                                "TVA Déductible 7%", "TVA Déductible Totale", "TVA à Payer", "TVA Crédit", "Statut", "Date Dépôt"};
+            for (int i = 0; i < headers.length; i++) {
+                Cell cell = headerRow.createCell(i);
+                cell.setCellValue(headers[i]);
+                cell.setCellStyle(headerStyle);
+            }
+            
+            for (com.bf4invest.model.DeclarationTVA decl : declarations) {
+                Row row = sheet.createRow(rowNum++);
+                row.createCell(0).setCellValue(decl.getPeriode());
+                row.createCell(1).setCellValue(decl.getTvaCollectee20() != null ? decl.getTvaCollectee20() : 0.0);
+                row.createCell(2).setCellValue(decl.getTvaCollectee14() != null ? decl.getTvaCollectee14() : 0.0);
+                row.createCell(3).setCellValue(decl.getTvaCollectee10() != null ? decl.getTvaCollectee10() : 0.0);
+                row.createCell(4).setCellValue(decl.getTvaCollectee7() != null ? decl.getTvaCollectee7() : 0.0);
+                row.createCell(5).setCellValue(decl.getTvaCollecteeTotale() != null ? decl.getTvaCollecteeTotale() : 0.0);
+                row.createCell(6).setCellValue(decl.getTvaDeductible20() != null ? decl.getTvaDeductible20() : 0.0);
+                row.createCell(7).setCellValue(decl.getTvaDeductible14() != null ? decl.getTvaDeductible14() : 0.0);
+                row.createCell(8).setCellValue(decl.getTvaDeductible10() != null ? decl.getTvaDeductible10() : 0.0);
+                row.createCell(9).setCellValue(decl.getTvaDeductible7() != null ? decl.getTvaDeductible7() : 0.0);
+                row.createCell(10).setCellValue(decl.getTvaDeductibleTotale() != null ? decl.getTvaDeductibleTotale() : 0.0);
+                row.createCell(11).setCellValue(decl.getTvaAPayer() != null ? decl.getTvaAPayer() : 0.0);
+                row.createCell(12).setCellValue(decl.getTvaCredit() != null ? decl.getTvaCredit() : 0.0);
+                row.createCell(13).setCellValue(decl.getStatut() != null ? decl.getStatut().toString() : "");
+                row.createCell(14).setCellValue(decl.getDateDepot() != null ? decl.getDateDepot().format(DATE_FORMATTER) : "");
+                
+                for (int i = 1; i <= 12; i++) {
+                    row.getCell(i).setCellStyle(currencyStyle);
+                }
+            }
+            
+            for (int i = 0; i < headers.length; i++) {
+                sheet.autoSizeColumn(i);
+            }
+            
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            workbook.write(out);
+            return out.toByteArray();
+        }
+    }
+
+    private CellStyle createDateStyle(Workbook workbook) {
+        CellStyle style = workbook.createCellStyle();
+        DataFormat format = workbook.createDataFormat();
+        style.setDataFormat(format.getFormat("dd/mm/yyyy"));
+        return style;
+    }
 }
 

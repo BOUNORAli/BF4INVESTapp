@@ -2,6 +2,7 @@ package com.bf4invest.config;
 
 import com.bf4invest.model.User;
 import com.bf4invest.repository.UserRepository;
+import com.bf4invest.service.ComptabiliteService;
 import com.bf4invest.service.PaymentModeService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.CommandLineRunner;
@@ -17,6 +18,7 @@ public class DataInitializer implements CommandLineRunner {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final PaymentModeService paymentModeService;
+    private final ComptabiliteService comptabiliteService;
     
     @Override
     public void run(String... args) {
@@ -32,6 +34,12 @@ public class DataInitializer implements CommandLineRunner {
         
         // Initialiser les modes de paiement par défaut
         paymentModeService.initializeDefaultModes();
+        
+        // Initialiser le plan comptable PCGM
+        comptabiliteService.initializePlanComptable();
+        
+        // Créer l'exercice comptable de l'année en cours
+        comptabiliteService.getOrCreateCurrentExercice();
     }
     
     private void createUserIfNotExists(String name, String email, String password) {

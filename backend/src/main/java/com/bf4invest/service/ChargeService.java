@@ -194,6 +194,13 @@ public class ChargeService {
             log.warn("Charge {} marquée PAYEE mais montant invalide: {}", saved.getId(), saved.getMontant());
         }
 
+        // Générer l'écriture comptable
+        try {
+            comptabiliteService.genererEcritureCharge(saved);
+        } catch (Exception e) {
+            log.warn("Erreur lors de la génération de l'écriture comptable pour charge {}: {}", saved.getId(), e.getMessage());
+        }
+
         return saved;
     }
 }

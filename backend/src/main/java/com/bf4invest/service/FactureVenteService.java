@@ -27,6 +27,7 @@ public class FactureVenteService {
     private final CalculComptableService calculComptableService;
     private final SoldeService soldeService;
     private final ClientService clientService;
+    private final ComptabiliteService comptabiliteService;
     
     public List<FactureVente> findAll() {
         List<FactureVente> factures = factureRepository.findAll();
@@ -116,6 +117,13 @@ public class FactureVenteService {
             } catch (Exception e) {
                 log.warn("Erreur lors de l'enregistrement de la transaction solde pour facture vente {}: {}", saved.getId(), e.getMessage());
             }
+        }
+        
+        // Générer l'écriture comptable
+        try {
+            comptabiliteService.genererEcritureFactureVente(saved);
+        } catch (Exception e) {
+            log.warn("Erreur lors de la génération de l'écriture comptable pour facture vente {}: {}", saved.getId(), e.getMessage());
         }
         
         return saved;

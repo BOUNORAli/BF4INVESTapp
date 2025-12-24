@@ -332,3 +332,73 @@ export interface DashboardKpiResponse {
   }>;
 }
 
+// ========== COMPTABILITÉ ==========
+
+export interface CompteComptable {
+  id?: string;
+  code: string;
+  libelle: string;
+  classe: string;
+  type: 'ACTIF' | 'PASSIF' | 'CHARGE' | 'PRODUIT' | 'TRESORERIE';
+  collectif?: boolean;
+  compteParent?: string;
+  soldeDebit: number;
+  soldeCredit: number;
+  solde: number;
+  actif: boolean;
+}
+
+export interface LigneEcriture {
+  compteCode: string;
+  compteLibelle: string;
+  debit?: number;
+  credit?: number;
+  libelle: string;
+}
+
+export interface EcritureComptable {
+  id?: string;
+  dateEcriture: string;
+  journal: string;
+  numeroPiece: string;
+  libelle: string;
+  lignes: LigneEcriture[];
+  pieceJustificativeType?: string;
+  pieceJustificativeId?: string;
+  exerciceId?: string;
+  lettree?: boolean;
+  pointage?: boolean;
+}
+
+export interface ExerciceComptable {
+  id?: string;
+  code: string;
+  dateDebut: string;
+  dateFin: string;
+  statut: 'OUVERT' | 'CLOTURE';
+}
+
+export interface DeclarationTVA {
+  id?: string;
+  mois: number;
+  annee: number;
+  periode: string;
+  tvaCollectee20: number;
+  tvaCollectee14: number;
+  tvaCollectee10: number;
+  tvaCollectee7: number;
+  tvaCollectee0: number;
+  tvaCollecteeTotale: number;
+  tvaDeductible20: number;
+  tvaDeductible14: number;
+  tvaDeductible10: number;
+  tvaDeductible7: number;
+  tvaDeductible0: number;
+  tvaDeductibleTotale: number;
+  tvaAPayer: number;
+  tvaCredit: number;
+  statut: 'BROUILLON' | 'VALIDEE' | 'DEPOSEE';
+  dateDepot?: string;
+  notes?: string;
+}
+
