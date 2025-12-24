@@ -345,9 +345,10 @@ import { StoreService, PrevisionTresorerieResponse, PrevisionJournaliere, Echean
                   }
                   <!-- Jours du calendrier -->
                   @for (day of calendarDays(); track day.date) {
-                    <div class="border border-slate-200 rounded-lg p-1.5 md:p-2 min-h-[60px] md:min-h-[80px] hover:bg-slate-50 transition"
+                    <div class="border border-slate-200 rounded-lg p-1.5 md:p-2 min-h-[60px] md:min-h-[80px] hover:bg-slate-50 transition cursor-pointer"
                          [class.bg-blue-50]="day.hasEcheance"
-                         [class.bg-emerald-50]="day.isToday">
+                         [class.bg-emerald-50]="day.isToday"
+                         (click)="showDayDetails(day)">
                       <div class="text-xs font-semibold mb-1 flex items-center justify-between"
                            [class.text-slate-400]="!day.isCurrentMonth"
                            [class.text-blue-600]="day.isToday"
@@ -386,6 +387,106 @@ import { StoreService, PrevisionTresorerieResponse, PrevisionJournaliere, Echean
           <p>Chargement des prévisions...</p>
         </div>
       }
+
+      <!-- Modal Détails du Jour -->
+      @if (selectedDayDetails()) {
+        <div class="fixed inset-0 z-50 flex items-center justify-center" aria-modal="true">
+          <div (click)="closeDayDetails()" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm"></div>
+          <div class="relative bg-white rounded-2xl shadow-2xl max-w-3xl w-full mx-2 md:mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+            <div class="flex items-center justify-between p-4 md:p-6 border-b border-slate-100 bg-gradient-to-r from-blue-50 to-indigo-50">
+              <div>
+                <h2 class="text-lg md:text-xl font-bold text-slate-800">Détails des Prévisions</h2>
+                <p class="text-xs md:text-sm text-slate-600 mt-1">{{ formatDateLong(selectedDayDetails()!.date) }}</p>
+              </div>
+              <button (click)="closeDayDetails()" class="text-slate-400 hover:text-slate-600 transition min-h-[44px] min-w-[44px] flex items-center justify-center">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+              </button>
+            </div>
+            
+            <div class="flex-1 overflow-y-auto p-4 md:p-6">
+              @if (selectedDayDetails()!.echeances && selectedDayDetails()!.echeances.length > 0) {
+                <div class="space-y-4">
+                  <div class="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                    <div class="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <span class="text-slate-600">Total Entrées:</span>
+                        <span class="font-bold text-emerald-600 ml-2">
+                          {{ getTotalForDay(selectedDayDetails()!.echeances, 'VENTE') | number:'1.2-2' }} MAD
+                        </span>
+                      </div>
+                      <div>
+                        <span class="text-slate-600">Total Sorties:</span>
+                        <span class="font-bold text-red-600 ml-2">
+                          {{ getTotalForDay(selectedDayDetails()!.echeances, 'ACHAT') | number:'1.2-2' }} MAD
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="overflow-x-auto">
+                    <table class="w-full text-sm min-w-[600px]">
+                      <thead class="bg-slate-50 border-b border-slate-200">
+                        <tr>
+                          <th class="px-4 py-3 text-left font-semibold text-slate-700">Type</th>
+                          <th class="px-4 py-3 text-left font-semibold text-slate-700">Facture</th>
+                          <th class="px-4 py-3 text-left font-semibold text-slate-700">Partenaire</th>
+                          <th class="px-4 py-3 text-right font-semibold text-slate-700">Montant</th>
+                          <th class="px-4 py-3 text-left font-semibold text-slate-700">Statut</th>
+                        </tr>
+                      </thead>
+                      <tbody class="divide-y divide-slate-100">
+                        @for (ech of selectedDayDetails()!.echeances; track ech.factureId + ech.date) {
+                          <tr class="hover:bg-slate-50">
+                            <td class="px-4 py-3">
+                              <span class="px-2 py-1 rounded text-xs font-medium"
+                                    [class.bg-emerald-50]="ech.type === 'VENTE'"
+                                    [class.text-emerald-700]="ech.type === 'VENTE'"
+                                    [class.bg-red-50]="ech.type === 'ACHAT'"
+                                    [class.text-red-700]="ech.type === 'ACHAT'">
+                                {{ ech.type }}
+                              </span>
+                            </td>
+                            <td class="px-4 py-3 text-sm font-medium">{{ ech.numeroFacture }}</td>
+                            <td class="px-4 py-3 text-sm">{{ ech.partenaire }}</td>
+                            <td class="px-4 py-3 text-right font-bold"
+                                [class.text-emerald-600]="ech.type === 'VENTE'"
+                                [class.text-red-600]="ech.type === 'ACHAT'">
+                              {{ ech.montant | number:'1.2-2' }} MAD
+                            </td>
+                            <td class="px-4 py-3">
+                              <span class="px-2 py-1 rounded text-xs font-medium"
+                                    [class.bg-blue-50]="ech.statut === 'PREVU'"
+                                    [class.text-blue-700]="ech.statut === 'PREVU'"
+                                    [class.bg-emerald-50]="ech.statut === 'REALISE'"
+                                    [class.text-emerald-700]="ech.statut === 'REALISE'"
+                                    [class.bg-orange-50]="ech.statut === 'PARTIELLE'"
+                                    [class.text-orange-700]="ech.statut === 'PARTIELLE'"
+                                    [class.bg-red-50]="ech.statut === 'EN_RETARD'"
+                                    [class.text-red-700]="ech.statut === 'EN_RETARD'">
+                                {{ ech.statut }}
+                              </span>
+                            </td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              } @else {
+                <div class="text-center py-12 text-slate-500">
+                  <p>Aucune échéance prévue pour ce jour</p>
+                </div>
+              }
+            </div>
+
+            <div class="p-4 md:p-6 border-t border-slate-100 bg-slate-50/50">
+              <button (click)="closeDayDetails()" class="w-full px-4 py-2.5 bg-slate-200 text-slate-700 font-medium rounded-lg hover:bg-slate-300 transition min-h-[44px]">
+                Fermer
+              </button>
+            </div>
+          </div>
+        </div>
+      }
     </div>
   `
 })
@@ -401,6 +502,9 @@ export class PrevisionTresorerieComponent implements OnInit {
   currentCalendarYear = signal<number>(new Date().getFullYear());
   selectedMonth = new Date().getMonth();
   selectedYear = new Date().getFullYear();
+  
+  // Modal détails jour
+  selectedDayDetails = signal<{ date: string; echeances: EcheanceDetail[] } | null>(null);
   
   months = [
     { value: 0, label: 'Janvier' },
@@ -859,6 +963,34 @@ export class PrevisionTresorerieComponent implements OnInit {
   
   getEcheancesForDate(date: string, echeances: EcheanceDetail[]): EcheanceDetail[] {
     return echeances.filter(e => e.date === date);
+  }
+  
+  showDayDetails(day: any) {
+    this.selectedDayDetails.set({
+      date: day.date,
+      echeances: day.echeances || []
+    });
+  }
+  
+  closeDayDetails() {
+    this.selectedDayDetails.set(null);
+  }
+  
+  formatDateLong(dateStr: string): string {
+    const date = new Date(dateStr);
+    const options: Intl.DateTimeFormatOptions = { 
+      weekday: 'long', 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    };
+    return date.toLocaleDateString('fr-FR', options);
+  }
+  
+  getTotalForDay(echeances: EcheanceDetail[], type: 'VENTE' | 'ACHAT'): number {
+    return echeances
+      .filter(e => e.type === type)
+      .reduce((sum, e) => sum + (e.montant || 0), 0);
   }
 }
 
