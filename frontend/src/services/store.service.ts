@@ -1481,8 +1481,11 @@ export class StoreService {
 
       // Recharger le solde global pour refléter la sortie
       await this.loadSoldeGlobal();
+      
+      // Recharger l'historique de trésorerie pour afficher la nouvelle entrée
+      await this.loadHistoriqueSolde();
 
-      this.showToast('Charge marquée payée', 'success');
+      this.showToast('Charge marquée payée et enregistrée dans l\'historique', 'success');
       return mapped;
     } catch (error) {
       console.error('Error paying charge:', error);
