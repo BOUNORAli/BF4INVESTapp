@@ -82,14 +82,22 @@ export class ApiService {
     });
   }
 
-  downloadFile(endpoint: string): Observable<Blob> {
+  downloadFile(endpoint: string, params?: any): Observable<Blob> {
     const token = localStorage.getItem('bf4_token');
     let headers = new HttpHeaders();
     if (token) {
       headers = headers.set('Authorization', `Bearer ${token}`);
     }
 
-    return this.http.get(`${this.getApiUrl()}${endpoint}`, {
+    let url = `${this.getApiUrl()}${endpoint}`;
+    if (params) {
+      const queryString = new URLSearchParams(params).toString();
+      if (queryString) {
+        url += '?' + queryString;
+      }
+    }
+
+    return this.http.get(url, {
       headers: headers,
       responseType: 'blob'
     });

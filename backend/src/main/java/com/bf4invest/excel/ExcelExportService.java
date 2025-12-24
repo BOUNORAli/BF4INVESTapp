@@ -4,6 +4,7 @@ import com.bf4invest.model.BandeCommande;
 import com.bf4invest.model.Client;
 import com.bf4invest.model.FactureAchat;
 import com.bf4invest.model.FactureVente;
+import com.bf4invest.model.HistoriqueSolde;
 import com.bf4invest.model.Paiement;
 import com.bf4invest.model.Supplier;
 import com.bf4invest.repository.ClientRepository;
@@ -24,6 +25,7 @@ import java.io.IOException;
 import java.text.DecimalFormat;
 import java.text.NumberFormat;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -595,6 +597,144 @@ public class ExcelExportService {
         font.setColor(IndexedColors.BLUE.getIndex());
         style.setFont(font);
         return style;
+    }
+    
+    /**
+     * Exporte l'historique de trésorerie en Excel
+     */
+    public byte[] exportHistoriqueTresorerie(List<HistoriqueSolde> historique) throws IOException {
+        try (XSSFWorkbook workbook = new XSSFWorkbook()) {
+            Sheet sheet = workbook.createSheet("Historique Trésorerie");
+            
+            // Styles
+            CellStyle headerStyle = createHeaderStyle(workbook);
+            CellStyle currencyStyle = createCurrencyStyle(workbook);
+            CellStyle dateStyle = createDateStyle(workbook);
+            CellStyle defaultStyle = createDefaultStyle(workbook);
+            
+            // En-têtes
+            Row headerRow = sheet.createRow(0);
+            String[] headers = {
+                "Date", "Type", "Partenaire", "Référence", "Montant", 
+                "Solde Global Avant", "Solde Global Après", 
+                "Solde Partenaire Avant", "Solde Partenaire Après", "Description"
+            };
+            
+            for (int i = 0; i < headers.length; i++) {
+                Cell cell = headerRow.createCell(i);
+                cell.setCellValue(headers[i]);
+                cell.setCellStyle(headerStyle);
+            }
+            
+            // Données
+            int rowNum = 1;
+            DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+            
+            for (HistoriqueSolde item : historique) {
+                Row row = sheet.createRow(rowNum++);
+                
+                // Date
+                Cell dateCell = row.createCell(0);
+                if (item.getDate() != null) {
+                    LocalDateTime dateTime = item.getDate();
+                    dateCell.setCellValue(dateTime.format(dateTimeFormatter));
+                } else {
+                    dateCell.setCellValue("-");
+                }
+                dateCell.setCellStyle(dateStyle);
+                
+                // Type
+                Cell typeCell = row.createCell(1);
+                typeCell.setCellValue(getTypeLabel(item.getType()));
+                typeCell.setCellStyle(defaultStyle);
+                
+                // Partenaire
+                Cell partenaireCell = row.createCell(2);
+                partenaireCell.setCellValue(item.getPartenaireNom() != null ? item.getPartenaireNom() : "-");
+                partenaireCell.setCellStyle(defaultStyle);
+                
+                // Référence
+                Cell refCell = row.createCell(3);
+                refCell.setCellValue(item.getReferenceNumero() != null ? item.getReferenceNumero() : "-");
+                refCell.setCellStyle(defaultStyle);
+                
+                // Montant
+                Cell montantCell = row.createCell(4);
+                if (item.getMontant() != null) {
+                    montantCell.setCellValue(item.getMontant());
+                } else {
+                    montantCell.setCellValue(0.0);
+                }
+                montantCell.setCellStyle(currencyStyle);
+                
+                // Solde Global Avant
+                Cell soldeAvantCell = row.createCell(5);
+                if (item.getSoldeGlobalAvant() != null) {
+                    soldeAvantCell.setCellValue(item.getSoldeGlobalAvant());
+                } else {
+                    soldeAvantCell.setCellValue(0.0);
+                }
+                soldeAvantCell.setCellStyle(currencyStyle);
+                
+                // Solde Global Après
+                Cell soldeApresCell = row.createCell(6);
+                if (item.getSoldeGlobalApres() != null) {
+                    soldeApresCell.setCellValue(item.getSoldeGlobalApres());
+                } else {
+                    soldeApresCell.setCellValue(0.0);
+                }
+                soldeApresCell.setCellStyle(currencyStyle);
+                
+                // Solde Partenaire Avant
+                Cell soldePartAvantCell = row.createCell(7);
+                if (item.getSoldePartenaireAvant() != null) {
+                    soldePartAvantCell.setCellValue(item.getSoldePartenaireAvant());
+                    soldePartAvantCell.setCellStyle(currencyStyle);
+                } else {
+                    soldePartAvantCell.setCellValue("-");
+                    soldePartAvantCell.setCellStyle(defaultStyle);
+                }
+                
+                // Solde Partenaire Après
+                Cell soldePartApresCell = row.createCell(8);
+                if (item.getSoldePartenaireApres() != null) {
+                    soldePartApresCell.setCellValue(item.getSoldePartenaireApres());
+                    soldePartApresCell.setCellStyle(currencyStyle);
+                } else {
+                    soldePartApresCell.setCellValue("-");
+                    soldePartApresCell.setCellStyle(defaultStyle);
+                }
+                
+                // Description
+                Cell descCell = row.createCell(9);
+                descCell.setCellValue(item.getDescription() != null ? item.getDescription() : "-");
+                descCell.setCellStyle(defaultStyle);
+            }
+            
+            // Ajuster la largeur des colonnes
+            for (int i = 0; i < headers.length; i++) {
+                sheet.autoSizeColumn(i);
+                // Ajouter un peu de padding
+                sheet.setColumnWidth(i, sheet.getColumnWidth(i) + 1000);
+            }
+            
+            // Convertir en byte array
+            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+            workbook.write(outputStream);
+            return outputStream.toByteArray();
+        }
+    }
+    
+    private String getTypeLabel(String type) {
+        if (type == null) return "-";
+        switch (type) {
+            case "FACTURE_VENTE": return "Facture Vente";
+            case "FACTURE_ACHAT": return "Facture Achat";
+            case "PAIEMENT_CLIENT": return "Paiement Client";
+            case "PAIEMENT_FOURNISSEUR": return "Paiement Fournisseur";
+            case "APPORT_EXTERNE": return "Apport Externe";
+            default: return type;
+        }
     }
 }
 

@@ -1561,6 +1561,48 @@ export class StoreService {
     }
   }
 
+  async exportHistoriqueTresorerieExcel(
+    partenaireId?: string,
+    partenaireType?: string,
+    type?: string,
+    dateDebut?: string,
+    dateFin?: string
+  ): Promise<void> {
+    try {
+      this.showToast('Génération de l\'export Excel en cours...', 'info');
+      
+      const params: any = {};
+      if (partenaireId) params.partenaireId = partenaireId;
+      if (partenaireType) params.partenaireType = partenaireType;
+      if (type) params.type = type;
+      if (dateDebut) params.dateDebut = dateDebut;
+      if (dateFin) params.dateFin = dateFin;
+      
+      const blob = await this.api.downloadFile('/solde/historique/export/excel', params).toPromise();
+      
+      if (blob) {
+        const today = new Date().toISOString().split('T')[0];
+        const fileName = `historique-tresorerie_${today}.xlsx`;
+        
+        const urlObj = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = urlObj;
+        link.download = fileName;
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(urlObj);
+        
+        this.showToast('Export Excel généré avec succès', 'success');
+      }
+    } catch (error) {
+      console.error('Error exporting historique Excel:', error);
+      this.showToast('Erreur lors de l\'export Excel', 'error');
+      throw error;
+    }
+  }
+
   // Vérification des rappels de paiement
   private reminderNotificationsCache = new Set<string>(); // Cache pour éviter les doublons
 
