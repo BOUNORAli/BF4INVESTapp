@@ -27,12 +27,20 @@ public class AuditController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime to
     ) {
-        List<AuditLog> logs = auditLogRepository.findAll();
+        List<AuditLog> logs;
         
-        if (entityType != null) {
+        // Optimisation: utiliser findByEntityTypeAndEntityId si les deux paramètres sont fournis
+        if (entityType != null && entityId != null) {
+            logs = auditLogRepository.findByEntityTypeAndEntityId(entityType, entityId);
+        } else {
+            logs = auditLogRepository.findAll();
+        }
+        
+        // Appliquer les autres filtres si nécessaire
+        if (entityType != null && entityId == null) {
             logs = logs.stream().filter(l -> l.getEntityType().equals(entityType)).toList();
         }
-        if (entityId != null) {
+        if (entityId != null && entityType == null) {
             logs = logs.stream().filter(l -> l.getEntityId() != null && l.getEntityId().equals(entityId)).toList();
         }
         if (userId != null) {

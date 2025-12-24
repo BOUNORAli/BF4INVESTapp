@@ -1,7 +1,7 @@
 
 import { Component, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterLink } from '@angular/router';
+import { RouterLink, Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { StoreService, BC } from '../../services/store.service';
 
@@ -156,6 +156,9 @@ import { StoreService, BC } from '../../services/store.service';
 
                   <td class="px-6 py-4 text-center">
                      <div class="flex items-center justify-center gap-2 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button (click)="viewAuditLog(bc)" class="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-full transition-all" title="Voir journal d'activité">
+                          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                        </button>
                         <a [routerLink]="['/bc/edit', bc.id]" class="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-all" title="Modifier">
                           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
                         </a>
@@ -212,6 +215,7 @@ import { StoreService, BC } from '../../services/store.service';
 })
 export class BcListComponent {
   store = inject(StoreService);
+  router = inject(Router);
   Math = Math; // Expose Math for template
 
   // Filters State
@@ -410,6 +414,15 @@ export class BcListComponent {
         // Error already handled in store
       }
     }
+  }
+
+  viewAuditLog(bc: BC) {
+    this.router.navigate(['/audit'], {
+      queryParams: {
+        entityType: 'BandeCommande',
+        entityId: bc.id
+      }
+    });
   }
 
   getStatusClass(status: string): string {

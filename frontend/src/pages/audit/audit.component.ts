@@ -1,6 +1,7 @@
 import { Component, OnInit, signal, computed, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute, Router } from '@angular/router';
 import { ApiService } from '../../services/api.service';
 import { StoreService } from '../../services/store.service';
 
@@ -80,6 +81,49 @@ interface AuditLog {
             <label class="block text-sm font-medium text-slate-700 mb-1">Date</label>
             <input type="date" [(ngModel)]="filterDate" (change)="applyFilters()"
               class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500">
+          </div>
+        </div>
+
+        <!-- Filtre par Document -->
+        <div class="mt-4 pt-4 border-t border-slate-100">
+          <h3 class="text-sm font-semibold text-slate-700 mb-3">Filtrer par Document</h3>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <!-- Type de document -->
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-1">Type de document</label>
+              <select [(ngModel)]="filterDocumentType" (change)="onDocumentTypeChange()" 
+                class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500">
+                <option value="">Sélectionner un type</option>
+                <option value="BandeCommande">Bon de Commande</option>
+                <option value="FactureVente">Facture Vente</option>
+                <option value="FactureAchat">Facture Achat</option>
+              </select>
+            </div>
+
+            <!-- Numéro du document -->
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-1">Numéro</label>
+              <input type="text" [(ngModel)]="filterDocumentNumber" 
+                [list]="filterDocumentType ? 'document-numbers-' + filterDocumentType : ''"
+                (input)="onDocumentNumberChange()"
+                placeholder="Saisir ou sélectionner un numéro"
+                class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500">
+              @if (filterDocumentType) {
+                <datalist [id]="'document-numbers-' + filterDocumentType">
+                  @for (number of getDocumentNumbers(); track number) {
+                    <option [value]="number">{{ number }}</option>
+                  }
+                </datalist>
+              }
+            </div>
+
+            <!-- Bouton Effacer filtre document -->
+            <div class="flex items-end">
+              <button (click)="clearDocumentFilter()" 
+                class="w-full px-4 py-2 bg-slate-100 text-slate-600 rounded-lg text-sm font-medium hover:bg-slate-200 transition-colors">
+                Effacer
+              </button>
+            </div>
           </div>
         </div>
 
@@ -248,6 +292,8 @@ interface AuditLog {
 export class AuditComponent implements OnInit {
   private api = inject(ApiService);
   store = inject(StoreService);
+  route = inject(ActivatedRoute);
+  router = inject(Router);
 
   auditLogs = signal<AuditLog[]>([]);
   loading = signal(false);
@@ -257,6 +303,9 @@ export class AuditComponent implements OnInit {
   filterEntityType = '';
   filterAction = '';
   filterDate = '';
+  filterDocumentType = '';
+  filterDocumentNumber = '';
+  filterEntityId = ''; // ID interne du document sélectionné
 
   uniqueUsers = computed(() => {
     const users = new Set<string>();
@@ -286,6 +335,9 @@ export class AuditComponent implements OnInit {
         return logDate === this.filterDate;
       });
     }
+    if (this.filterEntityId) {
+      logs = logs.filter(l => l.entityId === this.filterEntityId);
+    }
     
     // Trier par date décroissante
     return logs.sort((a, b) => {
@@ -295,13 +347,49 @@ export class AuditComponent implements OnInit {
     });
   });
 
-  ngOnInit() {
-    this.loadAuditLogs();
+  // Liste des numéros de documents disponibles selon le type
+  getDocumentNumbers(): string[] {
+    if (!this.filterDocumentType) return [];
+    
+    if (this.filterDocumentType === 'BandeCommande') {
+      return this.store.bcs().map(bc => bc.number || bc.id).filter(Boolean);
+    } else if (this.filterDocumentType === 'FactureVente') {
+      return this.store.invoices().filter(inv => inv.type === 'sale').map(inv => inv.number).filter(Boolean);
+    } else if (this.filterDocumentType === 'FactureAchat') {
+      return this.store.invoices().filter(inv => inv.type === 'purchase').map(inv => inv.number).filter(Boolean);
+    }
+    return [];
   }
 
-  loadAuditLogs() {
+  ngOnInit() {
+    // Vérifier les query params pour un filtre direct
+    this.route.queryParams.subscribe(params => {
+      if (params['entityType'] && params['entityId']) {
+        this.filterDocumentType = params['entityType'];
+        this.filterEntityId = params['entityId'];
+        // Trouver le numéro du document
+        this.resolveDocumentNumber();
+        this.loadAuditLogs(params['entityType'], params['entityId']);
+      } else {
+        this.loadAuditLogs();
+      }
+    });
+  }
+
+  loadAuditLogs(entityType?: string, entityId?: string) {
     this.loading.set(true);
-    this.api.get<AuditLog[]>('/audit-logs').subscribe({
+    let url = '/audit-logs';
+    const params: any = {};
+    
+    if (entityType) params.entityType = entityType;
+    if (entityId) params.entityId = entityId;
+    
+    if (Object.keys(params).length > 0) {
+      const queryString = new URLSearchParams(params).toString();
+      url += '?' + queryString;
+    }
+    
+    this.api.get<AuditLog[]>(url).subscribe({
       next: (logs) => {
         this.auditLogs.set(logs);
         this.loading.set(false);
@@ -313,6 +401,73 @@ export class AuditComponent implements OnInit {
     });
   }
 
+  onDocumentTypeChange() {
+    this.filterDocumentNumber = '';
+    this.filterEntityId = '';
+    // Si on change le type, on recharge tous les logs
+    if (!this.filterDocumentType) {
+      this.loadAuditLogs();
+    }
+  }
+
+  onDocumentNumberChange() {
+    if (!this.filterDocumentNumber || !this.filterDocumentType) {
+      this.filterEntityId = '';
+      this.loadAuditLogs();
+      return;
+    }
+    
+    // Résoudre l'ID du document à partir du numéro
+    let documentId: string | null = null;
+    
+    if (this.filterDocumentType === 'BandeCommande') {
+      const bc = this.store.bcs().find(b => (b.number || b.id) === this.filterDocumentNumber);
+      documentId = bc?.id || null;
+    } else if (this.filterDocumentType === 'FactureVente') {
+      const invoice = this.store.invoices().find(inv => inv.type === 'sale' && inv.number === this.filterDocumentNumber);
+      documentId = invoice?.id || null;
+    } else if (this.filterDocumentType === 'FactureAchat') {
+      const invoice = this.store.invoices().find(inv => inv.type === 'purchase' && inv.number === this.filterDocumentNumber);
+      documentId = invoice?.id || null;
+    }
+    
+    if (documentId) {
+      this.filterEntityId = documentId;
+      this.loadAuditLogs(this.filterDocumentType, documentId);
+    } else {
+      this.filterEntityId = '';
+      this.loadAuditLogs();
+    }
+  }
+
+  resolveDocumentNumber() {
+    if (!this.filterEntityId || !this.filterDocumentType) return;
+    
+    if (this.filterDocumentType === 'BandeCommande') {
+      const bc = this.store.bcs().find(b => b.id === this.filterEntityId);
+      this.filterDocumentNumber = bc?.number || bc?.id || '';
+    } else if (this.filterDocumentType === 'FactureVente') {
+      const invoice = this.store.invoices().find(inv => inv.id === this.filterEntityId && inv.type === 'sale');
+      this.filterDocumentNumber = invoice?.number || '';
+    } else if (this.filterDocumentType === 'FactureAchat') {
+      const invoice = this.store.invoices().find(inv => inv.id === this.filterEntityId && inv.type === 'purchase');
+      this.filterDocumentNumber = invoice?.number || '';
+    }
+  }
+
+  clearDocumentFilter() {
+    this.filterDocumentType = '';
+    this.filterDocumentNumber = '';
+    this.filterEntityId = '';
+    // Mettre à jour l'URL pour supprimer les query params
+    this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: {},
+      replaceUrl: true
+    });
+    this.loadAuditLogs();
+  }
+
   applyFilters() {
     // Les filtres sont appliqués via le computed signal
   }
@@ -322,6 +477,7 @@ export class AuditComponent implements OnInit {
     this.filterEntityType = '';
     this.filterAction = '';
     this.filterDate = '';
+    this.clearDocumentFilter();
   }
 
   formatDate(timestamp: string): string {
