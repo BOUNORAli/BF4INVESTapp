@@ -337,7 +337,7 @@ public class SoldeService {
                 .referenceId(chargeId)
                 .referenceNumero(libelle.trim())
                 .description(libelle.trim())
-                .date(datePaiement != null ? datePaiement.atStartOfDay() : LocalDateTime.now())
+                .date(LocalDateTime.now())
                 .build();
 
         HistoriqueSolde saved = historiqueSoldeRepository.save(historique);
