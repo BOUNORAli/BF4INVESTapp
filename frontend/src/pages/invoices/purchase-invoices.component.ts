@@ -584,7 +584,9 @@ import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, FormsModule } 
                                 @if (prev.montantPaye !== undefined && prev.montantPaye > 0) {
                                   <div class="text-emerald-600 font-medium">Payé: {{ prev.montantPaye | number:'1.2-2' }} MAD</div>
                                 }
-                                @if (prev.montantRestant !== undefined && prev.montantRestant > 0) {
+                                @if (prev.statut === 'PARTIELLE' && prev.montantRestant !== undefined && prev.montantRestant > 0) {
+                                  <div class="text-orange-600 font-bold mt-1">Restant: {{ prev.montantRestant | number:'1.2-2' }} MAD</div>
+                                } @else if (prev.montantRestant !== undefined && prev.montantRestant > 0) {
                                   <div class="text-slate-500">Restant: {{ prev.montantRestant | number:'1.2-2' }} MAD</div>
                                 }
                                 @if (!prev.montantPaye || prev.montantPaye === 0) {
