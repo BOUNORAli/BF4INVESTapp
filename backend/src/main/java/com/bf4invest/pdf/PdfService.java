@@ -461,7 +461,7 @@ public class PdfService {
         
         double totalHT = 0.0;
         double tauxTVA = 20.0;
-
+        
         // Nouvelle structure: lignesAchat
         if (bc.getLignesAchat() != null && !bc.getLignesAchat().isEmpty()) {
             int lineNum = 1;
@@ -683,7 +683,7 @@ public class PdfService {
         Font valueFontRed = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 9, RED);
         
         // LIEU DE LIVRAISON (vient du BC)
-        addInfoRowWithBackground(infoTable, "LIEU DE LIVRAISON:",
+        addInfoRowWithBackground(infoTable, "LIEU DE LIVRAISON:", 
             bc.getLieuLivraison() != null ? bc.getLieuLivraison() : "",
             labelFont, valueFontRed);
         
@@ -694,7 +694,7 @@ public class PdfService {
         
         // RESPONSABLE A CONTACTER (vient du BC) - laisser vide si non renseigné
         String responsable = bc.getResponsableLivraison() != null ? bc.getResponsableLivraison() : "";
-        addInfoRowWithBackground(infoTable, "RESPONSABLE A CONTACTER A LA\nLIVRAISON", responsable,
+        addInfoRowWithBackground(infoTable, "RESPONSABLE A CONTACTER A LA\nLIVRAISON", responsable, 
             labelFont, valueFontRed);
         
         // MODE PAIEMENT (délai de paiement en jours, ex: "120J") - laisser vide si non renseigné
@@ -1143,10 +1143,10 @@ public class PdfService {
                 footerCell.setPadding(10);
                 footerCell.setBorder(Rectangle.NO_BORDER);
                 footerCell.setHorizontalAlignment(Element.ALIGN_CENTER);
-                
-                Font footerFont = FontFactory.getFont(FontFactory.HELVETICA, 8);
-                
-                Paragraph footer1 = new Paragraph("ICE: 002889872000062", footerFont);
+        
+        Font footerFont = FontFactory.getFont(FontFactory.HELVETICA, 8);
+        
+        Paragraph footer1 = new Paragraph("ICE: 002889872000062", footerFont);
                 footer1.setAlignment(Element.ALIGN_CENTER);
                 footer1.setSpacingAfter(3);
                 
@@ -1157,12 +1157,12 @@ public class PdfService {
                 Paragraph footer3 = new Paragraph("RC de Meknes: 54287 - IF: 50499801 - TP: 17101980", footerFont);
                 footer3.setAlignment(Element.ALIGN_CENTER);
                 footer3.setSpacingAfter(0);
-                
-                footerCell.addElement(footer1);
-                footerCell.addElement(footer2);
-                footerCell.addElement(footer3);
-                
-                footerTable.addCell(footerCell);
+        
+        footerCell.addElement(footer1);
+        footerCell.addElement(footer2);
+        footerCell.addElement(footer3);
+        
+        footerTable.addCell(footerCell);
                 
                 // Positionner le footer en bas de page
                 float yPosition = document.bottomMargin() + 2f;
@@ -2535,9 +2535,11 @@ public class PdfService {
         
         boolean isExpress = "EXPRESS".equals(ov.getType());
         
-        PdfPTable t = new PdfPTable(3);
+        // Table 4 colonnes pour reproduire l'espacement du modèle:
+        // [label] [valeur] [DHS.] [espace vide]
+        PdfPTable t = new PdfPTable(4);
         t.setWidthPercentage(100);
-        t.setWidths(new float[]{2.6f, 5.6f, 1.8f});
+        t.setWidths(new float[]{2.2f, 3.0f, 1.0f, 3.8f});
         t.setSpacingAfter(0);
         
         // Helpers
@@ -2551,66 +2553,82 @@ public class PdfService {
             c.setVerticalAlignment(Element.ALIGN_MIDDLE);
             return c;
         };
+        java.util.function.BiFunction<String, Font, PdfPCell> valueCell = (txt, font) -> {
+            PdfPCell c = cell.apply(txt, font);
+            // Laisser un petit "air" comme dans l'image (valeur collée mais lisible)
+            c.setPaddingLeft(6);
+            return c;
+        };
         
-        // Montant row: label | amount | DHS.
+        // Montant row: label | amount | DHS. | (vide)
         String amount = formatAmount(ov.getMontant());
         PdfPCell c1 = cell.apply("Montant :", labelFont);
-        PdfPCell c2 = cell.apply(amount, blueAmountBold);
-        PdfPCell c3 = cell.apply("DHS.", valueBold);
+        PdfPCell c2 = valueCell.apply(amount, blueAmountBold);
+        PdfPCell c3 = valueCell.apply("DHS.", valueBold);
+        PdfPCell c4 = cell.apply("", valueBold);
         c1.setHorizontalAlignment(Element.ALIGN_LEFT);
-        c2.setHorizontalAlignment(Element.ALIGN_CENTER);
-        // "DHS." plus à droite comme sur le modèle
-        c3.setHorizontalAlignment(Element.ALIGN_RIGHT);
+        // Dans le modèle, le montant commence juste après le label (pas centré)
+        c2.setHorizontalAlignment(Element.ALIGN_LEFT);
+        // "DHS." proche du montant
+        c3.setHorizontalAlignment(Element.ALIGN_LEFT);
+        c4.setHorizontalAlignment(Element.ALIGN_LEFT);
         t.addCell(c1);
         t.addCell(c2);
         t.addCell(c3);
+        t.addCell(c4);
         
         // En faveur de
         String nomBeneficiaire = ov.getNomBeneficiaire() != null ? ov.getNomBeneficiaire() : "";
         Font nomFont = isExpress ? redValueBold : valueBold;
         PdfPCell b1 = cell.apply("En faveur de :", labelFont);
-        PdfPCell b2 = cell.apply(nomBeneficiaire, nomFont);
+        PdfPCell b2 = valueCell.apply(nomBeneficiaire, nomFont);
         PdfPCell b3 = cell.apply("", valueBold);
+        PdfPCell b4 = cell.apply("", valueBold);
         b1.setHorizontalAlignment(Element.ALIGN_LEFT);
         b2.setHorizontalAlignment(Element.ALIGN_LEFT);
         b3.setHorizontalAlignment(Element.ALIGN_LEFT);
+        b4.setHorizontalAlignment(Element.ALIGN_LEFT);
         t.addCell(b1);
+        // Valeur sur toute la largeur restante (comme modèle)
+        b2.setColspan(3);
         t.addCell(b2);
-        t.addCell(b3);
         
         // Domicilié chez
         String banqueBeneficiaire = ov.getBanqueBeneficiaire() != null ? ov.getBanqueBeneficiaire() : "";
         PdfPCell d1 = cell.apply("Domicilié chez :", labelFont);
-        PdfPCell d2 = cell.apply(banqueBeneficiaire, blueValueBold);
+        PdfPCell d2 = valueCell.apply(banqueBeneficiaire, blueValueBold);
         PdfPCell d3 = cell.apply("", valueBold);
+        PdfPCell d4 = cell.apply("", valueBold);
         d1.setHorizontalAlignment(Element.ALIGN_LEFT);
         d2.setHorizontalAlignment(Element.ALIGN_LEFT);
         t.addCell(d1);
+        d2.setColspan(3);
         t.addCell(d2);
-        t.addCell(d3);
         
         // Compte n°
         String rib = ov.getRibBeneficiaire() != null ? ov.getRibBeneficiaire() : "";
         PdfPCell r1 = cell.apply("Compte n° :", labelFont);
-        PdfPCell r2 = cell.apply(rib, blueValueBold);
+        PdfPCell r2 = valueCell.apply(rib, blueValueBold);
         PdfPCell r3 = cell.apply("", valueBold);
+        PdfPCell r4 = cell.apply("", valueBold);
         r1.setHorizontalAlignment(Element.ALIGN_LEFT);
         r2.setHorizontalAlignment(Element.ALIGN_LEFT);
         t.addCell(r1);
+        r2.setColspan(3);
         t.addCell(r2);
-        t.addCell(r3);
         
         // Motif
         String motif = ov.getMotif() != null ? ov.getMotif() : "";
         Font motifFont = isExpress ? redValueBold : valueBold;
         PdfPCell m1 = cell.apply("Motif :", labelFont);
-        PdfPCell m2 = cell.apply(motif, motifFont);
+        PdfPCell m2 = valueCell.apply(motif, motifFont);
         PdfPCell m3 = cell.apply("", valueBold);
+        PdfPCell m4 = cell.apply("", valueBold);
         m1.setHorizontalAlignment(Element.ALIGN_LEFT);
         m2.setHorizontalAlignment(Element.ALIGN_LEFT);
         t.addCell(m1);
+        m2.setColspan(3);
         t.addCell(m2);
-        t.addCell(m3);
         
         document.add(t);
         
