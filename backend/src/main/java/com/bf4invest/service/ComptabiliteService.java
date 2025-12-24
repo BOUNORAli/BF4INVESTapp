@@ -668,7 +668,7 @@ public class ComptabiliteService {
      * Récupère le grand livre pour un compte donné
      */
     public List<EcritureComptable> getGrandLivre(String compteCode, LocalDate dateDebut, LocalDate dateFin, String exerciceId) {
-        List<EcritureComptable> ecritures = getEcritures(dateDebut, dateFin, null, exerciceId);
+        List<EcritureComptable> ecritures = getEcritures(dateDebut, dateFin, null, exerciceId, null, null);
         return ecritures.stream()
                 .filter(e -> e.getLignes() != null && e.getLignes().stream()
                         .anyMatch(l -> compteCode.equals(l.getCompteCode())))
@@ -681,7 +681,7 @@ public class ComptabiliteService {
      * Calcule la balance générale (tous les comptes avec débit/crédit/solde)
      */
     public List<CompteComptable> getBalance(LocalDate dateDebut, LocalDate dateFin, String exerciceId) {
-        List<EcritureComptable> ecritures = getEcritures(dateDebut, dateFin, null, exerciceId);
+        List<EcritureComptable> ecritures = getEcritures(dateDebut, dateFin, null, exerciceId, null, null);
         
         // Réinitialiser les soldes des comptes
         List<CompteComptable> comptes = compteRepository.findAll();
