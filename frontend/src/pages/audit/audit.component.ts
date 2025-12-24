@@ -220,7 +220,7 @@ interface AuditLog {
       @if (selectedLog()) {
         <div class="fixed inset-0 z-50 flex items-center justify-center" aria-modal="true">
           <div (click)="closeDetails()" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm"></div>
-          <div class="relative bg-white rounded-2xl shadow-2xl max-w-3xl w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+          <div class="relative bg-white rounded-2xl shadow-2xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col">
             <div class="flex items-center justify-between p-6 border-b border-slate-100 bg-gradient-to-r from-blue-50 to-indigo-50">
               <div>
                 <h2 class="text-xl font-bold text-slate-800">Détails de l'Activité</h2>
@@ -232,49 +232,126 @@ interface AuditLog {
                 </svg>
               </button>
             </div>
-            
-            <div class="flex-1 overflow-y-auto p-6 space-y-6">
-              @if (selectedLog(); as log) {
-                <!-- Informations générales -->
-                <div class="bg-slate-50 p-4 rounded-lg">
-                  <h3 class="font-semibold text-slate-700 mb-3">Informations Générales</h3>
-                  <div class="space-y-2 text-sm">
-                    <div><span class="text-slate-500">Date/Heure:</span> <span class="font-medium">{{ formatDate(log.timestamp) }} à {{ formatTime(log.timestamp) }}</span></div>
-                    <div><span class="text-slate-500">Utilisateur:</span> <span class="font-medium">{{ log.userName || log.userId }}</span></div>
-                    <div><span class="text-slate-500">Action:</span> <span [class]="getActionBadgeClass(log.action)" class="px-2 py-1 rounded-full text-xs font-semibold ml-2">{{ getActionLabel(log.action) }}</span></div>
-                    <div><span class="text-slate-500">Type d'entité:</span> <span class="font-medium">{{ getEntityLabel(log.entityType) }}</span></div>
-                  </div>
-                </div>
 
-                <!-- Détails de l'action -->
-                <div class="space-y-4">
+            <!-- Onglets -->
+            @if (selectedLog(); as log) {
+              <div class="border-b border-slate-200 bg-slate-50/50">
+                <div class="flex gap-1 px-6">
+                  <button (click)="activeDetailsTab.set('resume')" 
+                    [class]="activeDetailsTab() === 'resume' ? 'border-b-2 border-blue-600 text-blue-600 font-semibold' : 'text-slate-600 hover:text-slate-800'"
+                    class="px-4 py-3 text-sm transition-colors">
+                    Résumé
+                  </button>
                   @if (log.action === 'UPDATE' && log.oldValue) {
-                    <div class="bg-amber-50 p-4 rounded-lg border border-amber-200">
-                      <h3 class="font-semibold text-amber-700 mb-3">Ancienne Valeur</h3>
-                      <div class="text-sm text-amber-800 whitespace-pre-wrap break-words font-mono bg-white p-3 rounded border border-amber-200 max-h-48 overflow-y-auto">
-                        {{ formatValue(log.oldValue) }}
-                      </div>
-                    </div>
+                    <button (click)="activeDetailsTab.set('before')" 
+                      [class]="activeDetailsTab() === 'before' ? 'border-b-2 border-amber-600 text-amber-600 font-semibold' : 'text-slate-600 hover:text-slate-800'"
+                      class="px-4 py-3 text-sm transition-colors">
+                      Avant
+                    </button>
                   }
-                  
-                  @if (log.newValue) {
-                    <div class="bg-emerald-50 p-4 rounded-lg border border-emerald-200">
-                      <h3 class="font-semibold text-emerald-700 mb-3">{{ log.action === 'UPDATE' ? 'Nouvelle Valeur' : 'Détails' }}</h3>
-                      <div class="text-sm text-emerald-800 whitespace-pre-wrap break-words font-mono bg-white p-3 rounded border border-emerald-200 max-h-48 overflow-y-auto">
-                        {{ formatValue(log.newValue) }}
-                      </div>
-                    </div>
-                  }
-                  
-                  @if (log.action === 'DELETE' && log.oldValue) {
-                    <div class="bg-red-50 p-4 rounded-lg border border-red-200">
-                      <h3 class="font-semibold text-red-700 mb-3">Valeur Supprimée</h3>
-                      <div class="text-sm text-red-800 whitespace-pre-wrap break-words font-mono bg-white p-3 rounded border border-red-200 max-h-48 overflow-y-auto">
-                        {{ formatValue(log.oldValue) }}
-                      </div>
-                    </div>
+                  @if (log.newValue || (log.action === 'DELETE' && log.oldValue)) {
+                    <button (click)="activeDetailsTab.set('after')" 
+                      [class]="activeDetailsTab() === 'after' ? 'border-b-2 border-emerald-600 text-emerald-600 font-semibold' : 'text-slate-600 hover:text-slate-800'"
+                      class="px-4 py-3 text-sm transition-colors">
+                      {{ log.action === 'UPDATE' ? 'Après' : 'Détails' }}
+                    </button>
                   }
                 </div>
+              </div>
+            }
+            
+            <div class="flex-1 overflow-y-auto p-6">
+              @if (selectedLog(); as log) {
+                <!-- Onglet Résumé -->
+                @if (activeDetailsTab() === 'resume') {
+                  <div class="space-y-6">
+                    <!-- Informations générales -->
+                    <div class="bg-slate-50 p-4 rounded-lg">
+                      <h3 class="font-semibold text-slate-700 mb-3">Informations Générales</h3>
+                      <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                        <div><span class="text-slate-500">Date/Heure:</span> <span class="font-medium ml-2">{{ formatDate(log.timestamp) }} à {{ formatTime(log.timestamp) }}</span></div>
+                        <div><span class="text-slate-500">Utilisateur:</span> <span class="font-medium ml-2">{{ log.userName || log.userId }}</span></div>
+                        <div><span class="text-slate-500">Action:</span> <span [class]="getActionBadgeClass(log.action)" class="px-2 py-1 rounded-full text-xs font-semibold ml-2">{{ getActionLabel(log.action) }}</span></div>
+                        <div><span class="text-slate-500">Type d'entité:</span> <span class="font-medium ml-2">{{ getEntityLabel(log.entityType) }}</span></div>
+                      </div>
+                    </div>
+
+                    <!-- Ce qui s'est passé -->
+                    <div class="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                      <h3 class="font-semibold text-blue-700 mb-3">Ce qui s'est passé</h3>
+                      <p class="text-sm text-blue-800">{{ getActionSummary(log) }}</p>
+                    </div>
+
+                    <!-- Champs modifiés (pour UPDATE) -->
+                    @if (log.action === 'UPDATE' && log.oldValue && log.newValue) {
+                      <div class="bg-amber-50 p-4 rounded-lg border border-amber-200">
+                        <h3 class="font-semibold text-amber-700 mb-3">Champs Modifiés</h3>
+                        @if (getChangedFields(log); as changedFields) {
+                          @if (changedFields.length > 0) {
+                            <div class="space-y-2">
+                              @for (field of changedFields; track field.key) {
+                                <div class="bg-white p-3 rounded border border-amber-200">
+                                  <div class="font-medium text-sm text-amber-900 mb-1">{{ field.label }}</div>
+                                  <div class="text-xs text-slate-600">
+                                    <span class="line-through text-red-600">{{ field.oldValue }}</span>
+                                    <span class="mx-2">→</span>
+                                    <span class="text-emerald-600 font-medium">{{ field.newValue }}</span>
+                                  </div>
+                                </div>
+                              }
+                            </div>
+                          } @else {
+                            <p class="text-sm text-amber-700">Aucun champ identifiable modifié</p>
+                          }
+                        }
+                      </div>
+                    }
+                  </div>
+                }
+
+                <!-- Onglet Avant -->
+                @if (activeDetailsTab() === 'before' && log.oldValue) {
+                  <div class="space-y-4">
+                    <div class="flex items-center justify-between mb-4">
+                      <h3 class="font-semibold text-amber-700">Ancienne Valeur</h3>
+                      <button (click)="copyToClipboard(formatValue(log.oldValue))" 
+                        class="px-3 py-1.5 bg-amber-100 text-amber-700 rounded-lg text-sm font-medium hover:bg-amber-200 transition flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                        </svg>
+                        Copier
+                      </button>
+                    </div>
+                    <div class="bg-amber-50 p-4 rounded-lg border border-amber-200">
+                      <div class="text-sm text-amber-800 whitespace-pre-wrap break-words font-mono bg-white p-4 rounded border border-amber-200 max-h-[60vh] overflow-y-auto">
+                        {{ formatValue(log.oldValue) }}
+                      </div>
+                    </div>
+                  </div>
+                }
+
+                <!-- Onglet Après / Détails -->
+                @if (activeDetailsTab() === 'after') {
+                  <div class="space-y-4">
+                    <div class="flex items-center justify-between mb-4">
+                      <h3 class="font-semibold text-emerald-700">{{ log.action === 'UPDATE' ? 'Nouvelle Valeur' : (log.action === 'DELETE' ? 'Valeur Supprimée' : 'Détails') }}</h3>
+                      @if (log.newValue || (log.action === 'DELETE' && log.oldValue)) {
+                        <button (click)="copyToClipboard(formatValue(log.newValue || log.oldValue))" 
+                          class="px-3 py-1.5 bg-emerald-100 text-emerald-700 rounded-lg text-sm font-medium hover:bg-emerald-200 transition flex items-center gap-2">
+                          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                          </svg>
+                          Copier
+                        </button>
+                      }
+                    </div>
+                    <div class="bg-emerald-50 p-4 rounded-lg border border-emerald-200">
+                      <div class="text-sm text-emerald-800 whitespace-pre-wrap break-words font-mono bg-white p-4 rounded border border-emerald-200 max-h-[60vh] overflow-y-auto">
+                        {{ formatValue(log.newValue || (log.action === 'DELETE' ? log.oldValue : null)) }}
+                      </div>
+                    </div>
+                  </div>
+                }
               }
             </div>
 
@@ -298,6 +375,7 @@ export class AuditComponent implements OnInit {
   auditLogs = signal<AuditLog[]>([]);
   loading = signal(false);
   selectedLog = signal<AuditLog | null>(null);
+  activeDetailsTab = signal<'resume' | 'before' | 'after'>('resume');
   
   filterUser = '';
   filterEntityType = '';
@@ -565,21 +643,236 @@ export class AuditComponent implements OnInit {
   }
 
   getDetails(log: AuditLog): string {
+    // Extraire les informations pertinentes pour un résumé court
+    const extractInfo = (value: any): { name?: string; number?: string; key?: string } => {
+      if (!value) return {};
+      let obj = value;
+      if (typeof value === 'string') {
+        try {
+          obj = JSON.parse(value);
+        } catch {
+          return { name: value };
+        }
+      }
+      if (typeof obj === 'object' && obj !== null) {
+        return {
+          name: obj.name || obj.designation || obj.libelle || obj.nomBeneficiaire,
+          number: obj.number || obj.numeroBC || obj.numeroOV,
+          key: obj.id || obj._id
+        };
+      }
+      return {};
+    };
+
+    if (log.action === 'CREATE') {
+      const info = extractInfo(log.newValue);
+      if (info.number) return `Création: ${info.number}`;
+      if (info.name) return `Création: ${info.name}`;
+      return 'Création effectuée';
+    } else if (log.action === 'UPDATE') {
+      const oldInfo = extractInfo(log.oldValue);
+      const newInfo = extractInfo(log.newValue);
+      const changedFields: string[] = [];
+      
+      if (oldInfo.number !== newInfo.number && (oldInfo.number || newInfo.number)) {
+        changedFields.push('numéro');
+      }
+      if (oldInfo.name !== newInfo.name && (oldInfo.name || newInfo.name)) {
+        changedFields.push('nom');
+      }
+      
+      // Essayer d'extraire d'autres champs communs
+      if (log.oldValue && log.newValue) {
+        const oldObj = typeof log.oldValue === 'string' ? (() => { try { return JSON.parse(log.oldValue); } catch { return null; } })() : log.oldValue;
+        const newObj = typeof log.newValue === 'string' ? (() => { try { return JSON.parse(log.newValue); } catch { return null; } })() : log.newValue;
+        
+        if (oldObj && newObj && typeof oldObj === 'object' && typeof newObj === 'object') {
+          const commonFields = ['montant', 'amountHT', 'amountTTC', 'date', 'statut', 'status', 'montantPrevu', 'datePrevue'];
+          for (const field of commonFields) {
+            if (oldObj[field] !== newObj[field] && (oldObj[field] !== undefined || newObj[field] !== undefined)) {
+              changedFields.push(field);
+            }
+          }
+        }
+      }
+      
+      if (changedFields.length > 0) {
+        return `Maj: ${changedFields.slice(0, 3).join(', ')}${changedFields.length > 3 ? '...' : ''}`;
+      }
+      return 'Modification effectuée';
+    } else if (log.action === 'DELETE') {
+      const info = extractInfo(log.oldValue);
+      if (info.number) return `Suppression: ${info.number}`;
+      if (info.name) return `Suppression: ${info.name}`;
+      return 'Suppression effectuée';
+    }
+    
+    // Fallback
     if (log.newValue && typeof log.newValue === 'string') {
-      return log.newValue;
+      return log.newValue.length > 50 ? log.newValue.substring(0, 50) + '...' : log.newValue;
     }
     if (log.oldValue && typeof log.oldValue === 'string') {
-      return log.oldValue;
+      return log.oldValue.length > 50 ? log.oldValue.substring(0, 50) + '...' : log.oldValue;
     }
     return log.entityId ? `ID: ${log.entityId}` : '-';
   }
 
+  getActionSummary(log: AuditLog): string {
+    const entityLabel = this.getEntityLabel(log.entityType);
+    const actionLabel = this.getActionLabel(log.action).toLowerCase();
+    
+    if (log.action === 'CREATE') {
+      const info = this.extractInfo(log.newValue);
+      if (info.number) {
+        return `${entityLabel} ${info.number} a été créé${entityLabel.includes('Facture') ? 'e' : ''}.`;
+      }
+      if (info.name) {
+        return `${entityLabel} "${info.name}" a été créé${entityLabel.includes('Facture') ? 'e' : ''}.`;
+      }
+      return `Un${entityLabel.startsWith('Bon') ? '' : 'e'} ${entityLabel.toLowerCase()} a été créé${entityLabel.includes('Facture') ? 'e' : ''}.`;
+    } else if (log.action === 'UPDATE') {
+      const changedFields = this.getChangedFields(log);
+      if (changedFields && changedFields.length > 0) {
+        const fieldsList = changedFields.slice(0, 3).map(f => f.label).join(', ');
+        return `${entityLabel} a été modifié${entityLabel.includes('Facture') ? 'e' : ''}. ${fieldsList} ${changedFields.length > 3 ? 'et autres' : ''} ${changedFields.length > 1 ? 'ont été mis à jour' : 'a été mis à jour'}.`;
+      }
+      return `${entityLabel} a été modifié${entityLabel.includes('Facture') ? 'e' : ''}.`;
+    } else if (log.action === 'DELETE') {
+      const info = this.extractInfo(log.oldValue);
+      if (info.number) {
+        return `${entityLabel} ${info.number} a été supprimé${entityLabel.includes('Facture') ? 'e' : ''}.`;
+      }
+      if (info.name) {
+        return `${entityLabel} "${info.name}" a été supprimé${entityLabel.includes('Facture') ? 'e' : ''}.`;
+      }
+      return `Un${entityLabel.startsWith('Bon') ? '' : 'e'} ${entityLabel.toLowerCase()} a été supprimé${entityLabel.includes('Facture') ? 'e' : ''}.`;
+    }
+    return `Action ${actionLabel} effectuée sur ${entityLabel.toLowerCase()}.`;
+  }
+
+  extractInfo(value: any): { name?: string; number?: string; key?: string } {
+    if (!value) return {};
+    let obj = value;
+    if (typeof value === 'string') {
+      try {
+        obj = JSON.parse(value);
+      } catch {
+        return { name: value };
+      }
+    }
+    if (typeof obj === 'object' && obj !== null) {
+      return {
+        name: obj.name || obj.designation || obj.libelle || obj.nomBeneficiaire || obj.raisonSociale,
+        number: obj.number || obj.numeroBC || obj.numeroOV,
+        key: obj.id || obj._id
+      };
+    }
+    return {};
+  }
+
+  getChangedFields(log: AuditLog): Array<{ key: string; label: string; oldValue: string; newValue: string }> | null {
+    if (log.action !== 'UPDATE' || !log.oldValue || !log.newValue) return null;
+    
+    let oldObj: any = log.oldValue;
+    let newObj: any = log.newValue;
+    
+    if (typeof log.oldValue === 'string') {
+      try {
+        oldObj = JSON.parse(log.oldValue);
+      } catch {
+        return null;
+      }
+    }
+    if (typeof log.newValue === 'string') {
+      try {
+        newObj = JSON.parse(log.newValue);
+      } catch {
+        return null;
+      }
+    }
+    
+    if (typeof oldObj !== 'object' || typeof newObj !== 'object' || !oldObj || !newObj) {
+      return null;
+    }
+    
+    const fieldLabels: Record<string, string> = {
+      number: 'Numéro',
+      numeroBC: 'Numéro BC',
+      numeroOV: 'Numéro OV',
+      name: 'Nom',
+      designation: 'Désignation',
+      libelle: 'Libellé',
+      montant: 'Montant',
+      amountHT: 'Montant HT',
+      amountTTC: 'Montant TTC',
+      montantPrevu: 'Montant prévu',
+      date: 'Date',
+      datePrevue: 'Date prévue',
+      dueDate: 'Date d\'échéance',
+      statut: 'Statut',
+      status: 'Statut',
+      partnerId: 'Partenaire',
+      supplierId: 'Fournisseur',
+      clientId: 'Client',
+      rib: 'RIB',
+      banque: 'Banque',
+      ice: 'ICE',
+      phone: 'Téléphone',
+      email: 'Email',
+      address: 'Adresse'
+    };
+    
+    const changedFields: Array<{ key: string; label: string; oldValue: string; newValue: string }> = [];
+    const allKeys = new Set([...Object.keys(oldObj), ...Object.keys(newObj)]);
+    
+    // Ignorer les champs techniques
+    const ignoredFields = ['id', '_id', 'createdAt', 'updatedAt', 'timestamp', 'userId', 'userName', 'ipAddress', 'userAgent'];
+    
+    for (const key of allKeys) {
+      if (ignoredFields.includes(key)) continue;
+      
+      const oldVal = oldObj[key];
+      const newVal = newObj[key];
+      
+      if (oldVal !== newVal && (oldVal !== undefined || newVal !== undefined)) {
+        const label = fieldLabels[key] || key.charAt(0).toUpperCase() + key.slice(1);
+        const formatVal = (val: any): string => {
+          if (val === null || val === undefined) return '-';
+          if (typeof val === 'object') return JSON.stringify(val);
+          if (typeof val === 'boolean') return val ? 'Oui' : 'Non';
+          return String(val);
+        };
+        
+        changedFields.push({
+          key,
+          label,
+          oldValue: formatVal(oldVal),
+          newValue: formatVal(newVal)
+        });
+      }
+    }
+    
+    return changedFields.length > 0 ? changedFields : null;
+  }
+
+  async copyToClipboard(text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      // Optionnel: afficher un toast (si disponible)
+      // this.store.showToast('Copié dans le presse-papiers', 'success');
+    } catch (err) {
+      console.error('Erreur lors de la copie:', err);
+    }
+  }
+
   selectLog(log: AuditLog) {
     this.selectedLog.set(log);
+    this.activeDetailsTab.set('resume');
   }
 
   closeDetails() {
     this.selectedLog.set(null);
+    this.activeDetailsTab.set('resume');
   }
 
   formatValue(value: any): string {
