@@ -962,12 +962,5 @@ public class ExcelExportService {
             return out.toByteArray();
         }
     }
-
-    private CellStyle createDateStyle(Workbook workbook) {
-        CellStyle style = workbook.createCellStyle();
-        DataFormat format = workbook.createDataFormat();
-        style.setDataFormat(format.getFormat("dd/mm/yyyy"));
-        return style;
-    }
 }
 
