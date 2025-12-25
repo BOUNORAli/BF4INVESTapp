@@ -164,9 +164,9 @@ import type { EcritureComptable } from '../../models/types';
                               <span>Ouvrir dans Comptabilité</span>
                             </button>
                             <div class="border-t border-slate-200 my-1"></div>
-                            <button (click)="uploadFileToInvoice(inv); closeDropdown()" class="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-3">
+                            <button (click)="openUploadModal(inv); closeDropdown()" class="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-3">
                               <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
-                              <span>Uploader fichier facture</span>
+                              <span>{{ hasFile(inv) ? 'Remplacer fichier' : 'Uploader fichier' }}</span>
                             </button>
                             <div class="border-t border-slate-200 my-1"></div>
                             <button (click)="deleteInvoice(inv.id); closeDropdown()" class="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-3">
@@ -226,103 +226,6 @@ import type { EcritureComptable } from '../../models/types';
                </div>
                
                <form [formGroup]="form" (ngSubmit)="onSubmit()" class="flex-1 overflow-y-auto p-4 md:p-6 space-y-6">
-                  
-                  <!-- Upload de fichier facture fournisseur - EN HAUT -->
-                  <div class="bg-gradient-to-r from-emerald-50 to-teal-50 p-5 rounded-xl border-2 border-emerald-300 shadow-lg" data-upload-section>
-                     <div class="flex items-center gap-3 mb-4">
-                        <div class="p-2 bg-emerald-600 rounded-lg">
-                           <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
-                        </div>
-                        <div>
-                           <label class="block text-base font-bold text-emerald-900">📎 Fichier Facture Fournisseur</label>
-                           <p class="text-xs text-emerald-700 mt-0.5">Image ou PDF - Taille max: 10MB</p>
-                        </div>
-                     </div>
-                     <div class="space-y-3">
-                        <!-- Drag & Drop Zone -->
-                        <div (dragover)="onDragOver($event)" (dragleave)="onDragLeave($event)" (drop)="onDrop($event)"
-                             class="border-2 border-dashed rounded-lg p-6 text-center transition-colors cursor-pointer"
-                             [class.border-emerald-400]="isDragging"
-                             [class.bg-emerald-100]="isDragging"
-                             [class.border-slate-300]="!isDragging">
-                           <input #fileInput type="file" accept="image/*,.pdf" (change)="onFileSelected($event)" class="hidden">
-                           <svg class="w-12 h-12 mx-auto text-emerald-600 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
-                           </svg>
-                           <p class="text-sm font-medium text-slate-700 mb-2">Glissez-déposez un fichier ici ou</p>
-                           <button type="button" (click)="fileInput.click()" [disabled]="uploadingFile()" 
-                                   class="px-6 py-2.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition font-semibold disabled:opacity-50 text-sm shadow-md">
-                              @if (uploadingFile()) {
-                                 Upload en cours... {{ uploadProgress() }}%
-                              } @else {
-                                 📁 Sélectionner fichier
-                              }
-                           </button>
-                           <p class="text-xs text-slate-500 mt-2">Formats acceptés: JPG, PNG, PDF</p>
-                        </div>
-                        
-                        <!-- File Preview -->
-                        @if (filePreviewUrl()) {
-                           <div class="relative bg-white rounded-lg border-2 border-emerald-200 p-4 shadow-sm">
-                              <div class="flex items-center justify-between mb-3">
-                                 <span class="text-sm font-semibold text-slate-700">{{ selectedFile()?.name }}</span>
-                                 <button type="button" (click)="removeSelectedFile()" class="text-red-600 hover:text-red-800">
-                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                                 </button>
-                              </div>
-                              @if (selectedFile()?.type.startsWith('image/')) {
-                                 <img [src]="filePreviewUrl()!" alt="Preview" class="w-full h-48 object-contain rounded border border-slate-200">
-                              } @else {
-                                 <div class="w-full h-48 bg-slate-100 rounded border border-slate-200 flex items-center justify-center">
-                                    <div class="text-center">
-                                       <svg class="w-16 h-16 mx-auto text-slate-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
-                                       </svg>
-                                       <p class="text-sm font-medium text-slate-600">{{ selectedFile()?.name }}</p>
-                                    </div>
-                                 </div>
-                              }
-                              @if (selectedFile() && !uploadingFile()) {
-                                 <button type="button" (click)="uploadFile()" class="w-full mt-3 px-4 py-2.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition font-semibold text-sm shadow-md">
-                                    ⬆️ Uploader le fichier
-                                 </button>
-                              }
-                           </div>
-                        }
-                        
-                        <!-- Upload Progress -->
-                        @if (uploadingFile()) {
-                           <div class="w-full bg-slate-200 rounded-full h-3 shadow-inner">
-                              <div class="bg-emerald-600 h-3 rounded-full transition-all duration-300 shadow-sm" [style.width.%]="uploadProgress()"></div>
-                           </div>
-                           <p class="text-xs text-center text-emerald-700 font-medium">Upload en cours... {{ uploadProgress() }}%</p>
-                        }
-                        
-                        <!-- Uploaded File Info -->
-                        @if (uploadedFileId() && !selectedFile()) {
-                           <div class="flex items-center justify-between p-4 bg-emerald-100 rounded-lg border-2 border-emerald-300">
-                              <div class="flex items-center gap-3">
-                                 <svg class="w-6 h-6 text-emerald-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
-                                 <div>
-                                    <span class="text-sm font-bold text-emerald-900">{{ uploadedFileName() }}</span>
-                                    <p class="text-xs text-emerald-700">Fichier uploadé avec succès</p>
-                                 </div>
-                              </div>
-                              <div class="flex gap-2">
-                                 <button type="button" (click)="previewUploadedFile()" class="px-3 py-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition text-xs font-semibold shadow-sm">
-                                    👁️ Voir
-                                 </button>
-                                 <button type="button" (click)="downloadUploadedFile()" class="px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-xs font-semibold shadow-sm">
-                                    ⬇️ Télécharger
-                                 </button>
-                                 <button type="button" (click)="removeUploadedFile()" class="px-3 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition text-xs font-semibold shadow-sm">
-                                    🗑️ Supprimer
-                                 </button>
-                              </div>
-                           </div>
-                        }
-                     </div>
-                  </div>
                   
                   <!-- Section Link -->
                   <div class="bg-blue-50 p-4 rounded-xl border border-blue-100 space-y-4">
@@ -523,6 +426,166 @@ import type { EcritureComptable } from '../../models/types';
 
             <div class="p-4 md:p-6 border-t border-slate-100 bg-slate-50/50">
               <button (click)="closeCalculDetails()" class="w-full px-4 py-2.5 bg-slate-200 text-slate-700 font-medium rounded-lg hover:bg-slate-300 transition min-h-[44px]">
+                Fermer
+              </button>
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- Modal Upload Fichier -->
+      @if (uploadModalInvoice()) {
+        <div class="fixed inset-0 z-50 flex items-center justify-center" aria-modal="true">
+          <div (click)="closeUploadModal()" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity"></div>
+          <div class="relative bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden">
+            <!-- Header -->
+            <div class="flex items-center justify-between p-6 border-b border-slate-100">
+              <div>
+                <h2 class="text-lg font-bold text-slate-800">Fichier Facture</h2>
+                <p class="text-xs text-slate-500 mt-1">{{ uploadModalInvoice()?.number }}</p>
+              </div>
+              <button (click)="closeUploadModal()" class="text-slate-400 hover:text-slate-600 transition">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+              </button>
+            </div>
+            
+            <!-- Content -->
+            <div class="p-6 space-y-4">
+              <!-- Existing File -->
+              @if (uploadedFileId() && !selectedFile()) {
+                <div class="bg-slate-50 rounded-lg p-4 border border-slate-200">
+                  <div class="flex items-center gap-3 mb-3">
+                    <div class="p-2 bg-blue-100 rounded-lg">
+                      <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+                      </svg>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <p class="text-sm font-semibold text-slate-800 truncate">{{ uploadedFileName() }}</p>
+                      <p class="text-xs text-slate-500">Fichier actuel</p>
+                    </div>
+                  </div>
+                  <div class="flex gap-2">
+                    <button (click)="previewUploadedFile()" class="flex-1 px-3 py-2 text-sm bg-white border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition font-medium">
+                      Voir
+                    </button>
+                    <button (click)="downloadUploadedFile()" class="flex-1 px-3 py-2 text-sm bg-white border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition font-medium">
+                      Télécharger
+                    </button>
+                    <button (click)="removeUploadedFile()" class="px-3 py-2 text-sm bg-red-50 border border-red-200 text-red-600 rounded-lg hover:bg-red-50 transition">
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              }
+              
+              <!-- Upload Zone -->
+              @if (!uploadedFileId() || selectedFile()) {
+                <div (dragover)="onDragOver($event)" (dragleave)="onDragLeave($event)" (drop)="onDrop($event)"
+                     class="border-2 border-dashed rounded-xl p-8 text-center transition-all cursor-pointer"
+                     [class.border-blue-400]="isDragging"
+                     [class.bg-blue-50/50]="isDragging"
+                     [class.border-slate-200]="!isDragging"
+                     [class.hover:border-blue-300]="!isDragging && !uploadingFile()">
+                  <input #uploadFileInput type="file" accept="image/*,.pdf" (change)="onFileSelected($event)" class="hidden">
+                  
+                  @if (!selectedFile()) {
+                    <div class="space-y-4">
+                      <div class="mx-auto w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center">
+                        <svg class="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                        </svg>
+                      </div>
+                      <div>
+                        <p class="text-sm font-medium text-slate-700 mb-1">Glissez-déposez votre fichier</p>
+                        <p class="text-xs text-slate-500 mb-4">ou</p>
+                        <button type="button" (click)="uploadFileInput.click()" [disabled]="uploadingFile()" 
+                                class="px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium disabled:opacity-50 text-sm">
+                          Sélectionner un fichier
+                        </button>
+                      </div>
+                      <p class="text-xs text-slate-400">JPG, PNG ou PDF • Max 10MB</p>
+                    </div>
+                  }
+                  
+                  <!-- File Preview -->
+                  @if (filePreviewUrl() && selectedFile()) {
+                    <div class="space-y-4">
+                      <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-3 flex-1 min-w-0">
+                          <div class="p-2 bg-blue-100 rounded-lg shrink-0">
+                            @if (selectedFile()?.type.startsWith('image/')) {
+                              <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                              </svg>
+                            } @else {
+                              <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+                              </svg>
+                            }
+                          </div>
+                          <div class="flex-1 min-w-0">
+                            <p class="text-sm font-semibold text-slate-800 truncate">{{ selectedFile()?.name }}</p>
+                            <p class="text-xs text-slate-500">{{ formatFileSize(selectedFile()?.size || 0) }}</p>
+                          </div>
+                        </div>
+                        <button type="button" (click)="removeSelectedFile()" class="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition">
+                          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                          </svg>
+                        </button>
+                      </div>
+                      
+                      @if (selectedFile()?.type.startsWith('image/')) {
+                        <div class="rounded-lg overflow-hidden border border-slate-200 bg-slate-50">
+                          <img [src]="filePreviewUrl()!" alt="Preview" class="w-full h-48 object-contain">
+                        </div>
+                      }
+                      
+                      @if (!uploadingFile()) {
+                        <button type="button" (click)="uploadFile()" 
+                                class="w-full px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium text-sm">
+                          Uploader
+                        </button>
+                      }
+                    </div>
+                  }
+                  
+                  <!-- Upload Progress -->
+                  @if (uploadingFile()) {
+                    <div class="space-y-3">
+                      <div class="flex items-center justify-between text-sm">
+                        <span class="font-medium text-slate-700">Upload en cours...</span>
+                        <span class="font-semibold text-blue-600">{{ uploadProgress() }}%</span>
+                      </div>
+                      <div class="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
+                        <div class="bg-blue-600 h-2 rounded-full transition-all duration-300" [style.width.%]="uploadProgress()"></div>
+                      </div>
+                    </div>
+                  }
+                  
+                  <!-- Upload Error -->
+                  @if (uploadError()) {
+                    <div class="bg-red-50 border border-red-200 rounded-lg p-3">
+                      <div class="flex items-start gap-2">
+                        <svg class="w-4 h-4 text-red-600 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        <p class="text-xs text-red-700 flex-1">{{ uploadError() }}</p>
+                      </div>
+                    </div>
+                  }
+                </div>
+              }
+            </div>
+            
+            <!-- Footer -->
+            <div class="p-6 border-t border-slate-100 bg-slate-50/50">
+              <button (click)="closeUploadModal()" class="w-full px-4 py-2.5 bg-white border border-slate-200 text-slate-700 font-medium rounded-lg hover:bg-slate-50 transition">
                 Fermer
               </button>
             </div>
@@ -1033,6 +1096,7 @@ export class PurchaseInvoicesComponent implements OnInit {
   openDropdownId = signal<string | null>(null);
   
   // File upload
+  uploadModalInvoice = signal<Invoice | null>(null);
   selectedFile = signal<File | null>(null);
   uploadingFile = signal(false);
   uploadedFileId = signal<string | null>(null);
@@ -1693,6 +1757,14 @@ export class PurchaseInvoicesComponent implements OnInit {
             this.uploadedFileName.set(null);
             this.uploadedFileUrl.set(null);
             this.store.showToast('Fichier supprimé avec succès', 'success');
+            
+            // Recharger les factures pour mettre à jour l'affichage
+            this.store.loadInvoices().then(() => {
+              const updatedInvoice = this.store.invoices().find(inv => inv.id === this.uploadModalInvoice()?.id);
+              if (updatedInvoice) {
+                this.uploadModalInvoice.set(updatedInvoice);
+              }
+            });
           },
           error: () => {
             this.store.showToast('Erreur lors de la suppression', 'error');
@@ -1827,7 +1899,23 @@ export class PurchaseInvoicesComponent implements OnInit {
           this.uploadedFileUrl.set(result.signedUrl || null);
           this.selectedFile.set(null);
           this.filePreviewUrl.set(null);
+          this.uploadError.set(null);
           this.store.showToast(`Fichier "${result.filename}" uploadé avec succès`, 'success');
+          
+          // Recharger les factures pour mettre à jour l'affichage
+          this.store.loadInvoices().then(() => {
+            // Mettre à jour la facture dans le modal si elle existe toujours
+            const updatedInvoice = this.store.invoices().find(inv => inv.id === this.uploadModalInvoice()?.id);
+            if (updatedInvoice) {
+              this.uploadModalInvoice.set(updatedInvoice);
+              const factureAchat = updatedInvoice as any;
+              if (factureAchat.fichierFactureId) {
+                this.uploadedFileId.set(factureAchat.fichierFactureId);
+                this.uploadedFileName.set(factureAchat.fichierFactureNom || 'Fichier joint');
+                this.uploadedFileUrl.set(factureAchat.fichierFactureUrl || null);
+              }
+            }
+          });
           
           // Réinitialiser la progression après un court délai
           setTimeout(() => {
@@ -2028,21 +2116,35 @@ export class PurchaseInvoicesComponent implements OnInit {
     return !!(facture.fichierFactureId);
   }
   
-  uploadFileToInvoice(inv: Invoice) {
-    // Ouvrir le formulaire en mode édition pour cette facture
-    this.editInvoice(inv);
-    // Scroll vers la section d'upload après un court délai
-    setTimeout(() => {
-      const uploadSection = document.querySelector('[data-upload-section]');
-      if (uploadSection) {
-        uploadSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        // Mettre en surbrillance la section
-        uploadSection.classList.add('ring-2', 'ring-emerald-500', 'ring-offset-2');
-        setTimeout(() => {
-          uploadSection.classList.remove('ring-2', 'ring-emerald-500', 'ring-offset-2');
-        }, 2000);
-      }
-    }, 300);
+  openUploadModal(inv: Invoice) {
+    this.uploadModalInvoice.set(inv);
+    this.editingId = inv.id;
+    
+    // Charger les informations du fichier si existant
+    const factureAchat = inv as any;
+    if (factureAchat.fichierFactureId) {
+      this.uploadedFileId.set(factureAchat.fichierFactureId);
+      this.uploadedFileName.set(factureAchat.fichierFactureNom || 'Fichier joint');
+      this.uploadedFileUrl.set(factureAchat.fichierFactureUrl || null);
+    } else {
+      this.uploadedFileId.set(null);
+      this.uploadedFileName.set(null);
+      this.uploadedFileUrl.set(null);
+    }
+    
+    // Réinitialiser les autres états
+    this.selectedFile.set(null);
+    this.filePreviewUrl.set(null);
+    this.uploadProgress.set(0);
+    this.uploadError.set(null);
+  }
+  
+  closeUploadModal() {
+    this.uploadModalInvoice.set(null);
+    this.selectedFile.set(null);
+    this.filePreviewUrl.set(null);
+    this.uploadError.set(null);
+    // Ne pas réinitialiser uploadedFileId car il peut être utilisé après l'upload
   }
 
   clearBcFilter() {
