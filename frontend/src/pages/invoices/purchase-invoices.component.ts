@@ -1040,6 +1040,7 @@ export class PurchaseInvoicesComponent implements OnInit {
   uploadedFileUrl = signal<string | null>(null);
   filePreviewUrl = signal<string | null>(null);
   uploadProgress = signal(0);
+  uploadError = signal<string | null>(null);
   
   // File viewer
   viewingFile = signal<{ fileId: string; filename: string; type: string } | null>(null);
@@ -1233,7 +1234,9 @@ export class PurchaseInvoicesComponent implements OnInit {
     this.filePreviewUrl.set(null);
     this.uploadedFileId.set(null);
     this.uploadedFileName.set(null);
+    this.uploadedFileUrl.set(null);
     this.uploadProgress.set(0);
+    this.uploadError.set(null);
     this.isFormOpen.set(true);
   }
 
@@ -1600,28 +1603,47 @@ export class PurchaseInvoicesComponent implements OnInit {
     }
   }
   
+  formatFileSize(bytes: number): string {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+  }
+
   processFile(file: File) {
+    // Réinitialiser les erreurs précédentes
+    this.uploadError.set(null);
+    
     // Vérifier la taille (10MB max)
     if (file.size > 10 * 1024 * 1024) {
-      this.store.showToast('Le fichier est trop volumineux (max 10MB)', 'error');
+      const errorMsg = `Le fichier est trop volumineux (${this.formatFileSize(file.size)}). Taille max: 10MB`;
+      this.uploadError.set(errorMsg);
+      this.store.showToast(errorMsg, 'error');
       return;
     }
     
     // Vérifier le type
     if (!file.type.startsWith('image/') && file.type !== 'application/pdf') {
-      this.store.showToast('Seuls les fichiers images et PDF sont acceptés', 'error');
+      const errorMsg = 'Seuls les fichiers images (JPG, PNG) et PDF sont acceptés';
+      this.uploadError.set(errorMsg);
+      this.store.showToast(errorMsg, 'error');
       return;
     }
     
     this.selectedFile.set(file);
     this.uploadedFileId.set(null);
     this.uploadedFileName.set(null);
+    this.uploadedFileUrl.set(null);
     
     // Créer une prévisualisation pour les images
     if (file.type.startsWith('image/')) {
       const reader = new FileReader();
       reader.onload = (e) => {
         this.filePreviewUrl.set(e.target?.result as string);
+      };
+      reader.onerror = () => {
+        this.uploadError.set('Erreur lors de la lecture du fichier');
       };
       reader.readAsDataURL(file);
     } else {
@@ -1654,6 +1676,7 @@ export class PurchaseInvoicesComponent implements OnInit {
   removeSelectedFile() {
     this.selectedFile.set(null);
     this.filePreviewUrl.set(null);
+    this.uploadError.set(null);
   }
   
   removeUploadedFile() {
@@ -1831,6 +1854,7 @@ export class PurchaseInvoicesComponent implements OnInit {
           errorMessage = error;
         }
         
+        this.uploadError.set(errorMessage);
         this.store.showToast(errorMessage, 'error');
       },
       complete: () => {
