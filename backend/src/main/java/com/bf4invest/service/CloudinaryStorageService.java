@@ -70,10 +70,16 @@ public class CloudinaryStorageService {
             Cloudinary client = buildClient();
             log.info("🔧 Configuration Cloudinary - Cloud: {}, Folder: {}", cloudName, resolveFolder(kind));
 
+            // Déterminer le type de ressource selon le type de fichier
+            String resourceType = "auto";
+            if (MediaType.APPLICATION_PDF_VALUE.equals(contentType)) {
+                resourceType = "raw"; // PDFs doivent être en "raw"
+            }
+            
             Map<String, Object> params = ObjectUtils.asMap(
                     "folder", resolveFolder(kind),
                     "public_id", UUID.randomUUID().toString(),
-                    "resource_type", "auto",
+                    "resource_type", resourceType,
                     "overwrite", true
             );
 
@@ -128,12 +134,47 @@ public class CloudinaryStorageService {
     public String generateUrl(String publicId) {
         try {
             Cloudinary client = buildClient();
-            return client.url()
+            // Essayer d'abord avec "raw" (pour PDFs), puis "auto" si ça échoue
+            String url = client.url()
+                    .secure(true)
+                    .resourceType("raw") // PDFs sont en "raw"
+                    .generate(publicId);
+            log.info("🔗 URL générée pour publicId: {} -> {}", publicId, url);
+            return url;
+        } catch (Exception e) {
+            log.warn("Tentative avec resource_type raw échouée, essai avec auto", e);
+            try {
+                Cloudinary client = buildClient();
+                String url = client.url()
+                        .secure(true)
+                        .resourceType("auto")
+                        .generate(publicId);
+                log.info("🔗 URL générée (auto) pour publicId: {} -> {}", publicId, url);
+                return url;
+            } catch (Exception e2) {
+                log.error("Erreur génération URL Cloudinary", e2);
+                return null;
+            }
+        }
+    }
+    
+    /**
+     * Génère une URL signée pour téléchargement direct avec transformation
+     */
+    public String generateSignedDownloadUrl(String publicId) {
+        try {
+            Cloudinary client = buildClient();
+            // URL signée avec transformation pour forcer le téléchargement
+            String url = client.url()
                     .secure(true)
                     .resourceType("auto")
+                    .transformation(new com.cloudinary.Transformation<>()
+                            .flags("attachment")) // Force le téléchargement
                     .generate(publicId);
+            log.info("🔗 URL téléchargement générée pour publicId: {} -> {}", publicId, url);
+            return url;
         } catch (Exception e) {
-            log.error("Erreur génération URL Cloudinary", e);
+            log.error("Erreur génération URL signée Cloudinary", e);
             return null;
         }
     }

@@ -417,15 +417,24 @@ export class ReleveBancaireComponent implements OnInit {
         return;
       }
 
-      const cached = this.uploadedPdfFiles().find(f => f.fichierId === fileId);
-      const url = cached?.url || (await firstValueFrom(this.apiService.getReleveFileUrl(fileId))).url;
+      // Toujours obtenir une URL signée fraîche depuis le backend pour Cloudinary
+      const response = await firstValueFrom(this.apiService.getReleveFileUrl(fileId));
+      const url = response.url;
+      
+      if (!url) {
+        throw new Error('URL non disponible');
+      }
+      
       const a = document.createElement('a');
       a.href = url;
+      a.target = '_blank'; // Ouvrir dans un nouvel onglet pour éviter les problèmes CORS
       const pdfFile = this.uploadedPdfFiles().find(f => f.fichierId === fileId);
       a.download = pdfFile?.filename || 'releve-bancaire.pdf';
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
+      
+      this.store.showToast('Téléchargement démarré', 'success');
     } catch (error) {
       console.error('Erreur téléchargement PDF:', error);
       this.store.showToast('Erreur lors du téléchargement', 'error');
