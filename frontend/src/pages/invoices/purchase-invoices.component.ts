@@ -5,6 +5,7 @@ import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, FormsModule } 
 import { Router, ActivatedRoute } from '@angular/router';
 import { ComptabiliteService } from '../../services/comptabilite.service';
 import { ApiService } from '../../services/api.service';
+import { firstValueFrom } from 'rxjs';
 import type { EcritureComptable } from '../../models/types';
 
 @Component({
@@ -1692,7 +1693,7 @@ export class PurchaseInvoicesComponent implements OnInit {
   
   async loadFileForViewing(fileId: string, filename: string, type: string) {
     try {
-      const blob = await this.apiService.downloadFileFromGridFS(fileId).toPromise();
+      const blob = await firstValueFrom(this.apiService.downloadFileFromGridFS(fileId));
       if (blob) {
         const url = window.URL.createObjectURL(blob);
         this.fileViewerBlobUrl.set(url);
@@ -1718,7 +1719,7 @@ export class PurchaseInvoicesComponent implements OnInit {
     if (!file) return;
     
     try {
-      const blob = await this.apiService.downloadFileFromGridFS(file.fileId).toPromise();
+      const blob = await firstValueFrom(this.apiService.downloadFileFromGridFS(file.fileId));
       if (blob) {
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -1728,54 +1729,90 @@ export class PurchaseInvoicesComponent implements OnInit {
         a.click();
         window.URL.revokeObjectURL(url);
         document.body.removeChild(a);
+        this.store.showToast('Fichier téléchargé avec succès', 'success');
       }
     } catch (error) {
+      console.error('Erreur téléchargement:', error);
       this.store.showToast('Erreur lors du téléchargement', 'error');
     }
   }
   
-  async uploadFile() {
+  uploadFile() {
     const file = this.selectedFile();
-    if (!file) return;
+    if (!file) {
+      this.store.showToast('Aucun fichier sélectionné', 'error');
+      return;
+    }
+    
+    // Vérifier la taille du fichier
+    if (file.size > 10 * 1024 * 1024) {
+      this.store.showToast('Le fichier est trop volumineux (max 10MB)', 'error');
+      return;
+    }
     
     this.uploadingFile.set(true);
     this.uploadProgress.set(0);
     
-    // Simuler la progression (dans un vrai cas, on utiliserait HttpEventType)
-    const progressInterval = setInterval(() => {
-      this.uploadProgress.update(p => Math.min(p + 10, 90));
-    }, 100);
+    console.log('🔄 Début upload fichier:', file.name, 'Taille:', (file.size / 1024 / 1024).toFixed(2), 'MB');
     
-    try {
-      const result = await this.apiService.uploadFileToGridFS(
-        file,
-        'facture_achat',
-        this.editingId || undefined,
-        'FactureAchat'
-      ).toPromise();
-      
-      clearInterval(progressInterval);
-      this.uploadProgress.set(100);
-      
-      if (result) {
-        this.uploadedFileId.set(result.fileId);
-        this.uploadedFileName.set(result.filename);
-        this.selectedFile.set(null);
-        this.filePreviewUrl.set(null);
-        this.store.showToast('Fichier uploadé avec succès', 'success');
-        
-        // Réinitialiser la progression après un court délai
-        setTimeout(() => {
-          this.uploadProgress.set(0);
-        }, 500);
+    // Utiliser subscribe pour gérer la progression
+    this.apiService.uploadFileToGridFS(
+      file,
+      'facture_achat',
+      this.editingId || undefined,
+      'FactureAchat',
+      (progress) => {
+        this.uploadProgress.set(progress);
+        console.log('📊 Progression:', progress + '%');
       }
-    } catch (error: any) {
-      clearInterval(progressInterval);
-      console.error('Erreur upload fichier:', error);
-      this.store.showToast('Erreur lors de l\'upload du fichier', 'error');
-    } finally {
-      this.uploadingFile.set(false);
-    }
+    ).subscribe({
+      next: (result: any) => {
+        // Ignorer les événements de progression (gérés par le callback)
+        if (result && result.type === 'progress') {
+          return;
+        }
+        
+        // C'est la réponse finale
+        if (result && result.fileId) {
+          console.log('✅ Upload réussi:', result);
+          this.uploadProgress.set(100);
+          this.uploadedFileId.set(result.fileId);
+          this.uploadedFileName.set(result.filename);
+          this.selectedFile.set(null);
+          this.filePreviewUrl.set(null);
+          this.store.showToast(`Fichier "${result.filename}" uploadé avec succès`, 'success');
+          
+          // Réinitialiser la progression après un court délai
+          setTimeout(() => {
+            this.uploadProgress.set(0);
+          }, 1000);
+          this.uploadingFile.set(false);
+        } else {
+          this.uploadingFile.set(false);
+          throw new Error('Réponse invalide du serveur: ' + JSON.stringify(result));
+        }
+      },
+      error: (error: any) => {
+        this.uploadProgress.set(0);
+        console.error('❌ Erreur upload fichier:', error);
+        
+        let errorMessage = 'Erreur lors de l\'upload du fichier';
+        if (error?.error?.error) {
+          errorMessage = error.error.error;
+        } else if (error?.error?.message) {
+          errorMessage = error.error.message;
+        } else if (error?.message) {
+          errorMessage = error.message;
+        } else if (typeof error === 'string') {
+          errorMessage = error;
+        }
+        
+        this.store.showToast(errorMessage, 'error');
+      },
+      complete: () => {
+        this.uploadingFile.set(false);
+      }
+    });
   }
   
   async downloadUploadedFile() {
@@ -1783,7 +1820,7 @@ export class PurchaseInvoicesComponent implements OnInit {
     if (!fileId) return;
     
     try {
-      const blob = await this.apiService.downloadFileFromGridFS(fileId).toPromise();
+      const blob = await firstValueFrom(this.apiService.downloadFileFromGridFS(fileId));
       if (blob) {
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -1793,6 +1830,7 @@ export class PurchaseInvoicesComponent implements OnInit {
         a.click();
         window.URL.revokeObjectURL(url);
         document.body.removeChild(a);
+        this.store.showToast('Fichier téléchargé avec succès', 'success');
       }
     } catch (error) {
       console.error('Erreur téléchargement fichier:', error);
@@ -1808,19 +1846,23 @@ export class PurchaseInvoicesComponent implements OnInit {
 
     try {
       // Charger les écritures de la facture
-      const ecrituresFacture = await this.comptabiliteService.getEcritures({
-        pieceType: 'FACTURE_ACHAT',
-        pieceId: inv.id
-      }).toPromise();
+      const ecrituresFacture = await firstValueFrom(
+        this.comptabiliteService.getEcritures({
+          pieceType: 'FACTURE_ACHAT',
+          pieceId: inv.id
+        })
+      );
 
       // Charger les écritures des paiements associés
       const payments = this.store.payments().get(inv.id) || [];
       const ecrituresPaiements = await Promise.all(
         payments.map(p => 
-          this.comptabiliteService.getEcritures({
-            pieceType: 'PAIEMENT',
-            pieceId: p.id
-          }).toPromise().catch(() => [])
+          firstValueFrom(
+            this.comptabiliteService.getEcritures({
+              pieceType: 'PAIEMENT',
+              pieceId: p.id
+            })
+          ).catch(() => [])
         )
       );
 

@@ -1,6 +1,7 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
+import { HttpClient, HttpHeaders, HttpParams, HttpEvent, HttpEventType } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { map, filter } from 'rxjs/operators';
 import { getApiBaseUrlDynamic } from '../config/environment';
 
 @Injectable({
@@ -128,24 +129,67 @@ export class ApiService {
   }
 
   /**
-   * Upload un fichier vers GridFS
+   * Upload un fichier vers GridFS avec progression
    * @param file Le fichier à uploader
    * @param type Type de fichier (facture_achat, releve_bancaire, etc.)
    * @param entityId ID de l'entité associée (optionnel)
    * @param entityType Type d'entité (FactureAchat, etc.) (optionnel)
+   * @param onProgress Callback pour la progression (optionnel)
    */
   uploadFileToGridFS(
     file: File,
     type?: string,
     entityId?: string,
-    entityType?: string
+    entityType?: string,
+    onProgress?: (progress: number) => void
   ): Observable<{ fileId: string; filename: string; contentType: string; size: number; message: string }> {
     const params: Record<string, any> = {};
     if (type) params.type = type;
     if (entityId) params.entityId = entityId;
     if (entityType) params.entityType = entityType;
 
-    return this.uploadFileWithParams('/files/upload', file, params);
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    if (params) {
+      Object.keys(params).forEach(key => {
+        if (params[key] !== null && params[key] !== undefined) {
+          formData.append(key, params[key].toString());
+        }
+      });
+    }
+    
+    const token = localStorage.getItem('bf4_token');
+    let headers = new HttpHeaders();
+    if (token) {
+      headers = headers.set('Authorization', `Bearer ${token}`);
+    }
+
+    return this.http.post<{ fileId: string; filename: string; contentType: string; size: number; message: string }>(
+      `${this.getApiUrl()}/files/upload`,
+      formData,
+      {
+        headers: headers,
+        reportProgress: true,
+        observe: 'events'
+      }
+    ).pipe(
+      map((event: HttpEvent<any>) => {
+        if (event.type === HttpEventType.UploadProgress && event.total) {
+          const progress = Math.round((100 * event.loaded) / event.total);
+          if (onProgress) {
+            onProgress(progress);
+          }
+          // Retourner un objet avec la progression pour le suivi
+          return { progress, type: 'progress', fileId: null } as any;
+        } else if (event.type === HttpEventType.Response) {
+          // Retourner la réponse finale
+          return event.body;
+        }
+        return null;
+      }),
+      filter((result: any) => result !== null)
+    ) as Observable<any>;
   }
 
   /**
