@@ -82,7 +82,7 @@ export class ApiService {
     });
   }
 
-  uploadFileWithParams(endpoint: string, file: File, params?: Record<string, any>): Observable<any> {
+  uploadFileWithParams<T = any>(endpoint: string, file: File, params?: Record<string, any>): Observable<T> {
     const formData = new FormData();
     formData.append('file', file);
     

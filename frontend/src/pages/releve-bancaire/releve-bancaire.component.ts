@@ -218,7 +218,7 @@ export class ReleveBancaireComponent implements OnInit {
           this.selectedFile.set(null);
           this.loadTransactions();
         } else {
-          this.store.showToast(`Import terminé avec ${result.errorCount} erreur(s)`, 'warning');
+          this.store.showToast(`Import terminé avec ${result.errorCount} erreur(s)`, 'info');
           if (result.errors && result.errors.length > 0) {
             console.error('Erreurs d\'import:', result.errors);
           }
