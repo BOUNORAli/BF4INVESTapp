@@ -1656,7 +1656,11 @@ export class PurchaseInvoicesComponent implements OnInit {
     if (confirm('Êtes-vous sûr de vouloir supprimer ce fichier ?')) {
       const fileId = this.uploadedFileId();
       if (fileId) {
-        this.apiService.deleteFileFromGridFS(fileId).subscribe({
+        const delete$ = this.isGridFsId(fileId)
+          ? this.apiService.deleteFileFromGridFS(fileId)
+          : this.apiService.deleteFactureAchatFile(fileId, this.editingId || undefined);
+
+        delete$.subscribe({
           next: () => {
             this.uploadedFileId.set(null);
             this.uploadedFileName.set(null);
@@ -1693,7 +1697,7 @@ export class PurchaseInvoicesComponent implements OnInit {
   
   async loadFileForViewing(fileId: string, filename: string, type: string) {
     try {
-      const blob = await firstValueFrom(this.apiService.downloadFileFromGridFS(fileId));
+      const blob = await this.downloadFactureBlob(fileId);
       if (blob) {
         const url = window.URL.createObjectURL(blob);
         this.fileViewerBlobUrl.set(url);
@@ -1719,7 +1723,7 @@ export class PurchaseInvoicesComponent implements OnInit {
     if (!file) return;
     
     try {
-      const blob = await firstValueFrom(this.apiService.downloadFileFromGridFS(file.fileId));
+      const blob = await this.downloadFactureBlob(file.fileId);
       if (blob) {
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -1756,11 +1760,9 @@ export class PurchaseInvoicesComponent implements OnInit {
     console.log('🔄 Début upload fichier:', file.name, 'Taille:', (file.size / 1024 / 1024).toFixed(2), 'MB');
     
     // Utiliser subscribe pour gérer la progression
-    this.apiService.uploadFileToGridFS(
+    this.apiService.uploadFactureAchatFile(
       file,
-      'facture_achat',
       this.editingId || undefined,
-      'FactureAchat',
       (progress) => {
         this.uploadProgress.set(progress);
         console.log('📊 Progression:', progress + '%');
@@ -1820,7 +1822,7 @@ export class PurchaseInvoicesComponent implements OnInit {
     if (!fileId) return;
     
     try {
-      const blob = await firstValueFrom(this.apiService.downloadFileFromGridFS(fileId));
+      const blob = await this.downloadFactureBlob(fileId);
       if (blob) {
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -1917,7 +1919,18 @@ export class PurchaseInvoicesComponent implements OnInit {
   formatDate(date: string): string {
     return new Date(date).toLocaleDateString('fr-FR');
   }
-  
+
+  private isGridFsId(fileId: string): boolean {
+    return /^[a-fA-F0-9]{24}$/.test(fileId);
+  }
+
+  private async downloadFactureBlob(fileId: string): Promise<Blob> {
+    if (this.isGridFsId(fileId)) {
+      return await firstValueFrom(this.apiService.downloadFileFromGridFS(fileId));
+    }
+    return await firstValueFrom(this.apiService.downloadFactureAchatFile(fileId));
+  }
+
   hasFile(inv: Invoice): boolean {
     const facture = inv as any;
     return !!(facture.fichierFactureId);

@@ -48,6 +48,13 @@ app:
   default-payment-term-days: 30
   purchase-invoice-due-days: 60 # 2 months for purchase invoices
 
+# Supabase (pour fichiers Facture Achat)
+supabase:
+  url: ${SUPABASE_URL:}
+  service-key: ${SUPABASE_SERVICE_KEY:}
+  bucket:
+    factures: ${SUPABASE_BUCKET_FACTURES:factures-achat}
+
 # CORS Configuration
 cors:
   allowed:

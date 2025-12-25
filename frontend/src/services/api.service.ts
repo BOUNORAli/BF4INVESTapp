@@ -223,4 +223,68 @@ export class ApiService {
   fileExists(fileId: string): Observable<{ exists: boolean }> {
     return this.get(`/files/${fileId}/exists`);
   }
+
+  /**
+   * Upload spécifique factures achat (Supabase)
+   */
+  uploadFactureAchatFile(
+    file: File,
+    factureId?: string,
+    onProgress?: (progress: number) => void
+  ): Observable<any> {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (factureId) {
+      formData.append('factureId', factureId);
+    }
+
+    const token = localStorage.getItem('bf4_token');
+    let headers = new HttpHeaders();
+    if (token) {
+      headers = headers.set('Authorization', `Bearer ${token}`);
+    }
+
+    return this.http.post(`${this.getApiUrl()}/factures-achats/files/upload`, formData, {
+      headers,
+      observe: 'events',
+      reportProgress: true
+    }).pipe(
+      map(event => {
+        if (event.type === HttpEventType.UploadProgress && event.total) {
+          const progress = Math.round((100 * event.loaded) / event.total);
+          if (onProgress) {
+            onProgress(progress);
+          }
+          return { type: 'progress', progress };
+        } else if (event.type === HttpEventType.Response) {
+          return event.body;
+        }
+        return null;
+      }),
+      filter(event => event !== null)
+    );
+  }
+
+  downloadFactureAchatFile(fileId: string): Observable<Blob> {
+    const token = localStorage.getItem('bf4_token');
+    let headers = new HttpHeaders();
+    if (token) {
+      headers = headers.set('Authorization', `Bearer ${token}`);
+    }
+    return this.http.get(`${this.getApiUrl()}/factures-achats/files/${fileId}`, {
+      headers,
+      responseType: 'blob'
+    });
+  }
+
+  deleteFactureAchatFile(fileId: string, factureId?: string): Observable<any> {
+    const token = localStorage.getItem('bf4_token');
+    let headers = new HttpHeaders();
+    if (token) {
+      headers = headers.set('Authorization', `Bearer ${token}`);
+    }
+    const params: any = {};
+    if (factureId) params.factureId = factureId;
+    return this.http.delete(`${this.getApiUrl()}/factures-achats/files/${fileId}`, { headers, params });
+  }
 }
