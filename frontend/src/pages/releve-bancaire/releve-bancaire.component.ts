@@ -459,21 +459,27 @@ export class ReleveBancaireComponent implements OnInit {
 
   async loadUploadedPdfFiles() {
     try {
-      const params: any = {};
-      if (this.selectedMois) params.mois = this.selectedMois;
-      if (this.selectedAnnee) params.annee = this.selectedAnnee;
-      
-      const files = await firstValueFrom(this.releveService.getPdfFiles(params));
+      // Charger tous les fichiers PDF sans filtre par mois/année
+      // pour afficher tous les relevés stockés
+      const files = await firstValueFrom(this.releveService.getPdfFiles());
       if (files) {
-        this.uploadedPdfFiles.set(files.map(f => ({
-          id: f.id,
-          filename: f.nomFichier,
-          fichierId: f.fichierId,
-          url: f.url,
-          mois: f.mois,
-          annee: f.annee,
-          uploadedAt: f.uploadedAt
-        })));
+        // Trier par date d'upload décroissante (plus récents en premier)
+        const sortedFiles = files
+          .map(f => ({
+            id: f.id,
+            filename: f.nomFichier,
+            fichierId: f.fichierId,
+            url: f.url,
+            mois: f.mois,
+            annee: f.annee,
+            uploadedAt: f.uploadedAt
+          }))
+          .sort((a, b) => {
+            const dateA = new Date(a.uploadedAt).getTime();
+            const dateB = new Date(b.uploadedAt).getTime();
+            return dateB - dateA; // Plus récent en premier
+          });
+        this.uploadedPdfFiles.set(sortedFiles);
       }
     } catch (error) {
       console.error('Erreur chargement fichiers PDF:', error);
