@@ -1880,6 +1880,23 @@ export class PurchaseInvoicesComponent implements OnInit {
     const facture = inv as any;
     return !!(facture.fichierFactureId);
   }
+  
+  uploadFileToInvoice(inv: Invoice) {
+    // Ouvrir le formulaire en mode édition pour cette facture
+    this.editInvoice(inv);
+    // Scroll vers la section d'upload après un court délai
+    setTimeout(() => {
+      const uploadSection = document.querySelector('[data-upload-section]');
+      if (uploadSection) {
+        uploadSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // Mettre en surbrillance la section
+        uploadSection.classList.add('ring-2', 'ring-emerald-500', 'ring-offset-2');
+        setTimeout(() => {
+          uploadSection.classList.remove('ring-2', 'ring-emerald-500', 'ring-offset-2');
+        }, 2000);
+      }
+    }, 300);
+  }
 
   clearBcFilter() {
     this.bcIdFilter.set(null);
