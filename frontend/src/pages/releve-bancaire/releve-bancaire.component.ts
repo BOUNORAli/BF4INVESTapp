@@ -250,7 +250,7 @@ export class ReleveBancaireComponent implements OnInit {
   // PDF upload
   selectedPdfFile = signal<File | null>(null);
   uploadingPdf = signal(false);
-  uploadedPdfFiles = signal<Array<{ id: string; fichierId: string; filename: string; mois: number; annee: number; uploadedAt: string }>>([]);
+  uploadedPdfFiles = signal<Array<{ id: string; fichierId: string; filename: string; url?: string; mois: number; annee: number; uploadedAt: string }>>([]);
 
   moisList = [
     { value: 1, label: 'Janvier' }, { value: 2, label: 'Février' }, { value: 3, label: 'Mars' },
