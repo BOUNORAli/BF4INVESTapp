@@ -94,10 +94,13 @@ public class FileController {
             var file = fileOpt.get();
             var inputStream = fileStorageService.getFileContent(id);
             
-            // Déterminer le Content-Type
-            String contentType = file.getContentType();
-            if (contentType == null) {
-                contentType = "application/octet-stream";
+            // Déterminer le Content-Type depuis les métadonnées
+            String contentType = "application/octet-stream";
+            if (file.getMetadata() != null) {
+                Object contentTypeObj = file.getMetadata().get("contentType");
+                if (contentTypeObj != null) {
+                    contentType = contentTypeObj.toString();
+                }
             }
             
             HttpHeaders headers = new HttpHeaders();

@@ -114,9 +114,16 @@ import type { EcritureComptable } from '../../models/types';
                   }
                 </td>
                 <td class="px-4 md:px-6 py-4 text-center">
-                  <span [class]="getStatusClass(inv.status)">
-                    {{ getStatusLabel(inv.status) }}
-                  </span>
+                  <div class="flex items-center justify-center gap-2">
+                    <span [class]="getStatusClass(inv.status)">
+                      {{ getStatusLabel(inv.status) }}
+                    </span>
+                    @if ((inv as any).fichierFactureId) {
+                      <button (click)="viewFile(inv)" class="p-1 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-full transition-all" title="Voir le fichier">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path></svg>
+                      </button>
+                    }
+                  </div>
                 </td>
                 <td class="px-6 py-4 text-right">
                    <div class="flex items-center justify-end gap-2 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity relative">
@@ -324,38 +331,84 @@ import type { EcritureComptable } from '../../models/types';
                      <div class="bg-slate-50 p-4 rounded-xl border border-slate-200">
                         <label class="block text-sm font-semibold text-slate-700 mb-2">Fichier Facture Fournisseur (Image ou PDF)</label>
                         <div class="space-y-3">
-                           <input #fileInput type="file" accept="image/*,.pdf" (change)="onFileSelected($event)" class="hidden">
-                           <div class="flex items-center gap-3">
+                           <!-- Drag & Drop Zone -->
+                           <div (dragover)="onDragOver($event)" (dragleave)="onDragLeave($event)" (drop)="onDrop($event)"
+                                class="border-2 border-dashed rounded-lg p-6 text-center transition-colors"
+                                [class.border-blue-400]="isDragging"
+                                [class.bg-blue-50]="isDragging"
+                                [class.border-slate-300]="!isDragging">
+                              <input #fileInput type="file" accept="image/*,.pdf" (change)="onFileSelected($event)" class="hidden">
+                              <svg class="w-12 h-12 mx-auto text-slate-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                              </svg>
+                              <p class="text-sm text-slate-600 mb-2">Glissez-déposez un fichier ici ou</p>
                               <button type="button" (click)="fileInput.click()" [disabled]="uploadingFile()" 
                                       class="px-4 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 transition font-medium disabled:opacity-50 text-sm">
                                  @if (uploadingFile()) {
-                                    Upload en cours...
+                                    Upload en cours... {{ uploadProgress() }}%
                                  } @else {
                                     Sélectionner fichier
                                  }
                               </button>
-                              @if (selectedFile()) {
-                                 <span class="text-sm text-slate-600">{{ selectedFile()?.name }}</span>
-                                 <button type="button" (click)="removeSelectedFile()" class="text-red-600 hover:text-red-800">
-                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                                 </button>
-                              }
-                              @if (uploadedFileId() && !selectedFile()) {
-                                 <div class="flex items-center gap-2 text-sm text-emerald-600">
-                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
-                                    <span>{{ uploadedFileName() }}</span>
-                                    <button type="button" (click)="downloadUploadedFile()" class="text-blue-600 hover:text-blue-800 ml-2" title="Télécharger">
-                                       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                              <p class="text-xs text-slate-500 mt-2">Formats: Images (JPG, PNG) ou PDF. Max: 10MB</p>
+                           </div>
+                           
+                           <!-- File Preview -->
+                           @if (filePreviewUrl()) {
+                              <div class="relative bg-white rounded-lg border border-slate-200 p-3">
+                                 <div class="flex items-center justify-between mb-2">
+                                    <span class="text-sm font-medium text-slate-700">{{ selectedFile()?.name }}</span>
+                                    <button type="button" (click)="removeSelectedFile()" class="text-red-600 hover:text-red-800">
+                                       <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                                     </button>
                                  </div>
-                              }
-                           </div>
-                           @if (selectedFile() && !uploadingFile()) {
-                              <button type="button" (click)="uploadFile()" class="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition font-medium text-sm">
-                                 Uploader le fichier
-                              </button>
+                                 @if (selectedFile()?.type.startsWith('image/')) {
+                                    <img [src]="filePreviewUrl()!" alt="Preview" class="w-full h-48 object-contain rounded border border-slate-200">
+                                 } @else {
+                                    <div class="w-full h-48 bg-slate-100 rounded border border-slate-200 flex items-center justify-center">
+                                       <div class="text-center">
+                                          <svg class="w-16 h-16 mx-auto text-slate-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+                                          </svg>
+                                          <p class="text-sm text-slate-600">{{ selectedFile()?.name }}</p>
+                                       </div>
+                                    </div>
+                                 }
+                                 @if (selectedFile() && !uploadingFile()) {
+                                    <button type="button" (click)="uploadFile()" class="w-full mt-3 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition font-medium text-sm">
+                                       Uploader le fichier
+                                    </button>
+                                 }
+                              </div>
                            }
-                           <p class="text-xs text-slate-500">Formats acceptés: Images (JPG, PNG) ou PDF. Taille max: 10MB</p>
+                           
+                           <!-- Upload Progress -->
+                           @if (uploadingFile()) {
+                              <div class="w-full bg-slate-200 rounded-full h-2">
+                                 <div class="bg-emerald-600 h-2 rounded-full transition-all duration-300" [style.width.%]="uploadProgress()"></div>
+                              </div>
+                           }
+                           
+                           <!-- Uploaded File Info -->
+                           @if (uploadedFileId() && !selectedFile()) {
+                              <div class="flex items-center justify-between p-3 bg-emerald-50 rounded-lg border border-emerald-200">
+                                 <div class="flex items-center gap-2 text-sm text-emerald-700">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                                    <span class="font-medium">{{ uploadedFileName() }}</span>
+                                 </div>
+                                 <div class="flex gap-2">
+                                    <button type="button" (click)="previewUploadedFile()" class="px-3 py-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition text-xs font-medium">
+                                       Voir
+                                    </button>
+                                    <button type="button" (click)="downloadUploadedFile()" class="px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-xs font-medium">
+                                       Télécharger
+                                    </button>
+                                    <button type="button" (click)="removeUploadedFile()" class="px-3 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition text-xs font-medium">
+                                       Supprimer
+                                    </button>
+                                 </div>
+                              </div>
+                           }
                         </div>
                      </div>
                   </div>
@@ -894,6 +947,40 @@ import type { EcritureComptable } from '../../models/types';
         </div>
       }
 
+      <!-- File Viewer Modal -->
+      @if (viewingFile()) {
+        <div class="fixed inset-0 z-50 flex items-center justify-center" aria-modal="true">
+          <div (click)="closeFileViewer()" class="fixed inset-0 bg-black/80 backdrop-blur-sm"></div>
+          <div class="relative bg-white rounded-2xl shadow-2xl max-w-6xl w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+            <div class="flex items-center justify-between p-4 border-b border-slate-200 bg-slate-50">
+              <h3 class="text-lg font-bold text-slate-800">{{ viewingFile()?.filename }}</h3>
+              <div class="flex gap-2">
+                <button (click)="downloadFileFromViewer()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm font-medium">
+                  Télécharger
+                </button>
+                <button (click)="closeFileViewer()" class="text-slate-400 hover:text-slate-600 transition">
+                  <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+              </div>
+            </div>
+            <div class="flex-1 overflow-auto p-4 bg-slate-100 flex items-center justify-center">
+              @if (viewingFile()?.type.startsWith('image/')) {
+                <img [src]="fileViewerBlobUrl()" [alt]="viewingFile()?.filename" class="max-w-full max-h-full object-contain rounded-lg shadow-lg">
+              } @else if (viewingFile()?.type === 'application/pdf') {
+                <iframe [src]="fileViewerBlobUrl()" class="w-full h-full min-h-[600px] border-0 rounded-lg shadow-lg bg-white"></iframe>
+              } @else {
+                <div class="text-center p-8">
+                  <p class="text-slate-600">Type de fichier non supporté pour la prévisualisation</p>
+                  <button (click)="downloadFileFromViewer()" class="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                    Télécharger le fichier
+                  </button>
+                </div>
+              }
+            </div>
+          </div>
+        </div>
+      }
+
     </div>
   `,
   styles: [`
@@ -932,6 +1019,12 @@ export class PurchaseInvoicesComponent implements OnInit {
   uploadingFile = signal(false);
   uploadedFileId = signal<string | null>(null);
   uploadedFileName = signal<string | null>(null);
+  filePreviewUrl = signal<string | null>(null);
+  uploadProgress = signal(0);
+  
+  // File viewer
+  viewingFile = signal<{ fileId: string; filename: string; type: string } | null>(null);
+  fileViewerBlobUrl = signal<string | null>(null);
 
   // Payment form
   paymentForm = this.fb.group({
@@ -1118,8 +1211,10 @@ export class PurchaseInvoicesComponent implements OnInit {
     
     this.availableBCs.set([]);
     this.selectedFile.set(null);
+    this.filePreviewUrl.set(null);
     this.uploadedFileId.set(null);
     this.uploadedFileName.set(null);
+    this.uploadProgress.set(0);
     this.isFormOpen.set(true);
   }
 
@@ -1206,6 +1301,7 @@ export class PurchaseInvoicesComponent implements OnInit {
       this.uploadedFileName.set(null);
     }
     this.selectedFile.set(null);
+    this.filePreviewUrl.set(null);
     this.isFormOpen.set(true);
   }
 
@@ -1473,23 +1569,152 @@ export class PurchaseInvoicesComponent implements OnInit {
   }
   
   // File upload methods
+  isDragging = false;
+  
   onFileSelected(event: Event) {
     const input = event.target as HTMLInputElement;
     if (input.files && input.files.length > 0) {
-      const file = input.files[0];
-      // Vérifier la taille (10MB max)
-      if (file.size > 10 * 1024 * 1024) {
-        this.store.showToast('Le fichier est trop volumineux (max 10MB)', 'error');
-        return;
-      }
-      this.selectedFile.set(file);
-      this.uploadedFileId.set(null);
-      this.uploadedFileName.set(null);
+      this.processFile(input.files[0]);
+    }
+  }
+  
+  processFile(file: File) {
+    // Vérifier la taille (10MB max)
+    if (file.size > 10 * 1024 * 1024) {
+      this.store.showToast('Le fichier est trop volumineux (max 10MB)', 'error');
+      return;
+    }
+    
+    // Vérifier le type
+    if (!file.type.startsWith('image/') && file.type !== 'application/pdf') {
+      this.store.showToast('Seuls les fichiers images et PDF sont acceptés', 'error');
+      return;
+    }
+    
+    this.selectedFile.set(file);
+    this.uploadedFileId.set(null);
+    this.uploadedFileName.set(null);
+    
+    // Créer une prévisualisation pour les images
+    if (file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        this.filePreviewUrl.set(e.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+    } else {
+      this.filePreviewUrl.set(null);
+    }
+  }
+  
+  onDragOver(event: DragEvent) {
+    event.preventDefault();
+    event.stopPropagation();
+    this.isDragging = true;
+  }
+  
+  onDragLeave(event: DragEvent) {
+    event.preventDefault();
+    event.stopPropagation();
+    this.isDragging = false;
+  }
+  
+  onDrop(event: DragEvent) {
+    event.preventDefault();
+    event.stopPropagation();
+    this.isDragging = false;
+    
+    if (event.dataTransfer?.files && event.dataTransfer.files.length > 0) {
+      this.processFile(event.dataTransfer.files[0]);
     }
   }
   
   removeSelectedFile() {
     this.selectedFile.set(null);
+    this.filePreviewUrl.set(null);
+  }
+  
+  removeUploadedFile() {
+    if (confirm('Êtes-vous sûr de vouloir supprimer ce fichier ?')) {
+      const fileId = this.uploadedFileId();
+      if (fileId) {
+        this.apiService.deleteFileFromGridFS(fileId).subscribe({
+          next: () => {
+            this.uploadedFileId.set(null);
+            this.uploadedFileName.set(null);
+            this.store.showToast('Fichier supprimé avec succès', 'success');
+          },
+          error: () => {
+            this.store.showToast('Erreur lors de la suppression', 'error');
+          }
+        });
+      }
+    }
+  }
+  
+  async previewUploadedFile() {
+    const fileId = this.uploadedFileId();
+    const fileName = this.uploadedFileName();
+    if (!fileId || !fileName) return;
+    
+    // Déterminer le type depuis le nom de fichier
+    const type = fileName.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image';
+    await this.loadFileForViewing(fileId, fileName, type);
+  }
+  
+  async viewFile(inv: Invoice) {
+    const facture = inv as any;
+    if (facture.fichierFactureId) {
+      await this.loadFileForViewing(
+        facture.fichierFactureId,
+        facture.fichierFactureNom || 'Fichier',
+        facture.fichierFactureType || 'application/pdf'
+      );
+    }
+  }
+  
+  async loadFileForViewing(fileId: string, filename: string, type: string) {
+    try {
+      const blob = await this.apiService.downloadFileFromGridFS(fileId).toPromise();
+      if (blob) {
+        const url = window.URL.createObjectURL(blob);
+        this.fileViewerBlobUrl.set(url);
+        this.viewingFile.set({ fileId, filename, type });
+      }
+    } catch (error) {
+      console.error('Erreur chargement fichier:', error);
+      this.store.showToast('Erreur lors du chargement du fichier', 'error');
+    }
+  }
+  
+  closeFileViewer() {
+    const blobUrl = this.fileViewerBlobUrl();
+    if (blobUrl) {
+      window.URL.revokeObjectURL(blobUrl);
+    }
+    this.viewingFile.set(null);
+    this.fileViewerBlobUrl.set(null);
+  }
+  
+  async downloadFileFromViewer() {
+    const file = this.viewingFile();
+    if (!file) return;
+    
+    try {
+      const blob = await this.apiService.downloadFileFromGridFS(file.fileId).toPromise();
+      if (blob) {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = file.filename;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      }
+    } catch (error) {
+      this.store.showToast('Erreur lors du téléchargement', 'error');
+    }
   }
   
   async uploadFile() {
@@ -1497,6 +1722,13 @@ export class PurchaseInvoicesComponent implements OnInit {
     if (!file) return;
     
     this.uploadingFile.set(true);
+    this.uploadProgress.set(0);
+    
+    // Simuler la progression (dans un vrai cas, on utiliserait HttpEventType)
+    const progressInterval = setInterval(() => {
+      this.uploadProgress.update(p => Math.min(p + 10, 90));
+    }, 100);
+    
     try {
       const result = await this.apiService.uploadFileToGridFS(
         file,
@@ -1505,13 +1737,23 @@ export class PurchaseInvoicesComponent implements OnInit {
         'FactureAchat'
       ).toPromise();
       
+      clearInterval(progressInterval);
+      this.uploadProgress.set(100);
+      
       if (result) {
         this.uploadedFileId.set(result.fileId);
         this.uploadedFileName.set(result.filename);
         this.selectedFile.set(null);
+        this.filePreviewUrl.set(null);
         this.store.showToast('Fichier uploadé avec succès', 'success');
+        
+        // Réinitialiser la progression après un court délai
+        setTimeout(() => {
+          this.uploadProgress.set(0);
+        }, 500);
       }
     } catch (error: any) {
+      clearInterval(progressInterval);
       console.error('Erreur upload fichier:', error);
       this.store.showToast('Erreur lors de l\'upload du fichier', 'error');
     } finally {
@@ -1645,4 +1887,5 @@ export class PurchaseInvoicesComponent implements OnInit {
       this.closeDropdown();
     }
   }
+  
 }

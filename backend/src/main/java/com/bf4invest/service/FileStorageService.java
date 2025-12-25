@@ -103,13 +103,16 @@ public class FileStorageService {
         Map<String, Object> metadata = new HashMap<>();
         metadata.put("id", file.getId().toString());
         metadata.put("filename", file.getFilename());
-        metadata.put("contentType", file.getContentType());
         metadata.put("length", file.getLength());
         metadata.put("uploadDate", file.getUploadDate());
         
-        // Ajouter les métadonnées personnalisées
+        // Récupérer les métadonnées personnalisées (incluant contentType)
         if (file.getMetadata() != null) {
             metadata.putAll(file.getMetadata());
+            // Le contentType est stocké dans les métadonnées
+            if (!metadata.containsKey("contentType") && file.getMetadata().containsKey("contentType")) {
+                metadata.put("contentType", file.getMetadata().get("contentType"));
+            }
         }
         
         return metadata;

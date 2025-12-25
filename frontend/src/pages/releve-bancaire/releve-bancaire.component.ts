@@ -405,7 +405,7 @@ export class ReleveBancaireComponent implements OnInit {
         const a = document.createElement('a');
         a.href = url;
         const pdfFile = this.uploadedPdfFiles().find(f => f.fichierId === fileId);
-        a.download = pdfFile?.nomFichier || 'releve-bancaire.pdf';
+        a.download = pdfFile?.filename || 'releve-bancaire.pdf';
         document.body.appendChild(a);
         a.click();
         window.URL.revokeObjectURL(url);
