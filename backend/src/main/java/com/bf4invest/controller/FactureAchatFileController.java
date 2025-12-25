@@ -75,7 +75,6 @@ public class FactureAchatFileController {
 
     @GetMapping("/{fileId}")
     // Download via Cloudinary: on sert juste l’URL sécurisée (déjà fournie au upload)
-    @GetMapping("/{fileId}")
     public ResponseEntity<Map<String, String>> getFileUrl(@PathVariable String fileId) {
         String url = cloudinaryStorageService.generateUrl(fileId);
         if (url == null) {
@@ -98,6 +97,7 @@ public class FactureAchatFileController {
                     f.setFichierFactureId(null);
                     f.setFichierFactureNom(null);
                     f.setFichierFactureType(null);
+                    f.setFichierFactureUrl(null);
                     factureAchatRepository.save(f);
                 }
             });
