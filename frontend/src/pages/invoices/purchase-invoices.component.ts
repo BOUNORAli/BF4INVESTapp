@@ -118,7 +118,7 @@ import type { EcritureComptable } from '../../models/types';
                     <span [class]="getStatusClass(inv.status)">
                       {{ getStatusLabel(inv.status) }}
                     </span>
-                    @if ((inv as any).fichierFactureId) {
+                    @if (hasFile(inv)) {
                       <button (click)="viewFile(inv)" class="p-1 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-full transition-all" title="Voir le fichier">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path></svg>
                       </button>
@@ -1857,6 +1857,11 @@ export class PurchaseInvoicesComponent implements OnInit {
 
   formatDate(date: string): string {
     return new Date(date).toLocaleDateString('fr-FR');
+  }
+  
+  hasFile(inv: Invoice): boolean {
+    const facture = inv as any;
+    return !!(facture.fichierFactureId);
   }
 
   clearBcFilter() {
