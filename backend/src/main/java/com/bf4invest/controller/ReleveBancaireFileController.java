@@ -94,8 +94,9 @@ public class ReleveBancaireFileController {
         return ResponseEntity.ok(files);
     }
 
-    @GetMapping("/{fileId}")
-    public ResponseEntity<Map<String, String>> getFileUrl(@PathVariable String fileId) {
+    @GetMapping("/url")
+    public ResponseEntity<Map<String, String>> getFileUrl(@RequestParam("fileId") String fileId) {
+        log.info("🔗 Génération URL pour fileId: {}", fileId);
         String url = cloudinaryStorageService.generateUrl(fileId);
         if (url == null) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", "Impossible de générer l'URL"));
@@ -103,10 +104,11 @@ public class ReleveBancaireFileController {
         return ResponseEntity.ok(Map.of("fileId", fileId, "url", url));
     }
 
-    @DeleteMapping("/{fileId}")
+    @DeleteMapping
     public ResponseEntity<Map<String, String>> delete(
-            @PathVariable String fileId
+            @RequestParam("fileId") String fileId
     ) {
+        log.info("🗑️ Suppression fichier: {}", fileId);
         boolean deleted = cloudinaryStorageService.delete(fileId);
         if (deleted) {
             releveRepo.findAll().stream()

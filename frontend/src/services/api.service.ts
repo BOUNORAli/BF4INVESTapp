@@ -283,9 +283,10 @@ export class ApiService {
     if (token) {
       headers = headers.set('Authorization', `Bearer ${token}`);
     }
-    const params: any = {};
+    const encodedFileId = encodeURIComponent(fileId);
+    const params: any = { fileId: encodedFileId };
     if (factureId) params.factureId = factureId;
-    return this.http.delete(`${this.getApiUrl()}/factures-achats/files/${fileId}`, { headers, params });
+    return this.http.delete(`${this.getApiUrl()}/factures-achats/files`, { headers, params });
   }
 
   getFactureAchatFileUrl(fileId: string): Observable<{ url: string }> {
@@ -294,7 +295,9 @@ export class ApiService {
     if (token) {
       headers = headers.set('Authorization', `Bearer ${token}`);
     }
-    return this.http.get<{ url: string }>(`${this.getApiUrl()}/factures-achats/files/${fileId}`, { headers });
+    // Encoder le fileId car il peut contenir des slashes (ex: bf4/factures/uuid)
+    const encodedFileId = encodeURIComponent(fileId);
+    return this.http.get<{ url: string }>(`${this.getApiUrl()}/factures-achats/files/url?fileId=${encodedFileId}`, { headers });
   }
 
   getReleveFileUrl(fileId: string): Observable<{ url: string }> {
@@ -303,6 +306,18 @@ export class ApiService {
     if (token) {
       headers = headers.set('Authorization', `Bearer ${token}`);
     }
-    return this.http.get<{ url: string }>(`${this.getApiUrl()}/releve-bancaire/files/${fileId}`, { headers });
+    // Encoder le fileId car il peut contenir des slashes (ex: bf4/releves/uuid)
+    const encodedFileId = encodeURIComponent(fileId);
+    return this.http.get<{ url: string }>(`${this.getApiUrl()}/releve-bancaire/files/url?fileId=${encodedFileId}`, { headers });
+  }
+  
+  deleteReleveFile(fileId: string): Observable<any> {
+    const token = localStorage.getItem('bf4_token');
+    let headers = new HttpHeaders();
+    if (token) {
+      headers = headers.set('Authorization', `Bearer ${token}`);
+    }
+    const encodedFileId = encodeURIComponent(fileId);
+    return this.http.delete(`${this.getApiUrl()}/releve-bancaire/files?fileId=${encodedFileId}`, { headers });
   }
 }

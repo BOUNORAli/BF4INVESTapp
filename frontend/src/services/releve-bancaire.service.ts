@@ -54,7 +54,7 @@ export class ReleveBancaireService {
   }
 
   deletePdfFile(fileId: string): Observable<any> {
-    return this.api.delete(`/releve-bancaire/files/${fileId}`);
+    return this.api.deleteReleveFile(fileId);
   }
 }
 
