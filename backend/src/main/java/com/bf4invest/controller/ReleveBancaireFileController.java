@@ -97,7 +97,8 @@ public class ReleveBancaireFileController {
     @GetMapping("/url")
     public ResponseEntity<Map<String, String>> getFileUrl(@RequestParam("fileId") String fileId) {
         log.info("🔗 Génération URL pour fileId: {}", fileId);
-        String url = cloudinaryStorageService.generateUrl(fileId);
+        // Les relevés bancaires sont toujours des PDFs
+        String url = cloudinaryStorageService.generateUrl(fileId, "application/pdf");
         if (url == null) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", "Impossible de générer l'URL"));
         }
@@ -109,7 +110,8 @@ public class ReleveBancaireFileController {
             @RequestParam("fileId") String fileId
     ) {
         log.info("🗑️ Suppression fichier: {}", fileId);
-        boolean deleted = cloudinaryStorageService.delete(fileId);
+        // Les relevés bancaires sont toujours des PDFs
+        boolean deleted = cloudinaryStorageService.delete(fileId, "application/pdf");
         if (deleted) {
             releveRepo.findAll().stream()
                     .filter(r -> fileId.equals(r.getFichierId()))

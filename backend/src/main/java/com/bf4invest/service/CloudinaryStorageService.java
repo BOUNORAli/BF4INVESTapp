@@ -121,8 +121,32 @@ public class CloudinaryStorageService {
     }
 
     public boolean delete(String publicId) {
+        return delete(publicId, null);
+    }
+    
+    public boolean delete(String publicId, String contentType) {
         try {
             Cloudinary client = buildClient();
+            
+            // Déterminer le resource_type selon le contentType
+            String resourceType = "auto";
+            if (contentType != null && MediaType.APPLICATION_PDF_VALUE.equals(contentType)) {
+                resourceType = "raw";
+            } else if (contentType != null && contentType.startsWith("image/")) {
+                resourceType = "image";
+            }
+            
+            // Essayer avec le resource_type déterminé
+            try {
+                Map res = client.uploader().destroy(publicId, ObjectUtils.asMap("resource_type", resourceType));
+                if ("ok".equals(res.get("result"))) {
+                    return true;
+                }
+            } catch (Exception e) {
+                log.warn("Suppression avec resource_type {} échouée, essai avec auto", resourceType, e);
+            }
+            
+            // Si ça échoue, essayer avec "auto"
             Map res = client.uploader().destroy(publicId, ObjectUtils.asMap("resource_type", "auto"));
             return "ok".equals(res.get("result"));
         } catch (Exception e) {
@@ -132,22 +156,40 @@ public class CloudinaryStorageService {
     }
 
     public String generateUrl(String publicId) {
+        return generateUrl(publicId, null);
+    }
+    
+    public String generateUrl(String publicId, String contentType) {
+        String resourceType = "auto"; // Par défaut
+        
         try {
             Cloudinary client = buildClient();
-            // Essayer d'abord avec "raw" (pour PDFs), puis "auto" si ça échoue
+            
+            // Déterminer le resource_type selon le contentType
+            if (contentType != null && MediaType.APPLICATION_PDF_VALUE.equals(contentType)) {
+                resourceType = "raw"; // PDFs sont en "raw"
+            } else if (contentType != null && contentType.startsWith("image/")) {
+                resourceType = "image"; // Images sont en "image"
+            } else {
+                // Si pas de contentType ou type inconnu, utiliser "auto" qui détecte automatiquement
+                resourceType = "auto";
+            }
+            
             String url = client.url()
                     .secure(true)
-                    .resourceType("raw") // PDFs sont en "raw"
+                    .resourceType(resourceType)
+                    .sign(ObjectUtils.asMap("expires_at", System.currentTimeMillis() / 1000L + 3600)) // 1 hour expiration
                     .generate(publicId);
-            log.info("🔗 URL générée pour publicId: {} -> {}", publicId, url);
+            log.info("🔗 URL générée pour publicId: {} (resourceType: {}, contentType: {}) -> {}", publicId, resourceType, contentType, url);
             return url;
         } catch (Exception e) {
-            log.warn("Tentative avec resource_type raw échouée, essai avec auto", e);
+            log.warn("Tentative avec resource_type {} échouée, essai avec auto", resourceType, e);
             try {
                 Cloudinary client = buildClient();
                 String url = client.url()
                         .secure(true)
                         .resourceType("auto")
+                        .sign(ObjectUtils.asMap("expires_at", System.currentTimeMillis() / 1000L + 3600))
                         .generate(publicId);
                 log.info("🔗 URL générée (auto) pour publicId: {} -> {}", publicId, url);
                 return url;

@@ -74,9 +74,22 @@ public class FactureAchatFileController {
     }
 
     @GetMapping("/url")
-    public ResponseEntity<Map<String, String>> getFileUrl(@RequestParam("fileId") String fileId) {
-        log.info("🔗 Génération URL pour fileId: {}", fileId);
-        String url = cloudinaryStorageService.generateUrl(fileId);
+    public ResponseEntity<Map<String, String>> getFileUrl(
+            @RequestParam("fileId") String fileId,
+            @RequestParam(value = "contentType", required = false) String contentType
+    ) {
+        log.info("🔗 Génération URL pour fileId: {}, contentType: {}", fileId, contentType);
+        
+        // Si contentType n'est pas fourni, essayer de le récupérer depuis la facture
+        if (contentType == null) {
+            Optional<FactureAchat> factureOpt = factureAchatRepository.findByFichierFactureId(fileId);
+            if (factureOpt.isPresent()) {
+                contentType = factureOpt.get().getFichierFactureType();
+                log.info("🔍 ContentType récupéré depuis la facture: {}", contentType);
+            }
+        }
+        
+        String url = cloudinaryStorageService.generateUrl(fileId, contentType);
         if (url == null) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", "Impossible de générer l'URL"));
         }

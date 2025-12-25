@@ -1415,16 +1415,18 @@ export class PurchaseInvoicesComponent implements OnInit {
     if (!fileId) return;
     
     try {
-      const blob = await this.downloadFactureBlob(fileId);
+      const contentType = facture.fichierFactureType || 
+                          (facture.fichierFactureNom?.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/jpeg');
+      
+      const blob = await this.downloadFactureBlob(fileId, contentType);
       if (blob) {
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
         
-        const contentType = facture.fichierFactureType || blob.type;
         const filename = this.ensureFileExtension(
           facture.fichierFactureNom || 'fichier',
-          contentType
+          contentType || blob.type
         );
         
         a.download = filename;
@@ -1847,8 +1849,8 @@ export class PurchaseInvoicesComponent implements OnInit {
   async loadFileForViewing(fileId: string, filename: string, type: string, contentType?: string) {
     try {
       if (!this.isGridFsId(fileId)) {
-        // Cloudinary : obtenir une URL signée fraîche
-        const { url } = await firstValueFrom(this.apiService.getFactureAchatFileUrl(fileId));
+        // Cloudinary : obtenir une URL signée fraîche avec le contentType correct
+        const { url } = await firstValueFrom(this.apiService.getFactureAchatFileUrl(fileId, contentType));
         
         // Pour les images, créer un blob URL pour éviter les problèmes CORS
         if (type === 'image' || contentType?.startsWith('image/')) {
@@ -1905,14 +1907,19 @@ export class PurchaseInvoicesComponent implements OnInit {
     if (!file) return;
     
     try {
-      const blob = await this.downloadFactureBlob(file.fileId);
+      // Déterminer le contentType depuis le type de fichier
+      const contentType = file.type === 'application/pdf' ? 'application/pdf' : 
+                         file.type === 'image' ? 'image/jpeg' : 
+                         file.type || 'application/octet-stream';
+      
+      const blob = await this.downloadFactureBlob(file.fileId, contentType);
       if (blob) {
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
         
         // Utiliser ensureFileExtension pour garantir l'extension
-        const filename = this.ensureFileExtension(file.filename, file.type || blob.type);
+        const filename = this.ensureFileExtension(file.filename, contentType || blob.type);
         a.download = filename;
         document.body.appendChild(a);
         a.click();
@@ -2062,7 +2069,7 @@ export class PurchaseInvoicesComponent implements OnInit {
       const contentType = factureAchat?.fichierFactureType || 
                          (this.uploadedFileName()?.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/jpeg');
       
-      const blob = await this.downloadFactureBlob(fileId);
+      const blob = await this.downloadFactureBlob(fileId, contentType);
       if (blob) {
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -2170,12 +2177,12 @@ export class PurchaseInvoicesComponent implements OnInit {
     return /^[a-fA-F0-9]{24}$/.test(fileId);
   }
 
-  private async downloadFactureBlob(fileId: string): Promise<Blob> {
+  private async downloadFactureBlob(fileId: string, contentType?: string): Promise<Blob> {
     if (this.isGridFsId(fileId)) {
       return await firstValueFrom(this.apiService.downloadFileFromGridFS(fileId));
     }
-    // Cloudinary : obtenir une URL signée fraîche puis récupérer le blob
-    const { url } = await firstValueFrom(this.apiService.getFactureAchatFileUrl(fileId));
+    // Cloudinary : obtenir une URL signée fraîche avec le contentType correct puis récupérer le blob
+    const { url } = await firstValueFrom(this.apiService.getFactureAchatFileUrl(fileId, contentType));
     const response = await fetch(url);
     if (!response.ok) {
       throw new Error(`Failed to fetch file: ${response.status} ${response.statusText}`);

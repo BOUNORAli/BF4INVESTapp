@@ -289,7 +289,7 @@ export class ApiService {
     return this.http.delete(`${this.getApiUrl()}/factures-achats/files`, { headers, params });
   }
 
-  getFactureAchatFileUrl(fileId: string): Observable<{ url: string }> {
+  getFactureAchatFileUrl(fileId: string, contentType?: string): Observable<{ url: string }> {
     const token = localStorage.getItem('bf4_token');
     let headers = new HttpHeaders();
     if (token) {
@@ -297,7 +297,11 @@ export class ApiService {
     }
     // Encoder le fileId car il peut contenir des slashes (ex: bf4/factures/uuid)
     const encodedFileId = encodeURIComponent(fileId);
-    return this.http.get<{ url: string }>(`${this.getApiUrl()}/factures-achats/files/url?fileId=${encodedFileId}`, { headers });
+    let params = new HttpParams().set('fileId', encodedFileId);
+    if (contentType) {
+      params = params.set('contentType', contentType);
+    }
+    return this.http.get<{ url: string }>(`${this.getApiUrl()}/factures-achats/files/url`, { headers, params });
   }
 
   getReleveFileUrl(fileId: string): Observable<{ url: string }> {

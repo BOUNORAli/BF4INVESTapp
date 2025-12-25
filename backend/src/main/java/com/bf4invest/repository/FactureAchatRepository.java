@@ -11,6 +11,7 @@ import java.util.Optional;
 @Repository
 public interface FactureAchatRepository extends MongoRepository<FactureAchat, String> {
     Optional<FactureAchat> findByNumeroFactureAchat(String numero);
+    Optional<FactureAchat> findByFichierFactureId(String fichierFactureId);
     List<FactureAchat> findByFournisseurId(String fournisseurId);
     List<FactureAchat> findByEtatPaiement(String etat);
     List<FactureAchat> findByDateEcheanceLessThanEqual(LocalDate date);
