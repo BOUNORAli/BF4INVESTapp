@@ -66,34 +66,52 @@ public class CloudinaryStorageService {
             throw new IllegalArgumentException("Taille maximale 10MB dépassée");
         }
 
-        Cloudinary client = buildClient();
+        try {
+            Cloudinary client = buildClient();
+            log.info("🔧 Configuration Cloudinary - Cloud: {}, Folder: {}", cloudName, resolveFolder(kind));
 
-        Map<String, Object> params = ObjectUtils.asMap(
-                "folder", resolveFolder(kind),
-                "public_id", UUID.randomUUID().toString(),
-                "resource_type", "auto",
-                "overwrite", true
-        );
+            Map<String, Object> params = ObjectUtils.asMap(
+                    "folder", resolveFolder(kind),
+                    "public_id", UUID.randomUUID().toString(),
+                    "resource_type", "auto",
+                    "overwrite", true
+            );
 
-        Map uploadResult = client.uploader().upload(file.getBytes(), params);
+            log.info("📤 Upload vers Cloudinary - Taille: {} bytes, ContentType: {}", file.getSize(), contentType);
+            Map uploadResult = client.uploader().upload(file.getBytes(), params);
+            log.info("✅ Upload Cloudinary réussi - Result: {}", uploadResult);
 
-        String publicId = (String) uploadResult.get("public_id");
-        String secureUrl = (String) uploadResult.get("secure_url");
-        String format = (String) uploadResult.get("format");
-        Number bytes = (Number) uploadResult.get("bytes");
+            String publicId = (String) uploadResult.get("public_id");
+            String secureUrl = (String) uploadResult.get("secure_url");
+            String format = (String) uploadResult.get("format");
+            Number bytes = (Number) uploadResult.get("bytes");
 
-        String filename = file.getOriginalFilename();
-        if (StringUtils.isBlank(filename) && uploadResult.containsKey("original_filename")) {
-            filename = uploadResult.get("original_filename").toString();
+            if (StringUtils.isBlank(publicId)) {
+                throw new IllegalStateException("Cloudinary n'a pas retourné de public_id");
+            }
+            if (StringUtils.isBlank(secureUrl)) {
+                throw new IllegalStateException("Cloudinary n'a pas retourné d'URL sécurisée");
+            }
+
+            String filename = file.getOriginalFilename();
+            if (StringUtils.isBlank(filename) && uploadResult.containsKey("original_filename")) {
+                filename = uploadResult.get("original_filename").toString();
+            }
+
+            return SupabaseFileResult.builder()
+                    .fileId(publicId)
+                    .filename(filename)
+                    .contentType(contentType)
+                    .size(bytes != null ? bytes.longValue() : file.getSize())
+                    .signedUrl(secureUrl)
+                    .build();
+        } catch (IllegalStateException e) {
+            log.error("❌ Erreur configuration Cloudinary: {}", e.getMessage());
+            throw e;
+        } catch (Exception e) {
+            log.error("❌ Erreur upload Cloudinary", e);
+            throw new IOException("Erreur lors de l'upload vers Cloudinary: " + e.getMessage(), e);
         }
-
-        return SupabaseFileResult.builder()
-                .fileId(publicId)
-                .filename(filename)
-                .contentType(contentType)
-                .size(bytes != null ? bytes.longValue() : file.getSize())
-                .signedUrl(secureUrl)
-                .build();
     }
 
     public boolean delete(String publicId) {

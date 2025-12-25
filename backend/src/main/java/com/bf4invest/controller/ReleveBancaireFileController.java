@@ -33,6 +33,8 @@ public class ReleveBancaireFileController {
             @RequestParam Integer annee
     ) {
         try {
+            log.info("📤 Upload relevé bancaire - Mois: {}, Année: {}, Taille: {} bytes", mois, annee, file.getSize());
+            
             if (file.isEmpty()) {
                 return ResponseEntity.badRequest().body(Map.of("error", "Fichier vide"));
             }
@@ -44,6 +46,7 @@ public class ReleveBancaireFileController {
             }
 
             SupabaseFileResult result = cloudinaryStorageService.upload(file, "releve");
+            log.info("✅ Upload Cloudinary réussi - FileId: {}, URL: {}", result.getFileId(), result.getSignedUrl());
 
             ReleveBancaireFichier saved = releveRepo.save(
                     ReleveBancaireFichier.builder()
@@ -57,6 +60,7 @@ public class ReleveBancaireFileController {
                             .uploadedAt(LocalDateTime.now())
                             .build()
             );
+            log.info("✅ Métadonnées sauvegardées - ID: {}", saved.getId());
 
             return ResponseEntity.ok(Map.of(
                     "id", saved.getId(),
@@ -64,11 +68,15 @@ public class ReleveBancaireFileController {
                     "filename", saved.getNomFichier(),
                     "signedUrl", result.getSignedUrl()
             ));
-        } catch (IllegalStateException e) {
+        } catch (IllegalStateException | IllegalArgumentException e) {
+            log.error("❌ Erreur validation/configuration: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", e.getMessage()));
         } catch (IOException e) {
-            log.error("Erreur upload Cloudinary releve", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", "Erreur lors de l'upload"));
+            log.error("❌ Erreur upload Cloudinary releve", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", "Erreur lors de l'upload: " + e.getMessage()));
+        } catch (Exception e) {
+            log.error("❌ Erreur inattendue upload relevé", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", "Erreur inattendue: " + e.getMessage()));
         }
     }
 
