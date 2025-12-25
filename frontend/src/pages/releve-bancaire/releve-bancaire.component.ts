@@ -6,6 +6,7 @@ import { ReleveBancaireService, ImportResult } from '../../services/releve-banca
 import { StoreService } from '../../services/store.service';
 import { ApiService } from '../../services/api.service';
 import type { TransactionBancaire } from '../../models/types';
+import { firstValueFrom } from 'rxjs';
 
 @Component({
   selector: 'app-releve-bancaire',
@@ -377,11 +378,13 @@ export class ReleveBancaireComponent implements OnInit {
 
     this.uploadingPdf.set(true);
     try {
-      const result = await this.releveService.uploadPdfReleve(
-        file,
-        this.selectedMois,
-        this.selectedAnnee
-      ).toPromise();
+      const result = await firstValueFrom(
+        this.releveService.uploadPdfReleve(
+          file,
+          this.selectedMois,
+          this.selectedAnnee
+        )
+      );
 
       if (result) {
         // Recharger la liste des fichiers
@@ -399,18 +402,30 @@ export class ReleveBancaireComponent implements OnInit {
 
   async downloadPdfFile(fileId: string) {
     try {
-      const blob = await this.apiService.downloadFileFromGridFS(fileId).toPromise();
-      if (blob) {
-        const url = window.URL.createObjectURL(blob);
+      const isGridFs = /^[a-fA-F0-9]{24}$/.test(fileId);
+      if (isGridFs) {
+        const blob = await firstValueFrom(this.apiService.downloadFileFromGridFS(fileId));
+        const urlBlob = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
-        a.href = url;
+        a.href = urlBlob;
         const pdfFile = this.uploadedPdfFiles().find(f => f.fichierId === fileId);
         a.download = pdfFile?.filename || 'releve-bancaire.pdf';
         document.body.appendChild(a);
         a.click();
-        window.URL.revokeObjectURL(url);
+        window.URL.revokeObjectURL(urlBlob);
         document.body.removeChild(a);
+        return;
       }
+
+      const cached = this.uploadedPdfFiles().find(f => f.fichierId === fileId);
+      const url = cached?.url || (await firstValueFrom(this.apiService.getReleveFileUrl(fileId))).url;
+      const a = document.createElement('a');
+      a.href = url;
+      const pdfFile = this.uploadedPdfFiles().find(f => f.fichierId === fileId);
+      a.download = pdfFile?.filename || 'releve-bancaire.pdf';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
     } catch (error) {
       console.error('Erreur téléchargement PDF:', error);
       this.store.showToast('Erreur lors du téléchargement', 'error');
@@ -423,12 +438,13 @@ export class ReleveBancaireComponent implements OnInit {
       if (this.selectedMois) params.mois = this.selectedMois;
       if (this.selectedAnnee) params.annee = this.selectedAnnee;
       
-      const files = await this.releveService.getPdfFiles(params).toPromise();
+      const files = await firstValueFrom(this.releveService.getPdfFiles(params));
       if (files) {
         this.uploadedPdfFiles.set(files.map(f => ({
           id: f.id,
           filename: f.nomFichier,
           fichierId: f.fichierId,
+          url: f.url,
           mois: f.mois,
           annee: f.annee,
           uploadedAt: f.uploadedAt

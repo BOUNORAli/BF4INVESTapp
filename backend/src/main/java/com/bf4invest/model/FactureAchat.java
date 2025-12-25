@@ -79,6 +79,7 @@ public class FactureAchat {
     private String fichierFactureId;      // ID GridFS du fichier facture
     private String fichierFactureNom;     // Nom original du fichier
     private String fichierFactureType;    // MIME type (image/jpeg, image/png, application/pdf)
+    private String fichierFactureUrl;     // URL sécurisée Cloudinary
     
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

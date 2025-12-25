@@ -1037,6 +1037,7 @@ export class PurchaseInvoicesComponent implements OnInit {
   uploadingFile = signal(false);
   uploadedFileId = signal<string | null>(null);
   uploadedFileName = signal<string | null>(null);
+  uploadedFileUrl = signal<string | null>(null);
   filePreviewUrl = signal<string | null>(null);
   uploadProgress = signal(0);
   
@@ -1314,9 +1315,11 @@ export class PurchaseInvoicesComponent implements OnInit {
     if (factureAchat.fichierFactureId) {
       this.uploadedFileId.set(factureAchat.fichierFactureId);
       this.uploadedFileName.set(factureAchat.fichierFactureNom || 'Fichier joint');
+      this.uploadedFileUrl.set(factureAchat.fichierFactureUrl || null);
     } else {
       this.uploadedFileId.set(null);
       this.uploadedFileName.set(null);
+      this.uploadedFileUrl.set(null);
     }
     this.selectedFile.set(null);
     this.filePreviewUrl.set(null);
@@ -1576,6 +1579,7 @@ export class PurchaseInvoicesComponent implements OnInit {
       invoice.fichierFactureId = this.uploadedFileId()!;
       invoice.fichierFactureNom = this.uploadedFileName() || this.selectedFile()?.name || '';
       invoice.fichierFactureType = this.selectedFile()?.type || '';
+      (invoice as any).fichierFactureUrl = this.uploadedFileUrl() || '';
     }
 
     if (this.isEditMode()) {
@@ -1664,6 +1668,7 @@ export class PurchaseInvoicesComponent implements OnInit {
           next: () => {
             this.uploadedFileId.set(null);
             this.uploadedFileName.set(null);
+            this.uploadedFileUrl.set(null);
             this.store.showToast('Fichier supprimé avec succès', 'success');
           },
           error: () => {
@@ -1681,6 +1686,14 @@ export class PurchaseInvoicesComponent implements OnInit {
     
     // Déterminer le type depuis le nom de fichier
     const type = fileName.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image';
+
+    // Si URL Cloudinary déjà connue, utiliser directement
+    if (!this.isGridFsId(fileId) && this.uploadedFileUrl()) {
+      this.fileViewerBlobUrl.set(this.uploadedFileUrl());
+      this.viewingFile.set({ fileId, filename: fileName, type });
+      return;
+    }
+
     await this.loadFileForViewing(fileId, fileName, type);
   }
   
@@ -1697,12 +1710,17 @@ export class PurchaseInvoicesComponent implements OnInit {
   
   async loadFileForViewing(fileId: string, filename: string, type: string) {
     try {
-      const blob = await this.downloadFactureBlob(fileId);
-      if (blob) {
-        const url = window.URL.createObjectURL(blob);
+      if (!this.isGridFsId(fileId)) {
+        const { url } = await firstValueFrom(this.apiService.getFactureAchatFileUrl(fileId));
         this.fileViewerBlobUrl.set(url);
         this.viewingFile.set({ fileId, filename, type });
+        return;
       }
+
+      const blob = await this.downloadFactureBlob(fileId);
+      const url = window.URL.createObjectURL(blob);
+      this.fileViewerBlobUrl.set(url);
+      this.viewingFile.set({ fileId, filename, type });
     } catch (error) {
       console.error('Erreur chargement fichier:', error);
       this.store.showToast('Erreur lors du chargement du fichier', 'error');
@@ -1780,6 +1798,7 @@ export class PurchaseInvoicesComponent implements OnInit {
           this.uploadProgress.set(100);
           this.uploadedFileId.set(result.fileId);
           this.uploadedFileName.set(result.filename);
+          this.uploadedFileUrl.set(result.signedUrl || null);
           this.selectedFile.set(null);
           this.filePreviewUrl.set(null);
           this.store.showToast(`Fichier "${result.filename}" uploadé avec succès`, 'success');
@@ -1928,7 +1947,10 @@ export class PurchaseInvoicesComponent implements OnInit {
     if (this.isGridFsId(fileId)) {
       return await firstValueFrom(this.apiService.downloadFileFromGridFS(fileId));
     }
-    return await firstValueFrom(this.apiService.downloadFactureAchatFile(fileId));
+    // Cloudinary : obtenir l'URL puis récupérer le blob
+    const { url } = await firstValueFrom(this.apiService.getFactureAchatFileUrl(fileId));
+    const response = await fetch(url);
+    return await response.blob();
   }
 
   hasFile(inv: Invoice): boolean {

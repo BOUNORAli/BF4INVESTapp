@@ -22,6 +22,7 @@ public class ReleveBancaireFichier {
     private String nomFichier;        // Nom original du fichier
     private String contentType;       // MIME type (application/pdf)
     private Long taille;               // Taille du fichier en bytes
+    private String url;               // URL sécurisée Cloudinary
     
     private Integer mois;              // Mois du relevé (1-12)
     private Integer annee;             // Année du relevé

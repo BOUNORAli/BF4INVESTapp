@@ -3,7 +3,7 @@ package com.bf4invest.controller;
 import com.bf4invest.dto.SupabaseFileResult;
 import com.bf4invest.model.FactureAchat;
 import com.bf4invest.repository.FactureAchatRepository;
-import com.bf4invest.service.SupabaseStorageService;
+import com.bf4invest.service.CloudinaryStorageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -23,7 +23,7 @@ import java.util.Optional;
 @Slf4j
 public class FactureAchatFileController {
 
-    private final SupabaseStorageService supabaseStorageService;
+    private final CloudinaryStorageService cloudinaryStorageService;
     private final FactureAchatRepository factureAchatRepository;
 
     private boolean isAllowedContentType(String contentType) {
@@ -47,13 +47,14 @@ public class FactureAchatFileController {
                 return ResponseEntity.badRequest().body(Map.of("error", "Taille max 10MB dépassée"));
             }
 
-            SupabaseFileResult result = supabaseStorageService.upload(file, "facture-achat");
+            SupabaseFileResult result = cloudinaryStorageService.upload(file, "facture-achat");
 
             if (StringUtils.isNotBlank(factureId)) {
                 factureAchatRepository.findById(factureId).ifPresent(facture -> {
                     facture.setFichierFactureId(result.getFileId());
                     facture.setFichierFactureNom(result.getFilename());
                     facture.setFichierFactureType(result.getContentType());
+                    facture.setFichierFactureUrl(result.getSignedUrl());
                     factureAchatRepository.save(facture);
                 });
             }
@@ -73,17 +74,14 @@ public class FactureAchatFileController {
     }
 
     @GetMapping("/{fileId}")
-    public ResponseEntity<byte[]> downloadFile(@PathVariable String fileId) {
-        return supabaseStorageService.download(fileId);
-    }
-
-    @GetMapping("/{fileId}/signed-url")
-    public ResponseEntity<Map<String, String>> getSignedUrl(@PathVariable String fileId) {
-        String url = supabaseStorageService.generateSignedUrl(fileId, 3600);
+    // Download via Cloudinary: on sert juste l’URL sécurisée (déjà fournie au upload)
+    @GetMapping("/{fileId}")
+    public ResponseEntity<Map<String, String>> getFileUrl(@PathVariable String fileId) {
+        String url = cloudinaryStorageService.generateUrl(fileId);
         if (url == null) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", "Impossible de générer l'URL signée"));
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", "Impossible de générer l'URL"));
         }
-        return ResponseEntity.ok(Map.of("signedUrl", url));
+        return ResponseEntity.ok(Map.of("fileId", fileId, "url", url));
     }
 
     @DeleteMapping("/{fileId}")
@@ -91,7 +89,7 @@ public class FactureAchatFileController {
             @PathVariable String fileId,
             @RequestParam(value = "factureId", required = false) String factureId
     ) {
-        boolean deleted = supabaseStorageService.delete(fileId);
+        boolean deleted = cloudinaryStorageService.delete(fileId);
 
         if (deleted && StringUtils.isNotBlank(factureId)) {
             Optional<FactureAchat> factureOpt = factureAchatRepository.findById(factureId);

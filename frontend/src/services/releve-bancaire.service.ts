@@ -44,17 +44,17 @@ export class ReleveBancaireService {
     return this.api.put<void>(`/releve-bancaire/transactions/${transactionId}/link`, body);
   }
 
-  // PDF file management
-  uploadPdfReleve(file: File, mois: number, annee: number): Observable<{ id: string; fileId: string; filename: string; mois: number; annee: number; message: string }> {
-    return this.api.uploadFileWithParams('/releve-bancaire/upload-pdf', file, { mois, annee });
+  // PDF file management (Cloudinary)
+  uploadPdfReleve(file: File, mois: number, annee: number): Observable<{ id: string; fileId: string; filename: string; signedUrl?: string }> {
+    return this.api.uploadFileWithParams('/releve-bancaire/files/upload', file, { mois, annee });
   }
 
-  getPdfFiles(params?: { mois?: number; annee?: number }): Observable<Array<{ id: string; fichierId: string; nomFichier: string; mois: number; annee: number; uploadedAt: string }>> {
-    return this.api.get<Array<{ id: string; fichierId: string; nomFichier: string; mois: number; annee: number; uploadedAt: string }>>('/releve-bancaire/pdf-files', params);
+  getPdfFiles(params?: { mois?: number; annee?: number }): Observable<Array<{ id: string; fichierId: string; nomFichier: string; contentType?: string; taille?: number; mois: number; annee: number; uploadedAt: string; url?: string }>> {
+    return this.api.get<Array<{ id: string; fichierId: string; nomFichier: string; contentType?: string; taille?: number; mois: number; annee: number; uploadedAt: string; url?: string }>>('/releve-bancaire/files', params);
   }
 
-  deletePdfFile(id: string): Observable<void> {
-    return this.api.delete(`/releve-bancaire/pdf-files/${id}`);
+  deletePdfFile(fileId: string): Observable<any> {
+    return this.api.delete(`/releve-bancaire/files/${fileId}`);
   }
 }
 

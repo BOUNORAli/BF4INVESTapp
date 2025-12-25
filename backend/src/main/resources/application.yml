@@ -55,6 +55,15 @@ supabase:
   bucket:
     factures: ${SUPABASE_BUCKET_FACTURES:factures-achat}
 
+# Cloudinary
+cloudinary:
+  cloud-name: ${CLOUDINARY_CLOUD_NAME:}
+  api-key: ${CLOUDINARY_API_KEY:}
+  api-secret: ${CLOUDINARY_API_SECRET:}
+  folder:
+    factures: ${CLOUDINARY_FOLDER_FACTURES:bf4/factures}
+    releves: ${CLOUDINARY_FOLDER_RELEVES:bf4/releves}
+
 # CORS Configuration
 cors:
   allowed:

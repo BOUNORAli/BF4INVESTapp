@@ -287,4 +287,22 @@ export class ApiService {
     if (factureId) params.factureId = factureId;
     return this.http.delete(`${this.getApiUrl()}/factures-achats/files/${fileId}`, { headers, params });
   }
+
+  getFactureAchatFileUrl(fileId: string): Observable<{ url: string }> {
+    const token = localStorage.getItem('bf4_token');
+    let headers = new HttpHeaders();
+    if (token) {
+      headers = headers.set('Authorization', `Bearer ${token}`);
+    }
+    return this.http.get<{ url: string }>(`${this.getApiUrl()}/factures-achats/files/${fileId}`, { headers });
+  }
+
+  getReleveFileUrl(fileId: string): Observable<{ url: string }> {
+    const token = localStorage.getItem('bf4_token');
+    let headers = new HttpHeaders();
+    if (token) {
+      headers = headers.set('Authorization', `Bearer ${token}`);
+    }
+    return this.http.get<{ url: string }>(`${this.getApiUrl()}/releve-bancaire/files/${fileId}`, { headers });
+  }
 }
