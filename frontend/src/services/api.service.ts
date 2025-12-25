@@ -101,7 +101,7 @@ export class ApiService {
     }
     // Don't set Content-Type - browser will set it automatically with boundary for FormData
 
-    return this.http.post(`${this.getApiUrl()}${endpoint}`, formData, {
+    return this.http.post<T>(`${this.getApiUrl()}${endpoint}`, formData, {
       headers: headers
     });
   }
