@@ -82,6 +82,30 @@ export class ApiService {
     });
   }
 
+  uploadFileWithParams(endpoint: string, file: File, params?: Record<string, any>): Observable<any> {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    if (params) {
+      Object.keys(params).forEach(key => {
+        if (params[key] !== null && params[key] !== undefined) {
+          formData.append(key, params[key].toString());
+        }
+      });
+    }
+    
+    const token = localStorage.getItem('bf4_token');
+    let headers = new HttpHeaders();
+    if (token) {
+      headers = headers.set('Authorization', `Bearer ${token}`);
+    }
+    // Don't set Content-Type - browser will set it automatically with boundary for FormData
+
+    return this.http.post(`${this.getApiUrl()}${endpoint}`, formData, {
+      headers: headers
+    });
+  }
+
   downloadFile(endpoint: string, params?: any): Observable<Blob> {
     const token = localStorage.getItem('bf4_token');
     let headers = new HttpHeaders();

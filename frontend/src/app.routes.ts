@@ -23,6 +23,7 @@ import { ChargesComponent } from './pages/charges/charges.component';
 import { TVAComponent } from './pages/tva/tva.component';
 import { ComptabiliteComponent } from './pages/comptabilite/comptabilite.component';
 import { ISComponent } from './pages/is/is.component';
+import { ReleveBancaireComponent } from './pages/releve-bancaire/releve-bancaire.component';
 
 const authGuard: CanActivateFn = () => {
   const auth = inject(AuthService);
@@ -62,6 +63,7 @@ export const routes: Routes = [
       { path: 'tva', component: TVAComponent },
       { path: 'comptabilite', component: ComptabiliteComponent },
       { path: 'is', component: ISComponent },
+      { path: 'releve-bancaire', component: ReleveBancaireComponent },
     ]
   },
   { path: '**', redirectTo: 'dashboard' }

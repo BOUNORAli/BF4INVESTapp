@@ -16,6 +16,7 @@ public interface FactureAchatRepository extends MongoRepository<FactureAchat, St
     List<FactureAchat> findByDateEcheanceLessThanEqual(LocalDate date);
     List<FactureAchat> findByDateFactureLessThanEqual(LocalDate date);
     List<FactureAchat> findByBandeCommandeId(String bandeCommandeId);
+    List<FactureAchat> findByDateFactureBetween(LocalDate dateDebut, LocalDate dateFin);
 }
 
 

@@ -1,6 +1,7 @@
 import { Component, inject, signal, computed, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { RouterModule } from '@angular/router';
 import { TVAService } from '../../services/tva.service';
 import { StoreService } from '../../services/store.service';
 import { ComptabiliteService } from '../../services/comptabilite.service';
@@ -9,7 +10,7 @@ import type { DeclarationTVA } from '../../models/types';
 @Component({
   selector: 'app-tva',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, RouterModule],
   template: `
     <div class="space-y-6 fade-in-up pb-10">
       <!-- Header -->
@@ -17,6 +18,11 @@ import type { DeclarationTVA } from '../../models/types';
         <div>
           <h1 class="text-2xl md:text-3xl font-bold text-slate-800 font-display">Déclarations TVA</h1>
           <p class="text-slate-500 mt-2 text-sm">Gestion des déclarations mensuelles de TVA</p>
+          <div class="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
+            <p class="font-semibold mb-1">ℹ️ Calcul TVA au règlement</p>
+            <p>Le calcul TVA utilise les dates de règlement (paiements). Assurez-vous d'avoir importé le relevé bancaire du mois concerné.</p>
+            <a routerLink="/releve-bancaire" class="text-blue-600 hover:underline font-medium mt-1 inline-block">→ Importer un relevé bancaire</a>
+          </div>
         </div>
         <div class="flex gap-3">
           <button (click)="loadDeclarations()" class="px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition font-medium">

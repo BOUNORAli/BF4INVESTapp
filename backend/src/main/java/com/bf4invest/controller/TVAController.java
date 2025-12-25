@@ -57,7 +57,8 @@ public class TVAController {
             @RequestParam Integer annee
     ) {
         try {
-            DeclarationTVA declaration = tvaService.calculerDeclarationTVA(mois, annee);
+            // Utiliser le calcul au règlement (basé sur les paiements)
+            DeclarationTVA declaration = tvaService.calculerDeclarationTVAAuReglement(mois, annee);
             return ResponseEntity.ok(declaration);
         } catch (Exception e) {
             log.error("Erreur lors du calcul de la déclaration TVA", e);

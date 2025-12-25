@@ -402,3 +402,21 @@ export interface DeclarationTVA {
   notes?: string;
 }
 
+export interface TransactionBancaire {
+  id?: string;
+  dateOperation: string; // ISO date
+  dateValeur?: string;
+  libelle: string;
+  debit?: number;
+  credit?: number;
+  reference?: string;
+  factureVenteId?: string;
+  factureAchatId?: string;
+  paiementId?: string;
+  mapped: boolean;
+  mois?: number;
+  annee?: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
