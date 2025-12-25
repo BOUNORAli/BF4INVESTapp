@@ -400,6 +400,15 @@ export class ReleveBancaireComponent implements OnInit {
     }
   }
 
+  private ensurePdfExtension(filename: string): string {
+    if (!filename) return 'releve-bancaire.pdf';
+    const lower = filename.toLowerCase();
+    if (lower.endsWith('.pdf')) {
+      return filename;
+    }
+    return filename + '.pdf';
+  }
+
   async downloadPdfFile(fileId: string) {
     try {
       const isGridFs = /^[a-fA-F0-9]{24}$/.test(fileId);
@@ -409,7 +418,7 @@ export class ReleveBancaireComponent implements OnInit {
         const a = document.createElement('a');
         a.href = urlBlob;
         const pdfFile = this.uploadedPdfFiles().find(f => f.fichierId === fileId);
-        a.download = pdfFile?.filename || 'releve-bancaire.pdf';
+        a.download = this.ensurePdfExtension(pdfFile?.filename || 'releve-bancaire');
         document.body.appendChild(a);
         a.click();
         window.URL.revokeObjectURL(urlBlob);
@@ -425,13 +434,20 @@ export class ReleveBancaireComponent implements OnInit {
         throw new Error('URL non disponible');
       }
       
-      const a = document.createElement('a');
-      a.href = url;
-      a.target = '_blank'; // Ouvrir dans un nouvel onglet pour éviter les problèmes CORS
       const pdfFile = this.uploadedPdfFiles().find(f => f.fichierId === fileId);
-      a.download = pdfFile?.filename || 'releve-bancaire.pdf';
+      const filename = this.ensurePdfExtension(pdfFile?.filename || 'releve-bancaire');
+      
+      // Pour Cloudinary, on doit télécharger via fetch pour pouvoir définir le nom
+      const blobResponse = await fetch(url);
+      const blob = await blobResponse.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = filename;
       document.body.appendChild(a);
       a.click();
+      window.URL.revokeObjectURL(blobUrl);
       document.body.removeChild(a);
       
       this.store.showToast('Téléchargement démarré', 'success');

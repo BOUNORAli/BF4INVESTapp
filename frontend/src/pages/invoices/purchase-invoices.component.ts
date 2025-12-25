@@ -1746,7 +1746,10 @@ export class PurchaseInvoicesComponent implements OnInit {
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = file.filename;
+        
+        // Utiliser ensureFileExtension pour garantir l'extension
+        const filename = this.ensureFileExtension(file.filename, file.type || blob.type);
+        a.download = filename;
         document.body.appendChild(a);
         a.click();
         window.URL.revokeObjectURL(url);
@@ -1836,6 +1839,37 @@ export class PurchaseInvoicesComponent implements OnInit {
     });
   }
   
+  private ensureFileExtension(filename: string, contentType?: string): string {
+    if (!filename) {
+      // Déterminer l'extension depuis le contentType
+      if (contentType?.startsWith('image/')) {
+        const ext = contentType.includes('jpeg') || contentType.includes('jpg') ? '.jpg' :
+                   contentType.includes('png') ? '.png' :
+                   contentType.includes('gif') ? '.gif' : '.jpg';
+        return 'fichier' + ext;
+      }
+      return contentType?.includes('pdf') ? 'fichier.pdf' : 'fichier';
+    }
+    
+    const lower = filename.toLowerCase();
+    // Vérifier si le fichier a déjà une extension
+    if (lower.includes('.')) {
+      return filename;
+    }
+    
+    // Ajouter l'extension selon le contentType
+    if (contentType?.includes('pdf')) {
+      return filename + '.pdf';
+    } else if (contentType?.startsWith('image/')) {
+      const ext = contentType.includes('jpeg') || contentType.includes('jpg') ? '.jpg' :
+                 contentType.includes('png') ? '.png' :
+                 contentType.includes('gif') ? '.gif' : '.jpg';
+      return filename + ext;
+    }
+    
+    return filename;
+  }
+
   async downloadUploadedFile() {
     const fileId = this.uploadedFileId();
     if (!fileId) return;
@@ -1846,7 +1880,19 @@ export class PurchaseInvoicesComponent implements OnInit {
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = this.uploadedFileName() || 'fichier';
+        
+        // Obtenir le type de fichier depuis la facture ou le blob
+        const facture = this.allPurchaseInvoices().find(inv => {
+          const f = inv as any;
+          return fileId === f.fichierFactureId;
+        }) as any;
+        const contentType = facture?.fichierFactureType || blob.type;
+        const filename = this.ensureFileExtension(
+          this.uploadedFileName() || 'fichier',
+          contentType
+        );
+        
+        a.download = filename;
         document.body.appendChild(a);
         a.click();
         window.URL.revokeObjectURL(url);
