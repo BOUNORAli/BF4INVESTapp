@@ -1045,8 +1045,8 @@ import type { EcritureComptable } from '../../models/types';
               </div>
             </div>
             <div class="flex-1 overflow-auto p-4 bg-slate-100 flex items-center justify-center">
-              @if (viewingFile()?.type.startsWith('image/')) {
-                <img [src]="fileViewerBlobUrl()" [alt]="viewingFile()?.filename" class="max-w-full max-h-full object-contain rounded-lg shadow-lg">
+              @if (viewingFile()?.type === 'image' || (viewingFile()?.type && viewingFile()!.type.startsWith('image/'))) {
+                <img [src]="fileViewerBlobUrl()" [alt]="viewingFile()?.filename" class="max-w-full max-h-full object-contain rounded-lg shadow-lg" (error)="handleImageError()">
               } @else if (viewingFile()?.type === 'application/pdf') {
                 <iframe [src]="fileViewerBlobUrl()" class="w-full h-full min-h-[600px] border-0 rounded-lg shadow-lg bg-white"></iframe>
               } @else {
@@ -1394,10 +1394,50 @@ export class PurchaseInvoicesComponent implements OnInit {
   }
 
   async exportPDF(inv: Invoice) {
+    const facture = inv as any;
+    if (!facture.fichierFactureId) {
+      this.store.showToast('Aucun fichier uploadé pour cette facture', 'error');
+      return;
+    }
+    
     try {
-      await this.store.downloadFactureAchatPDF(inv.id);
+      // Télécharger le fichier uploadé (image ou PDF)
+      await this.downloadUploadedFileForInvoice(inv);
     } catch (error) {
-      // Error already handled in store service
+      console.error('Erreur téléchargement fichier:', error);
+      this.store.showToast('Erreur lors du téléchargement du fichier', 'error');
+    }
+  }
+  
+  async downloadUploadedFileForInvoice(inv: Invoice) {
+    const facture = inv as any;
+    const fileId = facture.fichierFactureId;
+    if (!fileId) return;
+    
+    try {
+      const blob = await this.downloadFactureBlob(fileId);
+      if (blob) {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        
+        const contentType = facture.fichierFactureType || blob.type;
+        const filename = this.ensureFileExtension(
+          facture.fichierFactureNom || 'fichier',
+          contentType
+        );
+        
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        this.store.showToast('Fichier téléchargé avec succès', 'success');
+      }
+    } catch (error) {
+      console.error('Erreur téléchargement fichier:', error);
+      this.store.showToast('Erreur lors du téléchargement', 'error');
+      throw error;
     }
   }
 
@@ -1779,39 +1819,60 @@ export class PurchaseInvoicesComponent implements OnInit {
     const fileName = this.uploadedFileName();
     if (!fileId || !fileName) return;
     
-    // Déterminer le type depuis le nom de fichier
-    const type = fileName.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image';
+    // Obtenir le type depuis la facture ou le nom de fichier
+    const facture = this.uploadModalInvoice();
+    const factureAchat = facture as any;
+    const contentType = factureAchat?.fichierFactureType || 
+                       (fileName.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/jpeg');
+    const type = contentType === 'application/pdf' ? 'application/pdf' : 'image';
 
-    // Si URL Cloudinary déjà connue, utiliser directement
-    if (!this.isGridFsId(fileId) && this.uploadedFileUrl()) {
-      this.fileViewerBlobUrl.set(this.uploadedFileUrl());
-      this.viewingFile.set({ fileId, filename: fileName, type });
-      return;
-    }
-
-    await this.loadFileForViewing(fileId, fileName, type);
+    // Toujours obtenir une URL signée fraîche pour Cloudinary
+    await this.loadFileForViewing(fileId, fileName, type, contentType);
   }
   
   async viewFile(inv: Invoice) {
     const facture = inv as any;
     if (facture.fichierFactureId) {
+      const contentType = facture.fichierFactureType || 'application/pdf';
+      const type = contentType === 'application/pdf' ? 'application/pdf' : 'image';
       await this.loadFileForViewing(
         facture.fichierFactureId,
         facture.fichierFactureNom || 'Fichier',
-        facture.fichierFactureType || 'application/pdf'
+        type,
+        contentType
       );
     }
   }
   
-  async loadFileForViewing(fileId: string, filename: string, type: string) {
+  async loadFileForViewing(fileId: string, filename: string, type: string, contentType?: string) {
     try {
       if (!this.isGridFsId(fileId)) {
+        // Cloudinary : obtenir une URL signée fraîche
         const { url } = await firstValueFrom(this.apiService.getFactureAchatFileUrl(fileId));
-        this.fileViewerBlobUrl.set(url);
+        
+        // Pour les images, créer un blob URL pour éviter les problèmes CORS
+        if (type === 'image' || contentType?.startsWith('image/')) {
+          try {
+            const response = await fetch(url);
+            if (!response.ok) throw new Error('Failed to fetch image');
+            const blob = await response.blob();
+            const blobUrl = window.URL.createObjectURL(blob);
+            this.fileViewerBlobUrl.set(blobUrl);
+          } catch (fetchError) {
+            // Si le fetch échoue, utiliser directement l'URL Cloudinary
+            console.warn('Erreur fetch image, utilisation URL directe:', fetchError);
+            this.fileViewerBlobUrl.set(url);
+          }
+        } else {
+          // Pour les PDFs, utiliser directement l'URL signée
+          this.fileViewerBlobUrl.set(url);
+        }
+        
         this.viewingFile.set({ fileId, filename, type });
         return;
       }
 
+      // GridFS : créer un blob URL
       const blob = await this.downloadFactureBlob(fileId);
       const url = window.URL.createObjectURL(blob);
       this.fileViewerBlobUrl.set(url);
@@ -1824,11 +1885,19 @@ export class PurchaseInvoicesComponent implements OnInit {
   
   closeFileViewer() {
     const blobUrl = this.fileViewerBlobUrl();
-    if (blobUrl) {
+    if (blobUrl && blobUrl.startsWith('blob:')) {
       window.URL.revokeObjectURL(blobUrl);
     }
     this.viewingFile.set(null);
     this.fileViewerBlobUrl.set(null);
+  }
+  
+  handleImageError() {
+    // Si l'image ne peut pas être chargée, essayer de recharger avec une URL signée fraîche
+    const file = this.viewingFile();
+    if (file) {
+      this.loadFileForViewing(file.fileId, file.filename, file.type);
+    }
   }
   
   async downloadFileFromViewer() {
@@ -1987,21 +2056,21 @@ export class PurchaseInvoicesComponent implements OnInit {
     if (!fileId) return;
     
     try {
+      // Obtenir le type de fichier depuis la facture du modal ou le store
+      const facture = this.uploadModalInvoice();
+      const factureAchat = facture as any;
+      const contentType = factureAchat?.fichierFactureType || 
+                         (this.uploadedFileName()?.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/jpeg');
+      
       const blob = await this.downloadFactureBlob(fileId);
       if (blob) {
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
         
-        // Obtenir le type de fichier depuis la facture ou le blob
-        const facture = this.allPurchaseInvoices().find(inv => {
-          const f = inv as any;
-          return fileId === f.fichierFactureId;
-        }) as any;
-        const contentType = facture?.fichierFactureType || blob.type;
         const filename = this.ensureFileExtension(
           this.uploadedFileName() || 'fichier',
-          contentType
+          contentType || blob.type
         );
         
         a.download = filename;
@@ -2105,9 +2174,12 @@ export class PurchaseInvoicesComponent implements OnInit {
     if (this.isGridFsId(fileId)) {
       return await firstValueFrom(this.apiService.downloadFileFromGridFS(fileId));
     }
-    // Cloudinary : obtenir l'URL puis récupérer le blob
+    // Cloudinary : obtenir une URL signée fraîche puis récupérer le blob
     const { url } = await firstValueFrom(this.apiService.getFactureAchatFileUrl(fileId));
     const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch file: ${response.status} ${response.statusText}`);
+    }
     return await response.blob();
   }
 
@@ -2116,12 +2188,16 @@ export class PurchaseInvoicesComponent implements OnInit {
     return !!(facture.fichierFactureId);
   }
   
-  openUploadModal(inv: Invoice) {
+  async openUploadModal(inv: Invoice) {
     this.uploadModalInvoice.set(inv);
     this.editingId = inv.id;
     
-    // Charger les informations du fichier si existant
-    const factureAchat = inv as any;
+    // Recharger les factures pour avoir les données à jour
+    await this.store.loadInvoices();
+    
+    // Recharger les informations du fichier depuis la facture mise à jour
+    const updatedInvoice = this.store.invoices().find(i => i.id === inv.id);
+    const factureAchat = (updatedInvoice || inv) as any;
     if (factureAchat.fichierFactureId) {
       this.uploadedFileId.set(factureAchat.fichierFactureId);
       this.uploadedFileName.set(factureAchat.fichierFactureNom || 'Fichier joint');
