@@ -43,5 +43,18 @@ export class ReleveBancaireService {
     
     return this.api.put<void>(`/releve-bancaire/transactions/${transactionId}/link`, body);
   }
+
+  // PDF file management
+  uploadPdfReleve(file: File, mois: number, annee: number): Observable<{ id: string; fileId: string; filename: string; mois: number; annee: number; message: string }> {
+    return this.api.uploadFileWithParams('/releve-bancaire/upload-pdf', file, { mois, annee });
+  }
+
+  getPdfFiles(params?: { mois?: number; annee?: number }): Observable<Array<{ id: string; fichierId: string; nomFichier: string; mois: number; annee: number; uploadedAt: string }>> {
+    return this.api.get<Array<{ id: string; fichierId: string; nomFichier: string; mois: number; annee: number; uploadedAt: string }>>('/releve-bancaire/pdf-files', params);
+  }
+
+  deletePdfFile(id: string): Observable<void> {
+    return this.api.delete(`/releve-bancaire/pdf-files/${id}`);
+  }
 }
 

@@ -126,4 +126,57 @@ export class ApiService {
       responseType: 'blob'
     });
   }
+
+  /**
+   * Upload un fichier vers GridFS
+   * @param file Le fichier à uploader
+   * @param type Type de fichier (facture_achat, releve_bancaire, etc.)
+   * @param entityId ID de l'entité associée (optionnel)
+   * @param entityType Type d'entité (FactureAchat, etc.) (optionnel)
+   */
+  uploadFileToGridFS(
+    file: File,
+    type?: string,
+    entityId?: string,
+    entityType?: string
+  ): Observable<{ fileId: string; filename: string; contentType: string; size: number; message: string }> {
+    const params: Record<string, any> = {};
+    if (type) params.type = type;
+    if (entityId) params.entityId = entityId;
+    if (entityType) params.entityType = entityType;
+
+    return this.uploadFileWithParams('/files/upload', file, params);
+  }
+
+  /**
+   * Télécharge un fichier depuis GridFS
+   * @param fileId ID du fichier dans GridFS
+   */
+  downloadFileFromGridFS(fileId: string): Observable<Blob> {
+    return this.downloadFile(`/files/${fileId}`);
+  }
+
+  /**
+   * Récupère les métadonnées d'un fichier
+   * @param fileId ID du fichier dans GridFS
+   */
+  getFileMetadata(fileId: string): Observable<any> {
+    return this.get(`/files/${fileId}/metadata`);
+  }
+
+  /**
+   * Supprime un fichier
+   * @param fileId ID du fichier dans GridFS
+   */
+  deleteFileFromGridFS(fileId: string): Observable<void> {
+    return this.delete(`/files/${fileId}`);
+  }
+
+  /**
+   * Vérifie si un fichier existe
+   * @param fileId ID du fichier dans GridFS
+   */
+  fileExists(fileId: string): Observable<{ exists: boolean }> {
+    return this.get(`/files/${fileId}/exists`);
+  }
 }

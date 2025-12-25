@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
 import { ReleveBancaireService, ImportResult } from '../../services/releve-bancaire.service';
 import { StoreService } from '../../services/store.service';
+import { ApiService } from '../../services/api.service';
 import type { TransactionBancaire } from '../../models/types';
 
 @Component({
@@ -25,9 +26,9 @@ import type { TransactionBancaire } from '../../models/types';
         </div>
       </div>
 
-      <!-- Upload Section -->
+      <!-- Upload Section Excel -->
       <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-        <h2 class="text-lg font-bold text-slate-800 mb-4">Importer un relevé bancaire</h2>
+        <h2 class="text-lg font-bold text-slate-800 mb-4">Importer un relevé bancaire (Excel)</h2>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
           <div>
             <label class="block text-sm font-semibold text-slate-700 mb-1">Mois</label>
@@ -67,6 +68,71 @@ import type { TransactionBancaire } from '../../models/types';
                 Annuler
               </button>
             </div>
+          </div>
+        }
+      </div>
+
+      <!-- Upload Section PDF -->
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+        <h2 class="text-lg font-bold text-slate-800 mb-4">Stocker un relevé bancaire (PDF)</h2>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+          <div>
+            <label class="block text-sm font-semibold text-slate-700 mb-1">Mois</label>
+            <select [(ngModel)]="selectedMois" class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 outline-none">
+              @for (m of moisList; track m.value) {
+                <option [value]="m.value">{{ m.label }}</option>
+              }
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-semibold text-slate-700 mb-1">Année</label>
+            <input type="number" [(ngModel)]="selectedAnnee" class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 outline-none">
+          </div>
+          <div class="flex items-end">
+            <input #pdfFileInput type="file" accept=".pdf" (change)="onPdfFileSelected($event)" class="hidden">
+            <button (click)="pdfFileInput.click()" [disabled]="uploadingPdf()" class="w-full px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium disabled:opacity-50">
+              @if (uploadingPdf()) {
+                Upload en cours...
+              } @else {
+                Sélectionner fichier PDF
+              }
+            </button>
+          </div>
+        </div>
+        @if (selectedPdfFile()) {
+          <div class="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+            <span class="text-sm text-slate-700">{{ selectedPdfFile()?.name }}</span>
+            <div class="flex gap-2">
+              <button (click)="uploadPdfFile()" [disabled]="uploadingPdf() || !selectedMois || !selectedAnnee" class="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition font-medium disabled:opacity-50">
+                @if (uploadingPdf()) {
+                  Upload...
+                } @else {
+                  Uploader
+                }
+              </button>
+              <button (click)="selectedPdfFile.set(null)" class="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition font-medium">
+                Annuler
+              </button>
+            </div>
+          </div>
+        }
+        @if (uploadedPdfFiles().length > 0) {
+          <div class="mt-4 space-y-2">
+            <h3 class="text-sm font-semibold text-slate-700">Fichiers PDF stockés</h3>
+            @for (pdfFile of uploadedPdfFiles(); track pdfFile.id) {
+              <div class="flex items-center justify-between p-3 bg-indigo-50 rounded-lg border border-indigo-100">
+                <div class="flex items-center gap-3">
+                  <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+                  <div>
+                    <span class="text-sm font-medium text-slate-700">{{ pdfFile.filename }}</span>
+                    <p class="text-xs text-slate-500">{{ pdfFile.mois }}/{{ pdfFile.annee }} - {{ formatDate(pdfFile.uploadedAt) }}</p>
+                  </div>
+                </div>
+                <button (click)="downloadPdfFile(pdfFile.fichierId)" class="px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition text-sm font-medium">
+                  Télécharger
+                </button>
+              </div>
+            }
           </div>
         }
       </div>
@@ -169,6 +235,7 @@ import type { TransactionBancaire } from '../../models/types';
 export class ReleveBancaireComponent implements OnInit {
   private releveService = inject(ReleveBancaireService);
   private store = inject(StoreService);
+  private apiService = inject(ApiService);
 
   transactions = signal<TransactionBancaire[]>([]);
   selectedFile = signal<File | null>(null);
@@ -178,6 +245,11 @@ export class ReleveBancaireComponent implements OnInit {
   importing = signal(false);
   mapping = signal(false);
   loading = signal(false);
+  
+  // PDF upload
+  selectedPdfFile = signal<File | null>(null);
+  uploadingPdf = signal(false);
+  uploadedPdfFiles = signal<Array<{ id: string; fichierId: string; filename: string; mois: number; annee: number; uploadedAt: string }>>([]);
 
   moisList = [
     { value: 1, label: 'Janvier' }, { value: 2, label: 'Février' }, { value: 3, label: 'Mars' },
@@ -196,6 +268,7 @@ export class ReleveBancaireComponent implements OnInit {
 
   ngOnInit() {
     this.loadTransactions();
+    this.loadUploadedPdfFiles();
   }
 
   onFileSelected(event: Event) {
@@ -277,6 +350,93 @@ export class ReleveBancaireComponent implements OnInit {
 
   formatDate(date: string): string {
     return new Date(date).toLocaleDateString('fr-FR');
+  }
+
+  // PDF file upload methods
+  onPdfFileSelected(event: Event) {
+    const input = event.target as HTMLInputElement;
+    if (input.files && input.files.length > 0) {
+      const file = input.files[0];
+      // Vérifier la taille (10MB max)
+      if (file.size > 10 * 1024 * 1024) {
+        this.store.showToast('Le fichier est trop volumineux (max 10MB)', 'error');
+        return;
+      }
+      // Vérifier que c'est un PDF
+      if (file.type !== 'application/pdf') {
+        this.store.showToast('Seuls les fichiers PDF sont acceptés', 'error');
+        return;
+      }
+      this.selectedPdfFile.set(file);
+    }
+  }
+
+  async uploadPdfFile() {
+    const file = this.selectedPdfFile();
+    if (!file || !this.selectedMois || !this.selectedAnnee) return;
+
+    this.uploadingPdf.set(true);
+    try {
+      const result = await this.releveService.uploadPdfReleve(
+        file,
+        this.selectedMois,
+        this.selectedAnnee
+      ).toPromise();
+
+      if (result) {
+        // Recharger la liste des fichiers
+        await this.loadUploadedPdfFiles();
+        this.selectedPdfFile.set(null);
+        this.store.showToast('Fichier PDF uploadé avec succès', 'success');
+      }
+    } catch (error: any) {
+      console.error('Erreur upload PDF:', error);
+      this.store.showToast('Erreur lors de l\'upload du fichier PDF', 'error');
+    } finally {
+      this.uploadingPdf.set(false);
+    }
+  }
+
+  async downloadPdfFile(fileId: string) {
+    try {
+      const blob = await this.apiService.downloadFileFromGridFS(fileId).toPromise();
+      if (blob) {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const pdfFile = this.uploadedPdfFiles().find(f => f.fichierId === fileId);
+        a.download = pdfFile?.nomFichier || 'releve-bancaire.pdf';
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      }
+    } catch (error) {
+      console.error('Erreur téléchargement PDF:', error);
+      this.store.showToast('Erreur lors du téléchargement', 'error');
+    }
+  }
+
+  async loadUploadedPdfFiles() {
+    try {
+      const params: any = {};
+      if (this.selectedMois) params.mois = this.selectedMois;
+      if (this.selectedAnnee) params.annee = this.selectedAnnee;
+      
+      const files = await this.releveService.getPdfFiles(params).toPromise();
+      if (files) {
+        this.uploadedPdfFiles.set(files.map(f => ({
+          id: f.id,
+          filename: f.nomFichier,
+          fichierId: f.fichierId,
+          mois: f.mois,
+          annee: f.annee,
+          uploadedAt: f.uploadedAt
+        })));
+      }
+    } catch (error) {
+      console.error('Erreur chargement fichiers PDF:', error);
+    }
   }
 }
 

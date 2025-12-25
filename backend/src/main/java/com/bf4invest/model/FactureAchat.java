@@ -75,6 +75,11 @@ public class FactureAchat {
     
     private Double montantRestant; // Calculé: totalTTC - somme paiements
     
+    // Référence au fichier de facture fournisseur (image ou PDF)
+    private String fichierFactureId;      // ID GridFS du fichier facture
+    private String fichierFactureNom;     // Nom original du fichier
+    private String fichierFactureType;    // MIME type (image/jpeg, image/png, application/pdf)
+    
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

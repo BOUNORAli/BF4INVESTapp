@@ -4,6 +4,7 @@ import { StoreService, Invoice, BC, PrevisionPaiement } from '../../services/sto
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, FormsModule } from '@angular/forms';
 import { Router, ActivatedRoute } from '@angular/router';
 import { ComptabiliteService } from '../../services/comptabilite.service';
+import { ApiService } from '../../services/api.service';
 import type { EcritureComptable } from '../../models/types';
 
 @Component({
@@ -317,6 +318,45 @@ import type { EcritureComptable } from '../../models/types';
                               <p class="text-xs text-blue-600 mt-0.5">Cochez cette option pour incrémenter automatiquement le stock des produits achetés</p>
                            </div>
                         </label>
+                     </div>
+
+                     <!-- Upload de fichier facture fournisseur -->
+                     <div class="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                        <label class="block text-sm font-semibold text-slate-700 mb-2">Fichier Facture Fournisseur (Image ou PDF)</label>
+                        <div class="space-y-3">
+                           <input #fileInput type="file" accept="image/*,.pdf" (change)="onFileSelected($event)" class="hidden">
+                           <div class="flex items-center gap-3">
+                              <button type="button" (click)="fileInput.click()" [disabled]="uploadingFile()" 
+                                      class="px-4 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 transition font-medium disabled:opacity-50 text-sm">
+                                 @if (uploadingFile()) {
+                                    Upload en cours...
+                                 } @else {
+                                    Sélectionner fichier
+                                 }
+                              </button>
+                              @if (selectedFile()) {
+                                 <span class="text-sm text-slate-600">{{ selectedFile()?.name }}</span>
+                                 <button type="button" (click)="removeSelectedFile()" class="text-red-600 hover:text-red-800">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                 </button>
+                              }
+                              @if (uploadedFileId() && !selectedFile()) {
+                                 <div class="flex items-center gap-2 text-sm text-emerald-600">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                                    <span>{{ uploadedFileName() }}</span>
+                                    <button type="button" (click)="downloadUploadedFile()" class="text-blue-600 hover:text-blue-800 ml-2" title="Télécharger">
+                                       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                                    </button>
+                                 </div>
+                              }
+                           </div>
+                           @if (selectedFile() && !uploadingFile()) {
+                              <button type="button" (click)="uploadFile()" class="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition font-medium text-sm">
+                                 Uploader le fichier
+                              </button>
+                           }
+                           <p class="text-xs text-slate-500">Formats acceptés: Images (JPG, PNG) ou PDF. Taille max: 10MB</p>
+                        </div>
                      </div>
                   </div>
                </form>
@@ -871,6 +911,7 @@ export class PurchaseInvoicesComponent implements OnInit {
   router = inject(Router);
   route = inject(ActivatedRoute);
   comptabiliteService = inject(ComptabiliteService);
+  apiService = inject(ApiService);
 
   isFormOpen = signal(false);
   isEditMode = signal(false);
@@ -885,6 +926,12 @@ export class PurchaseInvoicesComponent implements OnInit {
   ecrituresComptables = signal<EcritureComptable[]>([]);
   loadingEcritures = signal(false);
   openDropdownId = signal<string | null>(null);
+  
+  // File upload
+  selectedFile = signal<File | null>(null);
+  uploadingFile = signal(false);
+  uploadedFileId = signal<string | null>(null);
+  uploadedFileName = signal<string | null>(null);
 
   // Payment form
   paymentForm = this.fb.group({
@@ -1070,6 +1117,9 @@ export class PurchaseInvoicesComponent implements OnInit {
     this.form.patchValue({ dueDate: today.toISOString().split('T')[0] });
     
     this.availableBCs.set([]);
+    this.selectedFile.set(null);
+    this.uploadedFileId.set(null);
+    this.uploadedFileName.set(null);
     this.isFormOpen.set(true);
   }
 
@@ -1146,6 +1196,16 @@ export class PurchaseInvoicesComponent implements OnInit {
       const bcs = this.store.bcs().filter(b => b.supplierId === inv.partnerId);
       this.availableBCs.set(bcs);
     }
+    // Charger les informations du fichier si existant
+    const factureAchat = inv as any;
+    if (factureAchat.fichierFactureId) {
+      this.uploadedFileId.set(factureAchat.fichierFactureId);
+      this.uploadedFileName.set(factureAchat.fichierFactureNom || 'Fichier joint');
+    } else {
+      this.uploadedFileId.set(null);
+      this.uploadedFileName.set(null);
+    }
+    this.selectedFile.set(null);
     this.isFormOpen.set(true);
   }
 
@@ -1382,7 +1442,7 @@ export class PurchaseInvoicesComponent implements OnInit {
     const amountHT = val.amountHT != null && val.amountHT !== undefined ? Number(val.amountHT) : 0;
     const amountTTC = val.amountTTC != null && val.amountTTC !== undefined ? Number(val.amountTTC) : 0;
     
-    const invoice: Invoice & { ajouterAuStock?: boolean } = {
+    const invoice: Invoice & { ajouterAuStock?: boolean; fichierFactureId?: string; fichierFactureNom?: string; fichierFactureType?: string } = {
       id: this.editingId || `fa-${Date.now()}`,
       type: 'purchase',
       number: val.number,
@@ -1396,6 +1456,13 @@ export class PurchaseInvoicesComponent implements OnInit {
       paymentMode: val.paymentMode || undefined,
       ajouterAuStock: val.ajouterAuStock || false
     };
+    
+    // Ajouter les informations du fichier si uploadé
+    if (this.uploadedFileId()) {
+      invoice.fichierFactureId = this.uploadedFileId()!;
+      invoice.fichierFactureNom = this.uploadedFileName() || this.selectedFile()?.name || '';
+      invoice.fichierFactureType = this.selectedFile()?.type || '';
+    }
 
     if (this.isEditMode()) {
       this.store.updateInvoice(invoice);
@@ -1403,6 +1470,75 @@ export class PurchaseInvoicesComponent implements OnInit {
       this.store.addInvoice(invoice);
     }
     this.closeForm();
+  }
+  
+  // File upload methods
+  onFileSelected(event: Event) {
+    const input = event.target as HTMLInputElement;
+    if (input.files && input.files.length > 0) {
+      const file = input.files[0];
+      // Vérifier la taille (10MB max)
+      if (file.size > 10 * 1024 * 1024) {
+        this.store.showToast('Le fichier est trop volumineux (max 10MB)', 'error');
+        return;
+      }
+      this.selectedFile.set(file);
+      this.uploadedFileId.set(null);
+      this.uploadedFileName.set(null);
+    }
+  }
+  
+  removeSelectedFile() {
+    this.selectedFile.set(null);
+  }
+  
+  async uploadFile() {
+    const file = this.selectedFile();
+    if (!file) return;
+    
+    this.uploadingFile.set(true);
+    try {
+      const result = await this.apiService.uploadFileToGridFS(
+        file,
+        'facture_achat',
+        this.editingId || undefined,
+        'FactureAchat'
+      ).toPromise();
+      
+      if (result) {
+        this.uploadedFileId.set(result.fileId);
+        this.uploadedFileName.set(result.filename);
+        this.selectedFile.set(null);
+        this.store.showToast('Fichier uploadé avec succès', 'success');
+      }
+    } catch (error: any) {
+      console.error('Erreur upload fichier:', error);
+      this.store.showToast('Erreur lors de l\'upload du fichier', 'error');
+    } finally {
+      this.uploadingFile.set(false);
+    }
+  }
+  
+  async downloadUploadedFile() {
+    const fileId = this.uploadedFileId();
+    if (!fileId) return;
+    
+    try {
+      const blob = await this.apiService.downloadFileFromGridFS(fileId).toPromise();
+      if (blob) {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = this.uploadedFileName() || 'fichier';
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      }
+    } catch (error) {
+      console.error('Erreur téléchargement fichier:', error);
+      this.store.showToast('Erreur lors du téléchargement', 'error');
+    }
   }
 
   async showEcrituresModal(inv: Invoice) {
