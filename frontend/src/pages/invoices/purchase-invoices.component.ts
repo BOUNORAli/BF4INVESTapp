@@ -5,7 +5,7 @@ import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, FormsModule } 
 import { Router, ActivatedRoute } from '@angular/router';
 import { ComptabiliteService } from '../../services/comptabilite.service';
 import { ApiService } from '../../services/api.service';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, take } from 'rxjs';
 import type { EcritureComptable } from '../../models/types';
 
 @Component({
@@ -1882,70 +1882,73 @@ export class PurchaseInvoicesComponent implements OnInit {
     }
   }
   
-  async loadFileForViewing(fileId: string, filename: string, type: string, contentType?: string) {
-    try {
-      let url: string;
-      
-      if (!this.isGridFsId(fileId)) {
-        // Cloudinary : obtenir une URL signée fraîche avec le contentType correct
-        // Exécuter firstValueFrom dans la zone Angular pour éviter NG0904
-        url = await this.ngZone.run(async () => {
-          const result = await firstValueFrom(this.apiService.getFactureAchatFileUrl(fileId, contentType));
-          return result.url;
-        });
-        console.log('🔗 [FRONTEND] URL Cloudinary obtenue:', url);
-        
-        // Pour les images, créer un blob URL pour éviter les problèmes CORS
-        if (type === 'image' || contentType?.startsWith('image/')) {
-          fetch(url)
-            .then(response => {
-              if (!response.ok) throw new Error('Failed to fetch image');
-              return response.blob();
-            })
-            .then(blob => {
-              const blobUrl = window.URL.createObjectURL(blob);
-              this.ngZone.run(() => {
-                this.fileViewerBlobUrl.set(blobUrl);
-                this.viewingFile.set({ fileId, filename, type });
-                this.cdr.markForCheck();
-              });
-            })
-            .catch(fetchError => {
-              // Si le fetch échoue, utiliser directement l'URL Cloudinary
-              console.warn('Erreur fetch image, utilisation URL directe:', fetchError);
+  loadFileForViewing(fileId: string, filename: string, type: string, contentType?: string) {
+    // Utiliser subscribe au lieu de firstValueFrom pour éviter NG0904
+    if (!this.isGridFsId(fileId)) {
+      // Cloudinary : obtenir une URL signée fraîche avec le contentType correct
+      this.apiService.getFactureAchatFileUrl(fileId, contentType)
+        .pipe(take(1))
+        .subscribe({
+          next: (result) => {
+            const url = result.url;
+            console.log('🔗 [FRONTEND] URL Cloudinary obtenue:', url);
+            
+            // Pour les images, créer un blob URL pour éviter les problèmes CORS
+            if (type === 'image' || contentType?.startsWith('image/')) {
+              fetch(url)
+                .then(response => {
+                  if (!response.ok) throw new Error('Failed to fetch image');
+                  return response.blob();
+                })
+                .then(blob => {
+                  const blobUrl = window.URL.createObjectURL(blob);
+                  this.ngZone.run(() => {
+                    this.fileViewerBlobUrl.set(blobUrl);
+                    this.viewingFile.set({ fileId, filename, type });
+                  });
+                })
+                .catch(fetchError => {
+                  // Si le fetch échoue, utiliser directement l'URL Cloudinary
+                  console.warn('Erreur fetch image, utilisation URL directe:', fetchError);
+                  this.ngZone.run(() => {
+                    this.fileViewerBlobUrl.set(url);
+                    this.viewingFile.set({ fileId, filename, type });
+                  });
+                });
+            } else {
+              // Pour les PDFs, utiliser directement l'URL signée
+              console.log('📄 [FRONTEND] Configuration PDF viewer avec URL:', url);
               this.ngZone.run(() => {
                 this.fileViewerBlobUrl.set(url);
                 this.viewingFile.set({ fileId, filename, type });
-                this.cdr.markForCheck();
               });
+            }
+          },
+          error: (error) => {
+            console.error('❌ [FRONTEND] Erreur chargement fichier:', error);
+            this.ngZone.run(() => {
+              this.store.showToast('Erreur lors du chargement du fichier', 'error');
             });
-        } else {
-          // Pour les PDFs, utiliser directement l'URL signée
-          console.log('📄 [FRONTEND] Configuration PDF viewer avec URL:', url);
-          this.ngZone.run(() => {
-            this.fileViewerBlobUrl.set(url);
-            this.viewingFile.set({ fileId, filename, type });
-            this.cdr.markForCheck();
-          });
-        }
-        return;
-      }
-
-      // GridFS : créer un blob URL
-      const blob = await this.downloadFactureBlob(fileId);
-      url = window.URL.createObjectURL(blob);
-      this.ngZone.run(() => {
-        this.fileViewerBlobUrl.set(url);
-        this.viewingFile.set({ fileId, filename, type });
-        this.cdr.markForCheck();
-      });
-    } catch (error) {
-      console.error('❌ [FRONTEND] Erreur chargement fichier:', error);
-      this.ngZone.run(() => {
-        this.store.showToast('Erreur lors du chargement du fichier', 'error');
-        this.cdr.markForCheck();
-      });
+          }
+        });
+      return;
     }
+
+    // GridFS : créer un blob URL
+    this.downloadFactureBlob(fileId)
+      .then(blob => {
+        const url = window.URL.createObjectURL(blob);
+        this.ngZone.run(() => {
+          this.fileViewerBlobUrl.set(url);
+          this.viewingFile.set({ fileId, filename, type });
+        });
+      })
+      .catch(error => {
+        console.error('❌ [FRONTEND] Erreur chargement fichier:', error);
+        this.ngZone.run(() => {
+          this.store.showToast('Erreur lors du chargement du fichier', 'error');
+        });
+      });
   }
   
   closeFileViewer() {
