@@ -19,7 +19,7 @@ import { CommonModule } from '@angular/common';
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-100">
-            @for (row of rows; track $index) {
+            @for (row of rowsArray; track row) {
               <tr>
                 @for (col of columns; track $index) {
                   <td class="px-6 py-4" [class.text-right]="col.align === 'right'" [class.text-center]="col.align === 'center'">
@@ -49,5 +49,9 @@ import { CommonModule } from '@angular/common';
 export class SkeletonTableComponent {
   @Input() columns: Array<{ width?: string; align?: 'left' | 'right' | 'center' }> = [];
   @Input() rows: number = 5;
+  
+  get rowsArray(): number[] {
+    return Array.from({ length: this.rows }, (_, i) => i);
+  }
 }
 

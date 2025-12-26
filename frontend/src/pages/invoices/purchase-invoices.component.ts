@@ -206,10 +206,9 @@ import type { EcritureComptable } from '../../models/types';
         </table>
         </div>
         }
-      </div>
-
-      <!-- Pagination Controls -->
-      <div class="p-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
+        
+        <!-- Pagination Controls -->
+        <div class="p-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
         <div class="text-xs text-slate-500">
           Affichage de {{ (currentPage() - 1) * pageSize() + 1 }} à {{ Math.min(currentPage() * pageSize(), filteredInvoices().length) }} sur {{ filteredInvoices().length }} résultats
         </div>
