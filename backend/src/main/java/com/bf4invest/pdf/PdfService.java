@@ -31,6 +31,7 @@ import java.time.format.DateTimeFormatter;
 public class PdfService {
     
     private final BandeCommandePdfGenerator bcGenerator;
+    private final com.bf4invest.pdf.generator.DashboardReportPdfGenerator dashboardReportGenerator;
     private final CompanyInfoService companyInfoService;
     
     // Dépendances pour les générateurs qui ne sont pas encore refactorisés
@@ -1729,49 +1730,15 @@ public class PdfService {
     
     // ============ DASHBOARD REPORT METHOD ============
     
+    /**
+     * Génère le rapport PDF du dashboard
+     * Délègue au générateur spécialisé
+     */
     public byte[] generateDashboardReport(com.bf4invest.dto.DashboardKpiResponse kpis, 
                                           java.time.LocalDate from, 
                                           java.time.LocalDate to,
                                           Double soldeActuel) throws DocumentException, IOException {
-        Document document = new Document(PageSize.A4, 40f, 40f, 60f, 60f);
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        PdfWriter writer = PdfWriter.getInstance(document, baos);
-        
-        document.open();
-        
-        // Page de garde
-        addReportCoverPage(document, writer, from, to);
-        document.newPage();
-        
-        // Synthèse exécutive
-        addExecutiveSummary(document, kpis);
-        
-        // Situation de trésorerie (NOUVEAU)
-        addSoldeSection(document, soldeActuel);
-        
-        // Analyse TVA
-        addTvaAnalysis(document, kpis);
-        
-        // Situation des impayés
-        addImpayesSection(document, kpis);
-        
-        // Évolution mensuelle du CA (AMÉLIORÉ avec graphiques)
-        addMonthlyCaEvolution(document, kpis);
-        
-        // Top Clients
-        addTopClients(document, kpis);
-        
-        // Top Fournisseurs
-        addTopSuppliers(document, kpis);
-        
-        // Alertes et actions requises
-        addAlertsSection(document, kpis);
-        
-        // Footer
-        addReportFooter(document);
-        
-        document.close();
-        return baos.toByteArray();
+        return dashboardReportGenerator.generate(kpis, from, to, soldeActuel);
     }
     
     private void addReportCoverPage(Document document, PdfWriter writer, 

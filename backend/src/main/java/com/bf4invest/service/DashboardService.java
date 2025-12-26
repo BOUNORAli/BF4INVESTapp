@@ -27,6 +27,14 @@ public class DashboardService {
     private final ClientRepository clientRepository;
     private final SupplierRepository supplierRepository;
     
+    // Nouveaux services d'analyse
+    private final ChargeAnalysisService chargeAnalysisService;
+    private final PaymentAnalysisService paymentAnalysisService;
+    private final ProductPerformanceService productPerformanceService;
+    private final TreasuryForecastService treasuryForecastService;
+    private final BCAnalysisService bcAnalysisService;
+    private final BalanceHistoryService balanceHistoryService;
+    
     public DashboardKpiResponse getKPIs(LocalDate from, LocalDate to) {
         List<FactureVente> facturesVente = filterFacturesVenteByDateRange(
                 factureVenteRepository.findAll(), from, to);
@@ -111,6 +119,17 @@ public class DashboardService {
         List<DashboardKpiResponse.FournisseurClientStat> topFournisseurs = calculateTopFournisseurs(facturesAchat);
         List<DashboardKpiResponse.FournisseurClientStat> topClients = calculateTopClients(facturesVente);
         
+        // Nouvelles analyses
+        DashboardKpiResponse.ChargeAnalysis chargeAnalysis = chargeAnalysisService.analyzeCharges(from, to);
+        DashboardKpiResponse.PaymentAnalysis paymentAnalysis = paymentAnalysisService.analyzePayments(from, to);
+        DashboardKpiResponse.ProductPerformance productPerformance = productPerformanceService.analyzeProducts(from, to);
+        DashboardKpiResponse.TreasuryForecast treasuryForecast = treasuryForecastService.generateForecast(from, to);
+        DashboardKpiResponse.BCAnalysis bcAnalysis = bcAnalysisService.analyzeBCs(from, to);
+        DashboardKpiResponse.BalanceHistory balanceHistory = balanceHistoryService.getBalanceHistory(from, to);
+        
+        // Graphiques avancés (calculs basés sur les données existantes)
+        DashboardKpiResponse.AdvancedCharts advancedCharts = calculateAdvancedCharts(caMensuel, margeTotale, margeMoyenne, from, to);
+        
         return DashboardKpiResponse.builder()
                 .caHT(caHT)
                 .caTTC(caTTC)
@@ -125,6 +144,98 @@ public class DashboardService {
                 .caMensuel(caMensuel)
                 .topFournisseurs(topFournisseurs)
                 .topClients(topClients)
+                .chargeAnalysis(chargeAnalysis)
+                .paymentAnalysis(paymentAnalysis)
+                .productPerformance(productPerformance)
+                .treasuryForecast(treasuryForecast)
+                .bcAnalysis(bcAnalysis)
+                .balanceHistory(balanceHistory)
+                .advancedCharts(advancedCharts)
+                .build();
+    }
+    
+    private DashboardKpiResponse.AdvancedCharts calculateAdvancedCharts(
+            List<DashboardKpiResponse.MonthlyData> caMensuel,
+            double margeTotale,
+            double margeMoyenne,
+            LocalDate from,
+            LocalDate to) {
+        
+        // Evolution des marges
+        List<DashboardKpiResponse.MarginEvolution> evolutionMarges = caMensuel.stream()
+                .map(m -> DashboardKpiResponse.MarginEvolution.builder()
+                        .mois(m.getMois())
+                        .marge(m.getMarge())
+                        .margePourcentage(m.getMarge())
+                        .build())
+                .collect(Collectors.toList());
+        
+        // Corrélation CA vs Charges (simplifié - utiliser les charges totales)
+        DashboardKpiResponse.ChargeAnalysis charges = chargeAnalysisService.analyzeCharges(from, to);
+        double totalCharges = charges != null ? charges.getTotalCharges() : 0.0;
+        
+        List<DashboardKpiResponse.CAChargeCorrelation> correlationCACharges = caMensuel.stream()
+                .map(m -> {
+                    double chargesMensuelles = totalCharges / Math.max(caMensuel.size(), 1);
+                    double ratio = m.getCaHT() > 0 ? chargesMensuelles / m.getCaHT() : 0.0;
+                    return DashboardKpiResponse.CAChargeCorrelation.builder()
+                            .mois(m.getMois())
+                            .ca(m.getCaHT())
+                            .charges(chargesMensuelles)
+                            .ratio(ratio)
+                            .build();
+                })
+                .collect(Collectors.toList());
+        
+        // Indicateurs de croissance
+        double croissanceMoM = 0.0;
+        double croissanceYoY = 0.0;
+        if (caMensuel.size() >= 2) {
+            List<DashboardKpiResponse.MonthlyData> sorted = caMensuel.stream()
+                    .sorted(Comparator.comparing(DashboardKpiResponse.MonthlyData::getMois))
+                    .collect(Collectors.toList());
+            double caMoisActuel = sorted.get(sorted.size() - 1).getCaHT();
+            double caMoisPrecedent = sorted.get(sorted.size() - 2).getCaHT();
+            if (caMoisPrecedent > 0) {
+                croissanceMoM = ((caMoisActuel - caMoisPrecedent) / caMoisPrecedent) * 100;
+            }
+        }
+        
+        DashboardKpiResponse.GrowthIndicators indicateursCroissance = DashboardKpiResponse.GrowthIndicators.builder()
+                .croissanceMoM(croissanceMoM)
+                .croissanceYoY(croissanceYoY) // Simplifié - nécessiterait données année précédente
+                .croissanceMoyenne(croissanceMoM)
+                .build();
+        
+        // Heatmap mensuelle (score composite)
+        List<DashboardKpiResponse.MonthlyPerformance> heatmapMensuelle = caMensuel.stream()
+                .map(m -> {
+                    double score = 0.0;
+                    String niveau = "FAIBLE";
+                    
+                    // Score basé sur CA et marge
+                    if (m.getCaHT() > 0 && m.getMarge() > 0) {
+                        score = (m.getCaHT() / 100000.0) * 50 + (m.getMarge() / 20.0) * 50;
+                        score = Math.min(score, 100.0);
+                        
+                        if (score >= 80) niveau = "EXCELLENT";
+                        else if (score >= 60) niveau = "BON";
+                        else if (score >= 40) niveau = "MOYEN";
+                    }
+                    
+                    return DashboardKpiResponse.MonthlyPerformance.builder()
+                            .mois(m.getMois())
+                            .score(score)
+                            .niveau(niveau)
+                            .build();
+                })
+                .collect(Collectors.toList());
+        
+        return DashboardKpiResponse.AdvancedCharts.builder()
+                .evolutionMarges(evolutionMarges)
+                .correlationCACharges(correlationCACharges)
+                .indicateursCroissance(indicateursCroissance)
+                .heatmapMensuelle(heatmapMensuelle)
                 .build();
     }
     
