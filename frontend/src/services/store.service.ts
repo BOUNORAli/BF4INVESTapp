@@ -1142,7 +1142,7 @@ export class StoreService {
   // T├®l├®charger le rapport complet du dashboard
   async downloadDashboardReport(from?: Date, to?: Date): Promise<void> {
     try {
-      this.showToast('G├®n├®ration du rapport en cours...', 'info');
+      this.showToast('Génération du rapport en cours...', 'info');
       
       // Construire les param├¿tres de requ├¬te
       const params: Record<string, string> = {};
@@ -1168,16 +1168,16 @@ export class StoreService {
         const fileName = `Rapport_Activite_${today}.pdf`;
         await this.handlePDFDownload(blob, fileName);
         
-        this.showToast('Rapport g├®n├®r├® avec succ├¿s', 'success');
+        this.showToast('Rapport généré avec succées', 'success');
         this.addNotification({ 
-          title: 'Rapport d\'Activit├®', 
-          message: 'Le rapport PDF a ├®t├® g├®n├®r├® et t├®l├®charg├®.', 
+          title: 'Rapport d\'Activité', 
+          message: 'Le rapport PDF a été généré et téléchargé.', 
           type: 'success'
         });
       }
     } catch (error) {
       console.error('Error downloading dashboard report:', error);
-      this.showToast('Erreur lors de la g├®n├®ration du rapport', 'error');
+      this.showToast('Erreur lors de la génération du rapport', 'error');
       throw error;
     }
   }

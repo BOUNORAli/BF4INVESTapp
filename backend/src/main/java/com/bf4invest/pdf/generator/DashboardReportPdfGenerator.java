@@ -38,70 +38,106 @@ public class DashboardReportPdfGenerator {
      */
     public byte[] generate(DashboardKpiResponse kpis, LocalDate from, LocalDate to, Double soldeActuel) 
             throws DocumentException, IOException {
+        if (kpis == null) {
+            throw new IllegalArgumentException("KPIs cannot be null");
+        }
+        
         Document document = new Document(PageSize.A4, 40f, 40f, 60f, 60f);
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         PdfWriter writer = PdfWriter.getInstance(document, baos);
         
-        document.open();
-        
-        // Page de garde avec table des matières
-        addReportCoverPage(document, writer, from, to);
-        document.newPage();
-        
-        // Table des matières
-        addTableOfContents(document);
-        document.newPage();
-        
-        // Sections existantes (1-8)
-        addExecutiveSummary(document, kpis);
-        addSoldeSection(document, soldeActuel);
-        addTvaAnalysis(document, kpis);
-        addImpayesSection(document, kpis);
-        addMonthlyCaEvolution(document, kpis);
-        addTopClients(document, kpis);
-        addTopSuppliers(document, kpis);
-        addAlertsSection(document, kpis);
-        
-        // Nouvelles sections (9-15)
-        if (kpis.getChargeAnalysis() != null) {
+        try {
+            document.open();
+            
+            // Page de garde avec table des matières
+            addReportCoverPage(document, writer, from, to);
             document.newPage();
-            addChargesAnalysis(document, kpis.getChargeAnalysis());
+            
+            // Table des matières
+            addTableOfContents(document);
+            document.newPage();
+            
+            // Sections existantes (1-8)
+            addExecutiveSummary(document, kpis);
+            addSoldeSection(document, soldeActuel);
+            addTvaAnalysis(document, kpis);
+            addImpayesSection(document, kpis);
+            addMonthlyCaEvolution(document, kpis);
+            addTopClients(document, kpis);
+            addTopSuppliers(document, kpis);
+            addAlertsSection(document, kpis);
+            
+            // Nouvelles sections (9-15) - avec gestion d'erreur pour éviter les crashes
+            try {
+                if (kpis.getChargeAnalysis() != null) {
+                    document.newPage();
+                    addChargesAnalysis(document, kpis.getChargeAnalysis());
+                }
+            } catch (Exception e) {
+                log.warn("Erreur lors de l'ajout de la section Charges Analysis", e);
+            }
+            
+            try {
+                if (kpis.getTreasuryForecast() != null) {
+                    document.newPage();
+                    addTreasuryForecast(document, kpis.getTreasuryForecast());
+                }
+            } catch (Exception e) {
+                log.warn("Erreur lors de l'ajout de la section Treasury Forecast", e);
+            }
+            
+            try {
+                if (kpis.getPaymentAnalysis() != null) {
+                    document.newPage();
+                    addPaymentAnalysis(document, kpis.getPaymentAnalysis());
+                }
+            } catch (Exception e) {
+                log.warn("Erreur lors de l'ajout de la section Payment Analysis", e);
+            }
+            
+            try {
+                if (kpis.getProductPerformance() != null) {
+                    document.newPage();
+                    addProductPerformance(document, kpis.getProductPerformance());
+                }
+            } catch (Exception e) {
+                log.warn("Erreur lors de l'ajout de la section Product Performance", e);
+            }
+            
+            try {
+                if (kpis.getBcAnalysis() != null) {
+                    document.newPage();
+                    addBCAnalysis(document, kpis.getBcAnalysis());
+                }
+            } catch (Exception e) {
+                log.warn("Erreur lors de l'ajout de la section BC Analysis", e);
+            }
+            
+            try {
+                if (kpis.getBalanceHistory() != null) {
+                    document.newPage();
+                    addBalanceHistory(document, kpis.getBalanceHistory());
+                }
+            } catch (Exception e) {
+                log.warn("Erreur lors de l'ajout de la section Balance History", e);
+            }
+            
+            try {
+                if (kpis.getAdvancedCharts() != null) {
+                    document.newPage();
+                    addAdvancedCharts(document, kpis.getAdvancedCharts());
+                }
+            } catch (Exception e) {
+                log.warn("Erreur lors de l'ajout de la section Advanced Charts", e);
+            }
+            
+            // Footer
+            addReportFooter(document);
+            
+        } finally {
+            document.close();
         }
         
-        if (kpis.getTreasuryForecast() != null) {
-            document.newPage();
-            addTreasuryForecast(document, kpis.getTreasuryForecast());
-        }
-        
-        if (kpis.getPaymentAnalysis() != null) {
-            document.newPage();
-            addPaymentAnalysis(document, kpis.getPaymentAnalysis());
-        }
-        
-        if (kpis.getProductPerformance() != null) {
-            document.newPage();
-            addProductPerformance(document, kpis.getProductPerformance());
-        }
-        
-        if (kpis.getBcAnalysis() != null) {
-            document.newPage();
-            addBCAnalysis(document, kpis.getBcAnalysis());
-        }
-        
-        if (kpis.getBalanceHistory() != null) {
-            document.newPage();
-            addBalanceHistory(document, kpis.getBalanceHistory());
-        }
-        
-        if (kpis.getAdvancedCharts() != null) {
-            document.newPage();
-            addAdvancedCharts(document, kpis.getAdvancedCharts());
-        }
-        
-        // Footer
-        addReportFooter(document);
-        
-        document.close();
         return baos.toByteArray();
     }
     
