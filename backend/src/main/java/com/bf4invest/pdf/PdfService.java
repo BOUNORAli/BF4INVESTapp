@@ -1,6 +1,7 @@
 package com.bf4invest.pdf;
 
 import com.bf4invest.model.*;
+import com.bf4invest.pdf.generator.BandeCommandePdfGenerator;
 import com.bf4invest.repository.ClientRepository;
 import com.bf4invest.repository.SupplierRepository;
 import com.bf4invest.repository.BandeCommandeRepository;

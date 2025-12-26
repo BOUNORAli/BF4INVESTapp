@@ -3,6 +3,7 @@ package com.bf4invest.pdf.generator;
 import com.bf4invest.model.BandeCommande;
 import com.bf4invest.model.Client;
 import com.bf4invest.model.Supplier;
+import com.bf4invest.pdf.event.BCFooterPageEvent;
 import com.bf4invest.pdf.helper.*;
 import com.bf4invest.repository.ClientRepository;
 import com.bf4invest.repository.SupplierRepository;
@@ -38,7 +39,7 @@ public class BandeCommandePdfGenerator {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         PdfWriter writer = PdfWriter.getInstance(document, baos);
         
-        writer.setPageEvent(new com.bf4invest.pdf.event.BCFooterPageEvent());
+        writer.setPageEvent(new BCFooterPageEvent());
         document.open();
         
         // Récupérer les informations client et fournisseur
