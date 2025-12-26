@@ -1052,10 +1052,15 @@ import type { EcritureComptable } from '../../models/types';
               </div>
             </div>
             <div class="flex-1 overflow-auto p-4 bg-slate-100 flex items-center justify-center">
-              @if (viewingFile()?.type === 'image' || (viewingFile()?.type && viewingFile()!.type.startsWith('image/'))) {
-                <img [src]="fileViewerBlobUrl()" [alt]="viewingFile()?.filename" class="max-w-full max-h-full object-contain rounded-lg shadow-lg" (error)="handleImageError()">
+              @if (!fileViewerBlobUrl()) {
+                <div class="text-center p-8">
+                  <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                  <p class="text-slate-600">Chargement du fichier...</p>
+                </div>
+              } @else if (viewingFile()?.type === 'image' || (viewingFile()?.type && viewingFile()!.type.startsWith('image/'))) {
+                <img [src]="fileViewerBlobUrl()!" [alt]="viewingFile()?.filename" class="max-w-full max-h-full object-contain rounded-lg shadow-lg" (error)="handleImageError()">
               } @else if (viewingFile()?.type === 'application/pdf') {
-                <iframe [src]="fileViewerBlobUrl()" class="w-full h-full min-h-[600px] border-0 rounded-lg shadow-lg bg-white"></iframe>
+                <iframe [src]="fileViewerBlobUrl()!" class="w-full h-full min-h-[600px] border-0 rounded-lg shadow-lg bg-white"></iframe>
               } @else {
                 <div class="text-center p-8">
                   <p class="text-slate-600">Type de fichier non supporté pour la prévisualisation</p>
@@ -1877,52 +1882,58 @@ export class PurchaseInvoicesComponent implements OnInit {
   }
   
   async loadFileForViewing(fileId: string, filename: string, type: string, contentType?: string) {
-    try {
-      if (!this.isGridFsId(fileId)) {
-        // Cloudinary : obtenir une URL signée fraîche avec le contentType correct
-        const { url } = await firstValueFrom(this.apiService.getFactureAchatFileUrl(fileId, contentType));
-        
-        // Pour les images, créer un blob URL pour éviter les problèmes CORS
-        if (type === 'image' || contentType?.startsWith('image/')) {
-          try {
-            const response = await fetch(url);
-            if (!response.ok) throw new Error('Failed to fetch image');
-            const blob = await response.blob();
-            const blobUrl = window.URL.createObjectURL(blob);
-            this.ngZone.run(() => {
-              this.fileViewerBlobUrl.set(blobUrl);
-            });
-          } catch (fetchError) {
-            // Si le fetch échoue, utiliser directement l'URL Cloudinary
-            console.warn('Erreur fetch image, utilisation URL directe:', fetchError);
+    // Exécuter les opérations asynchrones en dehors de la zone Angular
+    return this.ngZone.runOutsideAngular(async () => {
+      try {
+        if (!this.isGridFsId(fileId)) {
+          // Cloudinary : obtenir une URL signée fraîche avec le contentType correct
+          const { url } = await firstValueFrom(this.apiService.getFactureAchatFileUrl(fileId, contentType));
+          console.log('🔗 [FRONTEND] URL Cloudinary obtenue:', url);
+          
+          // Pour les images, créer un blob URL pour éviter les problèmes CORS
+          if (type === 'image' || contentType?.startsWith('image/')) {
+            try {
+              const response = await fetch(url);
+              if (!response.ok) throw new Error('Failed to fetch image');
+              const blob = await response.blob();
+              const blobUrl = window.URL.createObjectURL(blob);
+              this.ngZone.run(() => {
+                this.fileViewerBlobUrl.set(blobUrl);
+                this.viewingFile.set({ fileId, filename, type });
+              });
+            } catch (fetchError) {
+              // Si le fetch échoue, utiliser directement l'URL Cloudinary
+              console.warn('Erreur fetch image, utilisation URL directe:', fetchError);
+              this.ngZone.run(() => {
+                this.fileViewerBlobUrl.set(url);
+                this.viewingFile.set({ fileId, filename, type });
+              });
+            }
+          } else {
+            // Pour les PDFs, utiliser directement l'URL signée
+            console.log('📄 [FRONTEND] Configuration PDF viewer avec URL:', url);
             this.ngZone.run(() => {
               this.fileViewerBlobUrl.set(url);
+              this.viewingFile.set({ fileId, filename, type });
             });
           }
-        } else {
-          // Pour les PDFs, utiliser directement l'URL signée
-          this.ngZone.run(() => {
-            this.fileViewerBlobUrl.set(url);
-          });
+          return;
         }
-        
+
+        // GridFS : créer un blob URL
+        const blob = await this.downloadFactureBlob(fileId);
+        const url = window.URL.createObjectURL(blob);
         this.ngZone.run(() => {
+          this.fileViewerBlobUrl.set(url);
           this.viewingFile.set({ fileId, filename, type });
         });
-        return;
+      } catch (error) {
+        console.error('❌ [FRONTEND] Erreur chargement fichier:', error);
+        this.ngZone.run(() => {
+          this.store.showToast('Erreur lors du chargement du fichier', 'error');
+        });
       }
-
-      // GridFS : créer un blob URL
-      const blob = await this.downloadFactureBlob(fileId);
-      const url = window.URL.createObjectURL(blob);
-      this.ngZone.run(() => {
-        this.fileViewerBlobUrl.set(url);
-        this.viewingFile.set({ fileId, filename, type });
-      });
-    } catch (error) {
-      console.error('Erreur chargement fichier:', error);
-      this.store.showToast('Erreur lors du chargement du fichier', 'error');
-    }
+    });
   }
   
   closeFileViewer() {
@@ -2000,7 +2011,9 @@ export class PurchaseInvoicesComponent implements OnInit {
       file,
       this.editingId || undefined,
       (progress) => {
-        this.uploadProgress.set(progress);
+        this.ngZone.run(() => {
+          this.uploadProgress.set(progress);
+        });
         if (progress % 25 === 0 || progress === 100) { // Log tous les 25% et à 100%
           console.log('📊 [FRONTEND] Progression upload:', progress + '%');
         }
@@ -2063,7 +2076,9 @@ export class PurchaseInvoicesComponent implements OnInit {
         }
       },
       error: (error: any) => {
-        this.uploadProgress.set(0);
+        this.ngZone.run(() => {
+          this.uploadProgress.set(0);
+        });
         console.error('❌ [FRONTEND] Erreur upload fichier complète:', error);
         console.error('❌ [FRONTEND] Détails erreur:', {
           status: error?.status,
@@ -2085,11 +2100,15 @@ export class PurchaseInvoicesComponent implements OnInit {
           errorMessage = error;
         }
         
-        this.uploadError.set(errorMessage);
-        this.store.showToast(errorMessage, 'error');
+        this.ngZone.run(() => {
+          this.uploadError.set(errorMessage);
+          this.store.showToast(errorMessage, 'error');
+        });
       },
       complete: () => {
-        this.uploadingFile.set(false);
+        this.ngZone.run(() => {
+          this.uploadingFile.set(false);
+        });
       }
     });
   }
