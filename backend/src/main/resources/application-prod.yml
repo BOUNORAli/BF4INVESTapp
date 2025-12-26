@@ -2,6 +2,26 @@ spring:
   data:
     mongodb:
       uri: ${MONGODB_URI}
+  profiles:
+    active: prod
+
+# JWT Configuration - OBLIGATOIRE en production
+# JWT_SECRET doit être défini via variable d'environnement (minimum 32 caractères)
+jwt:
+  secret: ${JWT_SECRET} # Pas de fallback en prod - doit être défini
+  expiration: ${JWT_EXPIRATION:3600000} # 1 hour (access token)
+  refresh-expiration: ${JWT_REFRESH_EXPIRATION:604800000} # 7 days (refresh token)
+
+# CORS Configuration - OBLIGATOIRE en production
+# CORS_ALLOWED_ORIGINS doit être défini avec des domaines explicites (pas de "*")
+cors:
+  allowed:
+    origins: ${CORS_ALLOWED_ORIGINS} # Pas de fallback en prod - doit être défini
+
+# Désactiver l'initialisation automatique des données en production
+app:
+  data-initializer:
+    enabled: false
 
 logging:
   level:

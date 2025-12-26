@@ -5,7 +5,8 @@ import { RouterModule } from '@angular/router';
 import { ReleveBancaireService, ImportResult } from '../../services/releve-bancaire.service';
 import { StoreService } from '../../services/store.service';
 import { ApiService } from '../../services/api.service';
-import type { TransactionBancaire } from '../../models/types';
+import { InvoiceService } from '../../services/invoice.service';
+import type { TransactionBancaire, Invoice } from '../../models/types';
 import { firstValueFrom } from 'rxjs';
 
 @Component({
@@ -230,6 +231,84 @@ import { firstValueFrom } from 'rxjs';
           </div>
         }
       </div>
+
+      <!-- Modal de liaison manuelle -->
+      @if (showLinkModal()) {
+        <div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" (click)="closeLinkModal()">
+          <div class="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[80vh] overflow-hidden flex flex-col" (click)="$event.stopPropagation()">
+            <div class="p-6 border-b border-slate-200">
+              <h2 class="text-xl font-bold text-slate-800">Lier la transaction à une facture</h2>
+              <p class="text-sm text-slate-500 mt-1">
+                Transaction du {{ formatDate(selectedTransaction()?.dateOperation || '') }} - 
+                Montant: {{ (selectedTransaction()?.credit || selectedTransaction()?.debit || 0) | number:'1.2-2' }} MAD
+              </p>
+            </div>
+            
+            <div class="p-6 flex-1 overflow-y-auto">
+              <div class="mb-4">
+                <input 
+                  type="text" 
+                  [(ngModel)]="searchTerm" 
+                  (input)="filterInvoices()"
+                  placeholder="Rechercher par numéro, partenaire ou date..."
+                  class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 outline-none"
+                >
+              </div>
+              
+              <div class="space-y-2 max-h-96 overflow-y-auto">
+                @if (filteredInvoices().length === 0) {
+                  <p class="text-center text-slate-500 py-8">Aucune facture disponible</p>
+                } @else {
+                  @for (invoice of filteredInvoices(); track invoice.id) {
+                    <div 
+                      (click)="linkToInvoice(invoice)" 
+                      class="p-4 border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer transition"
+                    >
+                      <div class="flex justify-between items-start">
+                        <div>
+                          <div class="font-semibold text-slate-800">
+                            {{ invoice.number }}
+                            <span class="ml-2 text-xs px-2 py-1 rounded" 
+                                  [class.bg-blue-100]="invoice.type === 'sale'"
+                                  [class.text-blue-700]="invoice.type === 'sale'"
+                                  [class.bg-orange-100]="invoice.type === 'purchase'"
+                                  [class.text-orange-700]="invoice.type === 'purchase'">
+                              {{ invoice.type === 'sale' ? 'Vente' : 'Achat' }}
+                            </span>
+                          </div>
+                          <div class="text-sm text-slate-600 mt-1">
+                            Date: {{ invoice.date }} | Montant TTC: {{ invoice.amountTTC | number:'1.2-2' }} MAD
+                          </div>
+                        </div>
+                        <button 
+                          [disabled]="linking()"
+                          class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium disabled:opacity-50"
+                        >
+                          @if (linking()) {
+                            Liaison...
+                          } @else {
+                            Lier
+                          }
+                        </button>
+                      </div>
+                    </div>
+                  }
+                }
+              </div>
+            </div>
+            
+            <div class="p-6 border-t border-slate-200 flex justify-end gap-3">
+              <button 
+                (click)="closeLinkModal()" 
+                [disabled]="linking()"
+                class="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition font-medium disabled:opacity-50"
+              >
+                Annuler
+              </button>
+            </div>
+          </div>
+        </div>
+      }
     </div>
   `
 })
@@ -237,6 +316,7 @@ export class ReleveBancaireComponent implements OnInit {
   private releveService = inject(ReleveBancaireService);
   private store = inject(StoreService);
   private apiService = inject(ApiService);
+  private invoiceService = inject(InvoiceService);
 
   transactions = signal<TransactionBancaire[]>([]);
   selectedFile = signal<File | null>(null);
@@ -251,6 +331,14 @@ export class ReleveBancaireComponent implements OnInit {
   selectedPdfFile = signal<File | null>(null);
   uploadingPdf = signal(false);
   uploadedPdfFiles = signal<Array<{ id: string; fichierId: string; filename: string; url?: string; mois: number; annee: number; uploadedAt: string }>>([]);
+  
+  // Manual linking
+  showLinkModal = signal(false);
+  selectedTransaction = signal<TransactionBancaire | null>(null);
+  availableInvoices = signal<Invoice[]>([]);
+  filteredInvoices = signal<Invoice[]>([]);
+  searchTerm = signal('');
+  linking = signal(false);
 
   moisList = [
     { value: 1, label: 'Janvier' }, { value: 2, label: 'Février' }, { value: 3, label: 'Mars' },
@@ -344,9 +432,84 @@ export class ReleveBancaireComponent implements OnInit {
     });
   }
 
-  linkManually(transaction: TransactionBancaire) {
-    // TODO: Implémenter la liaison manuelle avec sélection de facture
-    this.store.showToast('Fonctionnalité de liaison manuelle à implémenter', 'info');
+  async linkManually(transaction: TransactionBancaire) {
+    this.selectedTransaction.set(transaction);
+    
+    // Charger les factures disponibles
+    try {
+      const invoices = await this.invoiceService.getInvoices();
+      // Filtrer selon le type de transaction (crédit = vente, débit = achat)
+      const isCredit = transaction.credit && transaction.credit > 0;
+      const filtered = invoices.filter(inv => {
+        if (isCredit) {
+          return inv.type === 'sale' && inv.status !== 'paid';
+        } else {
+          return inv.type === 'purchase' && inv.status !== 'paid';
+        }
+      });
+      
+      this.availableInvoices.set(filtered);
+      this.filteredInvoices.set(filtered);
+      this.searchTerm.set('');
+      this.showLinkModal.set(true);
+    } catch (error) {
+      console.error('Erreur lors du chargement des factures:', error);
+      this.store.showToast('Erreur lors du chargement des factures', 'error');
+    }
+  }
+
+  filterInvoices() {
+    const term = this.searchTerm().toLowerCase();
+    if (!term) {
+      this.filteredInvoices.set(this.availableInvoices());
+      return;
+    }
+    
+    const filtered = this.availableInvoices().filter(inv =>
+      inv.number?.toLowerCase().includes(term) ||
+      inv.partnerId?.toLowerCase().includes(term) ||
+      inv.date?.includes(term)
+    );
+    
+    this.filteredInvoices.set(filtered);
+  }
+
+  async linkToInvoice(invoice: Invoice) {
+    const transaction = this.selectedTransaction();
+    if (!transaction) return;
+
+    this.linking.set(true);
+    try {
+      const factureVenteId = invoice.type === 'sale' ? invoice.id : undefined;
+      const factureAchatId = invoice.type === 'purchase' ? invoice.id : undefined;
+
+      await firstValueFrom(
+        this.releveService.linkTransaction(transaction.id, factureVenteId, factureAchatId)
+      );
+
+      this.store.showToast(
+        `Transaction liée à la facture ${invoice.number}`,
+        'success'
+      );
+      
+      this.showLinkModal.set(false);
+      this.selectedTransaction.set(null);
+      this.loadTransactions();
+    } catch (error: any) {
+      console.error('Erreur lors de la liaison:', error);
+      this.store.showToast(
+        error?.error?.message || 'Erreur lors de la liaison de la transaction',
+        'error'
+      );
+    } finally {
+      this.linking.set(false);
+    }
+  }
+
+  closeLinkModal() {
+    this.showLinkModal.set(false);
+    this.selectedTransaction.set(null);
+    this.searchTerm.set('');
   }
 
   formatDate(date: string): string {

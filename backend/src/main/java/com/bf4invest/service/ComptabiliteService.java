@@ -175,6 +175,91 @@ public class ComptabiliteService {
     }
 
     /**
+     * Crée un nouvel exercice comptable avec validation
+     * Règles:
+     * - Unicité: pas de chevauchement de dates avec un exercice existant
+     * - Validité: dateDebut < dateFin
+     * - Code: généré automatiquement si non fourni (format: "YYYY" ou "YYYY-YYYY")
+     * - Statut: OUVERT par défaut
+     */
+    @Transactional
+    public ExerciceComptable createExercice(ExerciceComptable exercice) {
+        // Validation des dates
+        if (exercice.getDateDebut() == null || exercice.getDateFin() == null) {
+            throw new IllegalArgumentException("Les dates de début et de fin sont obligatoires");
+        }
+        
+        if (!exercice.getDateDebut().isBefore(exercice.getDateFin())) {
+            throw new IllegalArgumentException("La date de début doit être antérieure à la date de fin");
+        }
+        
+        // Générer le code si non fourni
+        if (exercice.getCode() == null || exercice.getCode().trim().isEmpty()) {
+            int anneeDebut = exercice.getDateDebut().getYear();
+            int anneeFin = exercice.getDateFin().getYear();
+            
+            if (anneeDebut == anneeFin) {
+                exercice.setCode(String.valueOf(anneeDebut));
+            } else {
+                exercice.setCode(anneeDebut + "-" + anneeFin);
+            }
+        }
+        
+        // Vérifier l'unicité du code
+        Optional<ExerciceComptable> existingByCode = exerciceRepository.findByCode(exercice.getCode());
+        if (existingByCode.isPresent()) {
+            throw new IllegalArgumentException(
+                String.format("Un exercice avec le code '%s' existe déjà", exercice.getCode())
+            );
+        }
+        
+        // Vérifier qu'il n'y a pas de chevauchement de dates
+        // Un exercice chevauche si:
+        // - Sa date de début est dans la plage d'un autre exercice, OU
+        // - Sa date de fin est dans la plage d'un autre exercice, OU
+        // - Il englobe complètement un autre exercice
+        List<ExerciceComptable> allExercices = exerciceRepository.findAll();
+        for (ExerciceComptable existing : allExercices) {
+            boolean chevauche = 
+                // Nouvel exercice commence dans un existant
+                (!exercice.getDateDebut().isBefore(existing.getDateDebut()) && 
+                 !exercice.getDateDebut().isAfter(existing.getDateFin())) ||
+                // Nouvel exercice se termine dans un existant
+                (!exercice.getDateFin().isBefore(existing.getDateDebut()) && 
+                 !exercice.getDateFin().isAfter(existing.getDateFin())) ||
+                // Nouvel exercice englobe complètement un existant
+                (exercice.getDateDebut().isBefore(existing.getDateDebut()) && 
+                 exercice.getDateFin().isAfter(existing.getDateFin()));
+            
+            if (chevauche) {
+                throw new IllegalArgumentException(
+                    String.format(
+                        "L'exercice chevauche avec l'exercice existant '%s' (%s - %s)",
+                        existing.getCode(),
+                        existing.getDateDebut(),
+                        existing.getDateFin()
+                    )
+                );
+            }
+        }
+        
+        // Définir le statut par défaut si non fourni
+        if (exercice.getStatut() == null) {
+            exercice.setStatut(ExerciceComptable.StatutExercice.OUVERT);
+        }
+        
+        // Timestamps
+        LocalDateTime now = LocalDateTime.now();
+        exercice.setCreatedAt(now);
+        exercice.setUpdatedAt(now);
+        
+        ExerciceComptable saved = exerciceRepository.save(exercice);
+        log.info("Exercice comptable créé: {} ({})", saved.getCode(), saved.getDateDebut() + " - " + saved.getDateFin());
+        
+        return saved;
+    }
+
+    /**
      * Récupère un compte par son code
      */
     public Optional<CompteComptable> getCompteByCode(String code) {

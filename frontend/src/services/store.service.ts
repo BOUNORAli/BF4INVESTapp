@@ -7,6 +7,13 @@ import { BcService } from './bc.service';
 import { InvoiceService } from './invoice.service';
 import { OrdreVirementService } from './ordre-virement.service';
 import { OrdreVirement } from '../models/types';
+import { ProductStore } from '../stores/product.store';
+import { PartnerStore } from '../stores/partner.store';
+import { BCStore } from '../stores/bc.store';
+import { InvoiceStore } from '../stores/invoice.store';
+import { SettingsStore } from '../stores/settings.store';
+import { NotificationStore } from '../stores/notification.store';
+import { DashboardStore } from '../stores/dashboard.store';
 
 export interface Product {
   id: string;
@@ -350,6 +357,15 @@ export class StoreService {
   private invoiceService = inject(InvoiceService);
   private ordreVirementService = inject(OrdreVirementService);
 
+  // Stores spécialisés (injection directe)
+  private productStore = inject(ProductStore);
+  private partnerStore = inject(PartnerStore);
+  private bcStore = inject(BCStore);
+  private invoiceStore = inject(InvoiceStore);
+  private settingsStore = inject(SettingsStore);
+  private notificationStore = inject(NotificationStore);
+  private dashboardStore = inject(DashboardStore);
+
   // --- NOTIFICATIONS SYSTEM (TOASTS) ---
   readonly toasts = this.toastService.toasts;
 
@@ -361,120 +377,44 @@ export class StoreService {
     this.toastService.removeToast(id);
   }
 
-  // --- NOTIFICATION CENTER (HISTORY) ---
-  readonly notifications = signal<Notification[]>([]);
-  readonly loading = signal<boolean>(false);
+  // --- NOTIFICATION CENTER (HISTORY) - Délégation au store ---
+  readonly notifications = computed(() => this.notificationStore.notifications());
+  readonly loading = computed(() => this.notificationStore.loading());
 
-  readonly unreadNotificationsCount = computed(() => 
-    this.notifications().filter(n => !n.read).length
-  );
+  readonly unreadNotificationsCount = computed(() => this.notificationStore.unreadCount());
 
+  // --- NOTIFICATION CENTER - Délégation au store ---
   async loadNotifications(unreadOnly: boolean = false): Promise<void> {
-    try {
-      this.loading.set(true);
-      const params: Record<string, any> = { unreadOnly };
-      const backendNotifications = await this.api.get<any[]>('/notifications', params).toPromise() || [];
-      const mapped = backendNotifications.map(n => this.mapNotification(n));
-      this.notifications.set(mapped);
-    } catch (error) {
-      console.error('Error loading notifications:', error);
-    } finally {
-      this.loading.set(false);
-    }
+    await this.notificationStore.loadNotifications(unreadOnly);
   }
 
   async markNotificationAsRead(id: string): Promise<void> {
-    try {
-      await this.api.put(`/notifications/${id}/read`, {}).toPromise();
-      this.notifications.update(list => 
-        list.map(n => n.id === id ? { ...n, read: true } : n)
-      );
-    } catch (error) {
-      console.error('Error marking notification as read:', error);
-    }
+    await this.notificationStore.markAsRead(id);
   }
 
   async markAllAsRead(): Promise<void> {
-    try {
-      await this.api.put('/notifications/read-all', {}).toPromise();
-      this.notifications.update(list => list.map(n => ({ ...n, read: true })));
-    } catch (error) {
-      console.error('Error marking all notifications as read:', error);
-    }
+    await this.notificationStore.markAllAsRead();
   }
 
-  // Keep local method for immediate UI feedback (notifications created locally)
   addNotification(n: Omit<Notification, 'id' | 'read' | 'time'>) {
-    const newNotif: Notification = {
-      id: `local-${Date.now()}`,
-      read: false,
-      time: '├Ç l\'instant',
-      ...n
-    };
-    this.notifications.update(list => [newNotif, ...list]);
-    // Optionally sync to backend if needed
+    this.notificationStore.addNotification(n);
   }
 
-  private mapNotification(n: any): Notification {
-    // Map backend notification to frontend format
-    const niveau = n.niveau || 'info';
-    let type: 'info' | 'alert' | 'success' = 'info';
-    if (niveau === 'critique' || niveau === 'warning') {
-      type = 'alert';
-    } else if (niveau === 'info') {
-      type = 'info';
-    }
-
-    // Format time
-    let timeStr = '├Ç l\'instant';
-    if (n.createdAt) {
-      const date = new Date(n.createdAt);
-      const now = new Date();
-      const diffMs = now.getTime() - date.getTime();
-      const diffMins = Math.floor(diffMs / 60000);
-      const diffHours = Math.floor(diffMs / 3600000);
-      const diffDays = Math.floor(diffMs / 86400000);
-
-      if (diffMins < 1) {
-        timeStr = '├Ç l\'instant';
-      } else if (diffMins < 60) {
-        timeStr = `Il y a ${diffMins} min`;
-      } else if (diffHours < 24) {
-        timeStr = `Il y a ${diffHours}h`;
-      } else if (diffDays === 1) {
-        timeStr = 'Hier';
-      } else if (diffDays < 7) {
-        timeStr = `Il y a ${diffDays} jours`;
-      } else {
-        timeStr = date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
-      }
-    }
-
-    return {
-      id: n.id,
-      title: n.titre || n.title || 'Notification',
-      message: n.message || '',
-      time: timeStr,
-      read: n.read || false,
-      type: type
-    };
-  }
-
-  // --- DATA STATE SIGNALS ---
-  readonly paymentModes = signal<PaymentMode[]>([]);
-  readonly products = signal<Product[]>([]);
-  readonly clients = signal<Client[]>([]);
-  readonly suppliers = signal<Supplier[]>([]);
-  readonly bcs = signal<BC[]>([]);
-  readonly invoices = signal<Invoice[]>([]);
-  readonly charges = signal<Charge[]>([]);
-  readonly ordresVirement = signal<OrdreVirement[]>([]);
-  readonly dashboardKPIs = signal<DashboardKpiResponse | null>(null);
-  readonly dashboardLoading = signal<boolean>(false);
-  readonly payments = signal<Map<string, Payment[]>>(new Map()); // Map<invoiceId, Payment[]>
-  readonly soldeGlobal = signal<SoldeGlobal | null>(null);
-  readonly historiqueSolde = signal<HistoriqueSolde[]>([]);
-  readonly previsionTresorerie = signal<PrevisionTresorerieResponse | null>(null);
+  // --- DATA STATE SIGNALS - Délégation aux stores spécialisés ---
+  readonly paymentModes = computed(() => this.settingsStore.paymentModes());
+  readonly products = computed(() => this.productStore.products());
+  readonly clients = computed(() => this.partnerStore.clients());
+  readonly suppliers = computed(() => this.partnerStore.suppliers());
+  readonly bcs = computed(() => this.bcStore.bcs());
+  readonly invoices = computed(() => this.invoiceStore.invoices());
+  readonly charges = signal<Charge[]>([]); // TODO: Créer ChargeStore si nécessaire
+  readonly ordresVirement = signal<OrdreVirement[]>([]); // TODO: Créer OrdreVirementStore si nécessaire
+  readonly dashboardKPIs = computed(() => this.dashboardStore.dashboardKPIs());
+  readonly dashboardLoading = computed(() => this.dashboardStore.dashboardLoading());
+  readonly payments = computed(() => this.invoiceStore.payments());
+  readonly soldeGlobal = computed(() => this.dashboardStore.soldeGlobal());
+  readonly historiqueSolde = computed(() => this.dashboardStore.historiqueSolde());
+  readonly previsionTresorerie = computed(() => this.dashboardStore.previsionTresorerie());
   
   // Flag pour ├®viter les rechargements multiples
   private dataLoaded = false;
@@ -500,7 +440,7 @@ export class StoreService {
         this.loadSuppliers(),
         this.loadProducts(),
         this.loadPaymentModes(),
-        this.loadBCs(),
+        this.bcStore.loadBCs(),
         this.loadInvoices(),
         this.loadNotifications(false)
       ]);
@@ -514,44 +454,21 @@ export class StoreService {
     }
   }
 
+  // --- DATA LOADING - Délégation aux stores ---
   private async loadClients(): Promise<void> {
-    try {
-      const clients = await this.partnerService.getClients();
-      this.clients.set(clients);
-    } catch (error) {
-      console.error('Error loading clients:', error);
-    }
+    await this.partnerStore.loadClients();
   }
 
   async loadSuppliers(): Promise<void> {
-    try {
-      const suppliers = await this.partnerService.getSuppliers();
-      this.suppliers.set(suppliers);
-    } catch (error) {
-      console.error('Error loading suppliers:', error);
-    }
+    await this.partnerStore.loadSuppliers();
   }
 
   private async loadProducts(): Promise<void> {
-    try {
-      const products = await this.productService.getProducts();
-      this.products.set(products);
-    } catch (error) {
-      console.error('Error loading products:', error);
-    }
+    await this.productStore.loadProducts();
   }
 
   async loadPaymentModes(): Promise<void> {
-    try {
-      const modes = await this.api.get<any[]>('/settings/payment-modes').toPromise() || [];
-      this.paymentModes.set(modes.map(m => ({
-        id: m.id || `pm-${Date.now()}-${Math.random()}`,
-        name: m.name,
-        active: m.active !== false
-      })));
-    } catch (error) {
-      console.error('Error loading payment modes:', error);
-    }
+    await this.settingsStore.loadPaymentModes();
   }
 
   // --- REFRESH ALL DATA ---
@@ -569,7 +486,7 @@ export class StoreService {
         this.loadClients(),
         this.loadSuppliers(), 
         this.loadProducts(),
-        this.loadBCs(),
+        this.bcStore.loadBCs(),
         this.loadInvoices(),
         this.loadPaymentModes()
       ]);
@@ -586,28 +503,11 @@ export class StoreService {
   // Mappers removed as they are now in specific services
 
 
-  // --- DASHBOARD KPIs ---
+  // --- DASHBOARD KPIs - Délégation au store ---
   async loadDashboardKPIs(from?: Date, to?: Date): Promise<void> {
-    try {
-      this.dashboardLoading.set(true);
-      const params: Record<string, any> = {};
-      if (from) {
-        params.from = from.toISOString().split('T')[0];
-      }
-      if (to) {
-        params.to = to.toISOString().split('T')[0];
-      }
-      
-      const kpis = await this.api.get<DashboardKpiResponse>('/dashboard/kpis', params).toPromise();
-      if (kpis) {
-        this.dashboardKPIs.set(kpis);
-      }
-    } catch (error) {
-      console.error('Error loading dashboard KPIs:', error);
-      this.showToast('Erreur lors du chargement des KPIs', 'error');
-    } finally {
-      this.dashboardLoading.set(false);
-    }
+    const fromStr = from ? from.toISOString().split('T')[0] : undefined;
+    const toStr = to ? to.toISOString().split('T')[0] : undefined;
+    await this.dashboardStore.loadDashboardKPIs(fromStr, toStr);
   }
 
   // --- COMPUTED SIGNALS (KPIs) - Fallback to backend data or local calculation ---
@@ -653,7 +553,7 @@ export class StoreService {
     try {
       const response = await this.api.post<PaymentMode>('/settings/payment-modes', { name }).toPromise();
       if (response) {
-        this.paymentModes.update(modes => [...modes, response]);
+        this.settingsStore.addPaymentMode(response);
         this.showToast('Mode de paiement ajouté', 'success');
       }
     } catch (error) {
@@ -667,7 +567,7 @@ export class StoreService {
     try {
       const response = await this.api.put<PaymentMode>(`/settings/payment-modes/${id}/toggle`, {}).toPromise();
       if (response) {
-        this.paymentModes.update(modes => modes.map(m => m.id === id ? response : m));
+        this.settingsStore.updatePaymentMode(response);
         this.showToast(`Mode ${response.active ? 'activé' : 'désactivé'}`, 'success');
       }
     } catch (error) {
@@ -680,7 +580,7 @@ export class StoreService {
   async deletePaymentMode(id: string): Promise<void> {
     try {
       await this.api.delete(`/settings/payment-modes/${id}`).toPromise();
-      this.paymentModes.update(modes => modes.filter(m => m.id !== id));
+      this.settingsStore.removePaymentMode(id);
       this.showToast('Mode supprimé', 'success');
     } catch (error) {
       console.error('Error deleting payment mode:', error);
@@ -693,7 +593,7 @@ export class StoreService {
   async addClient(client: Client): Promise<void> {
     try {
       const created = await this.partnerService.addClient(client);
-      this.clients.update(list => [created, ...list]);
+      this.partnerStore.upsertClient(created);
       this.showToast('Client ajouté avec succès');
       this.addNotification({ title: 'Nouveau Client', message: `Client ${client.name} ajouté.`, type: 'info' });
     } catch (error) {
@@ -705,7 +605,7 @@ export class StoreService {
   async updateClient(client: Client): Promise<void> {
     try {
       const updated = await this.partnerService.updateClient(client);
-      this.clients.update(list => list.map(c => c.id === client.id ? updated : c));
+      this.partnerStore.upsertClient(updated);
       this.showToast('Fiche client mise à jour');
     } catch (error) {
       this.showToast('Erreur lors de la mise à jour', 'error');
@@ -716,7 +616,7 @@ export class StoreService {
   async deleteClient(id: string): Promise<boolean> {
     try {
       await this.partnerService.deleteClient(id);
-      this.clients.update(list => list.filter(c => c.id !== id));
+      this.partnerStore.removeClient(id);
       this.showToast('Client supprimé', 'info');
       return true;
     } catch (error) {
@@ -729,7 +629,7 @@ export class StoreService {
   async addSupplier(supplier: Supplier): Promise<void> {
     try {
       const created = await this.partnerService.addSupplier(supplier);
-      this.suppliers.update(list => [created, ...list]);
+      this.partnerStore.upsertSupplier(created);
       this.showToast('Fournisseur ajouté avec succès');
     } catch (error) {
       this.showToast('Erreur lors de l\'ajout du fournisseur', 'error');
@@ -740,7 +640,7 @@ export class StoreService {
   async updateSupplier(supplier: Supplier): Promise<void> {
     try {
       const updated = await this.partnerService.updateSupplier(supplier);
-      this.suppliers.update(list => list.map(s => s.id === supplier.id ? updated : s));
+      this.partnerStore.upsertSupplier(updated);
       this.showToast('Fiche fournisseur mise à jour');
     } catch (error) {
       this.showToast('Erreur lors de la mise à jour', 'error');
@@ -751,7 +651,7 @@ export class StoreService {
   async deleteSupplier(id: string): Promise<boolean> {
     try {
       await this.partnerService.deleteSupplier(id);
-      this.suppliers.update(list => list.filter(s => s.id !== id));
+      this.partnerStore.removeSupplier(id);
       this.showToast('Fournisseur supprimé', 'info');
       return true;
     } catch (error) {
@@ -764,7 +664,7 @@ export class StoreService {
   async addProduct(product: Product): Promise<void> {
     try {
       const created = await this.productService.addProduct(product);
-      this.products.update(list => [created, ...list]);
+      this.productStore.upsertProduct(created);
       this.showToast('Produit ajouté au catalogue');
     } catch (error) {
       this.showToast('Erreur lors de l\'ajout du produit', 'error');
@@ -775,7 +675,7 @@ export class StoreService {
   async updateProduct(product: Product): Promise<void> {
     try {
       const updated = await this.productService.updateProduct(product);
-      this.products.update(list => list.map(p => p.id === product.id ? updated : p));
+      this.productStore.upsertProduct(updated);
       this.showToast('Produit mis à jour');
     } catch (error) {
       this.showToast('Erreur lors de la mise à jour', 'error');
@@ -786,7 +686,7 @@ export class StoreService {
   async deleteProduct(id: string): Promise<boolean> {
     try {
       await this.productService.deleteProduct(id);
-      this.products.update(list => list.filter(p => p.id !== id));
+      this.productStore.removeProduct(id);
       this.showToast('Produit retiré du catalogue', 'info');
       return true;
     } catch (error) {
@@ -796,19 +696,10 @@ export class StoreService {
   }
 
   // --- ACTIONS: BC ---
-  async loadBCs(): Promise<void> {
-    try {
-      const bcs = await this.bcService.getBCs();
-      this.bcs.set(bcs);
-    } catch (error) {
-      console.error('Error loading BCs:', error);
-    }
-  }
-
   async addBC(bc: BC): Promise<void> {
     try {
       const created = await this.bcService.addBC(bc);
-      this.bcs.update(list => [created, ...list]);
+      this.bcStore.upsertBC(created);
       
       // Recharger les produits si le stock a été mis à jour
       if (bc.ajouterAuStock) {
@@ -826,7 +717,7 @@ export class StoreService {
   async updateBC(updatedBc: BC): Promise<void> {
     try {
       const updated = await this.bcService.updateBC(updatedBc);
-      this.bcs.update(list => list.map(b => b.id === updatedBc.id ? updated : b));
+      this.bcStore.upsertBC(updated);
       
       // Recharger les produits si le stock a été mis à jour
       if (updatedBc.ajouterAuStock) {
@@ -842,7 +733,7 @@ export class StoreService {
   async deleteBC(id: string): Promise<boolean> {
     try {
       await this.bcService.deleteBC(id);
-      this.bcs.update(list => list.filter(b => b.id !== id));
+      this.bcStore.removeBC(id);
       this.showToast('Commande supprimée', 'info');
       return true;
     } catch (error) {
@@ -958,18 +849,13 @@ export class StoreService {
 
   // --- ACTIONS: INVOICES ---
   async loadInvoices(): Promise<void> {
-    try {
-      const allInvoices = await this.invoiceService.getInvoices();
-      this.invoices.set(allInvoices);
-    } catch (error) {
-      console.error('Error loading invoices:', error);
-    }
+    await this.invoiceStore.loadInvoices();
   }
 
   async addInvoice(inv: Invoice): Promise<void> {
     try {
       const created = await this.invoiceService.addInvoice(inv);
-      this.invoices.update(list => [created, ...list]);
+      this.invoiceStore.upsertInvoice(created);
       
       this.showToast(inv.type === 'sale' ? 'Facture vente émise' : 'Facture achat enregistrée', 'success');
       this.addNotification({ 
@@ -988,7 +874,7 @@ export class StoreService {
     try {
       const existingInvoice = this.invoices().find(i => i.id === inv.id);
       const updated = await this.invoiceService.updateInvoice(inv, existingInvoice);
-      this.invoices.update(list => list.map(item => item.id === inv.id ? updated : item));
+      this.invoiceStore.upsertInvoice(updated);
       
       this.showToast('Facture mise à jour avec succès', 'success');
     } catch (error) {
@@ -1007,7 +893,7 @@ export class StoreService {
       }
       
       await this.invoiceService.deleteInvoice(id, invoice.type);
-      this.invoices.update(list => list.filter(inv => inv.id !== id));
+      this.invoiceStore.removeInvoice(id);
       this.showToast('Facture supprimée', 'info');
       return true;
     } catch (error) {
@@ -1175,14 +1061,10 @@ export class StoreService {
       const paiements = await this.api.get<any[]>('/paiements', params).toPromise() || [];
       const mapped = await this.invoiceService.getPayments(factureAchatId, factureVenteId);
       
-      // Update payments map
+      // Update payments map via invoice store
       const invoiceId = factureAchatId || factureVenteId || '';
       if (invoiceId) {
-        this.payments.update(map => {
-          const newMap = new Map(map);
-          newMap.set(invoiceId, mapped);
-          return newMap;
-        });
+        await this.invoiceStore.loadPaymentsForInvoice(invoiceId, factureVenteId ? 'sale' : 'purchase');
       }
       
       return mapped;
@@ -1193,7 +1075,7 @@ export class StoreService {
   }
 
   getPaymentsForInvoice(invoiceId: string): Payment[] {
-    return this.payments().get(invoiceId) || [];
+    return this.invoiceStore.getPaymentsForInvoice(invoiceId);
   }
 
   async loadPaymentsForInvoice(invoiceId: string, invoiceType: 'sale' | 'purchase'): Promise<void> {
@@ -1228,15 +1110,10 @@ export class StoreService {
       
       const created = await this.invoiceService.addPayment(payment);
       
-      // Update local payments map
+      // Update local payments map via invoice store
       const invoiceId = payment.factureAchatId || payment.factureVenteId || '';
       if (invoiceId) {
-        this.payments.update(map => {
-          const newMap = new Map(map);
-          const existing = newMap.get(invoiceId) || [];
-          newMap.set(invoiceId, [...existing, created]);
-          return newMap;
-        });
+        this.invoiceStore.addPaymentToInvoice(invoiceId, created);
         
         // Reload invoices to get updated status
         await this.loadInvoices();
@@ -1502,14 +1379,7 @@ export class StoreService {
 
   // --- GESTION DES SOLDES ---
   async loadSoldeGlobal(): Promise<void> {
-    try {
-      const solde = await this.api.get<SoldeGlobal>('/solde/global/complet').toPromise();
-      if (solde) {
-        this.soldeGlobal.set(solde);
-      }
-    } catch (error) {
-      console.error('Error loading solde global:', error);
-    }
+    await this.dashboardStore.loadSoldeGlobal();
   }
 
   async getSoldeGlobalActuel(): Promise<number> {
@@ -1530,7 +1400,7 @@ export class StoreService {
       }
       const solde = await this.api.put<SoldeGlobal>(url, {}).toPromise();
       if (solde) {
-        this.soldeGlobal.set(solde);
+        this.dashboardStore.setSoldeGlobal(solde);
         this.showToast('Solde de départ initialisé avec succès', 'success');
       }
     } catch (error) {
@@ -1588,7 +1458,7 @@ export class StoreService {
       
       const response = await this.api.get<PrevisionTresorerieResponse>(url).toPromise();
       if (response) {
-        this.previsionTresorerie.set(response);
+        this.dashboardStore.setPrevisionTresorerie(response);
       }
     } catch (error) {
       console.error('Error loading prevision tresorerie:', error);
@@ -1607,20 +1477,15 @@ export class StoreService {
       if (saved) {
         this.showToast('Prévision ajoutée avec succès', 'success');
         // Mettre à jour localement la facture au lieu de recharger toutes les factures
-        this.invoices.update(invoices => {
-          const invoiceIndex = invoices.findIndex(inv => inv.id === factureId);
-          if (invoiceIndex !== -1) {
-            const updatedInvoice = { ...invoices[invoiceIndex] };
-            if (!updatedInvoice.previsionsPaiement) {
-              updatedInvoice.previsionsPaiement = [];
-            }
-            updatedInvoice.previsionsPaiement = [...updatedInvoice.previsionsPaiement, saved];
-            const newInvoices = [...invoices];
-            newInvoices[invoiceIndex] = updatedInvoice;
-            return newInvoices;
+        const invoice = this.invoices().find(inv => inv.id === factureId);
+        if (invoice) {
+          const updatedInvoice = { ...invoice };
+          if (!updatedInvoice.previsionsPaiement) {
+            updatedInvoice.previsionsPaiement = [];
           }
-          return invoices;
-        });
+          updatedInvoice.previsionsPaiement = [...updatedInvoice.previsionsPaiement, saved];
+          this.invoiceStore.upsertInvoice(updatedInvoice);
+        }
       }
       return saved!;
     } catch (error) {
@@ -1640,22 +1505,17 @@ export class StoreService {
       if (saved) {
         this.showToast('Prévision modifiée avec succès', 'success');
         // Mettre à jour localement la facture au lieu de recharger toutes les factures
-        this.invoices.update(invoices => {
-          const invoiceIndex = invoices.findIndex(inv => inv.id === factureId);
-          if (invoiceIndex !== -1) {
-            const updatedInvoice = { ...invoices[invoiceIndex] };
-            if (!updatedInvoice.previsionsPaiement) {
-              updatedInvoice.previsionsPaiement = [];
-            }
-            updatedInvoice.previsionsPaiement = updatedInvoice.previsionsPaiement.map(p => 
-              p.id === previsionId ? saved : p
-            );
-            const newInvoices = [...invoices];
-            newInvoices[invoiceIndex] = updatedInvoice;
-            return newInvoices;
+        const invoice = this.invoices().find(inv => inv.id === factureId);
+        if (invoice) {
+          const updatedInvoice = { ...invoice };
+          if (!updatedInvoice.previsionsPaiement) {
+            updatedInvoice.previsionsPaiement = [];
           }
-          return invoices;
-        });
+          updatedInvoice.previsionsPaiement = updatedInvoice.previsionsPaiement.map(p => 
+            p.id === previsionId ? saved : p
+          );
+          this.invoiceStore.upsertInvoice(updatedInvoice);
+        }
       }
       return saved!;
     } catch (error) {
@@ -1695,7 +1555,7 @@ export class StoreService {
       
       const historique = await this.api.get<HistoriqueSolde[]>('/solde/historique', params).toPromise();
       if (historique) {
-        this.historiqueSolde.set(historique);
+        this.dashboardStore.setHistoriqueSolde(historique);
       }
     } catch (error) {
       console.error('Error loading historique solde:', error);

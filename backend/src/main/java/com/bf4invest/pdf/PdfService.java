@@ -29,24 +29,26 @@ import java.time.format.DateTimeFormatter;
 @RequiredArgsConstructor
 public class PdfService {
     
+    private final BandeCommandePdfGenerator bcGenerator;
+    private final CompanyInfoService companyInfoService;
+    
+    // Dépendances pour les générateurs qui ne sont pas encore refactorisés
     private final ClientRepository clientRepository;
     private final SupplierRepository supplierRepository;
     private final BandeCommandeRepository bandeCommandeRepository;
-    private final CompanyInfoService companyInfoService;
     
-    // Cache statique pour le logo (chargé une seule fois)
+    // Cache statique pour le logo (chargé une seule fois) - conservé pour compatibilité
     private static byte[] cachedLogoBytes = null;
     private static final Object LOGO_LOCK = new Object();
     
-    // Couleurs utilisées - ajustées pour correspondre aux images de référence
-    private static final Color BLUE_DARK = new Color(30, 64, 124); // Bleu foncé pour logo
-    private static final Color BLUE_LIGHT = new Color(200, 220, 240); // Bleu clair grisé pour les sections (comme référence)
-    private static final Color BLUE_HEADER = new Color(70, 130, 180); // Bleu moyen pour les headers de tableau
-    private static final Color RED = new Color(180, 0, 0); // Rouge foncé pour les éléments importants (comme référence)
+    // Couleurs utilisées - conservées pour compatibilité avec code non refactorisé
+    private static final Color BLUE_DARK = new Color(30, 64, 124);
+    private static final Color BLUE_LIGHT = new Color(200, 220, 240);
+    private static final Color BLUE_HEADER = new Color(70, 130, 180);
+    private static final Color RED = new Color(180, 0, 0);
     
-    // Formatters
+    // Formatters - conservés pour compatibilité
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy");
-    // Format français: espace insécable pour milliers, virgule pour décimales (ex: 1 515,83)
     private static final NumberFormat FRENCH_NUMBER_FORMAT = NumberFormat.getNumberInstance(Locale.FRENCH);
     static {
         FRENCH_NUMBER_FORMAT.setMinimumFractionDigits(2);
@@ -67,54 +69,17 @@ public class PdfService {
     }
     
     // Format pour les montants (avec 2 décimales et séparateur de milliers)
-    // Format français: espace insécable pour milliers, virgule pour décimales (ex: 1 515,83)
     private static String formatAmount(Double amount) {
         if (amount == null) return "0,00";
-        // Utiliser le format français (espace insécable pour milliers, virgule pour décimales)
         return FRENCH_NUMBER_FORMAT.format(amount);
     }
     
+    /**
+     * Génère le PDF d'une bande de commande
+     * Délègue au générateur spécialisé
+     */
     public byte[] generateBC(BandeCommande bc) throws DocumentException, IOException {
-        // Marge supérieure augmentée pour laisser de l'espace au logo, inférieure pour le footer
-        Document document = new Document(PageSize.A4, 40f, 40f, 80f, 70f);
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        PdfWriter writer = PdfWriter.getInstance(document, baos);
-        
-        // IMPORTANT: setPageEvent doit être appelé AVANT document.open()
-        writer.setPageEvent(new BCFooterPageEvent());
-        
-        document.open();
-        
-        // Récupérer les informations client et fournisseur
-        // Nouvelle structure multi-clients: prendre le premier client pour l'affichage
-        Client client = null;
-        if (bc.getClientsVente() != null && !bc.getClientsVente().isEmpty()) {
-            String firstClientId = bc.getClientsVente().get(0).getClientId();
-            if (firstClientId != null) {
-                client = clientRepository.findById(firstClientId).orElse(null);
-            }
-        } else if (bc.getClientId() != null) {
-            // Ancienne structure
-            client = clientRepository.findById(bc.getClientId()).orElse(null);
-        }
-        
-        Supplier supplier = bc.getFournisseurId() != null ? 
-            supplierRepository.findById(bc.getFournisseurId()).orElse(null) : null;
-        
-        // En-tête avec logo et numéro
-        addBCHeader(document, bc, writer);
-        
-        // Section Destinataire (fournisseur) avec date au même niveau
-        addBCDestinataire(document, bc, supplier);
-        
-        // Tableau des lignes d'achat + totaux (comme le modèle: totaux dans le tableau)
-        addBCProductTable(document, bc);
-        
-        // Informations livraison et paiement
-        addBCDeliveryInfo(document, bc, client);
-        
-        document.close();
-        return baos.toByteArray();
+        return bcGenerator.generate(bc);
     }
     
     public byte[] generateFactureVente(FactureVente facture) throws DocumentException, IOException {
@@ -1155,7 +1120,7 @@ public class PdfService {
                 footer2.setSpacingAfter(3);
                 
                 Paragraph footer3 = new Paragraph("RC de Meknes: 54287 - IF: 50499801 - TP: 17101980", footerFont);
-                footer3.setAlignment(Element.ALIGN_CENTER);
+                footer3.setAlignment(Element.ALIGN_CENTER);#if doesnt work try another alignement 
                 footer3.setSpacingAfter(0);
         
         footerCell.addElement(footer1);

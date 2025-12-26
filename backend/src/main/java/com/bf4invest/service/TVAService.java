@@ -138,11 +138,66 @@ public class TVAService {
 
     /**
      * Récupère le taux de TVA depuis la facture associée à l'écriture
+     * Parcourt: écriture -> pièce justificative (facture/paiement) -> taux TVA
      */
     private Double getTauxTVAFromEcriture(EcritureComptable ecriture) {
-        // TODO: Récupérer le taux TVA depuis la facture via pieceJustificativeId
-        // Pour l'instant, on retourne null et on utilise 20% par défaut
-        return null;
+        if (ecriture == null || ecriture.getPieceJustificativeType() == null || ecriture.getPieceJustificativeId() == null) {
+            return null;
+        }
+        
+        String pieceType = ecriture.getPieceJustificativeType();
+        String pieceId = ecriture.getPieceJustificativeId();
+        
+        try {
+            // Cas 1: Facture d'achat
+            if ("FACTURE_ACHAT".equals(pieceType)) {
+                return factureAchatRepository.findById(pieceId)
+                        .map(FactureAchat::getTvaRate)
+                        .orElse(null);
+            }
+            
+            // Cas 2: Facture de vente
+            if ("FACTURE_VENTE".equals(pieceType)) {
+                return factureVenteRepository.findById(pieceId)
+                        .map(FactureVente::getTvaRate)
+                        .orElse(null);
+            }
+            
+            // Cas 3: Paiement - récupérer le taux depuis le paiement ou la facture associée
+            if ("PAIEMENT".equals(pieceType)) {
+                return paiementRepository.findById(pieceId)
+                        .map(paiement -> {
+                            // D'abord essayer le taux du paiement lui-même
+                            if (paiement.getTvaRate() != null) {
+                                return paiement.getTvaRate();
+                            }
+                            
+                            // Sinon, récupérer depuis la facture associée
+                            if (paiement.getFactureAchatId() != null) {
+                                return factureAchatRepository.findById(paiement.getFactureAchatId())
+                                        .map(FactureAchat::getTvaRate)
+                                        .orElse(null);
+                            }
+                            
+                            if (paiement.getFactureVenteId() != null) {
+                                return factureVenteRepository.findById(paiement.getFactureVenteId())
+                                        .map(FactureVente::getTvaRate)
+                                        .orElse(null);
+                            }
+                            
+                            return null;
+                        })
+                        .orElse(null);
+            }
+            
+            // Autres types de pièces justificatives (CHARGE, etc.) - pas de TVA
+            return null;
+            
+        } catch (Exception e) {
+            log.warn("Erreur lors de la récupération du taux TVA pour écriture {}: {}", 
+                    ecriture.getId(), e.getMessage());
+            return null;
+        }
     }
 
     /**

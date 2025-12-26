@@ -5,13 +5,18 @@ import com.bf4invest.repository.UserRepository;
 import com.bf4invest.service.ComptabiliteService;
 import com.bf4invest.service.PaymentModeService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.context.annotation.Profile;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
 
+@Slf4j
 @Component
+@Profile("!prod") // Ne s'exécute PAS en production
 @RequiredArgsConstructor
 public class DataInitializer implements CommandLineRunner {
     
@@ -20,17 +25,27 @@ public class DataInitializer implements CommandLineRunner {
     private final PaymentModeService paymentModeService;
     private final ComptabiliteService comptabiliteService;
     
+    @Value("${app.data-initializer.enabled:true}")
+    private boolean dataInitializerEnabled;
+    
     @Override
     public void run(String... args) {
-        // Créer les 4 comptes utilisateurs si ils n'existent pas
-        createUserIfNotExists("Boubker", "boubker@bf4invest.ma", "boubker123");
-        createUserIfNotExists("Fatima", "fatima@bf4invest.ma", "fatima123");
-        createUserIfNotExists("Ali", "ali@bf4invest.ma", "ali123");
-        createUserIfNotExists("Direction", "direction@bf4invest.ma", "direction123");
+        if (!dataInitializerEnabled) {
+            log.info("DataInitializer désactivé via configuration");
+            return;
+        }
         
-        // Garder les anciens comptes admin pour compatibilité
-        createUserIfNotExists("Administrateur", "admin@bf4invest.ma", "admin123");
-        createUserIfNotExists("Administrateur", "admin@bf4.com", "admin123");
+        log.info("Initialisation des données de développement...");
+        
+        // Créer les comptes utilisateurs avec rôles appropriés (DEV ONLY)
+        createUserIfNotExists("Boubker", "boubker@bf4invest.ma", "boubker123", User.Role.ADMIN);
+        createUserIfNotExists("Fatima", "fatima@bf4invest.ma", "fatima123", User.Role.COMMERCIAL);
+        createUserIfNotExists("Ali", "ali@bf4invest.ma", "ali123", User.Role.COMPTABLE);
+        createUserIfNotExists("Direction", "direction@bf4invest.ma", "direction123", User.Role.ADMIN);
+        
+        // Garder les anciens comptes admin pour compatibilité (DEV ONLY)
+        createUserIfNotExists("Administrateur", "admin@bf4invest.ma", "admin123", User.Role.ADMIN);
+        createUserIfNotExists("Administrateur", "admin@bf4.com", "admin123", User.Role.ADMIN);
         
         // Initialiser les modes de paiement par défaut
         paymentModeService.initializeDefaultModes();
@@ -40,15 +55,17 @@ public class DataInitializer implements CommandLineRunner {
         
         // Créer l'exercice comptable de l'année en cours
         comptabiliteService.getOrCreateCurrentExercice();
+        
+        log.info("Initialisation des données terminée");
     }
     
-    private void createUserIfNotExists(String name, String email, String password) {
+    private void createUserIfNotExists(String name, String email, String password, User.Role role) {
         if (userRepository.findByEmail(email).isEmpty()) {
             User user = User.builder()
                     .name(name)
                     .email(email)
                     .password(passwordEncoder.encode(password))
-                    .role(User.Role.ADMIN)
+                    .role(role)
                     .enabled(true)
                     .accountNonExpired(true)
                     .accountNonLocked(true)
@@ -58,7 +75,8 @@ public class DataInitializer implements CommandLineRunner {
                     .build();
             
             userRepository.save(user);
-            System.out.println("Utilisateur cree: " + email + " / " + password);
+            // Ne jamais logger les mots de passe - sécurité critique
+            log.info("Utilisateur créé: {} avec rôle {}", email, role);
         }
     }
 }

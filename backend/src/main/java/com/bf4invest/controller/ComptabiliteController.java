@@ -71,8 +71,11 @@ public class ComptabiliteController {
     @PostMapping("/exercices")
     public ResponseEntity<ExerciceComptable> createExercice(@RequestBody ExerciceComptable exercice) {
         try {
-            // TODO: Implémenter la création d'exercice dans le service
-            return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
+            ExerciceComptable created = comptabiliteService.createExercice(exercice);
+            return ResponseEntity.ok(created);
+        } catch (IllegalArgumentException e) {
+            log.warn("Erreur de validation lors de la création de l'exercice: {}", e.getMessage());
+            return ResponseEntity.badRequest().build();
         } catch (Exception e) {
             log.error("Erreur lors de la création de l'exercice", e);
             return ResponseEntity.internalServerError().build();
