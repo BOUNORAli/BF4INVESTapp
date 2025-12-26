@@ -1883,72 +1883,85 @@ export class PurchaseInvoicesComponent implements OnInit {
   }
   
   loadFileForViewing(fileId: string, filename: string, type: string, contentType?: string) {
-    // Utiliser subscribe au lieu de firstValueFrom pour éviter NG0904
+    // Utiliser runOutsideAngular pour l'appel HTTP et run pour les modifications de signaux
     if (!this.isGridFsId(fileId)) {
       // Cloudinary : obtenir une URL signée fraîche avec le contentType correct
-      this.apiService.getFactureAchatFileUrl(fileId, contentType)
-        .pipe(take(1))
-        .subscribe({
-          next: (result) => {
-            const url = result.url;
-            console.log('🔗 [FRONTEND] URL Cloudinary obtenue:', url);
-            
-            // Pour les images, créer un blob URL pour éviter les problèmes CORS
-            if (type === 'image' || contentType?.startsWith('image/')) {
-              fetch(url)
-                .then(response => {
-                  if (!response.ok) throw new Error('Failed to fetch image');
-                  return response.blob();
-                })
-                .then(blob => {
-                  const blobUrl = window.URL.createObjectURL(blob);
-                  this.ngZone.run(() => {
-                    this.fileViewerBlobUrl.set(blobUrl);
-                    this.viewingFile.set({ fileId, filename, type });
+      this.ngZone.runOutsideAngular(() => {
+        this.apiService.getFactureAchatFileUrl(fileId, contentType)
+          .pipe(take(1))
+          .subscribe({
+            next: (result) => {
+              let url = result.url;
+              console.log('🔗 [FRONTEND] URL Cloudinary obtenue:', url);
+              
+              // Ajouter l'extension .pdf à l'URL si c'est un PDF
+              if (contentType === 'application/pdf' || type === 'application/pdf') {
+                // Vérifier si l'URL n'a pas déjà une extension
+                if (!url.match(/\.(pdf|jpg|jpeg|png|gif)$/i)) {
+                  url = url + '.pdf';
+                  console.log('📄 [FRONTEND] Extension .pdf ajoutée à l\'URL:', url);
+                }
+              }
+              
+              // Pour les images, créer un blob URL pour éviter les problèmes CORS
+              if (type === 'image' || contentType?.startsWith('image/')) {
+                fetch(url)
+                  .then(response => {
+                    if (!response.ok) throw new Error('Failed to fetch image');
+                    return response.blob();
+                  })
+                  .then(blob => {
+                    const blobUrl = window.URL.createObjectURL(blob);
+                    this.ngZone.run(() => {
+                      this.fileViewerBlobUrl.set(blobUrl);
+                      this.viewingFile.set({ fileId, filename, type });
+                    });
+                  })
+                  .catch(fetchError => {
+                    // Si le fetch échoue, utiliser directement l'URL Cloudinary
+                    console.warn('Erreur fetch image, utilisation URL directe:', fetchError);
+                    this.ngZone.run(() => {
+                      this.fileViewerBlobUrl.set(url);
+                      this.viewingFile.set({ fileId, filename, type });
+                    });
                   });
-                })
-                .catch(fetchError => {
-                  // Si le fetch échoue, utiliser directement l'URL Cloudinary
-                  console.warn('Erreur fetch image, utilisation URL directe:', fetchError);
-                  this.ngZone.run(() => {
-                    this.fileViewerBlobUrl.set(url);
-                    this.viewingFile.set({ fileId, filename, type });
-                  });
+              } else {
+                // Pour les PDFs, utiliser directement l'URL signée avec extension
+                console.log('📄 [FRONTEND] Configuration PDF viewer avec URL:', url);
+                this.ngZone.run(() => {
+                  this.fileViewerBlobUrl.set(url);
+                  this.viewingFile.set({ fileId, filename, type });
                 });
-            } else {
-              // Pour les PDFs, utiliser directement l'URL signée
-              console.log('📄 [FRONTEND] Configuration PDF viewer avec URL:', url);
+              }
+            },
+            error: (error) => {
+              console.error('❌ [FRONTEND] Erreur chargement fichier:', error);
               this.ngZone.run(() => {
-                this.fileViewerBlobUrl.set(url);
-                this.viewingFile.set({ fileId, filename, type });
+                this.store.showToast('Erreur lors du chargement du fichier', 'error');
               });
             }
-          },
-          error: (error) => {
-            console.error('❌ [FRONTEND] Erreur chargement fichier:', error);
-            this.ngZone.run(() => {
-              this.store.showToast('Erreur lors du chargement du fichier', 'error');
-            });
-          }
-        });
+          });
+      });
       return;
     }
 
     // GridFS : créer un blob URL
-    this.downloadFactureBlob(fileId)
-      .then(blob => {
-        const url = window.URL.createObjectURL(blob);
-        this.ngZone.run(() => {
-          this.fileViewerBlobUrl.set(url);
-          this.viewingFile.set({ fileId, filename, type });
+    this.ngZone.runOutsideAngular(() => {
+      this.downloadFactureBlob(fileId)
+        .then(blob => {
+          const url = window.URL.createObjectURL(blob);
+          this.ngZone.run(() => {
+            this.fileViewerBlobUrl.set(url);
+            this.viewingFile.set({ fileId, filename, type });
+          });
+        })
+        .catch(error => {
+          console.error('❌ [FRONTEND] Erreur chargement fichier:', error);
+          this.ngZone.run(() => {
+            this.store.showToast('Erreur lors du chargement du fichier', 'error');
+          });
         });
-      })
-      .catch(error => {
-        console.error('❌ [FRONTEND] Erreur chargement fichier:', error);
-        this.ngZone.run(() => {
-          this.store.showToast('Erreur lors du chargement du fichier', 'error');
-        });
-      });
+    });
   }
   
   closeFileViewer() {
