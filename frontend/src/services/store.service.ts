@@ -187,6 +187,12 @@ export interface Invoice {
   
   // Prévisions de paiement
   previsionsPaiement?: PrevisionPaiement[];
+  
+  // Fichier facture (pour factures achat)
+  fichierFactureId?: string;
+  fichierFactureNom?: string;
+  fichierFactureType?: string;
+  fichierFactureUrl?: string;
 }
 
 export interface Payment {

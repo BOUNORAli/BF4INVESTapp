@@ -48,15 +48,25 @@ public class FactureAchatFileController {
             }
 
             SupabaseFileResult result = cloudinaryStorageService.upload(file, "facture-achat");
+            log.info("✅ Upload réussi - FileId: {}, Filename: {}, ContentType: {}, URL: {}", 
+                    result.getFileId(), result.getFilename(), result.getContentType(), result.getSignedUrl());
 
             if (StringUtils.isNotBlank(factureId)) {
-                factureAchatRepository.findById(factureId).ifPresent(facture -> {
+                Optional<FactureAchat> factureOpt = factureAchatRepository.findById(factureId);
+                if (factureOpt.isPresent()) {
+                    FactureAchat facture = factureOpt.get();
                     facture.setFichierFactureId(result.getFileId());
                     facture.setFichierFactureNom(result.getFilename());
                     facture.setFichierFactureType(result.getContentType());
                     facture.setFichierFactureUrl(result.getSignedUrl());
-                    factureAchatRepository.save(facture);
-                });
+                    FactureAchat saved = factureAchatRepository.save(facture);
+                    log.info("💾 Facture mise à jour - ID: {}, FileId: {}, Filename: {}", 
+                            saved.getId(), saved.getFichierFactureId(), saved.getFichierFactureNom());
+                } else {
+                    log.warn("⚠️ Facture non trouvée pour ID: {}", factureId);
+                }
+            } else {
+                log.info("ℹ️ Aucun factureId fourni, fichier uploadé mais non associé à une facture");
             }
 
             return ResponseEntity.ok(Map.of(

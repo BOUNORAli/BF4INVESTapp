@@ -246,7 +246,13 @@ export class InvoiceService {
         statut: p.statut || 'PREVU',
         notes: p.notes,
         dateRappel: p.dateRappel
-      })) : undefined
+      })) : undefined,
+      
+      // Fichier facture (pour factures achat)
+      fichierFactureId: inv.fichierFactureId,
+      fichierFactureNom: inv.fichierFactureNom,
+      fichierFactureType: inv.fichierFactureType,
+      fichierFactureUrl: inv.fichierFactureUrl
     };
   }
 }

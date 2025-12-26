@@ -1960,7 +1960,7 @@ export class PurchaseInvoicesComponent implements OnInit {
         console.log('📊 Progression:', progress + '%');
       }
     ).subscribe({
-      next: (result: any) => {
+      next: async (result: any) => {
         // Ignorer les événements de progression (gérés par le callback)
         if (result && result.type === 'progress') {
           return;
@@ -1979,19 +1979,24 @@ export class PurchaseInvoicesComponent implements OnInit {
           this.store.showToast(`Fichier "${result.filename}" uploadé avec succès`, 'success');
           
           // Recharger les factures pour mettre à jour l'affichage
-          this.store.loadInvoices().then(() => {
-            // Mettre à jour la facture dans le modal si elle existe toujours
-            const updatedInvoice = this.store.invoices().find(inv => inv.id === this.uploadModalInvoice()?.id);
-            if (updatedInvoice) {
-              this.uploadModalInvoice.set(updatedInvoice);
-              const factureAchat = updatedInvoice as any;
-              if (factureAchat.fichierFactureId) {
-                this.uploadedFileId.set(factureAchat.fichierFactureId);
-                this.uploadedFileName.set(factureAchat.fichierFactureNom || 'Fichier joint');
-                this.uploadedFileUrl.set(factureAchat.fichierFactureUrl || null);
-              }
+          await this.store.loadInvoices();
+          
+          // Mettre à jour la facture dans le modal si elle existe toujours
+          const updatedInvoice = this.store.invoices().find(inv => inv.id === this.uploadModalInvoice()?.id);
+          if (updatedInvoice) {
+            this.uploadModalInvoice.set(updatedInvoice);
+            const factureAchat = updatedInvoice as any;
+            if (factureAchat.fichierFactureId) {
+              this.uploadedFileId.set(factureAchat.fichierFactureId);
+              this.uploadedFileName.set(factureAchat.fichierFactureNom || 'Fichier joint');
+              this.uploadedFileUrl.set(factureAchat.fichierFactureUrl || null);
             }
-          });
+          } else {
+            // Si la facture n'est pas trouvée, utiliser les données de la réponse
+            this.uploadedFileId.set(result.fileId);
+            this.uploadedFileName.set(result.filename);
+            this.uploadedFileUrl.set(result.signedUrl || null);
+          }
           
           // Réinitialiser la progression après un court délai
           setTimeout(() => {

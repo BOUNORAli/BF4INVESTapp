@@ -76,17 +76,22 @@ public class CloudinaryStorageService {
                 resourceType = "raw"; // PDFs doivent être en "raw"
             }
             
+            // Générer un UUID pour le public_id
+            String uuid = UUID.randomUUID().toString();
+            String folder = resolveFolder(kind);
+            
             Map<String, Object> params = ObjectUtils.asMap(
-                    "folder", resolveFolder(kind),
-                    "public_id", UUID.randomUUID().toString(),
+                    "folder", folder,
+                    "public_id", folder + "/" + uuid, // Inclure le dossier dans le public_id
                     "resource_type", resourceType,
                     "overwrite", true
             );
 
-            log.info("📤 Upload vers Cloudinary - Taille: {} bytes, ContentType: {}", file.getSize(), contentType);
+            log.info("📤 Upload vers Cloudinary - Taille: {} bytes, ContentType: {}, ResourceType: {}", file.getSize(), contentType, resourceType);
             Map uploadResult = client.uploader().upload(file.getBytes(), params);
             log.info("✅ Upload Cloudinary réussi - Result: {}", uploadResult);
 
+            // Le public_id retourné par Cloudinary inclut déjà le dossier
             String publicId = (String) uploadResult.get("public_id");
             String secureUrl = (String) uploadResult.get("secure_url");
             String format = (String) uploadResult.get("format");
@@ -104,8 +109,10 @@ public class CloudinaryStorageService {
                 filename = uploadResult.get("original_filename").toString();
             }
 
+            log.info("📦 Fichier uploadé - PublicId: {}, Filename: {}, ContentType: {}", publicId, filename, contentType);
+
             return SupabaseFileResult.builder()
-                    .fileId(publicId)
+                    .fileId(publicId) // Le publicId inclut déjà le dossier (ex: bf4/factures/uuid)
                     .filename(filename)
                     .contentType(contentType)
                     .size(bytes != null ? bytes.longValue() : file.getSize())
