@@ -178,7 +178,6 @@ public class CloudinaryStorageService {
             String url = client.url()
                     .secure(true)
                     .resourceType(resourceType)
-                    .sign(ObjectUtils.asMap("expires_at", System.currentTimeMillis() / 1000L + 3600)) // 1 hour expiration
                     .generate(publicId);
             log.info("🔗 URL générée pour publicId: {} (resourceType: {}, contentType: {}) -> {}", publicId, resourceType, contentType, url);
             return url;
@@ -189,7 +188,6 @@ public class CloudinaryStorageService {
                 String url = client.url()
                         .secure(true)
                         .resourceType("auto")
-                        .sign(ObjectUtils.asMap("expires_at", System.currentTimeMillis() / 1000L + 3600))
                         .generate(publicId);
                 log.info("🔗 URL générée (auto) pour publicId: {} -> {}", publicId, url);
                 return url;
