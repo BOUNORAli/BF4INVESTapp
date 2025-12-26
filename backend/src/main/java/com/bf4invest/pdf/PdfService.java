@@ -1108,10 +1108,10 @@ public class PdfService {
                 footerCell.setPadding(10);
                 footerCell.setBorder(Rectangle.NO_BORDER);
                 footerCell.setHorizontalAlignment(Element.ALIGN_CENTER);
-        
-        Font footerFont = FontFactory.getFont(FontFactory.HELVETICA, 8);
-        
-        Paragraph footer1 = new Paragraph("ICE: 002889872000062", footerFont);
+                
+                Font footerFont = FontFactory.getFont(FontFactory.HELVETICA, 8);
+                
+                Paragraph footer1 = new Paragraph("ICE: 002889872000062", footerFont);
                 footer1.setAlignment(Element.ALIGN_CENTER);
                 footer1.setSpacingAfter(3);
                 
@@ -1120,14 +1120,14 @@ public class PdfService {
                 footer2.setSpacingAfter(3);
                 
                 Paragraph footer3 = new Paragraph("RC de Meknes: 54287 - IF: 50499801 - TP: 17101980", footerFont);
-                footer3.setAlignment(Element.ALIGN_CENTER);#if doesnt work try another alignement 
+                footer3.setAlignment(Element.ALIGN_CENTER);
                 footer3.setSpacingAfter(0);
-        
-        footerCell.addElement(footer1);
-        footerCell.addElement(footer2);
-        footerCell.addElement(footer3);
-        
-        footerTable.addCell(footerCell);
+                
+                footerCell.addElement(footer1);
+                footerCell.addElement(footer2);
+                footerCell.addElement(footer3);
+                
+                footerTable.addCell(footerCell);
                 
                 // Positionner le footer en bas de page
                 float yPosition = document.bottomMargin() + 2f;
