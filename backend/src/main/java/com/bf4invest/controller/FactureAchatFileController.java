@@ -109,22 +109,34 @@ public class FactureAchatFileController {
             @RequestParam("fileId") String fileId,
             @RequestParam(value = "contentType", required = false) String contentType
     ) {
-        log.info("🔗 Génération URL pour fileId: {}, contentType: {}", fileId, contentType);
+        // Décoder le fileId (Spring le décode automatiquement, mais on s'assure qu'il est bien décodé)
+        // Si le fileId contient encore des caractères encodés, les décoder
+        String decodedFileId = fileId;
+        try {
+            // Spring décode déjà les paramètres, mais si on a un double encodage, on doit le décoder manuellement
+            if (decodedFileId.contains("%")) {
+                decodedFileId = java.net.URLDecoder.decode(decodedFileId, "UTF-8");
+            }
+        } catch (Exception e) {
+            log.warn("Erreur décodage fileId, utilisation tel quel: {}", fileId);
+        }
+        
+        log.info("🔗 Génération URL pour fileId: {} (décodé: {}), contentType: {}", fileId, decodedFileId, contentType);
         
         // Si contentType n'est pas fourni, essayer de le récupérer depuis la facture
         if (contentType == null) {
-            Optional<FactureAchat> factureOpt = factureAchatRepository.findByFichierFactureId(fileId);
+            Optional<FactureAchat> factureOpt = factureAchatRepository.findByFichierFactureId(decodedFileId);
             if (factureOpt.isPresent()) {
                 contentType = factureOpt.get().getFichierFactureType();
                 log.info("🔍 ContentType récupéré depuis la facture: {}", contentType);
             }
         }
         
-        String url = cloudinaryStorageService.generateUrl(fileId, contentType);
+        String url = cloudinaryStorageService.generateUrl(decodedFileId, contentType);
         if (url == null) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", "Impossible de générer l'URL"));
         }
-        return ResponseEntity.ok(Map.of("fileId", fileId, "url", url));
+        return ResponseEntity.ok(Map.of("fileId", decodedFileId, "url", url));
     }
 
     @DeleteMapping

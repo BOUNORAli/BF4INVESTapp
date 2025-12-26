@@ -282,15 +282,20 @@ export class ApiService {
     });
   }
 
-  deleteFactureAchatFile(fileId: string, factureId?: string): Observable<any> {
+  deleteFactureAchatFile(fileId: string, factureId?: string, contentType?: string): Observable<any> {
     const token = localStorage.getItem('bf4_token');
     let headers = new HttpHeaders();
     if (token) {
       headers = headers.set('Authorization', `Bearer ${token}`);
     }
-    const encodedFileId = encodeURIComponent(fileId);
-    const params: any = { fileId: encodedFileId };
-    if (factureId) params.factureId = factureId;
+    // HttpParams encode automatiquement, donc pas besoin d'encoder manuellement
+    let params = new HttpParams().set('fileId', fileId);
+    if (factureId) {
+      params = params.set('factureId', factureId);
+    }
+    if (contentType) {
+      params = params.set('contentType', contentType);
+    }
     return this.http.delete(`${this.getApiUrl()}/factures-achats/files`, { headers, params });
   }
 
@@ -300,9 +305,9 @@ export class ApiService {
     if (token) {
       headers = headers.set('Authorization', `Bearer ${token}`);
     }
-    // Encoder le fileId car il peut contenir des slashes (ex: bf4/factures/uuid)
-    const encodedFileId = encodeURIComponent(fileId);
-    let params = new HttpParams().set('fileId', encodedFileId);
+    // HttpParams encode automatiquement, donc pas besoin d'encoder manuellement
+    // Si on encode manuellement, HttpParams va encoder encore une fois = double encodage
+    let params = new HttpParams().set('fileId', fileId);
     if (contentType) {
       params = params.set('contentType', contentType);
     }
@@ -315,9 +320,9 @@ export class ApiService {
     if (token) {
       headers = headers.set('Authorization', `Bearer ${token}`);
     }
-    // Encoder le fileId car il peut contenir des slashes (ex: bf4/releves/uuid)
-    const encodedFileId = encodeURIComponent(fileId);
-    return this.http.get<{ url: string }>(`${this.getApiUrl()}/releve-bancaire/files/url?fileId=${encodedFileId}`, { headers });
+    // HttpParams encode automatiquement, donc pas besoin d'encoder manuellement
+    const params = new HttpParams().set('fileId', fileId);
+    return this.http.get<{ url: string }>(`${this.getApiUrl()}/releve-bancaire/files/url`, { headers, params });
   }
   
   deleteReleveFile(fileId: string): Observable<any> {
@@ -326,7 +331,8 @@ export class ApiService {
     if (token) {
       headers = headers.set('Authorization', `Bearer ${token}`);
     }
-    const encodedFileId = encodeURIComponent(fileId);
-    return this.http.delete(`${this.getApiUrl()}/releve-bancaire/files?fileId=${encodedFileId}`, { headers });
+    // HttpParams encode automatiquement, donc pas besoin d'encoder manuellement
+    const params = new HttpParams().set('fileId', fileId);
+    return this.http.delete(`${this.getApiUrl()}/releve-bancaire/files`, { headers, params });
   }
 }

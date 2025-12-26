@@ -1764,11 +1764,15 @@ export class PurchaseInvoicesComponent implements OnInit {
       console.log('🖼️ [FRONTEND] Création prévisualisation image');
       const reader = new FileReader();
       reader.onload = (e) => {
-        this.filePreviewUrl.set(e.target?.result as string);
+        this.ngZone.run(() => {
+          this.filePreviewUrl.set(e.target?.result as string);
+        });
       };
       reader.onerror = () => {
         console.error('❌ [FRONTEND] Erreur lecture fichier image');
-        this.uploadError.set('Erreur lors de la lecture du fichier');
+        this.ngZone.run(() => {
+          this.uploadError.set('Erreur lors de la lecture du fichier');
+        });
       };
       reader.readAsDataURL(file);
     } else {
@@ -1815,21 +1819,27 @@ export class PurchaseInvoicesComponent implements OnInit {
 
         delete$.subscribe({
           next: () => {
-            this.uploadedFileId.set(null);
-            this.uploadedFileName.set(null);
-            this.uploadedFileUrl.set(null);
-            this.store.showToast('Fichier supprimé avec succès', 'success');
+            this.ngZone.run(() => {
+              this.uploadedFileId.set(null);
+              this.uploadedFileName.set(null);
+              this.uploadedFileUrl.set(null);
+              this.store.showToast('Fichier supprimé avec succès', 'success');
+            });
             
             // Recharger les factures pour mettre à jour l'affichage
             this.store.loadInvoices().then(() => {
-              const updatedInvoice = this.store.invoices().find(inv => inv.id === this.uploadModalInvoice()?.id);
-              if (updatedInvoice) {
-                this.uploadModalInvoice.set(updatedInvoice);
-              }
+              this.ngZone.run(() => {
+                const updatedInvoice = this.store.invoices().find(inv => inv.id === this.uploadModalInvoice()?.id);
+                if (updatedInvoice) {
+                  this.uploadModalInvoice.set(updatedInvoice);
+                }
+              });
             });
           },
           error: () => {
-            this.store.showToast('Erreur lors de la suppression', 'error');
+            this.ngZone.run(() => {
+              this.store.showToast('Erreur lors de la suppression', 'error');
+            });
           }
         });
       }
@@ -1879,26 +1889,36 @@ export class PurchaseInvoicesComponent implements OnInit {
             if (!response.ok) throw new Error('Failed to fetch image');
             const blob = await response.blob();
             const blobUrl = window.URL.createObjectURL(blob);
-            this.fileViewerBlobUrl.set(blobUrl);
+            this.ngZone.run(() => {
+              this.fileViewerBlobUrl.set(blobUrl);
+            });
           } catch (fetchError) {
             // Si le fetch échoue, utiliser directement l'URL Cloudinary
             console.warn('Erreur fetch image, utilisation URL directe:', fetchError);
-            this.fileViewerBlobUrl.set(url);
+            this.ngZone.run(() => {
+              this.fileViewerBlobUrl.set(url);
+            });
           }
         } else {
           // Pour les PDFs, utiliser directement l'URL signée
-          this.fileViewerBlobUrl.set(url);
+          this.ngZone.run(() => {
+            this.fileViewerBlobUrl.set(url);
+          });
         }
         
-        this.viewingFile.set({ fileId, filename, type });
+        this.ngZone.run(() => {
+          this.viewingFile.set({ fileId, filename, type });
+        });
         return;
       }
 
       // GridFS : créer un blob URL
       const blob = await this.downloadFactureBlob(fileId);
       const url = window.URL.createObjectURL(blob);
-      this.fileViewerBlobUrl.set(url);
-      this.viewingFile.set({ fileId, filename, type });
+      this.ngZone.run(() => {
+        this.fileViewerBlobUrl.set(url);
+        this.viewingFile.set({ fileId, filename, type });
+      });
     } catch (error) {
       console.error('Erreur chargement fichier:', error);
       this.store.showToast('Erreur lors du chargement du fichier', 'error');
