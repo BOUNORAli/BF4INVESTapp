@@ -653,15 +653,19 @@ public class DashboardReportPdfGenerator {
             document.add(subTitle);
             
             // Limiter à 12 semaines pour la lisibilité
-            List<DashboardKpiResponse.ForecastData> previsions = forecast.getPrevisions3Mois();
-            if (previsions.size() > 84) { // Plus de 3 mois de jours
-                previsions = previsions.stream()
-                        .filter(p -> previsions.indexOf(p) % 7 == 0) // Une semaine sur une
+            List<DashboardKpiResponse.ForecastData> previsionsOriginales = forecast.getPrevisions3Mois();
+            List<DashboardKpiResponse.ForecastData> previsions = previsionsOriginales;
+            
+            if (previsionsOriginales.size() > 84) { // Plus de 3 mois de jours
+                final List<DashboardKpiResponse.ForecastData> previsionsFinal = previsionsOriginales;
+                previsions = previsionsFinal.stream()
+                        .filter(p -> previsionsFinal.indexOf(p) % 7 == 0) // Une semaine sur une
                         .limit(12)
                         .collect(java.util.stream.Collectors.toList());
-            } else if (previsions.size() > 30) {
-                previsions = previsions.stream()
-                        .filter(p -> previsions.indexOf(p) % 2 == 0) // Un jour sur deux
+            } else if (previsionsOriginales.size() > 30) {
+                final List<DashboardKpiResponse.ForecastData> previsionsFinal = previsionsOriginales;
+                previsions = previsionsFinal.stream()
+                        .filter(p -> previsionsFinal.indexOf(p) % 2 == 0) // Un jour sur deux
                         .limit(30)
                         .collect(java.util.stream.Collectors.toList());
             }
