@@ -96,18 +96,18 @@ public class CloudinaryStorageService {
             }
             
             // Générer un UUID pour le public_id
+            // Ne pas inclure le dossier dans le public_id car Cloudinary l'ajoute automatiquement via le paramètre "folder"
             String uuid = UUID.randomUUID().toString();
-            String expectedPublicId = folder + "/" + uuid;
             
             Map<String, Object> params = ObjectUtils.asMap(
                     "folder", folder,
-                    "public_id", expectedPublicId, // Inclure le dossier dans le public_id
+                    "public_id", uuid, // Juste l'UUID, Cloudinary ajoutera le dossier automatiquement
                     "resource_type", resourceType,
                     "overwrite", true
             );
 
-            log.info("📤 [CLOUDINARY] Upload vers Cloudinary - ExpectedPublicId: {}, Taille: {} bytes, ContentType: {}, ResourceType: {}", 
-                    expectedPublicId, file.getSize(), contentType, resourceType);
+            log.info("📤 [CLOUDINARY] Upload vers Cloudinary - UUID: {}, Folder: {}, Taille: {} bytes, ContentType: {}, ResourceType: {}", 
+                    uuid, folder, file.getSize(), contentType, resourceType);
             log.info("📤 [CLOUDINARY] Paramètres upload: {}", params);
             
             Map uploadResult = client.uploader().upload(file.getBytes(), params);

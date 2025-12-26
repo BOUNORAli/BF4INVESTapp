@@ -1,4 +1,4 @@
-import { Component, inject, signal, computed, OnInit, HostListener } from '@angular/core';
+import { Component, inject, signal, computed, OnInit, HostListener, NgZone } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { StoreService, Invoice, BC, PrevisionPaiement } from '../../services/store.service';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, FormsModule } from '@angular/forms';
@@ -1087,6 +1087,7 @@ export class PurchaseInvoicesComponent implements OnInit {
   route = inject(ActivatedRoute);
   comptabiliteService = inject(ComptabiliteService);
   apiService = inject(ApiService);
+  ngZone = inject(NgZone);
 
   isFormOpen = signal(false);
   isEditMode = signal(false);
@@ -1994,42 +1995,50 @@ export class PurchaseInvoicesComponent implements OnInit {
         // C'est la réponse finale
         if (result && result.fileId) {
           console.log('✅ Upload réussi:', result);
-          this.uploadProgress.set(100);
-          this.uploadedFileId.set(result.fileId);
-          this.uploadedFileName.set(result.filename);
-          this.uploadedFileUrl.set(result.signedUrl || null);
-          this.selectedFile.set(null);
-          this.filePreviewUrl.set(null);
-          this.uploadError.set(null);
-          this.store.showToast(`Fichier "${result.filename}" uploadé avec succès`, 'success');
+          
+          // Utiliser NgZone pour s'assurer que les modifications de signaux sont dans le contexte Angular
+          this.ngZone.run(() => {
+            this.uploadProgress.set(100);
+            this.uploadedFileId.set(result.fileId);
+            this.uploadedFileName.set(result.filename);
+            this.uploadedFileUrl.set(result.signedUrl || null);
+            this.selectedFile.set(null);
+            this.filePreviewUrl.set(null);
+            this.uploadError.set(null);
+            this.store.showToast(`Fichier "${result.filename}" uploadé avec succès`, 'success');
+          });
           
           // Recharger les factures pour mettre à jour l'affichage
           await this.store.loadInvoices();
           
           // Mettre à jour la facture dans le modal si elle existe toujours
-          const updatedInvoice = this.store.invoices().find(inv => inv.id === this.uploadModalInvoice()?.id);
-          if (updatedInvoice) {
-            this.uploadModalInvoice.set(updatedInvoice);
-            const factureAchat = updatedInvoice as any;
-            if (factureAchat.fichierFactureId) {
-              this.uploadedFileId.set(factureAchat.fichierFactureId);
-              this.uploadedFileName.set(factureAchat.fichierFactureNom || 'Fichier joint');
-              this.uploadedFileUrl.set(factureAchat.fichierFactureUrl || null);
+          this.ngZone.run(() => {
+            const updatedInvoice = this.store.invoices().find(inv => inv.id === this.uploadModalInvoice()?.id);
+            if (updatedInvoice) {
+              this.uploadModalInvoice.set(updatedInvoice);
+              const factureAchat = updatedInvoice as any;
+              if (factureAchat.fichierFactureId) {
+                this.uploadedFileId.set(factureAchat.fichierFactureId);
+                this.uploadedFileName.set(factureAchat.fichierFactureNom || 'Fichier joint');
+                this.uploadedFileUrl.set(factureAchat.fichierFactureUrl || null);
+              }
+            } else {
+              // Si la facture n'est pas trouvée, utiliser les données de la réponse
+              this.uploadedFileId.set(result.fileId);
+              this.uploadedFileName.set(result.filename);
+              this.uploadedFileUrl.set(result.signedUrl || null);
             }
-          } else {
-            // Si la facture n'est pas trouvée, utiliser les données de la réponse
-            this.uploadedFileId.set(result.fileId);
-            this.uploadedFileName.set(result.filename);
-            this.uploadedFileUrl.set(result.signedUrl || null);
-          }
-          
-          // Réinitialiser la progression après un court délai
-          setTimeout(() => {
-            this.uploadProgress.set(0);
-          }, 1000);
-          this.uploadingFile.set(false);
+            
+            // Réinitialiser la progression après un court délai
+            setTimeout(() => {
+              this.uploadProgress.set(0);
+            }, 1000);
+            this.uploadingFile.set(false);
+          });
         } else {
-          this.uploadingFile.set(false);
+          this.ngZone.run(() => {
+            this.uploadingFile.set(false);
+          });
           throw new Error('Réponse invalide du serveur: ' + JSON.stringify(result));
         }
       },
