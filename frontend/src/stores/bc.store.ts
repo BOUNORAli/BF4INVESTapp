@@ -14,6 +14,8 @@ export class BCStore {
   // État
   readonly bcs = signal<BC[]>([]);
   readonly loading = signal<boolean>(false);
+  readonly refreshing = signal<boolean>(false);
+  readonly lastUpdated = signal<Date | null>(null);
 
   // Computed
   readonly bcsCount = () => this.bcs().length;
@@ -29,12 +31,37 @@ export class BCStore {
       this.loading.set(true);
       const bcs = await this.bcService.getBCs();
       this.bcs.set(bcs);
+      this.lastUpdated.set(new Date());
     } catch (error) {
       console.error('Error loading BCs:', error);
       throw error;
     } finally {
       this.loading.set(false);
     }
+  }
+
+  /**
+   * Rafraîchit les BCs (en arrière-plan, ne bloque pas l'UI)
+   */
+  async refresh(): Promise<void> {
+    try {
+      this.refreshing.set(true);
+      const bcs = await this.bcService.getBCs();
+      this.bcs.set(bcs);
+      this.lastUpdated.set(new Date());
+    } catch (error) {
+      console.error('Error refreshing BCs:', error);
+      throw error;
+    } finally {
+      this.refreshing.set(false);
+    }
+  }
+
+  /**
+   * Force le rafraîchissement (ignore le cache)
+   */
+  async forceRefresh(): Promise<void> {
+    await this.refresh();
   }
 
   /**

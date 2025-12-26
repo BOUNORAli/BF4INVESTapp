@@ -15,6 +15,8 @@ export class InvoiceStore {
   readonly invoices = signal<Invoice[]>([]);
   readonly payments = signal<Map<string, Payment[]>>(new Map()); // Map<invoiceId, Payment[]>
   readonly loading = signal<boolean>(false);
+  readonly refreshing = signal<boolean>(false);
+  readonly lastUpdated = signal<Date | null>(null);
 
   // Computed
   readonly invoicesCount = () => this.invoices().length;
@@ -39,12 +41,37 @@ export class InvoiceStore {
       this.loading.set(true);
       const invoices = await this.invoiceService.getInvoices();
       this.invoices.set(invoices);
+      this.lastUpdated.set(new Date());
     } catch (error) {
       console.error('Error loading invoices:', error);
       throw error;
     } finally {
       this.loading.set(false);
     }
+  }
+
+  /**
+   * Rafraîchit les factures (en arrière-plan, ne bloque pas l'UI)
+   */
+  async refresh(): Promise<void> {
+    try {
+      this.refreshing.set(true);
+      const invoices = await this.invoiceService.getInvoices();
+      this.invoices.set(invoices);
+      this.lastUpdated.set(new Date());
+    } catch (error) {
+      console.error('Error refreshing invoices:', error);
+      throw error;
+    } finally {
+      this.refreshing.set(false);
+    }
+  }
+
+  /**
+   * Force le rafraîchissement (ignore le cache)
+   */
+  async forceRefresh(): Promise<void> {
+    await this.refresh();
   }
 
   /**

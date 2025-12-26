@@ -5,13 +5,16 @@ import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, FormsModule } 
 import { Router, ActivatedRoute } from '@angular/router';
 import { ComptabiliteService } from '../../services/comptabilite.service';
 import { ApiService } from '../../services/api.service';
+import { InvoiceStore } from '../../stores/invoice.store';
+import { NavigationRefreshService } from '../../services/navigation-refresh.service';
+import { SkeletonTableComponent } from '../../components/skeleton/skeleton-table.component';
 import { firstValueFrom, take } from 'rxjs';
 import type { EcritureComptable } from '../../models/types';
 
 @Component({
   selector: 'app-purchase-invoices',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, FormsModule],
+  imports: [CommonModule, ReactiveFormsModule, FormsModule, SkeletonTableComponent],
   template: `
     <div class="space-y-6 fade-in-up relative pb-10">
       
@@ -70,6 +73,18 @@ import type { EcritureComptable } from '../../models/types';
         </div>
 
         <!-- Table wrapper with horizontal scroll -->
+        @if (invoiceStore.loading()) {
+          <app-skeleton-table [columns]="[
+            { width: '15%' },
+            { width: '20%' },
+            { width: '12%' },
+            { width: '12%' },
+            { width: '15%', align: 'right' },
+            { width: '12%', align: 'center' },
+            { width: '10%', align: 'center' },
+            { width: '4%', align: 'center' }
+          ]" [rows]="10"></app-skeleton-table>
+        } @else {
         <div class="overflow-x-auto">
           <table class="w-full text-sm text-left text-slate-600 min-w-[600px]">
           <thead class="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-200">
@@ -189,6 +204,8 @@ import type { EcritureComptable } from '../../models/types';
             }
           </tbody>
         </table>
+        </div>
+        }
       </div>
 
       <!-- Pagination Controls -->
@@ -1087,6 +1104,8 @@ export class PurchaseInvoicesComponent implements OnInit {
   Math = Math; // Make Math available in template
 
   store = inject(StoreService);
+  invoiceStore = inject(InvoiceStore);
+  navigationRefresh = inject(NavigationRefreshService);
   fb = inject(FormBuilder);
   router = inject(Router);
   route = inject(ActivatedRoute);
@@ -1094,6 +1113,8 @@ export class PurchaseInvoicesComponent implements OnInit {
   apiService = inject(ApiService);
   ngZone = inject(NgZone);
   cdr = inject(ChangeDetectorRef);
+  
+  readonly isRefreshing = computed(() => this.navigationRefresh.isRefreshing() || this.invoiceStore.refreshing());
 
   isFormOpen = signal(false);
   isEditMode = signal(false);

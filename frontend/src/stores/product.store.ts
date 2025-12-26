@@ -15,6 +15,8 @@ export class ProductStore {
   // État
   readonly products = signal<Product[]>([]);
   readonly loading = signal<boolean>(false);
+  readonly refreshing = signal<boolean>(false);
+  readonly lastUpdated = signal<Date | null>(null);
 
   // Computed
   readonly productsCount = () => this.products().length;
@@ -27,12 +29,37 @@ export class ProductStore {
       this.loading.set(true);
       const products = await this.productService.getProducts();
       this.products.set(products);
+      this.lastUpdated.set(new Date());
     } catch (error) {
       console.error('Error loading products:', error);
       throw error;
     } finally {
       this.loading.set(false);
     }
+  }
+
+  /**
+   * Rafraîchit les produits (en arrière-plan, ne bloque pas l'UI)
+   */
+  async refresh(): Promise<void> {
+    try {
+      this.refreshing.set(true);
+      const products = await this.productService.getProducts();
+      this.products.set(products);
+      this.lastUpdated.set(new Date());
+    } catch (error) {
+      console.error('Error refreshing products:', error);
+      throw error;
+    } finally {
+      this.refreshing.set(false);
+    }
+  }
+
+  /**
+   * Force le rafraîchissement (ignore le cache)
+   */
+  async forceRefresh(): Promise<void> {
+    await this.refresh();
   }
 
   /**

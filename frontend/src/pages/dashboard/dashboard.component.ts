@@ -2,12 +2,17 @@
 import { Component, inject, computed, OnInit, effect, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { StoreService } from '../../services/store.service';
+import { DashboardStore } from '../../stores/dashboard.store';
+import { BCStore } from '../../stores/bc.store';
+import { NavigationRefreshService } from '../../services/navigation-refresh.service';
 import { Router, RouterLink } from '@angular/router';
+import { SkeletonCardComponent } from '../../components/skeleton/skeleton-card.component';
+import { SkeletonTableComponent } from '../../components/skeleton/skeleton-table.component';
 
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [CommonModule, RouterLink],
+  imports: [CommonModule, RouterLink, SkeletonCardComponent, SkeletonTableComponent],
   template: `
     <div class="space-y-6 md:space-y-8 fade-in-up pb-10">
       
@@ -37,9 +42,7 @@ import { Router, RouterLink } from '@angular/router';
             <div>
               <p class="text-sm font-medium text-indigo-100 uppercase tracking-wide">Solde Global</p>
               @if (isLoadingSolde()) {
-                <div class="animate-pulse">
-                  <div class="h-8 bg-white/20 rounded w-32 mt-2"></div>
-                </div>
+                <app-skeleton-card [type]="'kpi'" [showHeader]="false"></app-skeleton-card>
               } @else {
                 <h3 class="text-3xl font-extrabold text-white mt-2 tracking-tight break-words" 
                     [class.text-emerald-200]="soldeActuel() >= 0" 
@@ -88,9 +91,7 @@ import { Router, RouterLink } from '@angular/router';
           <div class="flex flex-col">
             <p class="text-sm font-semibold text-slate-500 uppercase tracking-wide">Total Achats</p>
             @if (isLoadingKPIs()) {
-              <div class="animate-pulse">
-                <div class="h-8 bg-slate-200 rounded w-32 mt-3"></div>
-              </div>
+              <app-skeleton-card [type]="'kpi'" [showHeader]="false"></app-skeleton-card>
             } @else {
               <h3 class="text-3xl font-extrabold text-slate-800 mt-3 tracking-tight break-words">{{ formatLargeNumber(store.totalPurchasesHT()) }}</h3>
             }
@@ -109,9 +110,7 @@ import { Router, RouterLink } from '@angular/router';
             <div>
               <p class="text-sm font-medium text-emerald-100 uppercase tracking-wide">Marge Nette</p>
               @if (isLoadingKPIs()) {
-                <div class="animate-pulse">
-                  <div class="h-8 bg-white/20 rounded w-32 mt-2"></div>
-                </div>
+                <app-skeleton-card [type]="'kpi'" [showHeader]="false"></app-skeleton-card>
               } @else {
                 <h3 class="text-3xl font-extrabold text-white mt-2 tracking-tight break-words">{{ formatLargeNumber(store.marginTotal()) }}</h3>
               }
@@ -145,9 +144,7 @@ import { Router, RouterLink } from '@angular/router';
           <div class="flex flex-col">
             <p class="text-sm font-semibold text-red-500 uppercase tracking-wide">Action Requise</p>
             @if (isLoadingKPIs()) {
-              <div class="animate-pulse">
-                <div class="h-8 bg-slate-200 rounded w-16 mt-3"></div>
-              </div>
+              <app-skeleton-card [type]="'kpi'" [showHeader]="false"></app-skeleton-card>
             } @else {
               <h3 class="text-3xl font-extrabold text-slate-800 mt-3 tracking-tight">{{ store.overduePurchaseInvoices() }}</h3>
             }
@@ -175,8 +172,26 @@ import { Router, RouterLink } from '@angular/router';
                <h3 class="text-lg font-bold text-slate-800">Commandes Récentes</h3>
                <p class="text-xs text-slate-500">Derniers mouvements enregistrés</p>
             </div>
-            <button (click)="viewAllBCs()" class="text-sm text-blue-600 font-medium hover:text-blue-800 transition">Voir tout</button>
+            <div class="flex items-center gap-3">
+              @if (isRefreshing()) {
+                <div class="flex items-center gap-2 text-xs text-slate-500">
+                  <svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                  </svg>
+                  <span>Actualisation...</span>
+                </div>
+              }
+              <button (click)="viewAllBCs()" class="text-sm text-blue-600 font-medium hover:text-blue-800 transition">Voir tout</button>
+            </div>
           </div>
+          @if (bcStore.loading()) {
+            <app-skeleton-table [columns]="[
+              { width: '20%' },
+              { width: '30%' },
+              { width: '20%' },
+              { width: '30%', align: 'right' }
+            ]" [rows]="5"></app-skeleton-table>
+          } @else {
           <div class="overflow-x-auto">
             <table class="w-full text-sm text-left min-w-[600px]">
               <thead class="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-100">
@@ -212,6 +227,7 @@ import { Router, RouterLink } from '@angular/router';
               </tbody>
             </table>
           </div>
+          }
         </div>
 
         <!-- Side Panel / Quick Stats -->
@@ -318,18 +334,25 @@ import { Router, RouterLink } from '@angular/router';
 })
 export class DashboardComponent implements OnInit {
   store = inject(StoreService);
+  dashboardStore = inject(DashboardStore);
+  bcStore = inject(BCStore);
+  navigationRefresh = inject(NavigationRefreshService);
   router = inject(Router);
 
-  recentBCs = computed(() => this.store.bcs().slice(0, 5));
+  recentBCs = computed(() => this.bcStore.bcs().slice(0, 5));
   
   // KPIs from backend
-  readonly kpis = computed(() => this.store.dashboardKPIs());
-  readonly isLoadingKPIs = computed(() => this.store.dashboardLoading());
+  readonly kpis = computed(() => this.dashboardStore.dashboardKPIs());
+  readonly isLoadingKPIs = computed(() => this.dashboardStore.dashboardLoading());
+  readonly isRefreshingKPIs = computed(() => this.dashboardStore.refreshing());
   
   // Solde global
-  readonly soldeGlobal = computed(() => this.store.soldeGlobal());
+  readonly soldeGlobal = computed(() => this.dashboardStore.soldeGlobal());
   readonly soldeActuel = computed(() => this.soldeGlobal()?.soldeActuel || 0);
   readonly isLoadingSolde = signal(false);
+  
+  // État de rafraîchissement global
+  readonly isRefreshing = computed(() => this.navigationRefresh.isRefreshing());
 
   // Monthly data for chart
   monthlyData = computed(() => {
@@ -393,21 +416,28 @@ export class DashboardComponent implements OnInit {
   }
 
   async ngOnInit() {
-    // Load KPIs on component initialization (les BCs et factures sont déjà chargés au démarrage)
-    await this.store.loadDashboardKPIs();
-    // Charger le solde global
+    // Load KPIs on component initialization
     this.isLoadingSolde.set(true);
     try {
-      await this.store.loadSoldeGlobal();
+      await Promise.all([
+        this.dashboardStore.loadDashboardKPIs(),
+        this.dashboardStore.loadSoldeGlobal()
+      ]);
     } catch (error) {
-      console.error('Error loading solde global:', error);
+      console.error('Error loading dashboard data:', error);
     } finally {
       this.isLoadingSolde.set(false);
     }
   }
 
   async reloadKPIs(from?: Date, to?: Date) {
-    await this.store.loadDashboardKPIs(from, to);
+    const fromStr = from?.toISOString().split('T')[0];
+    const toStr = to?.toISOString().split('T')[0];
+    await this.dashboardStore.loadDashboardKPIs(fromStr, toStr);
+  }
+  
+  async forceRefresh() {
+    await this.navigationRefresh.forceRefreshCurrentRoute();
   }
 
   formatCurrency(value: number): string {

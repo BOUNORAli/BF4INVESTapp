@@ -15,6 +15,8 @@ export class SettingsStore {
   readonly paymentModes = signal<PaymentMode[]>([]);
   readonly companyInfo = signal<CompanyInfo | null>(null);
   readonly loading = signal<boolean>(false);
+  readonly refreshing = signal<boolean>(false);
+  readonly lastUpdated = signal<Date | null>(null);
 
   /**
    * Charge les modes de paiement
@@ -104,6 +106,32 @@ export class SettingsStore {
    */
   removePaymentMode(id: string): void {
     this.paymentModes.update(modes => modes.filter(m => m.id !== id));
+  }
+
+  /**
+   * Rafraîchit les paramètres (en arrière-plan)
+   */
+  async refresh(): Promise<void> {
+    try {
+      this.refreshing.set(true);
+      await Promise.all([
+        this.loadPaymentModes(),
+        this.loadCompanyInfo()
+      ]);
+      this.lastUpdated.set(new Date());
+    } catch (error) {
+      console.error('Error refreshing settings:', error);
+      throw error;
+    } finally {
+      this.refreshing.set(false);
+    }
+  }
+
+  /**
+   * Force le rafraîchissement (ignore le cache)
+   */
+  async forceRefresh(): Promise<void> {
+    await this.refresh();
   }
 }
 

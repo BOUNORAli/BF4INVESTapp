@@ -93,6 +93,8 @@ export class DashboardStore {
   // État
   readonly dashboardKPIs = signal<DashboardKpiResponse | null>(null);
   readonly dashboardLoading = signal<boolean>(false);
+  readonly refreshing = signal<boolean>(false);
+  readonly lastUpdated = signal<Date | null>(null);
   readonly soldeGlobal = signal<SoldeGlobal | null>(null);
   readonly historiqueSolde = signal<HistoriqueSolde[]>([]);
   readonly previsionTresorerie = signal<PrevisionTresorerieResponse | null>(null);
@@ -194,6 +196,32 @@ export class DashboardStore {
    */
   setPrevisionTresorerie(prevision: PrevisionTresorerieResponse): void {
     this.previsionTresorerie.set(prevision);
+  }
+
+  /**
+   * Rafraîchit toutes les données du dashboard (en arrière-plan)
+   */
+  async refresh(): Promise<void> {
+    try {
+      this.refreshing.set(true);
+      await Promise.all([
+        this.loadDashboardKPIs(),
+        this.loadSoldeGlobal()
+      ]);
+      this.lastUpdated.set(new Date());
+    } catch (error) {
+      console.error('Error refreshing dashboard:', error);
+      throw error;
+    } finally {
+      this.refreshing.set(false);
+    }
+  }
+
+  /**
+   * Force le rafraîchissement (ignore le cache)
+   */
+  async forceRefresh(): Promise<void> {
+    await this.refresh();
   }
 }
 

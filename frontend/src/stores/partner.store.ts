@@ -15,6 +15,8 @@ export class PartnerStore {
   readonly clients = signal<Client[]>([]);
   readonly suppliers = signal<Supplier[]>([]);
   readonly loading = signal<boolean>(false);
+  readonly refreshing = signal<boolean>(false);
+  readonly lastUpdated = signal<Date | null>(null);
 
   // Computed
   readonly clientsCount = () => this.clients().length;
@@ -25,14 +27,18 @@ export class PartnerStore {
    */
   async loadClients(): Promise<void> {
     try {
-      this.loading.set(true);
+      if (!this.refreshing()) {
+        this.loading.set(true);
+      }
       const clients = await this.partnerService.getClients();
       this.clients.set(clients);
     } catch (error) {
       console.error('Error loading clients:', error);
       throw error;
     } finally {
-      this.loading.set(false);
+      if (!this.refreshing()) {
+        this.loading.set(false);
+      }
     }
   }
 
@@ -41,14 +47,18 @@ export class PartnerStore {
    */
   async loadSuppliers(): Promise<void> {
     try {
-      this.loading.set(true);
+      if (!this.refreshing()) {
+        this.loading.set(true);
+      }
       const suppliers = await this.partnerService.getSuppliers();
       this.suppliers.set(suppliers);
     } catch (error) {
       console.error('Error loading suppliers:', error);
       throw error;
     } finally {
-      this.loading.set(false);
+      if (!this.refreshing()) {
+        this.loading.set(false);
+      }
     }
   }
 
@@ -57,6 +67,30 @@ export class PartnerStore {
    */
   async loadAll(): Promise<void> {
     await Promise.all([this.loadClients(), this.loadSuppliers()]);
+    this.lastUpdated.set(new Date());
+  }
+
+  /**
+   * Rafraîchit les partenaires (en arrière-plan, ne bloque pas l'UI)
+   */
+  async refresh(): Promise<void> {
+    try {
+      this.refreshing.set(true);
+      await Promise.all([this.loadClients(), this.loadSuppliers()]);
+      this.lastUpdated.set(new Date());
+    } catch (error) {
+      console.error('Error refreshing partners:', error);
+      throw error;
+    } finally {
+      this.refreshing.set(false);
+    }
+  }
+
+  /**
+   * Force le rafraîchissement (ignore le cache)
+   */
+  async forceRefresh(): Promise<void> {
+    await this.refresh();
   }
 
   /**

@@ -6,6 +6,7 @@ import { FormsModule } from '@angular/forms';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { AuthService } from './services/auth.service';
 import { StoreService, BC, Invoice, Product, Client, Supplier } from './services/store.service';
+import { NavigationRefreshService } from './services/navigation-refresh.service';
 import { filter } from 'rxjs/operators';
 
 interface SearchResult {
@@ -28,6 +29,7 @@ export class AppComponent implements OnInit, OnDestroy {
   store = inject(StoreService);
   router = inject(Router);
   sanitizer = inject(DomSanitizer);
+  navigationRefresh = inject(NavigationRefreshService); // Initialise le service de rafraîchissement
 
   // État du menu mobile
   isMobileMenuOpen = signal(false);

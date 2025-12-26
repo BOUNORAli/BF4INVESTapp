@@ -1,14 +1,18 @@
 
-import { Component, inject, signal, computed, HostListener } from '@angular/core';
+import { Component, inject, signal, computed, HostListener, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink, Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { StoreService, BC } from '../../services/store.service';
+import { BCStore } from '../../stores/bc.store';
+import { PartnerStore } from '../../stores/partner.store';
+import { NavigationRefreshService } from '../../services/navigation-refresh.service';
+import { SkeletonTableComponent } from '../../components/skeleton/skeleton-table.component';
 
 @Component({
   selector: 'app-bc-list',
   standalone: true,
-  imports: [CommonModule, RouterLink, FormsModule],
+  imports: [CommonModule, RouterLink, FormsModule, SkeletonTableComponent],
   template: `
     <div class="space-y-6 fade-in-up pb-10">
       
@@ -84,6 +88,17 @@ import { StoreService, BC } from '../../services/store.service';
 
       <!-- Data Table -->
       <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        @if (bcStore.loading()) {
+          <app-skeleton-table [columns]="[
+            { width: '20%' },
+            { width: '25%' },
+            { width: '15%', align: 'right' },
+            { width: '15%', align: 'right' },
+            { width: '10%', align: 'center' },
+            { width: '10%', align: 'center' },
+            { width: '5%', align: 'center' }
+          ]" [rows]="10"></app-skeleton-table>
+        } @else {
         <div class="overflow-x-auto">
           <table class="w-full text-sm text-left min-w-[900px]">
             <thead class="text-xs text-slate-500 uppercase bg-slate-50/80 border-b border-slate-200">
@@ -209,6 +224,16 @@ import { StoreService, BC } from '../../services/store.service';
             </tbody>
           </table>
         </div>
+        }
+        
+        @if (isRefreshing() && !bcStore.loading()) {
+          <div class="p-4 border-t border-slate-200 bg-blue-50/50 flex items-center justify-center gap-2 text-sm text-blue-600">
+            <svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+            </svg>
+            <span>Actualisation des données...</span>
+          </div>
+        }
 
         <!-- Pagination Controls -->
         @if (filteredBcs().length > 0) {
@@ -231,10 +256,15 @@ import { StoreService, BC } from '../../services/store.service';
     </div>
   `
 })
-export class BcListComponent {
+export class BcListComponent implements OnInit {
   store = inject(StoreService);
+  bcStore = inject(BCStore);
+  partnerStore = inject(PartnerStore);
+  navigationRefresh = inject(NavigationRefreshService);
   router = inject(Router);
   Math = Math; // Expose Math for template
+  
+  readonly isRefreshing = computed(() => this.navigationRefresh.isRefreshing() || this.bcStore.refreshing());
 
   // Filters State
   searchTerm = signal('');
@@ -257,7 +287,7 @@ export class BcListComponent {
     const dMin = this.dateMin();
     const dMax = this.dateMax();
 
-    return this.store.bcs().filter(bc => {
+    return this.bcStore.bcs().filter(bc => {
       // Recherche dans le numéro BC et les noms des clients
       const clientIds = this.getClientIds(bc);
       const clientNames = clientIds.map(id => this.store.getClientName(id).toLowerCase());
@@ -454,6 +484,21 @@ export class BcListComponent {
         bcId: bc.id
       }
     });
+  }
+
+  async ngOnInit() {
+    // Les données sont chargées automatiquement par NavigationRefreshService
+    // Mais on s'assure qu'elles sont chargées si elles ne le sont pas
+    if (this.bcStore.bcs().length === 0 && !this.bcStore.loading()) {
+      await this.bcStore.loadBCs();
+    }
+    if (this.partnerStore.clients().length === 0 && !this.partnerStore.loading()) {
+      await this.partnerStore.loadAll();
+    }
+  }
+  
+  async forceRefresh() {
+    await this.navigationRefresh.forceRefreshCurrentRoute();
   }
 
   getStatusClass(status: string): string {
