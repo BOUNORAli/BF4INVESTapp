@@ -15,3 +15,4 @@ public interface HistoriqueSoldeRepository extends MongoRepository<HistoriqueSol
     List<HistoriqueSolde> findAllByOrderByDateDesc();
 }
 
+

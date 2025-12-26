@@ -35,5 +35,9 @@ export class TVAService {
   exportDeclarations(annee?: number): Observable<Blob> {
     return this.api.downloadFile('/tva/export/declarations', annee ? { annee } : undefined);
   }
+
+  exportEtatTVADetaille(mois: number, annee: number): Observable<Blob> {
+    return this.api.downloadFile('/tva/export/etat-detaille', { mois, annee });
+  }
 }
 

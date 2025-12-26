@@ -14,3 +14,4 @@ public interface ParametresCalculRepository extends MongoRepository<ParametresCa
     Optional<ParametresCalcul> findFirstByOrderByUpdatedAtDesc();
 }
 
+

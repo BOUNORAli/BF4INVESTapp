@@ -27,3 +27,4 @@ public class SoldeGlobal {
     private LocalDateTime updatedAt;
 }
 
+

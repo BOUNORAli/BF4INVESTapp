@@ -18,3 +18,4 @@ public class PrevisionJournaliere {
     private Double soldePrevu;
 }
 
+

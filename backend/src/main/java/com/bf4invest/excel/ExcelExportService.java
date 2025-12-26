@@ -13,7 +13,9 @@ import com.bf4invest.repository.FactureVenteRepository;
 import com.bf4invest.repository.PaiementRepository;
 import com.bf4invest.repository.SupplierRepository;
 import com.bf4invest.service.CalculComptableService;
+import com.bf4invest.service.CompanyInfoService;
 import com.bf4invest.service.SoldeService;
+import com.bf4invest.service.TVAService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.*;
@@ -42,6 +44,8 @@ public class ExcelExportService {
     private final PaiementRepository paiementRepository;
     private final CalculComptableService calculComptableService;
     private final SoldeService soldeService;
+    private final TVAService tvaService;
+    private final CompanyInfoService companyInfoService;
     
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy");
     private static final NumberFormat NUMBER_FORMAT = NumberFormat.getNumberInstance(Locale.FRENCH);
@@ -961,6 +965,539 @@ public class ExcelExportService {
             workbook.write(out);
             return out.toByteArray();
         }
+    }
+
+    /**
+     * Exporte l'état TVA détaillé pour un mois/année donné
+     * Format exact comme dans l'image fournie
+     */
+    public byte[] exportEtatTVADetaille(Integer mois, Integer annee) throws IOException {
+        try (XSSFWorkbook workbook = new XSSFWorkbook()) {
+            Sheet sheet = workbook.createSheet("ETAT TVA");
+            
+            // Récupérer les données
+            List<FactureAchat> facturesAchat = tvaService.getFacturesAchatByMonth(mois, annee);
+            List<FactureVente> facturesVente = tvaService.getFacturesVenteByMonth(mois, annee);
+            com.bf4invest.model.CompanyInfo companyInfo = companyInfoService.getCompanyInfo();
+            
+            // Créer les caches pour les noms
+            Map<String, Supplier> suppliersMap = supplierRepository.findAll().stream()
+                    .collect(Collectors.toMap(Supplier::getId, s -> s));
+            Map<String, Client> clientsMap = clientRepository.findAll().stream()
+                    .collect(Collectors.toMap(Client::getId, c -> c));
+            
+            // Styles
+            CellStyle titleStyle = createTitleStyle(workbook);
+            CellStyle sectionHeaderStyle = createSectionHeaderStyle(workbook);
+            CellStyle columnHeaderStyle = createColumnHeaderStyle(workbook);
+            CellStyle dataStyle = createDefaultStyle(workbook);
+            CellStyle dataAltStyle = createDataAltStyle(workbook);
+            CellStyle dataGreenStyle = createDataGreenStyle(workbook);
+            CellStyle totalStyle = createTotalStyle(workbook);
+            CellStyle currencyStyle = createCurrencyStyle(workbook);
+            CellStyle dateStyle = createDateStyle(workbook);
+            CellStyle percentStyle = createPercentStyle(workbook);
+            
+            int rowNum = 0;
+            
+            // Titre
+            Row titleRow = sheet.createRow(rowNum++);
+            Cell titleCell = titleRow.createCell(0);
+            String moisAbrev = getMoisAbreviation(mois);
+            titleCell.setCellValue(String.format("ETAT TVA %s/ %d", moisAbrev, annee));
+            titleCell.setCellStyle(titleStyle);
+            sheet.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(0, 0, 0, 10));
+            
+            // Nom entreprise
+            Row companyRow = sheet.createRow(rowNum++);
+            Cell companyCell = companyRow.createCell(0);
+            companyCell.setCellValue(companyInfo.getRaisonSociale() != null ? companyInfo.getRaisonSociale() : "STE BF4 INVEST");
+            companyCell.setCellStyle(dataStyle);
+            sheet.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(1, 1, 0, 10));
+            
+            rowNum++; // Ligne vide
+            
+            // Section FACTURES FOURNISSEUR
+            Row sectionHeaderRow = sheet.createRow(rowNum++);
+            Cell sectionHeaderCell = sectionHeaderRow.createCell(0);
+            sectionHeaderCell.setCellValue("FACTURES FOURNISSEUR");
+            sectionHeaderCell.setCellStyle(sectionHeaderStyle);
+            sheet.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(rowNum - 1, rowNum - 1, 0, 10));
+            
+            // En-têtes colonnes
+            Row headerRow = sheet.createRow(rowNum++);
+            String[] headers = {
+                "TVA MOIS", "N° facture", "Fournisseur", "date", "MT TTC",
+                "Taux TVA", "MT HT", "Somme de TVA", "Moyen payement",
+                "REFERENCE", "NATURE PIECE COMPTABLE"
+            };
+            for (int i = 0; i < headers.length; i++) {
+                Cell cell = headerRow.createCell(i);
+                cell.setCellValue(headers[i]);
+                cell.setCellStyle(columnHeaderStyle);
+            }
+            
+            // Lignes de données FACTURES FOURNISSEUR
+            double totalTTCFournisseur = 0.0;
+            double totalHTFournisseur = 0.0;
+            double totalTVAFournisseur = 0.0;
+            
+            for (int i = 0; i < facturesAchat.size(); i++) {
+                FactureAchat facture = facturesAchat.get(i);
+                Row dataRow = sheet.createRow(rowNum++);
+                
+                // Déterminer le style (alternance blanc/gris, vert pour 10%)
+                CellStyle rowStyle = (i % 2 == 0) ? dataStyle : dataAltStyle;
+                if (facture.getTvaRate() != null && Math.abs(facture.getTvaRate() - 0.10) < 0.001) {
+                    rowStyle = dataGreenStyle;
+                }
+                
+                // TVA MOIS
+                Cell cell0 = dataRow.createCell(0);
+                cell0.setCellValue(String.format("%s-%d", moisAbrev, annee % 100));
+                cell0.setCellStyle(rowStyle);
+                
+                // N° facture
+                Cell cell1 = dataRow.createCell(1);
+                cell1.setCellValue(facture.getNumeroFactureAchat() != null ? facture.getNumeroFactureAchat() : "");
+                cell1.setCellStyle(rowStyle);
+                
+                // Fournisseur
+                Cell cell2 = dataRow.createCell(2);
+                Supplier supplier = facture.getFournisseurId() != null ? suppliersMap.get(facture.getFournisseurId()) : null;
+                cell2.setCellValue(supplier != null ? supplier.getNom() : "");
+                cell2.setCellStyle(rowStyle);
+                
+                // date
+                Cell cell3 = dataRow.createCell(3);
+                if (facture.getDateFacture() != null) {
+                    cell3.setCellValue(facture.getDateFacture().format(DATE_FORMATTER));
+                    cell3.setCellStyle(dateStyle);
+                } else {
+                    cell3.setCellValue("");
+                    cell3.setCellStyle(rowStyle);
+                }
+                
+                // MT TTC
+                Cell cell4 = dataRow.createCell(4);
+                Double mtTTC = facture.getTotalTTC() != null ? facture.getTotalTTC() : 0.0;
+                cell4.setCellValue(mtTTC);
+                CellStyle currencyStyleWithBg = createCurrencyStyleWithBackground(workbook, rowStyle);
+                cell4.setCellStyle(currencyStyleWithBg);
+                totalTTCFournisseur += mtTTC;
+                
+                // Taux TVA
+                Cell cell5 = dataRow.createCell(5);
+                Double tauxTVA = facture.getTvaRate() != null ? facture.getTvaRate() : 0.20;
+                cell5.setCellValue(tauxTVA);
+                CellStyle percentStyleWithBg = createPercentStyleWithBackground(workbook, rowStyle);
+                cell5.setCellStyle(percentStyleWithBg);
+                
+                // MT HT
+                Cell cell6 = dataRow.createCell(6);
+                Double mtHT = facture.getTotalHT() != null ? facture.getTotalHT() : 0.0;
+                cell6.setCellValue(mtHT);
+                cell6.setCellStyle(currencyStyleWithBg);
+                totalHTFournisseur += mtHT;
+                
+                // Somme de TVA
+                Cell cell7 = dataRow.createCell(7);
+                Double sommeTVA = facture.getTotalTVA() != null ? facture.getTotalTVA() : 0.0;
+                cell7.setCellValue(sommeTVA);
+                cell7.setCellStyle(currencyStyleWithBg);
+                totalTVAFournisseur += sommeTVA;
+                
+                // Moyen payement
+                Cell cell8 = dataRow.createCell(8);
+                cell8.setCellValue(facture.getModePaiement() != null ? facture.getModePaiement() : "");
+                cell8.setCellStyle(rowStyle);
+                
+                // REFERENCE
+                Cell cell9 = dataRow.createCell(9);
+                // Chercher la référence dans les paiements
+                String reference = "";
+                if (facture.getPaiements() != null && !facture.getPaiements().isEmpty()) {
+                    reference = facture.getPaiements().stream()
+                            .filter(p -> p.getReference() != null && !p.getReference().isEmpty())
+                            .map(Paiement::getReference)
+                            .findFirst()
+                            .orElse("");
+                }
+                cell9.setCellValue(reference);
+                cell9.setCellStyle(rowStyle);
+                
+                // NATURE PIECE COMPTABLE
+                Cell cell10 = dataRow.createCell(10);
+                cell10.setCellValue("COPIE/ORIGINALE A RECEVOIR");
+                cell10.setCellStyle(rowStyle);
+            }
+            
+            // Ligne de total FACTURES FOURNISSEUR
+            Row totalRowFournisseur = sheet.createRow(rowNum++);
+            Cell totalLabel = totalRowFournisseur.createCell(0);
+            totalLabel.setCellValue("Total MT TTC");
+            totalLabel.setCellStyle(totalStyle);
+            sheet.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(rowNum - 1, rowNum - 1, 0, 3));
+            
+            Cell totalTTC = totalRowFournisseur.createCell(4);
+            totalTTC.setCellValue(totalTTCFournisseur);
+            CellStyle totalCurrencyStyle = createTotalCurrencyStyle(workbook);
+            totalTTC.setCellStyle(totalCurrencyStyle);
+            
+            Cell totalHTLabel = totalRowFournisseur.createCell(5);
+            totalHTLabel.setCellValue("Total MT HT");
+            totalHTLabel.setCellStyle(totalStyle);
+            sheet.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(rowNum - 1, rowNum - 1, 5, 6));
+            
+            Cell totalHT = totalRowFournisseur.createCell(7);
+            totalHT.setCellValue(totalHTFournisseur);
+            totalHT.setCellStyle(totalCurrencyStyle);
+            
+            Cell totalTVALabel = totalRowFournisseur.createCell(8);
+            totalTVALabel.setCellValue("Total Somme de TVA");
+            totalTVALabel.setCellStyle(totalStyle);
+            sheet.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(rowNum - 1, rowNum - 1, 8, 9));
+            
+            Cell totalTVA = totalRowFournisseur.createCell(10);
+            totalTVA.setCellValue(totalTVAFournisseur);
+            totalTVA.setCellStyle(totalCurrencyStyle);
+            
+            rowNum++; // Ligne vide
+            
+            // Section FACTURES CLIENTS
+            Row sectionClientRow = sheet.createRow(rowNum++);
+            Cell sectionClientCell = sectionClientRow.createCell(0);
+            sectionClientCell.setCellValue("FACTURES CLIENTS");
+            sectionClientCell.setCellStyle(sectionHeaderStyle);
+            sheet.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(rowNum - 1, rowNum - 1, 0, 10));
+            
+            // En-têtes colonnes (même structure)
+            Row headerClientRow = sheet.createRow(rowNum++);
+            for (int i = 0; i < headers.length; i++) {
+                Cell cell = headerClientRow.createCell(i);
+                cell.setCellValue(headers[i]);
+                cell.setCellStyle(columnHeaderStyle);
+            }
+            
+            // Lignes de données FACTURES CLIENTS
+            double totalTTCClient = 0.0;
+            double totalHTClient = 0.0;
+            double totalTVAClient = 0.0;
+            
+            for (int i = 0; i < facturesVente.size(); i++) {
+                FactureVente facture = facturesVente.get(i);
+                Row dataRow = sheet.createRow(rowNum++);
+                
+                // Déterminer le style
+                CellStyle rowStyle = (i % 2 == 0) ? dataStyle : dataAltStyle;
+                if (facture.getTvaRate() != null && Math.abs(facture.getTvaRate() - 0.10) < 0.001) {
+                    rowStyle = dataGreenStyle;
+                }
+                
+                // TVA MOIS
+                Cell cell0 = dataRow.createCell(0);
+                cell0.setCellValue(String.format("%s-%d", moisAbrev, annee % 100));
+                cell0.setCellStyle(rowStyle);
+                
+                // N° facture
+                Cell cell1 = dataRow.createCell(1);
+                cell1.setCellValue(facture.getNumeroFactureVente() != null ? facture.getNumeroFactureVente() : "");
+                cell1.setCellStyle(rowStyle);
+                
+                // Client
+                Cell cell2 = dataRow.createCell(2);
+                Client client = facture.getClientId() != null ? clientsMap.get(facture.getClientId()) : null;
+                cell2.setCellValue(client != null ? client.getNom() : "");
+                cell2.setCellStyle(rowStyle);
+                
+                // date
+                Cell cell3 = dataRow.createCell(3);
+                if (facture.getDateFacture() != null) {
+                    cell3.setCellValue(facture.getDateFacture().format(DATE_FORMATTER));
+                    cell3.setCellStyle(dateStyle);
+                } else {
+                    cell3.setCellValue("");
+                    cell3.setCellStyle(rowStyle);
+                }
+                
+                // MT TTC
+                Cell cell4 = dataRow.createCell(4);
+                Double mtTTC = facture.getTotalTTC() != null ? facture.getTotalTTC() : 0.0;
+                cell4.setCellValue(mtTTC);
+                CellStyle currencyStyleWithBgClient = createCurrencyStyleWithBackground(workbook, rowStyle);
+                cell4.setCellStyle(currencyStyleWithBgClient);
+                totalTTCClient += mtTTC;
+                
+                // Taux TVA
+                Cell cell5 = dataRow.createCell(5);
+                Double tauxTVA = facture.getTvaRate() != null ? facture.getTvaRate() : 0.20;
+                cell5.setCellValue(tauxTVA);
+                CellStyle percentStyleWithBgClient = createPercentStyleWithBackground(workbook, rowStyle);
+                cell5.setCellStyle(percentStyleWithBgClient);
+                
+                // MT HT
+                Cell cell6 = dataRow.createCell(6);
+                Double mtHT = facture.getTotalHT() != null ? facture.getTotalHT() : 0.0;
+                cell6.setCellValue(mtHT);
+                cell6.setCellStyle(currencyStyleWithBgClient);
+                totalHTClient += mtHT;
+                
+                // Somme de TVA
+                Cell cell7 = dataRow.createCell(7);
+                Double sommeTVA = facture.getTotalTVA() != null ? facture.getTotalTVA() : 0.0;
+                cell7.setCellValue(sommeTVA);
+                cell7.setCellStyle(currencyStyleWithBgClient);
+                totalTVAClient += sommeTVA;
+                
+                // Moyen payement
+                Cell cell8 = dataRow.createCell(8);
+                cell8.setCellValue(facture.getModePaiement() != null ? facture.getModePaiement() : "");
+                cell8.setCellStyle(rowStyle);
+                
+                // REFERENCE
+                Cell cell9 = dataRow.createCell(9);
+                String reference = "";
+                if (facture.getPaiements() != null && !facture.getPaiements().isEmpty()) {
+                    reference = facture.getPaiements().stream()
+                            .filter(p -> p.getReference() != null && !p.getReference().isEmpty())
+                            .map(Paiement::getReference)
+                            .findFirst()
+                            .orElse("");
+                }
+                cell9.setCellValue(reference);
+                cell9.setCellStyle(rowStyle);
+                
+                // NATURE PIECE COMPTABLE
+                Cell cell10 = dataRow.createCell(10);
+                cell10.setCellValue("COPIE/ORIGINALE A RECEVOIR");
+                cell10.setCellStyle(rowStyle);
+            }
+            
+            // Si aucune facture client, ajouter une ligne vide avec 0,00
+            if (facturesVente.isEmpty()) {
+                Row emptyRow = sheet.createRow(rowNum++);
+                Cell emptyCell0 = emptyRow.createCell(0);
+                emptyCell0.setCellValue(String.format("%s-%d", moisAbrev, annee % 100));
+                emptyCell0.setCellStyle(dataStyle);
+                
+                for (int i = 1; i < 11; i++) {
+                    Cell emptyCell = emptyRow.createCell(i);
+                    if (i == 4 || i == 6 || i == 7) {
+                        emptyCell.setCellValue(0.0);
+                        emptyCell.setCellStyle(currencyStyle);
+                    } else {
+                        emptyCell.setCellValue("");
+                        emptyCell.setCellStyle(dataStyle);
+                    }
+                }
+            }
+            
+            // Ligne de total FACTURES CLIENTS
+            Row totalRowClient = sheet.createRow(rowNum++);
+            Cell totalLabelClient = totalRowClient.createCell(0);
+            totalLabelClient.setCellValue("Total MT TTC");
+            totalLabelClient.setCellStyle(totalStyle);
+            sheet.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(rowNum - 1, rowNum - 1, 0, 3));
+            
+            Cell totalTTCClientCell = totalRowClient.createCell(4);
+            totalTTCClientCell.setCellValue(totalTTCClient);
+            CellStyle totalCurrencyStyleClient = createTotalCurrencyStyle(workbook);
+            totalTTCClientCell.setCellStyle(totalCurrencyStyleClient);
+            
+            Cell totalHTLabelClient = totalRowClient.createCell(5);
+            totalHTLabelClient.setCellValue("Total MT HT");
+            totalHTLabelClient.setCellStyle(totalStyle);
+            sheet.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(rowNum - 1, rowNum - 1, 5, 6));
+            
+            Cell totalHTClientCell = totalRowClient.createCell(7);
+            totalHTClientCell.setCellValue(totalHTClient);
+            totalHTClientCell.setCellStyle(totalCurrencyStyleClient);
+            
+            Cell totalTVALabelClient = totalRowClient.createCell(8);
+            totalTVALabelClient.setCellValue("Total Somme de TVA");
+            totalTVALabelClient.setCellStyle(totalStyle);
+            sheet.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(rowNum - 1, rowNum - 1, 8, 9));
+            
+            Cell totalTVAClientCell = totalRowClient.createCell(10);
+            totalTVAClientCell.setCellValue(totalTVAClient);
+            totalTVAClientCell.setCellStyle(totalCurrencyStyleClient);
+            
+            // Ajuster la largeur des colonnes
+            for (int i = 0; i < 11; i++) {
+                sheet.autoSizeColumn(i);
+                sheet.setColumnWidth(i, Math.max(sheet.getColumnWidth(i) + 1000, 3000));
+            }
+            
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            workbook.write(out);
+            return out.toByteArray();
+        }
+    }
+    
+    /**
+     * Retourne l'abréviation du mois en français
+     */
+    private String getMoisAbreviation(Integer mois) {
+        String[] moisAbrev = {"janv.", "févr.", "mars", "avr.", "mai", "juin",
+                "juil.", "août", "sept.", "oct.", "nov.", "déc."};
+        if (mois >= 1 && mois <= 12) {
+            return moisAbrev[mois - 1];
+        }
+        return "janv.";
+    }
+    
+    /**
+     * Style pour le titre
+     */
+    private CellStyle createTitleStyle(Workbook workbook) {
+        CellStyle style = workbook.createCellStyle();
+        Font font = workbook.createFont();
+        font.setBold(true);
+        font.setFontHeightInPoints((short) 16);
+        style.setFont(font);
+        return style;
+    }
+    
+    /**
+     * Style pour les en-têtes de section (orange/brun)
+     */
+    private CellStyle createSectionHeaderStyle(Workbook workbook) {
+        CellStyle style = workbook.createCellStyle();
+        Font font = workbook.createFont();
+        font.setBold(true);
+        font.setColor(IndexedColors.WHITE.getIndex());
+        font.setFontHeightInPoints((short) 12);
+        style.setFont(font);
+        style.setFillForegroundColor(IndexedColors.ORANGE.getIndex());
+        style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        style.setAlignment(HorizontalAlignment.LEFT);
+        style.setVerticalAlignment(VerticalAlignment.CENTER);
+        style.setBorderBottom(BorderStyle.THIN);
+        style.setBorderTop(BorderStyle.THIN);
+        style.setBorderLeft(BorderStyle.THIN);
+        style.setBorderRight(BorderStyle.THIN);
+        return style;
+    }
+    
+    /**
+     * Style pour les en-têtes de colonnes (orange/brun clair)
+     */
+    private CellStyle createColumnHeaderStyle(Workbook workbook) {
+        CellStyle style = workbook.createCellStyle();
+        Font font = workbook.createFont();
+        font.setBold(true);
+        font.setFontHeightInPoints((short) 10);
+        style.setFont(font);
+        // Couleur orange/brun clair
+        style.setFillForegroundColor(IndexedColors.TAN.getIndex());
+        style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        style.setAlignment(HorizontalAlignment.CENTER);
+        style.setVerticalAlignment(VerticalAlignment.CENTER);
+        style.setBorderBottom(BorderStyle.THIN);
+        style.setBorderTop(BorderStyle.THIN);
+        style.setBorderLeft(BorderStyle.THIN);
+        style.setBorderRight(BorderStyle.THIN);
+        return style;
+    }
+    
+    /**
+     * Style pour les lignes alternées (gris clair)
+     */
+    private CellStyle createDataAltStyle(Workbook workbook) {
+        CellStyle style = workbook.createCellStyle();
+        style.setFillForegroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
+        style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        style.setBorderBottom(BorderStyle.THIN);
+        style.setBorderTop(BorderStyle.THIN);
+        style.setBorderLeft(BorderStyle.THIN);
+        style.setBorderRight(BorderStyle.THIN);
+        style.setAlignment(HorizontalAlignment.LEFT);
+        style.setVerticalAlignment(VerticalAlignment.CENTER);
+        return style;
+    }
+    
+    /**
+     * Style pour les lignes avec TVA 10% (vert clair)
+     */
+    private CellStyle createDataGreenStyle(Workbook workbook) {
+        CellStyle style = workbook.createCellStyle();
+        // Vert clair
+        style.setFillForegroundColor(IndexedColors.LIGHT_GREEN.getIndex());
+        style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        style.setBorderBottom(BorderStyle.THIN);
+        style.setBorderTop(BorderStyle.THIN);
+        style.setBorderLeft(BorderStyle.THIN);
+        style.setBorderRight(BorderStyle.THIN);
+        style.setAlignment(HorizontalAlignment.LEFT);
+        style.setVerticalAlignment(VerticalAlignment.CENTER);
+        return style;
+    }
+    
+    /**
+     * Style pour la ligne de total (jaune)
+     */
+    private CellStyle createTotalStyle(Workbook workbook) {
+        CellStyle style = workbook.createCellStyle();
+        Font font = workbook.createFont();
+        font.setBold(true);
+        style.setFont(font);
+        // Jaune
+        style.setFillForegroundColor(IndexedColors.YELLOW.getIndex());
+        style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        style.setBorderBottom(BorderStyle.THIN);
+        style.setBorderTop(BorderStyle.THIN);
+        style.setBorderLeft(BorderStyle.THIN);
+        style.setBorderRight(BorderStyle.THIN);
+        style.setAlignment(HorizontalAlignment.LEFT);
+        style.setVerticalAlignment(VerticalAlignment.CENTER);
+        DataFormat format = workbook.createDataFormat();
+        style.setDataFormat(format.getFormat("#,##0.00"));
+        return style;
+    }
+    
+    /**
+     * Style currency avec fond (pour les lignes de données)
+     */
+    private CellStyle createCurrencyStyleWithBackground(Workbook workbook, CellStyle baseStyle) {
+        CellStyle style = workbook.createCellStyle();
+        style.cloneStyleFrom(baseStyle);
+        DataFormat format = workbook.createDataFormat();
+        style.setDataFormat(format.getFormat("#,##0.00"));
+        style.setAlignment(HorizontalAlignment.RIGHT);
+        return style;
+    }
+    
+    /**
+     * Style percent avec fond (pour les lignes de données)
+     */
+    private CellStyle createPercentStyleWithBackground(Workbook workbook, CellStyle baseStyle) {
+        CellStyle style = workbook.createCellStyle();
+        style.cloneStyleFrom(baseStyle);
+        DataFormat format = workbook.createDataFormat();
+        style.setDataFormat(format.getFormat("0.00%"));
+        style.setAlignment(HorizontalAlignment.RIGHT);
+        return style;
+    }
+    
+    /**
+     * Style currency pour les totaux (jaune avec format monétaire)
+     */
+    private CellStyle createTotalCurrencyStyle(Workbook workbook) {
+        CellStyle style = workbook.createCellStyle();
+        Font font = workbook.createFont();
+        font.setBold(true);
+        style.setFont(font);
+        style.setFillForegroundColor(IndexedColors.YELLOW.getIndex());
+        style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        style.setBorderBottom(BorderStyle.THIN);
+        style.setBorderTop(BorderStyle.THIN);
+        style.setBorderLeft(BorderStyle.THIN);
+        style.setBorderRight(BorderStyle.THIN);
+        style.setAlignment(HorizontalAlignment.RIGHT);
+        style.setVerticalAlignment(VerticalAlignment.CENTER);
+        DataFormat format = workbook.createDataFormat();
+        style.setDataFormat(format.getFormat("#,##0.00"));
+        return style;
     }
 }
 

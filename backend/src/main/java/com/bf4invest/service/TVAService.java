@@ -409,5 +409,23 @@ public class TVAService {
         
         return declarationRepository.save(declaration);
     }
+    
+    /**
+     * Récupère toutes les factures d'achat pour un mois/année donné
+     */
+    public List<FactureAchat> getFacturesAchatByMonth(Integer mois, Integer annee) {
+        LocalDate dateDebut = LocalDate.of(annee, mois, 1);
+        LocalDate dateFin = dateDebut.withDayOfMonth(dateDebut.lengthOfMonth());
+        return factureAchatRepository.findByDateFactureBetween(dateDebut, dateFin);
+    }
+    
+    /**
+     * Récupère toutes les factures de vente pour un mois/année donné
+     */
+    public List<FactureVente> getFacturesVenteByMonth(Integer mois, Integer annee) {
+        LocalDate dateDebut = LocalDate.of(annee, mois, 1);
+        LocalDate dateFin = dateDebut.withDayOfMonth(dateDebut.lengthOfMonth());
+        return factureVenteRepository.findByDateFactureBetween(dateDebut, dateFin);
+    }
 }
 

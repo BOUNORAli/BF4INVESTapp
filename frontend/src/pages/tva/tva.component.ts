@@ -105,6 +105,9 @@ import type { DeclarationTVA } from '../../models/types';
                         <button (click)="viewDetails(decl)" class="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition">
                           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
                         </button>
+                        <button (click)="exportEtatDetaille(decl.mois!, decl.annee!)" class="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-full transition" title="Exporter état détaillé">
+                          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                        </button>
                         @if (decl.statut === 'BROUILLON') {
                           <button (click)="valider(decl.id!)" class="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-full transition">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
@@ -198,7 +201,13 @@ import type { DeclarationTVA } from '../../models/types';
                 </div>
               }
             </div>
-            <button (click)="closeDetails()" class="mt-6 w-full px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition font-medium">Fermer</button>
+            <div class="flex gap-3 mt-6">
+              <button (click)="exportEtatDetaille(decl.mois!, decl.annee!)" class="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium flex items-center justify-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                Exporter État Détaillé
+              </button>
+              <button (click)="closeDetails()" class="flex-1 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition font-medium">Fermer</button>
+            </div>
           </div>
         </div>
       }
@@ -340,6 +349,24 @@ export class TVAComponent implements OnInit {
       error: (err) => {
         this.regenerating.set(false);
         this.store.showToast('Erreur lors de la régénération des écritures', 'error');
+      }
+    });
+  }
+
+  exportEtatDetaille(mois: number, annee: number) {
+    this.tvaService.exportEtatTVADetaille(mois, annee).subscribe({
+      next: (blob) => {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const moisAbrev = ['janv', 'fevr', 'mars', 'avr', 'mai', 'juin', 'juil', 'aout', 'sept', 'oct', 'nov', 'dec'][mois - 1];
+        a.download = `etat_tva_${moisAbrev}_${annee}.xlsx`;
+        a.click();
+        window.URL.revokeObjectURL(url);
+        this.store.showToast('État TVA détaillé exporté avec succès', 'success');
+      },
+      error: (err) => {
+        this.store.showToast('Erreur lors de l\'export de l\'état TVA détaillé', 'error');
       }
     });
   }

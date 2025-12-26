@@ -120,5 +120,35 @@ public class TVAController {
             return ResponseEntity.internalServerError().build();
         }
     }
+
+    @GetMapping("/export/etat-detaille")
+    public ResponseEntity<byte[]> exportEtatTVADetaille(
+            @RequestParam Integer mois,
+            @RequestParam Integer annee
+    ) {
+        try {
+            byte[] excel = excelExportService.exportEtatTVADetaille(mois, annee);
+            
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
+            String moisAbrev = getMoisAbreviation(mois);
+            String filename = String.format("etat_tva_%s_%d.xlsx", moisAbrev, annee);
+            headers.setContentDispositionFormData("attachment", filename);
+            
+            return ResponseEntity.ok().headers(headers).body(excel);
+        } catch (Exception e) {
+            log.error("Erreur lors de l'export de l'état TVA détaillé pour {}/{}", mois, annee, e);
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+    
+    private String getMoisAbreviation(Integer mois) {
+        String[] moisAbrev = {"janv", "fevr", "mars", "avr", "mai", "juin",
+                "juil", "aout", "sept", "oct", "nov", "dec"};
+        if (mois >= 1 && mois <= 12) {
+            return moisAbrev[mois - 1];
+        }
+        return "janv";
+    }
 }
 

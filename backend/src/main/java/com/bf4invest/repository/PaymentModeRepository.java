@@ -12,3 +12,4 @@ public interface PaymentModeRepository extends MongoRepository<PaymentMode, Stri
     List<PaymentMode> findAllByOrderByNameAsc();
 }
 
+

@@ -42,3 +42,4 @@ public class HistoriqueSolde {
     private String description; // Description optionnelle de la transaction
 }
 
+
