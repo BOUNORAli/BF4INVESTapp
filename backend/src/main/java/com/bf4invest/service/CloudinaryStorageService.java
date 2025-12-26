@@ -55,41 +55,64 @@ public class CloudinaryStorageService {
     }
 
     public SupabaseFileResult upload(MultipartFile file, String kind) throws IOException {
+        log.info("🔄 [CLOUDINARY] upload() appelé - Nom: {}, Taille: {} bytes, Kind: {}", 
+                file.getOriginalFilename(), file.getSize(), kind);
+        
         if (file == null || file.isEmpty()) {
+            log.error("❌ [CLOUDINARY] Fichier null ou vide");
             throw new IllegalArgumentException("Le fichier ne peut pas être vide");
         }
+        
         String contentType = StringUtils.defaultIfBlank(file.getContentType(), MediaType.APPLICATION_OCTET_STREAM_VALUE);
-        if (!(contentType.startsWith("image/") || MediaType.APPLICATION_PDF_VALUE.equals(contentType))) {
+        log.info("🔍 [CLOUDINARY] ContentType détecté: {}", contentType);
+        
+        boolean isImage = contentType.startsWith("image/");
+        boolean isPdf = MediaType.APPLICATION_PDF_VALUE.equals(contentType);
+        log.info("🔍 [CLOUDINARY] Validation type - isImage: {}, isPdf: {}", isImage, isPdf);
+        
+        if (!isImage && !isPdf) {
+            log.error("❌ [CLOUDINARY] Type non autorisé: {}", contentType);
             throw new IllegalArgumentException("Formats acceptés: images ou PDF");
         }
+        
         if (file.getSize() > 10 * 1024 * 1024) {
+            log.error("❌ [CLOUDINARY] Fichier trop volumineux: {} bytes", file.getSize());
             throw new IllegalArgumentException("Taille maximale 10MB dépassée");
         }
 
         try {
             Cloudinary client = buildClient();
-            log.info("🔧 Configuration Cloudinary - Cloud: {}, Folder: {}", cloudName, resolveFolder(kind));
+            String folder = resolveFolder(kind);
+            log.info("🔧 [CLOUDINARY] Configuration - Cloud: {}, Folder: {}", cloudName, folder);
 
             // Déterminer le type de ressource selon le type de fichier
             String resourceType = "auto";
-            if (MediaType.APPLICATION_PDF_VALUE.equals(contentType)) {
+            if (isPdf) {
                 resourceType = "raw"; // PDFs doivent être en "raw"
+                log.info("📄 [CLOUDINARY] Fichier PDF détecté, resourceType = raw");
+            } else if (isImage) {
+                resourceType = "image"; // Images sont en "image"
+                log.info("🖼️ [CLOUDINARY] Fichier image détecté, resourceType = image");
             }
             
             // Générer un UUID pour le public_id
             String uuid = UUID.randomUUID().toString();
-            String folder = resolveFolder(kind);
+            String publicId = folder + "/" + uuid;
             
             Map<String, Object> params = ObjectUtils.asMap(
                     "folder", folder,
-                    "public_id", folder + "/" + uuid, // Inclure le dossier dans le public_id
+                    "public_id", publicId, // Inclure le dossier dans le public_id
                     "resource_type", resourceType,
                     "overwrite", true
             );
 
-            log.info("📤 Upload vers Cloudinary - Taille: {} bytes, ContentType: {}, ResourceType: {}", file.getSize(), contentType, resourceType);
+            log.info("📤 [CLOUDINARY] Upload vers Cloudinary - PublicId: {}, Taille: {} bytes, ContentType: {}, ResourceType: {}", 
+                    publicId, file.getSize(), contentType, resourceType);
+            log.info("📤 [CLOUDINARY] Paramètres upload: {}", params);
+            
             Map uploadResult = client.uploader().upload(file.getBytes(), params);
-            log.info("✅ Upload Cloudinary réussi - Result: {}", uploadResult);
+            log.info("✅ [CLOUDINARY] Upload Cloudinary réussi - PublicId retourné: {}, SecureUrl: {}", 
+                    uploadResult.get("public_id"), uploadResult.get("secure_url"));
 
             // Le public_id retourné par Cloudinary inclut déjà le dossier
             String publicId = (String) uploadResult.get("public_id");
@@ -119,10 +142,12 @@ public class CloudinaryStorageService {
                     .signedUrl(secureUrl)
                     .build();
         } catch (IllegalStateException e) {
-            log.error("❌ Erreur configuration Cloudinary: {}", e.getMessage());
+            log.error("❌ [CLOUDINARY] Erreur configuration Cloudinary: {}", e.getMessage(), e);
             throw e;
         } catch (Exception e) {
-            log.error("❌ Erreur upload Cloudinary", e);
+            log.error("❌ [CLOUDINARY] Exception lors de l'upload vers Cloudinary", e);
+            log.error("❌ [CLOUDINARY] Détails exception - Type: {}, Message: {}, Cause: {}", 
+                    e.getClass().getName(), e.getMessage(), e.getCause());
             throw new IOException("Erreur lors de l'upload vers Cloudinary: " + e.getMessage(), e);
         }
     }

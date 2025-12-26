@@ -36,17 +36,31 @@ public class FactureAchatFileController {
             @RequestParam("file") MultipartFile file,
             @RequestParam(value = "factureId", required = false) String factureId
     ) {
+        log.info("📥 [BACKEND] Upload reçu - Nom: {}, Taille: {} bytes, ContentType: {}, FactureId: {}", 
+                file.getOriginalFilename(), file.getSize(), file.getContentType(), factureId);
+        
         try {
             if (file.isEmpty()) {
+                log.warn("⚠️ [BACKEND] Fichier vide rejeté");
                 return ResponseEntity.badRequest().body(Map.of("error", "Fichier vide"));
             }
-            if (!isAllowedContentType(file.getContentType())) {
+            
+            String contentType = file.getContentType();
+            log.info("🔍 [BACKEND] Validation contentType: {}", contentType);
+            boolean isAllowed = isAllowedContentType(contentType);
+            log.info("🔍 [BACKEND] ContentType autorisé: {}", isAllowed);
+            
+            if (!isAllowed) {
+                log.warn("⚠️ [BACKEND] ContentType non autorisé rejeté: {}", contentType);
                 return ResponseEntity.badRequest().body(Map.of("error", "Formats acceptés: images ou PDF"));
             }
+            
             if (file.getSize() > 10 * 1024 * 1024) {
+                log.warn("⚠️ [BACKEND] Fichier trop volumineux: {} bytes", file.getSize());
                 return ResponseEntity.badRequest().body(Map.of("error", "Taille max 10MB dépassée"));
             }
 
+            log.info("✅ [BACKEND] Validation OK, appel CloudinaryStorageService.upload");
             SupabaseFileResult result = cloudinaryStorageService.upload(file, "facture-achat");
             log.info("✅ Upload réussi - FileId: {}, Filename: {}, ContentType: {}, URL: {}", 
                     result.getFileId(), result.getFilename(), result.getContentType(), result.getSignedUrl());
@@ -76,10 +90,17 @@ public class FactureAchatFileController {
                     "signedUrl", result.getSignedUrl()
             ));
         } catch (IllegalStateException e) {
+            log.error("❌ [BACKEND] IllegalStateException lors de l'upload: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", e.getMessage()));
+        } catch (IllegalArgumentException e) {
+            log.error("❌ [BACKEND] IllegalArgumentException lors de l'upload: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", e.getMessage()));
         } catch (IOException e) {
-            log.error("Erreur upload Supabase", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", "Erreur lors de l'upload"));
+            log.error("❌ [BACKEND] IOException lors de l'upload", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", "Erreur lors de l'upload: " + e.getMessage()));
+        } catch (Exception e) {
+            log.error("❌ [BACKEND] Exception inattendue lors de l'upload", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", "Erreur inattendue lors de l'upload: " + e.getMessage()));
         }
     }
 

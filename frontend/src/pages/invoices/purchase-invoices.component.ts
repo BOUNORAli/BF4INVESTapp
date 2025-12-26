@@ -1718,41 +1718,53 @@ export class PurchaseInvoicesComponent implements OnInit {
   }
 
   processFile(file: File) {
+    console.log('📄 [FRONTEND] processFile appelé - Nom:', file.name, 'Type:', file.type, 'Taille:', this.formatFileSize(file.size), 'bytes:', file.size);
+    
     // Réinitialiser les erreurs précédentes
     this.uploadError.set(null);
     
     // Vérifier la taille (10MB max)
     if (file.size > 10 * 1024 * 1024) {
       const errorMsg = `Le fichier est trop volumineux (${this.formatFileSize(file.size)}). Taille max: 10MB`;
+      console.error('❌ [FRONTEND] Fichier trop volumineux:', errorMsg);
       this.uploadError.set(errorMsg);
       this.store.showToast(errorMsg, 'error');
       return;
     }
     
     // Vérifier le type
-    if (!file.type.startsWith('image/') && file.type !== 'application/pdf') {
+    const isImage = file.type.startsWith('image/');
+    const isPdf = file.type === 'application/pdf';
+    console.log('🔍 [FRONTEND] Validation type - isImage:', isImage, 'isPdf:', isPdf, 'file.type:', file.type);
+    
+    if (!isImage && !isPdf) {
       const errorMsg = 'Seuls les fichiers images (JPG, PNG) et PDF sont acceptés';
+      console.error('❌ [FRONTEND] Type de fichier non accepté:', file.type);
       this.uploadError.set(errorMsg);
       this.store.showToast(errorMsg, 'error');
       return;
     }
     
+    console.log('✅ [FRONTEND] Fichier validé, ajout à selectedFile');
     this.selectedFile.set(file);
     this.uploadedFileId.set(null);
     this.uploadedFileName.set(null);
     this.uploadedFileUrl.set(null);
     
     // Créer une prévisualisation pour les images
-    if (file.type.startsWith('image/')) {
+    if (isImage) {
+      console.log('🖼️ [FRONTEND] Création prévisualisation image');
       const reader = new FileReader();
       reader.onload = (e) => {
         this.filePreviewUrl.set(e.target?.result as string);
       };
       reader.onerror = () => {
+        console.error('❌ [FRONTEND] Erreur lecture fichier image');
         this.uploadError.set('Erreur lors de la lecture du fichier');
       };
       reader.readAsDataURL(file);
     } else {
+      console.log('📄 [FRONTEND] Fichier PDF, pas de prévisualisation');
       this.filePreviewUrl.set(null);
     }
   }
@@ -1936,12 +1948,16 @@ export class PurchaseInvoicesComponent implements OnInit {
   uploadFile() {
     const file = this.selectedFile();
     if (!file) {
+      console.error('❌ [FRONTEND] uploadFile: Aucun fichier sélectionné');
       this.store.showToast('Aucun fichier sélectionné', 'error');
       return;
     }
     
+    console.log('🚀 [FRONTEND] uploadFile démarré - Nom:', file.name, 'Type:', file.type, 'Taille:', this.formatFileSize(file.size), 'FactureId:', this.editingId);
+    
     // Vérifier la taille du fichier
     if (file.size > 10 * 1024 * 1024) {
+      console.error('❌ [FRONTEND] Fichier trop volumineux');
       this.store.showToast('Le fichier est trop volumineux (max 10MB)', 'error');
       return;
     }
@@ -1949,7 +1965,7 @@ export class PurchaseInvoicesComponent implements OnInit {
     this.uploadingFile.set(true);
     this.uploadProgress.set(0);
     
-    console.log('🔄 Début upload fichier:', file.name, 'Taille:', (file.size / 1024 / 1024).toFixed(2), 'MB');
+    console.log('📤 [FRONTEND] Envoi vers API - URL:', '/factures-achats/files/upload', 'ContentType:', file.type);
     
     // Utiliser subscribe pour gérer la progression
     this.apiService.uploadFactureAchatFile(
@@ -1957,7 +1973,9 @@ export class PurchaseInvoicesComponent implements OnInit {
       this.editingId || undefined,
       (progress) => {
         this.uploadProgress.set(progress);
-        console.log('📊 Progression:', progress + '%');
+        if (progress % 25 === 0 || progress === 100) { // Log tous les 25% et à 100%
+          console.log('📊 [FRONTEND] Progression upload:', progress + '%');
+        }
       }
     ).subscribe({
       next: async (result: any) => {
@@ -2010,11 +2028,19 @@ export class PurchaseInvoicesComponent implements OnInit {
       },
       error: (error: any) => {
         this.uploadProgress.set(0);
-        console.error('❌ Erreur upload fichier:', error);
+        console.error('❌ [FRONTEND] Erreur upload fichier complète:', error);
+        console.error('❌ [FRONTEND] Détails erreur:', {
+          status: error?.status,
+          statusText: error?.statusText,
+          error: error?.error,
+          message: error?.message,
+          url: error?.url
+        });
         
         let errorMessage = 'Erreur lors de l\'upload du fichier';
         if (error?.error?.error) {
           errorMessage = error.error.error;
+          console.error('❌ [FRONTEND] Message erreur backend:', errorMessage);
         } else if (error?.error?.message) {
           errorMessage = error.error.message;
         } else if (error?.message) {

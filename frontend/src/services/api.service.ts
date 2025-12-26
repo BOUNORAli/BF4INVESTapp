@@ -232,6 +232,8 @@ export class ApiService {
     factureId?: string,
     onProgress?: (progress: number) => void
   ): Observable<any> {
+    console.log('🌐 [API] uploadFactureAchatFile - Nom:', file.name, 'Type:', file.type, 'Taille:', file.size, 'FactureId:', factureId);
+    
     const formData = new FormData();
     formData.append('file', file);
     if (factureId) {
@@ -244,7 +246,10 @@ export class ApiService {
       headers = headers.set('Authorization', `Bearer ${token}`);
     }
 
-    return this.http.post(`${this.getApiUrl()}/factures-achats/files/upload`, formData, {
+    const url = `${this.getApiUrl()}/factures-achats/files/upload`;
+    console.log('🌐 [API] Envoi POST vers:', url);
+
+    return this.http.post(url, formData, {
       headers,
       observe: 'events',
       reportProgress: true
