@@ -48,9 +48,12 @@ public class ProductPerformanceService {
                             String produitRef = ligneVente.getProduitRef();
                             if (produitRef != null) {
                                 ProductStats stats = productStatsMap.computeIfAbsent(produitRef, k -> new ProductStats());
-                                stats.volume += ligneVente.getQuantiteVendue() != null ? ligneVente.getQuantiteVendue() : 0.0;
-                                stats.marge += ligneVente.getMargeTotale() != null ? ligneVente.getMargeTotale() : 0.0;
-                                stats.margeUnitaire = ligneVente.getMargeUnitaire() != null ? ligneVente.getMargeUnitaire() : 0.0;
+                                double quantite = ligneVente.getQuantiteVendue() != null ? ligneVente.getQuantiteVendue() : 0.0;
+                                double margeUnitaire = ligneVente.getMargeUnitaire() != null ? ligneVente.getMargeUnitaire() : 0.0;
+                                
+                                stats.volume += quantite;
+                                stats.marge += margeUnitaire * quantite; // Marge totale = marge unitaire * quantité
+                                stats.margeUnitaire = margeUnitaire;
                                 stats.margePourcentage = ligneVente.getMargePourcentage() != null ? ligneVente.getMargePourcentage() : 0.0;
                                 stats.designation = ligneVente.getDesignation();
                             }
