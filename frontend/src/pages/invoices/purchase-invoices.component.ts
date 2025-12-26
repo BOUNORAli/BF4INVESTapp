@@ -513,7 +513,7 @@ import type { EcritureComptable } from '../../models/types';
                   }
                   
                   <!-- File Preview -->
-                  @if (filePreviewUrl() && selectedFile()) {
+                  @if (selectedFile()) {
                     <div class="space-y-4">
                       <div class="flex items-center justify-between">
                         <div class="flex items-center gap-3 flex-1 min-w-0">
@@ -540,9 +540,16 @@ import type { EcritureComptable } from '../../models/types';
                         </button>
                       </div>
                       
-                      @if (selectedFile()?.type.startsWith('image/')) {
+                      @if (selectedFile()?.type.startsWith('image/') && filePreviewUrl()) {
                         <div class="rounded-lg overflow-hidden border border-slate-200 bg-slate-50">
                           <img [src]="filePreviewUrl()!" alt="Preview" class="w-full h-48 object-contain">
+                        </div>
+                      } @else if (selectedFile()?.type === 'application/pdf') {
+                        <div class="rounded-lg border border-slate-200 bg-slate-50 p-4 text-center">
+                          <svg class="w-12 h-12 text-blue-600 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+                          </svg>
+                          <p class="text-sm text-slate-600">Fichier PDF prêt à être uploadé</p>
                         </div>
                       }
                       
