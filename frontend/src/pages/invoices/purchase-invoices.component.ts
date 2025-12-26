@@ -1872,8 +1872,16 @@ export class PurchaseInvoicesComponent implements OnInit {
     const facture = inv as any;
     if (facture.fichierFactureId) {
       const contentType = facture.fichierFactureType || 'application/pdf';
-      const type = contentType === 'application/pdf' ? 'application/pdf' : 'image';
-      await this.loadFileForViewing(
+      
+      // Pour les PDFs, télécharger directement au lieu d'essayer de les afficher
+      if (contentType === 'application/pdf') {
+        await this.downloadUploadedFileForInvoice(inv);
+        return;
+      }
+      
+      // Pour les images, les afficher dans le modal
+      const type = 'image';
+      this.loadFileForViewing(
         facture.fichierFactureId,
         facture.fichierFactureNom || 'Fichier',
         type,
@@ -1883,61 +1891,44 @@ export class PurchaseInvoicesComponent implements OnInit {
   }
   
   loadFileForViewing(fileId: string, filename: string, type: string, contentType?: string) {
-    // Utiliser runOutsideAngular pour l'appel HTTP et run pour les modifications de signaux
+    // Cette méthode est maintenant uniquement utilisée pour les images
+    // Les PDFs sont téléchargés directement via downloadUploadedFileForInvoice
     if (!this.isGridFsId(fileId)) {
-      // Cloudinary : obtenir une URL signée fraîche avec le contentType correct
+      // Cloudinary : obtenir une URL signée fraîche pour l'image
       this.ngZone.runOutsideAngular(() => {
         this.apiService.getFactureAchatFileUrl(fileId, contentType)
           .pipe(take(1))
           .subscribe({
             next: (result) => {
-              let url = result.url;
-              console.log('🔗 [FRONTEND] URL Cloudinary obtenue:', url);
+              const url = result.url;
+              console.log('🔗 [FRONTEND] URL Cloudinary obtenue pour image:', url);
               
-              // Ajouter l'extension .pdf à l'URL si c'est un PDF
-              if (contentType === 'application/pdf' || type === 'application/pdf') {
-                // Vérifier si l'URL n'a pas déjà une extension
-                if (!url.match(/\.(pdf|jpg|jpeg|png|gif)$/i)) {
-                  url = url + '.pdf';
-                  console.log('📄 [FRONTEND] Extension .pdf ajoutée à l\'URL:', url);
-                }
-              }
-              
-              // Pour les images, créer un blob URL pour éviter les problèmes CORS
-              if (type === 'image' || contentType?.startsWith('image/')) {
-                fetch(url)
-                  .then(response => {
-                    if (!response.ok) throw new Error('Failed to fetch image');
-                    return response.blob();
-                  })
-                  .then(blob => {
-                    const blobUrl = window.URL.createObjectURL(blob);
-                    this.ngZone.run(() => {
-                      this.fileViewerBlobUrl.set(blobUrl);
-                      this.viewingFile.set({ fileId, filename, type });
-                    });
-                  })
-                  .catch(fetchError => {
-                    // Si le fetch échoue, utiliser directement l'URL Cloudinary
-                    console.warn('Erreur fetch image, utilisation URL directe:', fetchError);
-                    this.ngZone.run(() => {
-                      this.fileViewerBlobUrl.set(url);
-                      this.viewingFile.set({ fileId, filename, type });
-                    });
+              // Créer un blob URL pour éviter les problèmes CORS
+              fetch(url)
+                .then(response => {
+                  if (!response.ok) throw new Error('Failed to fetch image');
+                  return response.blob();
+                })
+                .then(blob => {
+                  const blobUrl = window.URL.createObjectURL(blob);
+                  this.ngZone.run(() => {
+                    this.fileViewerBlobUrl.set(blobUrl);
+                    this.viewingFile.set({ fileId, filename, type });
                   });
-              } else {
-                // Pour les PDFs, utiliser directement l'URL signée avec extension
-                console.log('📄 [FRONTEND] Configuration PDF viewer avec URL:', url);
-                this.ngZone.run(() => {
-                  this.fileViewerBlobUrl.set(url);
-                  this.viewingFile.set({ fileId, filename, type });
+                })
+                .catch(fetchError => {
+                  // Si le fetch échoue, utiliser directement l'URL Cloudinary
+                  console.warn('Erreur fetch image, utilisation URL directe:', fetchError);
+                  this.ngZone.run(() => {
+                    this.fileViewerBlobUrl.set(url);
+                    this.viewingFile.set({ fileId, filename, type });
+                  });
                 });
-              }
             },
             error: (error) => {
-              console.error('❌ [FRONTEND] Erreur chargement fichier:', error);
+              console.error('❌ [FRONTEND] Erreur chargement image:', error);
               this.ngZone.run(() => {
-                this.store.showToast('Erreur lors du chargement du fichier', 'error');
+                this.store.showToast('Erreur lors du chargement de l\'image', 'error');
               });
             }
           });
@@ -1945,9 +1936,9 @@ export class PurchaseInvoicesComponent implements OnInit {
       return;
     }
 
-    // GridFS : créer un blob URL
+    // GridFS : créer un blob URL pour les images
     this.ngZone.runOutsideAngular(() => {
-      this.downloadFactureBlob(fileId)
+      this.downloadFactureBlob(fileId, contentType)
         .then(blob => {
           const url = window.URL.createObjectURL(blob);
           this.ngZone.run(() => {
@@ -1956,9 +1947,9 @@ export class PurchaseInvoicesComponent implements OnInit {
           });
         })
         .catch(error => {
-          console.error('❌ [FRONTEND] Erreur chargement fichier:', error);
+          console.error('❌ [FRONTEND] Erreur chargement image:', error);
           this.ngZone.run(() => {
-            this.store.showToast('Erreur lors du chargement du fichier', 'error');
+            this.store.showToast('Erreur lors du chargement de l\'image', 'error');
           });
         });
     });
