@@ -1,4 +1,4 @@
-import { Component, inject, signal, computed, OnInit, HostListener, NgZone } from '@angular/core';
+import { Component, inject, signal, computed, OnInit, HostListener, NgZone, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { StoreService, Invoice, BC, PrevisionPaiement } from '../../services/store.service';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, FormsModule } from '@angular/forms';
@@ -1093,6 +1093,7 @@ export class PurchaseInvoicesComponent implements OnInit {
   comptabiliteService = inject(ComptabiliteService);
   apiService = inject(ApiService);
   ngZone = inject(NgZone);
+  cdr = inject(ChangeDetectorRef);
 
   isFormOpen = signal(false);
   isEditMode = signal(false);
@@ -1882,58 +1883,69 @@ export class PurchaseInvoicesComponent implements OnInit {
   }
   
   async loadFileForViewing(fileId: string, filename: string, type: string, contentType?: string) {
-    // Exécuter les opérations asynchrones en dehors de la zone Angular
-    return this.ngZone.runOutsideAngular(async () => {
-      try {
-        if (!this.isGridFsId(fileId)) {
-          // Cloudinary : obtenir une URL signée fraîche avec le contentType correct
-          const { url } = await firstValueFrom(this.apiService.getFactureAchatFileUrl(fileId, contentType));
-          console.log('🔗 [FRONTEND] URL Cloudinary obtenue:', url);
-          
-          // Pour les images, créer un blob URL pour éviter les problèmes CORS
-          if (type === 'image' || contentType?.startsWith('image/')) {
-            try {
-              const response = await fetch(url);
+    try {
+      let url: string;
+      
+      if (!this.isGridFsId(fileId)) {
+        // Cloudinary : obtenir une URL signée fraîche avec le contentType correct
+        // Exécuter firstValueFrom dans la zone Angular pour éviter NG0904
+        url = await this.ngZone.run(async () => {
+          const result = await firstValueFrom(this.apiService.getFactureAchatFileUrl(fileId, contentType));
+          return result.url;
+        });
+        console.log('🔗 [FRONTEND] URL Cloudinary obtenue:', url);
+        
+        // Pour les images, créer un blob URL pour éviter les problèmes CORS
+        if (type === 'image' || contentType?.startsWith('image/')) {
+          fetch(url)
+            .then(response => {
               if (!response.ok) throw new Error('Failed to fetch image');
-              const blob = await response.blob();
+              return response.blob();
+            })
+            .then(blob => {
               const blobUrl = window.URL.createObjectURL(blob);
               this.ngZone.run(() => {
                 this.fileViewerBlobUrl.set(blobUrl);
                 this.viewingFile.set({ fileId, filename, type });
+                this.cdr.markForCheck();
               });
-            } catch (fetchError) {
+            })
+            .catch(fetchError => {
               // Si le fetch échoue, utiliser directement l'URL Cloudinary
               console.warn('Erreur fetch image, utilisation URL directe:', fetchError);
               this.ngZone.run(() => {
                 this.fileViewerBlobUrl.set(url);
                 this.viewingFile.set({ fileId, filename, type });
+                this.cdr.markForCheck();
               });
-            }
-          } else {
-            // Pour les PDFs, utiliser directement l'URL signée
-            console.log('📄 [FRONTEND] Configuration PDF viewer avec URL:', url);
-            this.ngZone.run(() => {
-              this.fileViewerBlobUrl.set(url);
-              this.viewingFile.set({ fileId, filename, type });
             });
-          }
-          return;
+        } else {
+          // Pour les PDFs, utiliser directement l'URL signée
+          console.log('📄 [FRONTEND] Configuration PDF viewer avec URL:', url);
+          this.ngZone.run(() => {
+            this.fileViewerBlobUrl.set(url);
+            this.viewingFile.set({ fileId, filename, type });
+            this.cdr.markForCheck();
+          });
         }
-
-        // GridFS : créer un blob URL
-        const blob = await this.downloadFactureBlob(fileId);
-        const url = window.URL.createObjectURL(blob);
-        this.ngZone.run(() => {
-          this.fileViewerBlobUrl.set(url);
-          this.viewingFile.set({ fileId, filename, type });
-        });
-      } catch (error) {
-        console.error('❌ [FRONTEND] Erreur chargement fichier:', error);
-        this.ngZone.run(() => {
-          this.store.showToast('Erreur lors du chargement du fichier', 'error');
-        });
+        return;
       }
-    });
+
+      // GridFS : créer un blob URL
+      const blob = await this.downloadFactureBlob(fileId);
+      url = window.URL.createObjectURL(blob);
+      this.ngZone.run(() => {
+        this.fileViewerBlobUrl.set(url);
+        this.viewingFile.set({ fileId, filename, type });
+        this.cdr.markForCheck();
+      });
+    } catch (error) {
+      console.error('❌ [FRONTEND] Erreur chargement fichier:', error);
+      this.ngZone.run(() => {
+        this.store.showToast('Erreur lors du chargement du fichier', 'error');
+        this.cdr.markForCheck();
+      });
+    }
   }
   
   closeFileViewer() {
