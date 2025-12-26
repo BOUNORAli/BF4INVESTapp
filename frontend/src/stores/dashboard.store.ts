@@ -124,13 +124,26 @@ export class DashboardStore {
    */
   async loadSoldeGlobal(): Promise<void> {
     try {
-      const solde = await this.api.get<SoldeGlobal>('/solde/global').toPromise();
+      // Utiliser l'endpoint /complet qui retourne l'objet SoldeGlobal complet
+      const solde = await this.api.get<SoldeGlobal>('/solde/global/complet').toPromise();
       if (solde) {
         this.soldeGlobal.set(solde);
+      } else {
+        // Si aucun solde n'existe, créer un objet par défaut
+        this.soldeGlobal.set({
+          soldeInitial: 0,
+          soldeActuel: 0,
+          dateDebut: new Date().toISOString().split('T')[0]
+        });
       }
     } catch (error) {
       console.error('Error loading solde global:', error);
-      throw error;
+      // En cas d'erreur, initialiser avec 0
+      this.soldeGlobal.set({
+        soldeInitial: 0,
+        soldeActuel: 0,
+        dateDebut: new Date().toISOString().split('T')[0]
+      });
     }
   }
 

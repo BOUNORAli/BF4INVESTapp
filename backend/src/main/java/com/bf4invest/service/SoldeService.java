@@ -251,9 +251,48 @@ public class SoldeService {
     
     /**
      * Récupère le solde global complet (avec solde initial)
+     * Si aucun solde n'existe mais qu'il y a un historique, recalcule depuis l'historique
      */
     public Optional<SoldeGlobal> getSoldeGlobal() {
-        return soldeGlobalRepository.findAll().stream().findFirst();
+        Optional<SoldeGlobal> soldeOpt = soldeGlobalRepository.findAll().stream().findFirst();
+        
+        // Si aucun solde n'existe mais qu'il y a un historique, recalculer depuis l'historique
+        if (soldeOpt.isEmpty()) {
+            List<HistoriqueSolde> historique = historiqueSoldeRepository.findAllByOrderByDateDesc();
+            if (!historique.isEmpty()) {
+                // Prendre le solde global après de la dernière transaction
+                HistoriqueSolde dernier = historique.get(0);
+                if (dernier.getSoldeGlobalApres() != null) {
+                    // Créer un solde global à partir de l'historique
+                    SoldeGlobal soldeGlobal = SoldeGlobal.builder()
+                            .soldeInitial(dernier.getSoldeGlobalApres())
+                            .soldeActuel(dernier.getSoldeGlobalApres())
+                            .dateDebut(dernier.getDate() != null ? dernier.getDate().toLocalDate() : LocalDate.now())
+                            .createdAt(LocalDateTime.now())
+                            .updatedAt(LocalDateTime.now())
+                            .build();
+                    soldeGlobal = soldeGlobalRepository.save(soldeGlobal);
+                    return Optional.of(soldeGlobal);
+                }
+            }
+        } else {
+            // Vérifier si le solde actuel est cohérent avec l'historique
+            SoldeGlobal solde = soldeOpt.get();
+            List<HistoriqueSolde> historique = historiqueSoldeRepository.findAllByOrderByDateDesc();
+            if (!historique.isEmpty()) {
+                HistoriqueSolde dernier = historique.get(0);
+                if (dernier.getSoldeGlobalApres() != null && 
+                    !dernier.getSoldeGlobalApres().equals(solde.getSoldeActuel())) {
+                    // Le solde n'est pas à jour, le mettre à jour
+                    solde.setSoldeActuel(dernier.getSoldeGlobalApres());
+                    solde.setUpdatedAt(LocalDateTime.now());
+                    solde = soldeGlobalRepository.save(solde);
+                    return Optional.of(solde);
+                }
+            }
+        }
+        
+        return soldeOpt;
     }
     
     /**
