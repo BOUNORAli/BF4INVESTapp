@@ -696,6 +696,10 @@ export class StoreService {
   }
 
   // --- ACTIONS: BC ---
+  async loadBCs(): Promise<void> {
+    await this.bcStore.loadBCs();
+  }
+
   async addBC(bc: BC): Promise<void> {
     try {
       const created = await this.bcService.addBC(bc);
