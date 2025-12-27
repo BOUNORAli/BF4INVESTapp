@@ -463,7 +463,7 @@ export class StoreService {
     await this.partnerStore.loadSuppliers();
   }
 
-  private async loadProducts(): Promise<void> {
+  async loadProducts(): Promise<void> {
     await this.productStore.loadProducts();
   }
 
