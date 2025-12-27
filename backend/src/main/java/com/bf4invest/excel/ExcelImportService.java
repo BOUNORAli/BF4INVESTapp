@@ -41,6 +41,7 @@ public class ExcelImportService {
     private final ProductRepository productRepository;
     private final OperationComptableRepository operationComptableRepository;
     private final com.bf4invest.service.PaiementService paiementService;
+    private final com.bf4invest.service.ChargeService chargeService;
     
     private static final DateTimeFormatter DATE_FORMATTER_DDMMYYYY = DateTimeFormatter.ofPattern("dd/MM/yyyy");
     private static final DateTimeFormatter DATE_FORMATTER_YYYYMMDD = DateTimeFormatter.ofPattern("yyyy-MM-dd");
@@ -1618,403 +1619,243 @@ public class ExcelImportService {
      * Traite les paiements depuis les opérations comptables importées
      * et met à jour les statuts des factures
      */
-    /**
-     * Trouve une facture achat en utilisant plusieurs critères de matching
-     */
-    private Optional<FactureAchat> findFactureAchatByMultipleCriteria(
-            String numeroFacture, String nomPartenaire, LocalDate dateOperation, Double montantPaiement) {
-        
-        Optional<FactureAchat> facture;
-        List<FactureAchat> allFactures = factureAchatRepository.findAll();
-        
-        // 1. Chercher par numéro exact (si numéro fourni)
-        if (numeroFacture != null && !numeroFacture.trim().isEmpty()) {
-            facture = factureAchatRepository.findByNumeroFactureAchat(numeroFacture);
-            if (facture.isPresent()) {
-                log.debug("Found facture achat by exact numero: {}", numeroFacture);
-                return facture;
-            }
-            
-            // 2. Chercher par correspondance partielle dans le numéro
-            facture = allFactures.stream()
-                    .filter(f -> f.getNumeroFactureAchat() != null && 
-                            (f.getNumeroFactureAchat().contains(numeroFacture) || 
-                             numeroFacture.contains(f.getNumeroFactureAchat())))
-                    .findFirst();
-            if (facture.isPresent()) {
-                log.debug("Found facture achat by partial numero match: {} -> {}", numeroFacture, facture.get().getNumeroFactureAchat());
-                return facture;
-            }
-        }
-        
-        // 3. Chercher par partenaire + date + montant (avec tolérance)
-        if (nomPartenaire != null && !nomPartenaire.trim().isEmpty() && dateOperation != null && montantPaiement != null) {
-            // Trouver le fournisseur par nom (insensible à la casse, recherche partielle)
-            String nomPartenaireNormalized = nomPartenaire.trim().toUpperCase();
-            Optional<Supplier> supplierOpt = supplierRepository.findAll().stream()
-                    .filter(s -> s.getNom() != null && s.getNom().toUpperCase().contains(nomPartenaireNormalized) || 
-                            nomPartenaireNormalized.contains(s.getNom().toUpperCase()))
-                    .findFirst();
-            
-            if (supplierOpt.isPresent()) {
-                String supplierId = supplierOpt.get().getId();
-                List<FactureAchat> facturesBySupplier = factureAchatRepository.findByFournisseurId(supplierId);
-                log.debug("Found supplier {} (id: {}) with {} invoices", supplierOpt.get().getNom(), supplierId, facturesBySupplier.size());
-                
-                // Chercher par date (tolérance ±60 jours) et montant (tolérance 5%)
-                facture = facturesBySupplier.stream()
-                        .filter(f -> {
-                            boolean dateMatch = f.getDateFacture() != null && 
-                                    Math.abs(java.time.temporal.ChronoUnit.DAYS.between(f.getDateFacture(), dateOperation)) <= 60;
-                            boolean montantMatch = f.getTotalTTC() != null && montantPaiement > 0 &&
-                                    Math.abs(f.getTotalTTC() - montantPaiement) / montantPaiement <= 0.05; // 5% tolerance
-                            if (!dateMatch || !montantMatch) {
-                                log.debug("Invoice {} rejected: dateMatch={} (diff={} days), montantMatch={} (diff={}%)", 
-                                        f.getNumeroFactureAchat(), dateMatch,
-                                        f.getDateFacture() != null ? Math.abs(java.time.temporal.ChronoUnit.DAYS.between(f.getDateFacture(), dateOperation)) : -1,
-                                        montantMatch, f.getTotalTTC() != null && montantPaiement > 0 ? 
-                                        Math.abs(f.getTotalTTC() - montantPaiement) / montantPaiement * 100 : -1);
-                            }
-                            return dateMatch && montantMatch;
-                        })
-                        .findFirst();
-                
-                if (facture.isPresent()) {
-                    log.info("Found facture achat by supplier + date + amount: {} -> {} (supplier: {}, date: {}, amount: {})", 
-                            nomPartenaire, facture.get().getNumeroFactureAchat(), supplierOpt.get().getNom(), 
-                            facture.get().getDateFacture(), facture.get().getTotalTTC());
-                    return facture;
-                } else {
-                    log.debug("No matching invoice found for supplier {} with {} invoices", supplierOpt.get().getNom(), facturesBySupplier.size());
-                }
-            } else {
-                log.debug("Supplier not found for name: {}", nomPartenaire);
-            }
-        }
-        
-        // 4. Chercher par date + montant uniquement (si pas de partenaire)
-        if (dateOperation != null && montantPaiement != null) {
-            facture = allFactures.stream()
-                    .filter(f -> {
-                        boolean dateMatch = f.getDateFacture() != null && 
-                                Math.abs(java.time.temporal.ChronoUnit.DAYS.between(f.getDateFacture(), dateOperation)) <= 60;
-                        boolean montantMatch = f.getTotalTTC() != null && montantPaiement > 0 &&
-                                Math.abs(f.getTotalTTC() - montantPaiement) / montantPaiement <= 0.05; // 5% tolerance
-                        return dateMatch && montantMatch;
-                    })
-                    .findFirst();
-            
-            if (facture.isPresent()) {
-                log.info("Found facture achat by date + amount: {} (date: {}, amount: {})", 
-                        facture.get().getNumeroFactureAchat(), facture.get().getDateFacture(), facture.get().getTotalTTC());
-                return facture;
-            }
-        }
-        
-        log.debug("No facture achat found for numero: {}, partenaire: {}, date: {}, montant: {}", 
-                numeroFacture, nomPartenaire, dateOperation, montantPaiement);
-        return Optional.empty();
-    }
     
     /**
-     * Trouve une facture vente en utilisant plusieurs critères de matching
+     * Vérifie si une opération est une charge (bureaux, etc.)
      */
-    private Optional<FactureVente> findFactureVenteByMultipleCriteria(
-            String numeroFacture, String nomPartenaire, LocalDate dateOperation, Double montantPaiement) {
-        
-        Optional<FactureVente> facture;
-        List<FactureVente> allFactures = factureVenteRepository.findAll();
-        
-        // 1. Chercher par numéro exact (si numéro fourni)
-        if (numeroFacture != null && !numeroFacture.trim().isEmpty()) {
-            facture = factureVenteRepository.findByNumeroFactureVente(numeroFacture);
-            if (facture.isPresent()) {
-                log.debug("Found facture vente by exact numero: {}", numeroFacture);
-                return facture;
-            }
-            
-            // 2. Chercher par correspondance partielle dans le numéro
-            facture = allFactures.stream()
-                    .filter(f -> f.getNumeroFactureVente() != null && 
-                            (f.getNumeroFactureVente().contains(numeroFacture) || 
-                             numeroFacture.contains(f.getNumeroFactureVente())))
-                    .findFirst();
-            if (facture.isPresent()) {
-                log.debug("Found facture vente by partial numero match: {} -> {}", numeroFacture, facture.get().getNumeroFactureVente());
-                return facture;
-            }
+    private boolean isChargeOperation(String numeroBc) {
+        if (numeroBc == null || numeroBc.trim().isEmpty()) {
+            return false;
         }
-        
-        // 3. Chercher par partenaire + date + montant (avec tolérance)
-        if (nomPartenaire != null && !nomPartenaire.trim().isEmpty() && dateOperation != null && montantPaiement != null) {
-            // Trouver le client par nom (insensible à la casse, recherche partielle)
-            String nomPartenaireNormalized = nomPartenaire.trim().toUpperCase();
-            Optional<Client> clientOpt = clientRepository.findAll().stream()
-                    .filter(c -> c.getNom() != null && (c.getNom().toUpperCase().contains(nomPartenaireNormalized) || 
-                            nomPartenaireNormalized.contains(c.getNom().toUpperCase())))
-                    .findFirst();
-            
-            if (clientOpt.isPresent()) {
-                String clientId = clientOpt.get().getId();
-                List<FactureVente> facturesByClient = factureVenteRepository.findByClientId(clientId);
-                log.debug("Found client {} (id: {}) with {} invoices", clientOpt.get().getNom(), clientId, facturesByClient.size());
-                
-                // Chercher par date (tolérance ±60 jours) et montant (tolérance 5%)
-                facture = facturesByClient.stream()
-                        .filter(f -> {
-                            boolean dateMatch = f.getDateFacture() != null && 
-                                    Math.abs(java.time.temporal.ChronoUnit.DAYS.between(f.getDateFacture(), dateOperation)) <= 60;
-                            boolean montantMatch = f.getTotalTTC() != null && montantPaiement > 0 &&
-                                    Math.abs(f.getTotalTTC() - montantPaiement) / montantPaiement <= 0.05; // 5% tolerance
-                            if (!dateMatch || !montantMatch) {
-                                log.debug("Invoice {} rejected: dateMatch={} (diff={} days), montantMatch={} (diff={}%)", 
-                                        f.getNumeroFactureVente(), dateMatch,
-                                        f.getDateFacture() != null ? Math.abs(java.time.temporal.ChronoUnit.DAYS.between(f.getDateFacture(), dateOperation)) : -1,
-                                        montantMatch, f.getTotalTTC() != null && montantPaiement > 0 ? 
-                                        Math.abs(f.getTotalTTC() - montantPaiement) / montantPaiement * 100 : -1);
-                            }
-                            return dateMatch && montantMatch;
-                        })
-                        .findFirst();
-                
-                if (facture.isPresent()) {
-                    log.info("Found facture vente by client + date + amount: {} -> {} (client: {}, date: {}, amount: {})", 
-                            nomPartenaire, facture.get().getNumeroFactureVente(), clientOpt.get().getNom(), 
-                            facture.get().getDateFacture(), facture.get().getTotalTTC());
-                    return facture;
-                } else {
-                    log.debug("No matching invoice found for client {} with {} invoices", clientOpt.get().getNom(), facturesByClient.size());
-                }
-            } else {
-                log.debug("Client not found for name: {}", nomPartenaire);
-            }
-        }
-        
-        // 4. Chercher par date + montant uniquement (si pas de partenaire)
-        if (dateOperation != null && montantPaiement != null) {
-            facture = allFactures.stream()
-                    .filter(f -> {
-                        boolean dateMatch = f.getDateFacture() != null && 
-                                Math.abs(java.time.temporal.ChronoUnit.DAYS.between(f.getDateFacture(), dateOperation)) <= 60;
-                        boolean montantMatch = f.getTotalTTC() != null && montantPaiement > 0 &&
-                                Math.abs(f.getTotalTTC() - montantPaiement) / montantPaiement <= 0.05; // 5% tolerance
-                        return dateMatch && montantMatch;
-                    })
-                    .findFirst();
-            
-            if (facture.isPresent()) {
-                log.info("Found facture vente by date + amount: {} (date: {}, amount: {})", 
-                        facture.get().getNumeroFactureVente(), facture.get().getDateFacture(), facture.get().getTotalTTC());
-                return facture;
-            }
-        }
-        
-        log.debug("No facture vente found for numero: {}, partenaire: {}, date: {}, montant: {}", 
-                numeroFacture, nomPartenaire, dateOperation, montantPaiement);
-        return Optional.empty();
+        String numeroBcLower = numeroBc.toLowerCase().trim();
+        return numeroBcLower.contains("bureaux") || 
+               numeroBcLower.contains("bureau") ||
+               numeroBcLower.contains("charge") ||
+               numeroBcLower.contains("frais") ||
+               numeroBcLower.contains("loyer");
     }
     
     private int processPaymentsFromOperations(ImportResult result) {
         final java.util.concurrent.atomic.AtomicInteger paymentsProcessed = new java.util.concurrent.atomic.AtomicInteger(0);
+        final java.util.concurrent.atomic.AtomicInteger chargesProcessed = new java.util.concurrent.atomic.AtomicInteger(0);
         
         // Récupérer toutes les opérations de type PAIEMENT avec un montant de paiement > 0
         List<OperationComptable> allOperations = operationComptableRepository.findAll();
         log.info("Total operations in database: {}", allOperations.size());
         
-        // Debug: compter les opérations par type
-        long factureCount = allOperations.stream().filter(op -> op.getTypeMouvement() == TypeMouvement.FACTURE).count();
-        long paiementCount = allOperations.stream().filter(op -> op.getTypeMouvement() == TypeMouvement.PAIEMENT).count();
-        long nullTypeCount = allOperations.stream().filter(op -> op.getTypeMouvement() == null).count();
-        log.info("Operations by type - FACTURE: {}, PAIEMENT: {}, NULL: {}", factureCount, paiementCount, nullTypeCount);
-        
-        // Filtrer les paiements - accepter même sans numéro de facture si on a une référence
+        // Filtrer les paiements
         List<OperationComptable> paiements = allOperations.stream()
                 .filter(op -> {
                     // Vérifier le type mouvement
                     boolean isPaiement = op.getTypeMouvement() == TypeMouvement.PAIEMENT;
                     if (!isPaiement && op.getTypeMouvement() == null) {
                         // Si type mouvement est null, vérifier si c'est un paiement par le montant
-                        // Un paiement a totalPayementTtc > 0 et totalTtcApresRg == 0 ou null
                         isPaiement = op.getTotalPayementTtc() != null && op.getTotalPayementTtc() > 0
                                 && (op.getTotalTtcApresRg() == null || op.getTotalTtcApresRg() == 0);
                     }
                     return isPaiement;
                 })
                 .filter(op -> op.getTotalPayementTtc() != null && op.getTotalPayementTtc() > 0)
-                .filter(op -> op.getTypeOperation() == TypeOperation.C || op.getTypeOperation() == TypeOperation.F)
                 .collect(java.util.stream.Collectors.toList());
-        
-        // Log détaillé pour debug
-        if (paiements.isEmpty() && allOperations.size() > 0) {
-            log.warn("No payments found. Sample operations: {}", allOperations.stream()
-                    .limit(5)
-                    .map(op -> String.format("typeMouvement=%s, totalPayementTtc=%s, totalTtcApresRg=%s, numeroFacture=%s, typeOperation=%s",
-                            op.getTypeMouvement(), op.getTotalPayementTtc(), op.getTotalTtcApresRg(), 
-                            op.getNumeroFacture(), op.getTypeOperation()))
-                    .collect(java.util.stream.Collectors.joining("; ")));
-        }
         
         log.info("Found {} payment operations to process", paiements.size());
         
         for (OperationComptable operation : paiements) {
             try {
-                String numeroFactureTemp = operation.getNumeroFacture() != null ? operation.getNumeroFacture().trim() : null;
-                String reference = operation.getReference() != null ? operation.getReference().trim() : null;
+                String numeroBc = operation.getNumeroBc() != null ? operation.getNumeroBc().trim() : null;
                 TypeOperation typeOperation = operation.getTypeOperation();
-                Double montantPaiementTemp = operation.getTotalPayementTtc();
+                Double montantPaiement = operation.getTotalPayementTtc();
+                LocalDate dateOperation = operation.getDateOperation();
+                String commentaire = operation.getCommentaire();
                 
-                if (montantPaiementTemp == null || montantPaiementTemp <= 0) {
+                if (montantPaiement == null || montantPaiement <= 0) {
                     continue;
                 }
                 
-                // Si pas de numéro de facture, essayer de l'extraire de la référence ou utiliser la référence comme numéro
-                if (numeroFactureTemp == null || numeroFactureTemp.isEmpty()) {
-                    if (reference != null && !reference.trim().isEmpty()) {
-                        // Essayer d'utiliser la référence comme numéro de facture
-                        numeroFactureTemp = reference.trim();
-                        log.debug("Using reference as invoice number: {}", numeroFactureTemp);
-                    } else {
-                        // Pas de numéro ni référence, mais on peut quand même essayer de matcher par partenaire + date + montant
-                        if (operation.getNomClientFrs() == null || operation.getNomClientFrs().trim().isEmpty() || 
-                            operation.getDateOperation() == null || montantPaiementTemp == null) {
-                            log.debug("Skipping payment operation: no invoice number, no reference, and missing partner/date/amount");
-                            continue;
+                // 1. Vérifier si c'est une charge (bureaux, etc.)
+                if (numeroBc != null && isChargeOperation(numeroBc)) {
+                    try {
+                        // Créer une charge
+                        String libelle = (commentaire != null && !commentaire.trim().isEmpty()) 
+                                ? commentaire.trim() 
+                                : ("Charge " + numeroBc);
+                        
+                        Charge charge = Charge.builder()
+                                .libelle(libelle)
+                                .categorie("AUTRE")
+                                .montant(montantPaiement)
+                                .dateEcheance(dateOperation != null ? dateOperation : LocalDate.now())
+                                .statut("PREVUE")
+                                .imposable(true)
+                                .notes(commentaire)
+                                .build();
+                        
+                        Charge savedCharge = chargeService.create(charge);
+                        
+                        // Marquer comme payée si date de paiement est présente
+                        if (dateOperation != null) {
+                            chargeService.marquerPayee(savedCharge.getId(), dateOperation);
                         }
-                        // Utiliser une valeur vide pour le matching qui utilisera d'autres critères
-                        numeroFactureTemp = "";
-                        log.debug("Trying to match payment by partner + date + amount: {}, {}, {}", 
-                                operation.getNomClientFrs(), operation.getDateOperation(), montantPaiementTemp);
+                        
+                        chargesProcessed.incrementAndGet();
+                        log.info("Created charge: {} - {} MAD (from BC: {})", libelle, montantPaiement, numeroBc);
+                    } catch (Exception e) {
+                        log.error("Error creating charge for BC {}: {}", numeroBc, e.getMessage(), e);
+                        result.getWarnings().add(String.format("Erreur création charge pour BC %s: %s", numeroBc, e.getMessage()));
                     }
+                    continue; // Passer à l'opération suivante
                 }
                 
-                // Créer des copies finales pour les lambdas
-                final String numeroFacture = numeroFactureTemp;
-                final Double montantPaiement = montantPaiementTemp;
-                final String nomPartenaire = operation.getNomClientFrs();
-                final LocalDate dateOperation = operation.getDateOperation();
+                // 2. Si pas de BC, on ne peut pas matcher - passer à la suivante
+                if (numeroBc == null || numeroBc.trim().isEmpty()) {
+                    log.debug("Skipping payment operation: no BC reference (numeroBc)");
+                    continue;
+                }
                 
-                // Déterminer le type de facture selon typeOperation
+                // 3. Traiter les paiements pour factures (C = Client, F = Fournisseur)
                 if (typeOperation == TypeOperation.F) {
-                    // Facture Achat (Fournisseur) - Matching intelligent
-                    Optional<FactureAchat> factureOpt = findFactureAchatByMultipleCriteria(
-                            numeroFacture, nomPartenaire, dateOperation, montantPaiement);
+                    // Facture Achat (Fournisseur) - Chercher par bcReference
+                    List<FactureAchat> factures = factureAchatRepository.findByBcReference(numeroBc);
                     
-                    factureOpt.ifPresentOrElse(
-                                    facture -> {
-                                        try {
-                                            // Vérifier si un paiement existe déjà pour cette facture avec cette référence et date
-                                            boolean paiementExiste = false;
-                                            List<Paiement> paiementsExistants = paiementService.findByFactureAchatId(facture.getId());
-                                            if (operation.getReference() != null && !operation.getReference().trim().isEmpty()) {
-                                                // Vérifier par référence
-                                                paiementExiste = paiementsExistants.stream()
-                                                        .anyMatch(p -> operation.getReference().equals(p.getReference()));
-                                            } else {
-                                                // Si pas de référence, vérifier par date et montant (tolérance de 0.01 MAD)
-                                                paiementExiste = paiementsExistants.stream()
-                                                        .anyMatch(p -> p.getDate() != null && p.getDate().equals(operation.getDateOperation())
-                                                                && p.getMontant() != null && Math.abs(p.getMontant() - montantPaiement) < 0.01);
-                                            }
-                                            
-                                            if (!paiementExiste) {
-                                                // Créer le paiement
-                                                Paiement paiement = Paiement.builder()
-                                                        .factureAchatId(facture.getId())
-                                                        .bcReference(operation.getNumeroBc())
-                                                        .typeMouvement("F")
-                                                        .nature("paiement")
-                                                        .date(operation.getDateOperation())
-                                                        .montant(montantPaiement)
-                                                        .mode(operation.getMoyenPayement())
-                                                        .reference(operation.getReference())
-                                                        .tvaRate(operation.getTauxTva())
-                                                        .totalPaiementTTC(montantPaiement)
-                                                        .htPaye(operation.getHtPaye())
-                                                        .tvaPaye(operation.getTva())
-                                                        .notes(operation.getCommentaire())
-                                                        .build();
-                                                
-                                                // Créer le paiement (qui mettra à jour automatiquement le statut de la facture)
-                                                paiementService.create(paiement);
-                                                paymentsProcessed.incrementAndGet();
-                                                log.info("Created payment for facture achat {}: {} MAD", numeroFacture, montantPaiement);
-                                            } else {
-                                                log.debug("Payment already exists for facture achat {} with reference {}", numeroFacture, operation.getReference());
-                                            }
-                                        } catch (Exception e) {
-                                            log.error("Error creating payment for facture achat {}: {}", numeroFacture, e.getMessage(), e);
-                                            result.getWarnings().add(String.format("Erreur création paiement facture achat %s: %s", numeroFacture, e.getMessage()));
-                                        }
-                                    },
-                                    () -> {
-                                        log.warn("Facture achat not found for numero: {}", numeroFacture);
-                                        result.getWarnings().add(String.format("Facture achat non trouvée: %s", numeroFacture));
-                                    }
-                            );
+                    if (factures.isEmpty()) {
+                        log.warn("No facture achat found for BC: {}", numeroBc);
+                        result.getWarnings().add(String.format("Aucune facture achat trouvée pour BC: %s", numeroBc));
+                        continue;
+                    }
+                    
+                    // Si plusieurs factures, utiliser la première ou matcher par montant
+                    FactureAchat facture = factures.size() == 1 
+                            ? factures.get(0)
+                            : factures.stream()
+                                    .filter(f -> f.getTotalTTC() != null && 
+                                            Math.abs(f.getTotalTTC() - montantPaiement) < 0.01)
+                                    .findFirst()
+                                    .orElse(factures.get(0));
+                    
+                    if (factures.size() > 1) {
+                        log.warn("Multiple factures achat found for BC {}: using first match or by amount", numeroBc);
+                    }
+                    
+                    try {
+                        // Vérifier si un paiement existe déjà
+                        boolean paiementExiste = false;
+                        List<Paiement> paiementsExistants = paiementService.findByFactureAchatId(facture.getId());
+                        if (operation.getReference() != null && !operation.getReference().trim().isEmpty()) {
+                            paiementExiste = paiementsExistants.stream()
+                                    .anyMatch(p -> operation.getReference().equals(p.getReference()));
+                        } else {
+                            paiementExiste = paiementsExistants.stream()
+                                    .anyMatch(p -> p.getDate() != null && p.getDate().equals(dateOperation)
+                                            && p.getMontant() != null && Math.abs(p.getMontant() - montantPaiement) < 0.01);
+                        }
+                        
+                        if (!paiementExiste) {
+                            Paiement paiement = Paiement.builder()
+                                    .factureAchatId(facture.getId())
+                                    .bcReference(numeroBc)
+                                    .typeMouvement("F")
+                                    .nature("paiement")
+                                    .date(dateOperation)
+                                    .montant(montantPaiement)
+                                    .mode(operation.getMoyenPayement())
+                                    .reference(operation.getReference())
+                                    .tvaRate(operation.getTauxTva())
+                                    .totalPaiementTTC(montantPaiement)
+                                    .htPaye(operation.getHtPaye())
+                                    .tvaPaye(operation.getTva())
+                                    .notes(commentaire)
+                                    .build();
+                            
+                            paiementService.create(paiement);
+                            paymentsProcessed.incrementAndGet();
+                            log.info("Created payment for facture achat {} (BC: {}): {} MAD", 
+                                    facture.getNumeroFactureAchat(), numeroBc, montantPaiement);
+                        } else {
+                            log.debug("Payment already exists for facture achat {} (BC: {})", 
+                                    facture.getNumeroFactureAchat(), numeroBc);
+                        }
+                    } catch (Exception e) {
+                        log.error("Error creating payment for facture achat (BC: {}): {}", numeroBc, e.getMessage(), e);
+                        result.getWarnings().add(String.format("Erreur création paiement facture achat (BC %s): %s", numeroBc, e.getMessage()));
+                    }
+                    
                 } else if (typeOperation == TypeOperation.C) {
-                    // Facture Vente (Client) - Matching intelligent
-                    Optional<FactureVente> factureOpt = findFactureVenteByMultipleCriteria(
-                            numeroFacture, nomPartenaire, dateOperation, montantPaiement);
+                    // Facture Vente (Client) - Chercher par bcReference
+                    List<FactureVente> factures = factureVenteRepository.findByBcReference(numeroBc);
                     
-                    factureOpt.ifPresentOrElse(
-                                    facture -> {
-                                        try {
-                                            // Vérifier si un paiement existe déjà pour cette facture avec cette référence et date
-                                            boolean paiementExiste = false;
-                                            List<Paiement> paiementsExistants = paiementService.findByFactureVenteId(facture.getId());
-                                            if (operation.getReference() != null && !operation.getReference().trim().isEmpty()) {
-                                                // Vérifier par référence
-                                                paiementExiste = paiementsExistants.stream()
-                                                        .anyMatch(p -> operation.getReference().equals(p.getReference()));
-                                            } else {
-                                                // Si pas de référence, vérifier par date et montant (tolérance de 0.01 MAD)
-                                                paiementExiste = paiementsExistants.stream()
-                                                        .anyMatch(p -> p.getDate() != null && p.getDate().equals(operation.getDateOperation())
-                                                                && p.getMontant() != null && Math.abs(p.getMontant() - montantPaiement) < 0.01);
-                                            }
-                                            
-                                            if (!paiementExiste) {
-                                                // Créer le paiement
-                                                Paiement paiement = Paiement.builder()
-                                                        .factureVenteId(facture.getId())
-                                                        .bcReference(operation.getNumeroBc())
-                                                        .typeMouvement("C")
-                                                        .nature("paiement")
-                                                        .date(operation.getDateOperation())
-                                                        .montant(montantPaiement)
-                                                        .mode(operation.getMoyenPayement())
-                                                        .reference(operation.getReference())
-                                                        .tvaRate(operation.getTauxTva())
-                                                        .totalPaiementTTC(montantPaiement)
-                                                        .htPaye(operation.getHtPaye())
-                                                        .tvaPaye(operation.getTva())
-                                                        .notes(operation.getCommentaire())
-                                                        .build();
-                                                
-                                                // Créer le paiement (qui mettra à jour automatiquement le statut de la facture)
-                                                paiementService.create(paiement);
-                                                paymentsProcessed.incrementAndGet();
-                                                log.info("Created payment for facture vente {}: {} MAD", numeroFacture, montantPaiement);
-                                            } else {
-                                                log.debug("Payment already exists for facture vente {} with reference {}", numeroFacture, operation.getReference());
-                                            }
-                                        } catch (Exception e) {
-                                            log.error("Error creating payment for facture vente {}: {}", numeroFacture, e.getMessage(), e);
-                                            result.getWarnings().add(String.format("Erreur création paiement facture vente %s: %s", numeroFacture, e.getMessage()));
-                                        }
-                                    },
-                                    () -> {
-                                        log.warn("Facture vente not found for numero: {}", numeroFacture);
-                                        result.getWarnings().add(String.format("Facture vente non trouvée: %s", numeroFacture));
-                                    }
-                            );
+                    if (factures.isEmpty()) {
+                        log.warn("No facture vente found for BC: {}", numeroBc);
+                        result.getWarnings().add(String.format("Aucune facture vente trouvée pour BC: %s", numeroBc));
+                        continue;
+                    }
+                    
+                    // Si plusieurs factures, utiliser la première ou matcher par montant
+                    FactureVente facture = factures.size() == 1 
+                            ? factures.get(0)
+                            : factures.stream()
+                                    .filter(f -> f.getTotalTTC() != null && 
+                                            Math.abs(f.getTotalTTC() - montantPaiement) < 0.01)
+                                    .findFirst()
+                                    .orElse(factures.get(0));
+                    
+                    if (factures.size() > 1) {
+                        log.warn("Multiple factures vente found for BC {}: using first match or by amount", numeroBc);
+                    }
+                    
+                    try {
+                        // Vérifier si un paiement existe déjà
+                        boolean paiementExiste = false;
+                        List<Paiement> paiementsExistants = paiementService.findByFactureVenteId(facture.getId());
+                        if (operation.getReference() != null && !operation.getReference().trim().isEmpty()) {
+                            paiementExiste = paiementsExistants.stream()
+                                    .anyMatch(p -> operation.getReference().equals(p.getReference()));
+                        } else {
+                            paiementExiste = paiementsExistants.stream()
+                                    .anyMatch(p -> p.getDate() != null && p.getDate().equals(dateOperation)
+                                            && p.getMontant() != null && Math.abs(p.getMontant() - montantPaiement) < 0.01);
+                        }
+                        
+                        if (!paiementExiste) {
+                            Paiement paiement = Paiement.builder()
+                                    .factureVenteId(facture.getId())
+                                    .bcReference(numeroBc)
+                                    .typeMouvement("C")
+                                    .nature("paiement")
+                                    .date(dateOperation)
+                                    .montant(montantPaiement)
+                                    .mode(operation.getMoyenPayement())
+                                    .reference(operation.getReference())
+                                    .tvaRate(operation.getTauxTva())
+                                    .totalPaiementTTC(montantPaiement)
+                                    .htPaye(operation.getHtPaye())
+                                    .tvaPaye(operation.getTva())
+                                    .notes(commentaire)
+                                    .build();
+                            
+                            paiementService.create(paiement);
+                            paymentsProcessed.incrementAndGet();
+                            log.info("Created payment for facture vente {} (BC: {}): {} MAD", 
+                                    facture.getNumeroFactureVente(), numeroBc, montantPaiement);
+                        } else {
+                            log.debug("Payment already exists for facture vente {} (BC: {})", 
+                                    facture.getNumeroFactureVente(), numeroBc);
+                        }
+                    } catch (Exception e) {
+                        log.error("Error creating payment for facture vente (BC: {}): {}", numeroBc, e.getMessage(), e);
+                        result.getWarnings().add(String.format("Erreur création paiement facture vente (BC %s): %s", numeroBc, e.getMessage()));
+                    }
+                } else {
+                    log.debug("Skipping payment operation: typeOperation is not C or F: {}", typeOperation);
                 }
+                
             } catch (Exception e) {
                 log.error("Error processing payment operation: {}", e.getMessage(), e);
                 result.getWarnings().add("Erreur traitement paiement: " + e.getMessage());
             }
         }
         
+        log.info("Processed {} payments and {} charges from imported operations", 
+                paymentsProcessed.get(), chargesProcessed.get());
         return paymentsProcessed.get();
     }
     

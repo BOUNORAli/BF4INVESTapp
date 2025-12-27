@@ -16,6 +16,7 @@ public interface FactureVenteRepository extends MongoRepository<FactureVente, St
     List<FactureVente> findByDateEcheanceLessThanEqual(LocalDate date);
     List<FactureVente> findByBandeCommandeId(String bandeCommandeId);
     List<FactureVente> findByDateFactureBetween(LocalDate dateDebut, LocalDate dateFin);
+    List<FactureVente> findByBcReference(String bcReference);
 }
 
 
