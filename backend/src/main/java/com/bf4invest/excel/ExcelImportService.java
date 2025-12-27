@@ -8,6 +8,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.util.DateFormatConverter;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.apache.poi.hssf.usermodel.HSSFWorkbook;
+import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.apache.poi.ss.usermodel.BorderStyle;
 import org.apache.poi.ss.usermodel.FillPatternType;
 import org.apache.poi.ss.usermodel.HorizontalAlignment;
@@ -16,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
+import java.io.BufferedInputStream;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.text.NumberFormat;
@@ -47,11 +50,28 @@ public class ExcelImportService {
     private static final DateTimeFormatter DATE_FORMATTER_YYYYMMDD = DateTimeFormatter.ofPattern("yyyy-MM-dd");
     private static final NumberFormat FRENCH_NUMBER_FORMAT = NumberFormat.getNumberInstance(Locale.FRENCH);
     
+    /**
+     * Crée un Workbook à partir d'un InputStream en détectant automatiquement le format (.xls ou .xlsx)
+     */
+    private Workbook createWorkbook(InputStream is) throws Exception {
+        try {
+            // Utiliser BufferedInputStream pour permettre la détection automatique du format
+            // WorkbookFactory détecte automatiquement le format (xls ou xlsx)
+            if (!is.markSupported()) {
+                is = new BufferedInputStream(is);
+            }
+            return WorkbookFactory.create(is);
+        } catch (Exception e) {
+            log.error("Error creating workbook: {}", e.getMessage(), e);
+            throw new Exception("Format de fichier Excel non supporté ou fichier corrompu: " + e.getMessage(), e);
+        }
+    }
+    
     public ImportResult importExcel(MultipartFile file) {
         ImportResult result = new ImportResult();
         
         try (InputStream is = file.getInputStream();
-             Workbook workbook = new XSSFWorkbook(is)) {
+             Workbook workbook = createWorkbook(is)) {
             
             Sheet sheet = workbook.getSheetAt(0);
             if (sheet.getLastRowNum() < 1) {
@@ -1240,7 +1260,7 @@ public class ExcelImportService {
         ImportResult result = new ImportResult();
         
         try (InputStream is = file.getInputStream();
-             Workbook workbook = new XSSFWorkbook(is)) {
+             Workbook workbook = createWorkbook(is)) {
             
             Sheet sheet = workbook.getSheetAt(0);
             if (sheet.getLastRowNum() < 1) {
@@ -1594,7 +1614,7 @@ public class ExcelImportService {
         ImportResult result = new ImportResult();
         
         try (InputStream is = file.getInputStream();
-             Workbook workbook = new XSSFWorkbook(is)) {
+             Workbook workbook = createWorkbook(is)) {
             
             Sheet sheet = workbook.getSheetAt(0);
             if (sheet.getLastRowNum() < 1) {
