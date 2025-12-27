@@ -1622,24 +1622,65 @@ public class ExcelImportService {
         final java.util.concurrent.atomic.AtomicInteger paymentsProcessed = new java.util.concurrent.atomic.AtomicInteger(0);
         
         // Récupérer toutes les opérations de type PAIEMENT avec un montant de paiement > 0
-        // Filtrer uniquement celles qui ont un numéro de facture (pour pouvoir les lier)
-        List<OperationComptable> paiements = operationComptableRepository.findAll().stream()
-                .filter(op -> op.getTypeMouvement() == TypeMouvement.PAIEMENT)
+        List<OperationComptable> allOperations = operationComptableRepository.findAll();
+        log.info("Total operations in database: {}", allOperations.size());
+        
+        // Debug: compter les opérations par type
+        long factureCount = allOperations.stream().filter(op -> op.getTypeMouvement() == TypeMouvement.FACTURE).count();
+        long paiementCount = allOperations.stream().filter(op -> op.getTypeMouvement() == TypeMouvement.PAIEMENT).count();
+        long nullTypeCount = allOperations.stream().filter(op -> op.getTypeMouvement() == null).count();
+        log.info("Operations by type - FACTURE: {}, PAIEMENT: {}, NULL: {}", factureCount, paiementCount, nullTypeCount);
+        
+        // Filtrer les paiements - accepter même sans numéro de facture si on a une référence
+        List<OperationComptable> paiements = allOperations.stream()
+                .filter(op -> {
+                    // Vérifier le type mouvement
+                    boolean isPaiement = op.getTypeMouvement() == TypeMouvement.PAIEMENT;
+                    if (!isPaiement && op.getTypeMouvement() == null) {
+                        // Si type mouvement est null, vérifier si c'est un paiement par le montant
+                        // Un paiement a totalPayementTtc > 0 et totalTtcApresRg == 0 ou null
+                        isPaiement = op.getTotalPayementTtc() != null && op.getTotalPayementTtc() > 0
+                                && (op.getTotalTtcApresRg() == null || op.getTotalTtcApresRg() == 0);
+                    }
+                    return isPaiement;
+                })
                 .filter(op -> op.getTotalPayementTtc() != null && op.getTotalPayementTtc() > 0)
-                .filter(op -> op.getNumeroFacture() != null && !op.getNumeroFacture().trim().isEmpty())
                 .filter(op -> op.getTypeOperation() == TypeOperation.C || op.getTypeOperation() == TypeOperation.F)
                 .collect(java.util.stream.Collectors.toList());
+        
+        // Log détaillé pour debug
+        if (paiements.isEmpty() && allOperations.size() > 0) {
+            log.warn("No payments found. Sample operations: {}", allOperations.stream()
+                    .limit(5)
+                    .map(op -> String.format("typeMouvement=%s, totalPayementTtc=%s, totalTtcApresRg=%s, numeroFacture=%s, typeOperation=%s",
+                            op.getTypeMouvement(), op.getTotalPayementTtc(), op.getTotalTtcApresRg(), 
+                            op.getNumeroFacture(), op.getTypeOperation()))
+                    .collect(java.util.stream.Collectors.joining("; ")));
+        }
         
         log.info("Found {} payment operations to process", paiements.size());
         
         for (OperationComptable operation : paiements) {
             try {
-                String numeroFacture = operation.getNumeroFacture().trim();
+                String numeroFacture = operation.getNumeroFacture() != null ? operation.getNumeroFacture().trim() : null;
+                String reference = operation.getReference() != null ? operation.getReference().trim() : null;
                 TypeOperation typeOperation = operation.getTypeOperation();
                 Double montantPaiement = operation.getTotalPayementTtc();
                 
                 if (montantPaiement == null || montantPaiement <= 0) {
                     continue;
+                }
+                
+                // Si pas de numéro de facture, essayer de l'extraire de la référence ou utiliser la référence comme numéro
+                if (numeroFacture == null || numeroFacture.isEmpty()) {
+                    if (reference != null && !reference.trim().isEmpty()) {
+                        // Essayer d'utiliser la référence comme numéro de facture
+                        numeroFacture = reference.trim();
+                        log.debug("Using reference as invoice number: {}", numeroFacture);
+                    } else {
+                        log.debug("Skipping payment operation: no invoice number and no reference");
+                        continue;
+                    }
                 }
                 
                 // Déterminer le type de facture selon typeOperation
@@ -1903,8 +1944,20 @@ public class ExcelImportService {
             String normalized = typeMouvStr.trim().toLowerCase();
             if (normalized.contains("facture")) {
                 typeMouvement = TypeMouvement.FACTURE;
-            } else if (normalized.contains("paiement") || normalized.contains("payment")) {
+            } else if (normalized.contains("paiement") || normalized.contains("payment") || normalized.contains("pai")) {
                 typeMouvement = TypeMouvement.PAIEMENT;
+            }
+        }
+        
+        // Si type mouvement est null, essayer de le déduire des montants
+        // Un paiement a totalPayementTtc > 0 et (totalTtcApresRg == 0 ou null)
+        if (typeMouvement == null) {
+            Double totalPayement = getDoubleValue(row, columnMap, "total_payement_ttc");
+            Double totalTtcApresRg = getDoubleValue(row, columnMap, "total_ttc_apres_rg");
+            if (totalPayement != null && totalPayement > 0 && (totalTtcApresRg == null || totalTtcApresRg == 0)) {
+                typeMouvement = TypeMouvement.PAIEMENT;
+            } else if (totalTtcApresRg != null && totalTtcApresRg > 0) {
+                typeMouvement = TypeMouvement.FACTURE;
             }
         }
         
