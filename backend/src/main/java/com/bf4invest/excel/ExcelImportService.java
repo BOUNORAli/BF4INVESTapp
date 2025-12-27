@@ -1662,26 +1662,30 @@ public class ExcelImportService {
         
         for (OperationComptable operation : paiements) {
             try {
-                String numeroFacture = operation.getNumeroFacture() != null ? operation.getNumeroFacture().trim() : null;
+                String numeroFactureTemp = operation.getNumeroFacture() != null ? operation.getNumeroFacture().trim() : null;
                 String reference = operation.getReference() != null ? operation.getReference().trim() : null;
                 TypeOperation typeOperation = operation.getTypeOperation();
-                Double montantPaiement = operation.getTotalPayementTtc();
+                Double montantPaiementTemp = operation.getTotalPayementTtc();
                 
-                if (montantPaiement == null || montantPaiement <= 0) {
+                if (montantPaiementTemp == null || montantPaiementTemp <= 0) {
                     continue;
                 }
                 
                 // Si pas de numéro de facture, essayer de l'extraire de la référence ou utiliser la référence comme numéro
-                if (numeroFacture == null || numeroFacture.isEmpty()) {
+                if (numeroFactureTemp == null || numeroFactureTemp.isEmpty()) {
                     if (reference != null && !reference.trim().isEmpty()) {
                         // Essayer d'utiliser la référence comme numéro de facture
-                        numeroFacture = reference.trim();
-                        log.debug("Using reference as invoice number: {}", numeroFacture);
+                        numeroFactureTemp = reference.trim();
+                        log.debug("Using reference as invoice number: {}", numeroFactureTemp);
                     } else {
                         log.debug("Skipping payment operation: no invoice number and no reference");
                         continue;
                     }
                 }
+                
+                // Créer des copies finales pour les lambdas
+                final String numeroFacture = numeroFactureTemp;
+                final Double montantPaiement = montantPaiementTemp;
                 
                 // Déterminer le type de facture selon typeOperation
                 if (typeOperation == TypeOperation.F) {
