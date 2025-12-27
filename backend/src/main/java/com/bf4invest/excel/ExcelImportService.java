@@ -1624,16 +1624,18 @@ public class ExcelImportService {
     private Optional<FactureAchat> findFactureAchatByMultipleCriteria(
             String numeroFacture, String nomPartenaire, LocalDate dateOperation, Double montantPaiement) {
         
+        Optional<FactureAchat> facture;
+        List<FactureAchat> allFactures = factureAchatRepository.findAll();
+        
         // 1. Chercher par numéro exact (si numéro fourni)
         if (numeroFacture != null && !numeroFacture.trim().isEmpty()) {
-            Optional<FactureAchat> facture = factureAchatRepository.findByNumeroFactureAchat(numeroFacture);
+            facture = factureAchatRepository.findByNumeroFactureAchat(numeroFacture);
             if (facture.isPresent()) {
                 log.debug("Found facture achat by exact numero: {}", numeroFacture);
                 return facture;
             }
             
             // 2. Chercher par correspondance partielle dans le numéro
-            List<FactureAchat> allFactures = factureAchatRepository.findAll();
             facture = allFactures.stream()
                     .filter(f -> f.getNumeroFactureAchat() != null && 
                             (f.getNumeroFactureAchat().contains(numeroFacture) || 
@@ -1700,16 +1702,18 @@ public class ExcelImportService {
     private Optional<FactureVente> findFactureVenteByMultipleCriteria(
             String numeroFacture, String nomPartenaire, LocalDate dateOperation, Double montantPaiement) {
         
+        Optional<FactureVente> facture;
+        List<FactureVente> allFactures = factureVenteRepository.findAll();
+        
         // 1. Chercher par numéro exact (si numéro fourni)
         if (numeroFacture != null && !numeroFacture.trim().isEmpty()) {
-            Optional<FactureVente> facture = factureVenteRepository.findByNumeroFactureVente(numeroFacture);
+            facture = factureVenteRepository.findByNumeroFactureVente(numeroFacture);
             if (facture.isPresent()) {
                 log.debug("Found facture vente by exact numero: {}", numeroFacture);
                 return facture;
             }
             
             // 2. Chercher par correspondance partielle dans le numéro
-            List<FactureVente> allFactures = factureVenteRepository.findAll();
             facture = allFactures.stream()
                     .filter(f -> f.getNumeroFactureVente() != null && 
                             (f.getNumeroFactureVente().contains(numeroFacture) || 
