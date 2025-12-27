@@ -128,6 +128,56 @@ public class ImportController {
         
         return ResponseEntity.ok(result);
     }
+    
+    @GetMapping("/template/operations")
+    public ResponseEntity<ByteArrayResource> downloadOperationsComptablesTemplate() {
+        try {
+            byte[] excelBytes = excelImportService.generateOperationsComptablesTemplate();
+            
+            HttpHeaders headers = new HttpHeaders();
+            headers.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=Modele_Operations_Comptables.xlsx");
+            headers.add(HttpHeaders.CONTENT_TYPE, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+            
+            return ResponseEntity.ok()
+                    .headers(headers)
+                    .contentLength(excelBytes.length)
+                    .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                    .body(new ByteArrayResource(excelBytes));
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+    
+    @PostMapping("/operations")
+    public ResponseEntity<ImportResult> importOperationsComptables(@RequestParam("file") MultipartFile file) {
+        if (file.isEmpty()) {
+            ImportResult result = new ImportResult();
+            result.getErrors().add("Fichier vide");
+            return ResponseEntity.badRequest().body(result);
+        }
+        
+        if (!file.getOriginalFilename().endsWith(".xlsx") && !file.getOriginalFilename().endsWith(".xls")) {
+            ImportResult result = new ImportResult();
+            result.getErrors().add("Format de fichier non supporté. Utilisez .xlsx ou .xls");
+            return ResponseEntity.badRequest().body(result);
+        }
+        
+        ImportResult result = excelImportService.importOperationsComptables(file);
+        
+        // Store import log
+        ImportLog log = ImportLog.builder()
+                .fileName(file.getOriginalFilename())
+                .details(String.format("%d opération(s) importée(s) avec succès, %d erreur(s)", 
+                        result.getSuccessCount(), result.getErrorCount()))
+                .success(result.getErrorCount() == 0 && result.getSuccessCount() > 0)
+                .successCount(result.getSuccessCount())
+                .errorCount(result.getErrorCount())
+                .createdAt(LocalDateTime.now())
+                .build();
+        importLogRepository.save(log);
+        
+        return ResponseEntity.ok(result);
+    }
 }
 
 

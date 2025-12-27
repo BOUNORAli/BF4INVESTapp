@@ -38,7 +38,7 @@ interface ImportResult {
       </div>
 
       <!-- Import Cards -->
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
         
         <!-- Products Import -->
         <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-lg transition-shadow duration-300">
@@ -130,6 +130,51 @@ interface ImportResult {
           </div>
         </div>
 
+        <!-- Operations Comptables Import -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-lg transition-shadow duration-300">
+          <div class="p-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+            <h3 class="font-bold text-slate-800 flex items-center gap-2">
+              <span class="p-2 bg-purple-100 text-purple-600 rounded-lg">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+              </span>
+              Opérations Comptables
+            </h3>
+            <span class="text-xs font-medium text-slate-400 bg-white px-2 py-1 rounded border border-slate-200">.xlsx</span>
+          </div>
+          <div class="p-8">
+            <div class="border-2 border-dashed border-slate-300 rounded-xl bg-slate-50 h-48 flex flex-col items-center justify-center text-slate-400 hover:bg-purple-50 hover:border-purple-400 hover:text-purple-500 transition-all cursor-pointer group relative overflow-hidden"
+                 (click)="fileInputOperations.click()"
+                 (dragover)="onDragOver($event)"
+                 (dragleave)="onDragLeave($event)"
+                 (drop)="onDrop($event, 'operations')">
+               
+               @if (isImporting() && currentType() === 'operations') {
+                 <div class="absolute inset-0 bg-white/90 z-10 flex flex-col items-center justify-center">
+                    <div class="w-2/3 bg-slate-200 rounded-full h-2 mb-2">
+                       <div class="bg-purple-600 h-2 rounded-full transition-all duration-300" [style.width.%]="progress()"></div>
+                    </div>
+                    <span class="text-xs font-bold text-purple-600">Traitement... {{ progress() }}%</span>
+                 </div>
+               } @else {
+                 <svg class="w-12 h-12 mb-3 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+                 <span class="text-sm font-medium">Glissez votre fichier ici</span>
+                 <span class="text-xs mt-1 opacity-70">ou cliquez pour parcourir</span>
+               }
+               
+               <input #fileInputOperations type="file" accept=".xlsx,.xls" (change)="onFileSelected($event, 'operations')" class="hidden">
+            </div>
+            <div class="mt-6 flex justify-between items-center">
+               <button type="button" (click)="downloadTemplate('operations')" class="text-xs text-blue-600 font-medium hover:underline flex items-center gap-1">
+                 <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                 Télécharger modèle
+               </button>
+               @if (selectedFiles['operations']) {
+                 <span class="text-xs text-slate-400">{{ selectedFiles['operations']?.name }}</span>
+               }
+            </div>
+          </div>
+        </div>
+
       </div>
 
       <!-- Logs Section -->
@@ -185,7 +230,8 @@ export class ImportComponent implements OnInit {
   progress = signal(0);
   selectedFiles: Record<string, File | null> = {
     'produits': null,
-    'bc': null
+    'bc': null,
+    'operations': null
   };
   
   logs = signal<ImportLog[]>([]);
@@ -282,7 +328,12 @@ export class ImportComponent implements OnInit {
       }, 200);
 
       // Utiliser le bon endpoint selon le type
-      const endpoint = type === 'produits' ? '/import/produits' : '/import/excel';
+      let endpoint = '/import/excel';
+      if (type === 'produits') {
+        endpoint = '/import/produits';
+      } else if (type === 'operations') {
+        endpoint = '/import/operations';
+      }
       const result = await this.api.uploadFile(endpoint, file).toPromise() as ImportResult;
       
       clearInterval(progressInterval);
@@ -346,8 +397,15 @@ export class ImportComponent implements OnInit {
   async downloadTemplate(type: string) {
     try {
       // Utiliser le bon endpoint selon le type
-      const endpoint = type === 'produits' ? '/import/template/produits' : '/import/template';
-      const filename = type === 'produits' ? 'Modele_Catalogue_Produits.xlsx' : 'Modele_Import_BF4Invest.xlsx';
+      let endpoint = '/import/template';
+      let filename = 'Modele_Import_BF4Invest.xlsx';
+      if (type === 'produits') {
+        endpoint = '/import/template/produits';
+        filename = 'Modele_Catalogue_Produits.xlsx';
+      } else if (type === 'operations') {
+        endpoint = '/import/template/operations';
+        filename = 'Modele_Operations_Comptables.xlsx';
+      }
       
       // Télécharger le modèle depuis le backend
       const blob = await this.api.downloadFile(endpoint).toPromise();

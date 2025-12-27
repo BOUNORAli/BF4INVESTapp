@@ -39,6 +39,7 @@ public class ExcelImportService {
     private final ClientRepository clientRepository;
     private final SupplierRepository supplierRepository;
     private final ProductRepository productRepository;
+    private final OperationComptableRepository operationComptableRepository;
     
     private static final DateTimeFormatter DATE_FORMATTER_DDMMYYYY = DateTimeFormatter.ofPattern("dd/MM/yyyy");
     private static final DateTimeFormatter DATE_FORMATTER_YYYYMMDD = DateTimeFormatter.ofPattern("yyyy-MM-dd");
@@ -1390,5 +1391,403 @@ public class ExcelImportService {
             log.warn("Error parsing date from cell: {}", e.getMessage());
         }
         return null;
+    }
+    
+    /**
+     * Génère un fichier Excel modèle pour l'import des opérations comptables
+     */
+    public byte[] generateOperationsComptablesTemplate() {
+        try (XSSFWorkbook workbook = new XSSFWorkbook()) {
+            Sheet sheet = workbook.createSheet("Opérations Comptables");
+            
+            // Style pour l'en-tête
+            CellStyle headerStyle = workbook.createCellStyle();
+            Font headerFont = workbook.createFont();
+            headerFont.setBold(true);
+            headerFont.setColor(IndexedColors.WHITE.getIndex());
+            headerStyle.setFont(headerFont);
+            headerStyle.setFillForegroundColor(IndexedColors.DARK_BLUE.getIndex());
+            headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+            headerStyle.setAlignment(HorizontalAlignment.CENTER);
+            headerStyle.setBorderBottom(BorderStyle.THIN);
+            headerStyle.setBorderTop(BorderStyle.THIN);
+            headerStyle.setBorderLeft(BorderStyle.THIN);
+            headerStyle.setBorderRight(BorderStyle.THIN);
+            
+            // Créer l'en-tête
+            Row headerRow = sheet.createRow(0);
+            String[] headers = {
+                "AFFECTATION/N°BC", "RELEVE BQ", "CONTRE PARTIE", "NOM CLIENT/FRS", "Client/Fourn",
+                "SOURCE payement", "DATE", "TYPE", "N° FACTURE", "REFERENCE",
+                "TOTAL TTC APRES RG", "Total payement TTC", "Taux TVA", "TAUX RG",
+                "Moyen de payement", "COMMENT AIRE", "tva mois", "annee", "mois",
+                "SOLDE BANQUE", "TOTAL TTC APRES RG (calculé)", "Total payement TTC (calculé)",
+                "RG TTC", "RG HT", "FACTURE HT YC RG", "HT PAYE", "TVA FACTURE YC RG", "TVA", "bilan", "CA"
+            };
+            
+            for (int i = 0; i < headers.length; i++) {
+                Cell cell = headerRow.createCell(i);
+                cell.setCellValue(headers[i]);
+                cell.setCellStyle(headerStyle);
+            }
+            
+            // Créer des lignes d'exemple
+            Row exampleRow1 = sheet.createRow(1);
+            exampleRow1.createCell(0).setCellValue("1001C/22"); // AFFECTATION/N°BC
+            exampleRow1.createCell(1).setCellValue("BM"); // RELEVE BQ
+            exampleRow1.createCell(2).setCellValue("ARTIS"); // CONTRE PARTIE
+            exampleRow1.createCell(3).setCellValue("ABNIMO SER"); // NOM CLIENT/FRS
+            exampleRow1.createCell(4).setCellValue("C"); // Client/Fourn
+            exampleRow1.createCell(5).setCellValue("BM"); // SOURCE payement
+            exampleRow1.createCell(6).setCellValue("31/10/2022"); // DATE
+            exampleRow1.createCell(7).setCellValue("Facture"); // TYPE
+            exampleRow1.createCell(8).setCellValue("1004/2022"); // N° FACTURE
+            exampleRow1.createCell(9).setCellValue(""); // REFERENCE
+            exampleRow1.createCell(10).setCellValue(7920.0); // TOTAL TTC APRES RG
+            exampleRow1.createCell(11).setCellValue(0.0); // Total payement TTC
+            exampleRow1.createCell(12).setCellValue(20.0); // Taux TVA
+            exampleRow1.createCell(13).setCellValue(0.0); // TAUX RG
+            exampleRow1.createCell(14).setCellValue(""); // Moyen de payement
+            exampleRow1.createCell(15).setCellValue("LIV G1 17/08"); // COMMENT AIRE
+            exampleRow1.createCell(16).setCellValue(12); // tva mois
+            exampleRow1.createCell(17).setCellValue(2022); // annee
+            exampleRow1.createCell(18).setCellValue(10); // mois
+            exampleRow1.createCell(19).setCellValue(0.0); // SOLDE BANQUE
+            exampleRow1.createCell(20).setCellValue(7920.0); // TOTAL TTC APRES RG (calculé)
+            exampleRow1.createCell(21).setCellValue(0.0); // Total payement TTC (calculé)
+            exampleRow1.createCell(22).setCellValue(0.0); // RG TTC
+            exampleRow1.createCell(23).setCellValue(0.0); // RG HT
+            exampleRow1.createCell(24).setCellValue(6600.0); // FACTURE HT YC RG
+            exampleRow1.createCell(25).setCellValue(0.0); // HT PAYE
+            exampleRow1.createCell(26).setCellValue(1320.0); // TVA FACTURE YC RG
+            exampleRow1.createCell(27).setCellValue(1320.0); // TVA
+            exampleRow1.createCell(28).setCellValue("6600,00 C"); // bilan
+            exampleRow1.createCell(29).setCellValue(""); // CA
+            
+            Row exampleRow2 = sheet.createRow(2);
+            exampleRow2.createCell(0).setCellValue("0508A/23"); // AFFECTATION/N°BC
+            exampleRow2.createCell(1).setCellValue("BM"); // RELEVE BQ
+            exampleRow2.createCell(2).setCellValue("PLASTIMA"); // CONTRE PARTIE
+            exampleRow2.createCell(3).setCellValue("ACCESS DE"); // NOM CLIENT/FRS
+            exampleRow2.createCell(4).setCellValue("F"); // Client/Fourn
+            exampleRow2.createCell(5).setCellValue("Caisse"); // SOURCE payement
+            exampleRow2.createCell(6).setCellValue("20/07/2023"); // DATE
+            exampleRow2.createCell(7).setCellValue("Paiement"); // TYPE
+            exampleRow2.createCell(8).setCellValue(""); // N° FACTURE
+            exampleRow2.createCell(9).setCellValue("AVM 741498"); // REFERENCE
+            exampleRow2.createCell(10).setCellValue(0.0); // TOTAL TTC APRES RG
+            exampleRow2.createCell(11).setCellValue(45520.0); // Total payement TTC
+            exampleRow2.createCell(12).setCellValue(20.0); // Taux TVA
+            exampleRow2.createCell(13).setCellValue(0.0); // TAUX RG
+            exampleRow2.createCell(14).setCellValue("LCN"); // Moyen de payement
+            exampleRow2.createCell(15).setCellValue("LIV AOUT"); // COMMENT AIRE
+            exampleRow2.createCell(16).setCellValue(7); // tva mois
+            exampleRow2.createCell(17).setCellValue(2023); // annee
+            exampleRow2.createCell(18).setCellValue(7); // mois
+            exampleRow2.createCell(19).setCellValue(200000.0); // SOLDE BANQUE
+            exampleRow2.createCell(20).setCellValue(0.0); // TOTAL TTC APRES RG (calculé)
+            exampleRow2.createCell(21).setCellValue(45520.0); // Total payement TTC (calculé)
+            exampleRow2.createCell(22).setCellValue(0.0); // RG TTC
+            exampleRow2.createCell(23).setCellValue(0.0); // RG HT
+            exampleRow2.createCell(24).setCellValue(0.0); // FACTURE HT YC RG
+            exampleRow2.createCell(25).setCellValue(37933.33); // HT PAYE
+            exampleRow2.createCell(26).setCellValue(0.0); // TVA FACTURE YC RG
+            exampleRow2.createCell(27).setCellValue(7586.67); // TVA
+            exampleRow2.createCell(28).setCellValue(""); // bilan
+            exampleRow2.createCell(29).setCellValue(""); // CA
+            
+            // Ajuster la largeur des colonnes
+            for (int i = 0; i < headers.length; i++) {
+                sheet.autoSizeColumn(i);
+                int width = sheet.getColumnWidth(i);
+                if (width > 50 * 256) {
+                    sheet.setColumnWidth(i, 50 * 256);
+                }
+            }
+            
+            // Écrire dans un ByteArrayOutputStream
+            java.io.ByteArrayOutputStream outputStream = new java.io.ByteArrayOutputStream();
+            workbook.write(outputStream);
+            return outputStream.toByteArray();
+            
+        } catch (Exception e) {
+            log.error("Error generating operations comptables Excel template", e);
+            throw new RuntimeException("Erreur lors de la génération du modèle Excel opérations comptables", e);
+        }
+    }
+    
+    /**
+     * Importe les opérations comptables depuis un fichier Excel
+     */
+    public ImportResult importOperationsComptables(MultipartFile file) {
+        ImportResult result = new ImportResult();
+        
+        try (InputStream is = file.getInputStream();
+             Workbook workbook = new XSSFWorkbook(is)) {
+            
+            Sheet sheet = workbook.getSheetAt(0);
+            if (sheet.getLastRowNum() < 1) {
+                result.getErrors().add("Le fichier Excel est vide ou ne contient que l'en-tête");
+                return result;
+            }
+            
+            // Mapping intelligent des colonnes
+            Row headerRow = sheet.getRow(0);
+            Map<String, Integer> columnMap = mapOperationsComptablesColumns(headerRow);
+            log.info("Mapped operations comptables columns: {}", columnMap);
+            
+            result.setTotalRows(sheet.getLastRowNum());
+            int successCount = 0;
+            int errorCount = 0;
+            
+            // Traiter chaque ligne
+            for (int i = 1; i <= sheet.getLastRowNum(); i++) {
+                Row row = sheet.getRow(i);
+                if (row == null) continue;
+                
+                try {
+                    OperationComptable operation = processOperationComptableRow(row, columnMap, result);
+                    if (operation != null) {
+                        operationComptableRepository.save(operation);
+                        successCount++;
+                    } else {
+                        errorCount++;
+                    }
+                } catch (Exception e) {
+                    errorCount++;
+                    result.getErrors().add(String.format("Ligne %d: %s", i + 1, e.getMessage()));
+                    log.error("Error processing operation comptable row {}: {}", i + 1, e.getMessage(), e);
+                }
+            }
+            
+            result.setSuccessCount(successCount);
+            result.setErrorCount(errorCount);
+            
+        } catch (Exception e) {
+            log.error("Error importing operations comptables", e);
+            result.getErrors().add("Erreur lors de l'import: " + e.getMessage());
+        }
+        
+        return result;
+    }
+    
+    /**
+     * Mapping intelligent des colonnes pour les opérations comptables
+     */
+    private Map<String, Integer> mapOperationsComptablesColumns(Row headerRow) {
+        Map<String, Integer> map = new HashMap<>();
+        
+        for (Cell cell : headerRow) {
+            if (cell == null) continue;
+            
+            String cellValue = getCellStringValue(cell).toLowerCase().trim();
+            if (cellValue.isEmpty()) continue;
+            
+            int colIndex = cell.getColumnIndex();
+            String normalized = normalizeColumnName(cellValue);
+            
+            // Mapping des colonnes
+            if (normalized.contains("affectation") || normalized.contains("bc") || normalized.contains("n°bc")) {
+                map.put("numero_bc", colIndex);
+            } else if (normalized.contains("releve") && normalized.contains("bq")) {
+                map.put("releve_bancaire", colIndex);
+            } else if (normalized.contains("contre") && normalized.contains("partie")) {
+                map.put("contre_partie", colIndex);
+            } else if (normalized.contains("nom") && (normalized.contains("client") || normalized.contains("frs"))) {
+                map.put("nom_client_frs", colIndex);
+            } else if (normalized.equals("client/fourn") || normalized.contains("client/fourn")) {
+                map.put("type_operation", colIndex);
+            } else if (normalized.contains("source") && normalized.contains("payement")) {
+                map.put("source_payement", colIndex);
+            } else if (normalized.equals("date")) {
+                map.put("date", colIndex);
+            } else if (normalized.equals("type")) {
+                map.put("type_mouvement", colIndex);
+            } else if (normalized.contains("facture") && (normalized.contains("n°") || normalized.contains("numero"))) {
+                map.put("numero_facture", colIndex);
+            } else if (normalized.contains("reference")) {
+                map.put("reference", colIndex);
+            } else if (normalized.contains("total") && normalized.contains("ttc") && normalized.contains("apres") && normalized.contains("rg") && !normalized.contains("calcul")) {
+                map.put("total_ttc_apres_rg", colIndex);
+            } else if (normalized.contains("total") && normalized.contains("payement") && normalized.contains("ttc") && !normalized.contains("calcul")) {
+                map.put("total_payement_ttc", colIndex);
+            } else if (normalized.contains("taux") && normalized.contains("tva")) {
+                map.put("taux_tva", colIndex);
+            } else if (normalized.contains("taux") && normalized.contains("rg")) {
+                map.put("taux_rg", colIndex);
+            } else if (normalized.contains("moyen") && normalized.contains("payement")) {
+                map.put("moyen_payement", colIndex);
+            } else if (normalized.contains("comment") || normalized.contains("commentaire")) {
+                map.put("commentaire", colIndex);
+            } else if (normalized.contains("tva") && normalized.contains("mois")) {
+                map.put("tva_mois", colIndex);
+            } else if (normalized.equals("annee") || normalized.contains("annee")) {
+                map.put("annee", colIndex);
+            } else if (normalized.equals("mois")) {
+                map.put("mois", colIndex);
+            } else if (normalized.contains("solde") && normalized.contains("banque")) {
+                map.put("solde_banque", colIndex);
+            } else if (normalized.contains("total") && normalized.contains("ttc") && normalized.contains("apres") && normalized.contains("rg") && normalized.contains("calcul")) {
+                map.put("total_ttc_apres_rg_calcule", colIndex);
+            } else if (normalized.contains("total") && normalized.contains("payement") && normalized.contains("ttc") && normalized.contains("calcul")) {
+                map.put("total_payement_ttc_calcule", colIndex);
+            } else if (normalized.contains("rg") && normalized.contains("ttc") && !normalized.contains("ht")) {
+                map.put("rg_ttc", colIndex);
+            } else if (normalized.contains("rg") && normalized.contains("ht")) {
+                map.put("rg_ht", colIndex);
+            } else if (normalized.contains("facture") && normalized.contains("ht") && normalized.contains("yc") && normalized.contains("rg")) {
+                map.put("facture_ht_yc_rg", colIndex);
+            } else if (normalized.contains("ht") && normalized.contains("paye")) {
+                map.put("ht_paye", colIndex);
+            } else if (normalized.contains("tva") && normalized.contains("facture") && normalized.contains("yc") && normalized.contains("rg")) {
+                map.put("tva_yc_rg", colIndex);
+            } else if (normalized.equals("tva") && !normalized.contains("taux") && !normalized.contains("facture")) {
+                map.put("tva", colIndex);
+            } else if (normalized.equals("bilan")) {
+                map.put("bilan", colIndex);
+            } else if (normalized.equals("ca")) {
+                map.put("ca", colIndex);
+            }
+        }
+        
+        return map;
+    }
+    
+    /**
+     * Traite une ligne d'opération comptable
+     */
+    private OperationComptable processOperationComptableRow(Row row, Map<String, Integer> columnMap, ImportResult result) {
+        // Numéro BC (optionnel)
+        String numeroBc = getCellValue(row, columnMap, "numero_bc");
+        
+        // Relevé bancaire
+        String releveBancaire = getCellValue(row, columnMap, "releve_bancaire");
+        
+        // Contre partie
+        String contrePartie = getCellValue(row, columnMap, "contre_partie");
+        
+        // Nom client/fournisseur
+        String nomClientFrs = getCellValue(row, columnMap, "nom_client_frs");
+        
+        // Type opération (obligatoire)
+        String typeOpStr = getCellValue(row, columnMap, "type_operation");
+        if (typeOpStr == null || typeOpStr.trim().isEmpty()) {
+            throw new RuntimeException("Type opération manquant (C, F, IS, TVA, CNSS, FB, LOY)");
+        }
+        TypeOperation typeOperation;
+        try {
+            typeOperation = TypeOperation.valueOf(typeOpStr.trim().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new RuntimeException("Type opération invalide: " + typeOpStr + ". Valeurs possibles: C, F, IS, TVA, CNSS, FB, LOY");
+        }
+        
+        // Source paiement
+        String sourcePayement = getCellValue(row, columnMap, "source_payement");
+        
+        // Date (obligatoire)
+        LocalDate dateOperation = parseDateFromCell(row.getCell(columnMap.get("date")));
+        if (dateOperation == null) {
+            String dateStr = getCellValue(row, columnMap, "date");
+            dateOperation = parseDate(dateStr);
+            if (dateOperation == null) {
+                throw new RuntimeException("Date invalide ou manquante");
+            }
+        }
+        
+        // Type mouvement
+        String typeMouvStr = getCellValue(row, columnMap, "type_mouvement");
+        TypeMouvement typeMouvement = null;
+        if (typeMouvStr != null && !typeMouvStr.trim().isEmpty()) {
+            String normalized = typeMouvStr.trim().toLowerCase();
+            if (normalized.contains("facture")) {
+                typeMouvement = TypeMouvement.FACTURE;
+            } else if (normalized.contains("paiement") || normalized.contains("payment")) {
+                typeMouvement = TypeMouvement.PAIEMENT;
+            }
+        }
+        
+        // Numéro facture
+        String numeroFacture = getCellValue(row, columnMap, "numero_facture");
+        
+        // Référence
+        String reference = getCellValue(row, columnMap, "reference");
+        
+        // Montants
+        Double totalTtcApresRg = getDoubleValue(row, columnMap, "total_ttc_apres_rg");
+        Double totalPayementTtc = getDoubleValue(row, columnMap, "total_payement_ttc");
+        Double tauxTva = getDoubleValue(row, columnMap, "taux_tva");
+        Double tauxRg = getDoubleValue(row, columnMap, "taux_rg");
+        
+        // Paiement
+        String moyenPayement = getCellValue(row, columnMap, "moyen_payement");
+        String commentaire = getCellValue(row, columnMap, "commentaire");
+        
+        // Période fiscale
+        Integer tvaMois = getIntegerValue(row, columnMap, "tva_mois");
+        Integer annee = getIntegerValue(row, columnMap, "annee");
+        Integer mois = getIntegerValue(row, columnMap, "mois");
+        
+        // Soldes et calculs
+        Double soldeBanque = getDoubleValue(row, columnMap, "solde_banque");
+        Double totalTtcApresRgCalcule = getDoubleValue(row, columnMap, "total_ttc_apres_rg_calcule");
+        Double totalPayementTtcCalcule = getDoubleValue(row, columnMap, "total_payement_ttc_calcule");
+        Double rgTtc = getDoubleValue(row, columnMap, "rg_ttc");
+        Double rgHt = getDoubleValue(row, columnMap, "rg_ht");
+        Double factureHtYcRg = getDoubleValue(row, columnMap, "facture_ht_yc_rg");
+        Double htPaye = getDoubleValue(row, columnMap, "ht_paye");
+        Double tvaYcRg = getDoubleValue(row, columnMap, "tva_yc_rg");
+        Double tva = getDoubleValue(row, columnMap, "tva");
+        Double bilan = null;
+        String bilanStr = getCellValue(row, columnMap, "bilan");
+        if (bilanStr != null && !bilanStr.trim().isEmpty()) {
+            // Extraire le nombre du bilan (ex: "6600,00 C" -> 6600.0)
+            try {
+                String numStr = bilanStr.replaceAll("[^0-9,.-]", "").replace(",", ".");
+                if (!numStr.isEmpty()) {
+                    bilan = Double.parseDouble(numStr);
+                }
+            } catch (Exception e) {
+                // Ignorer si on ne peut pas parser
+            }
+        }
+        String ca = getCellValue(row, columnMap, "ca");
+        
+        // Créer l'opération comptable
+        OperationComptable operation = OperationComptable.builder()
+                .numeroBc(numeroBc)
+                .releveBancaire(releveBancaire)
+                .contrePartie(contrePartie)
+                .nomClientFrs(nomClientFrs)
+                .typeOperation(typeOperation)
+                .sourcePayement(sourcePayement)
+                .dateOperation(dateOperation)
+                .typeMouvement(typeMouvement)
+                .numeroFacture(numeroFacture)
+                .reference(reference)
+                .totalTtcApresRg(totalTtcApresRg)
+                .totalPayementTtc(totalPayementTtc)
+                .tauxTva(tauxTva)
+                .tauxRg(tauxRg)
+                .moyenPayement(moyenPayement)
+                .commentaire(commentaire)
+                .tvaMois(tvaMois)
+                .annee(annee)
+                .mois(mois)
+                .soldeBanque(soldeBanque)
+                .totalTtcApresRgCalcule(totalTtcApresRgCalcule)
+                .totalPayementTtcCalcule(totalPayementTtcCalcule)
+                .rgTtc(rgTtc)
+                .rgHt(rgHt)
+                .factureHtYcRg(factureHtYcRg)
+                .htPaye(htPaye)
+                .facture(null) // Pas utilisé dans le modèle actuel
+                .tvaYcRg(tvaYcRg)
+                .tva(tva)
+                .bilan(bilan)
+                .ca(ca)
+                .createdAt(LocalDateTime.now())
+                .build();
+        
+        return operation;
     }
 }
