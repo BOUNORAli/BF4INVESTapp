@@ -979,6 +979,7 @@ public class ExcelExportService {
             // Récupérer les données
             List<FactureAchat> facturesAchat = tvaService.getFacturesAchatByMonth(mois, annee);
             List<FactureVente> facturesVente = tvaService.getFacturesVenteByMonth(mois, annee);
+            List<Charge> charges = tvaService.getChargesByMonth(mois, annee);
             com.bf4invest.model.CompanyInfo companyInfo = companyInfoService.getCompanyInfo();
             
             // Créer les caches pour les noms
@@ -1503,6 +1504,23 @@ public class ExcelExportService {
         CellStyle style = workbook.createCellStyle();
         // Vert clair
         style.setFillForegroundColor(IndexedColors.LIGHT_GREEN.getIndex());
+        style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        style.setBorderBottom(BorderStyle.THIN);
+        style.setBorderTop(BorderStyle.THIN);
+        style.setBorderLeft(BorderStyle.THIN);
+        style.setBorderRight(BorderStyle.THIN);
+        style.setAlignment(HorizontalAlignment.LEFT);
+        style.setVerticalAlignment(VerticalAlignment.CENTER);
+        return style;
+    }
+    
+    /**
+     * Style pour les charges (bleu ciel)
+     */
+    private CellStyle createDataBlueStyle(Workbook workbook) {
+        CellStyle style = workbook.createCellStyle();
+        // Bleu ciel (light blue)
+        style.setFillForegroundColor(IndexedColors.LIGHT_BLUE.getIndex());
         style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
         style.setBorderBottom(BorderStyle.THIN);
         style.setBorderTop(BorderStyle.THIN);
