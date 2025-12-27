@@ -11,6 +11,8 @@ import com.bf4invest.repository.EcritureComptableRepository;
 import com.bf4invest.repository.FactureAchatRepository;
 import com.bf4invest.repository.FactureVenteRepository;
 import com.bf4invest.repository.PaiementRepository;
+import com.bf4invest.repository.ChargeRepository;
+import com.bf4invest.model.Charge;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -31,6 +33,7 @@ public class TVAService {
     private final PaiementRepository paiementRepository;
     private final FactureVenteRepository factureVenteRepository;
     private final FactureAchatRepository factureAchatRepository;
+    private final ChargeRepository chargeRepository;
 
     /**
      * Calcule et génère une déclaration TVA pour un mois/année donné
@@ -426,6 +429,26 @@ public class TVAService {
         LocalDate dateDebut = LocalDate.of(annee, mois, 1);
         LocalDate dateFin = dateDebut.withDayOfMonth(dateDebut.lengthOfMonth());
         return factureVenteRepository.findByDateFactureBetween(dateDebut, dateFin);
+    }
+    
+    /**
+     * Récupère toutes les charges pour un mois/année donné (basé sur datePaiement si payée, sinon dateEcheance)
+     */
+    public List<Charge> getChargesByMonth(Integer mois, Integer annee) {
+        LocalDate dateDebut = LocalDate.of(annee, mois, 1);
+        LocalDate dateFin = dateDebut.withDayOfMonth(dateDebut.lengthOfMonth());
+        
+        // Récupérer toutes les charges
+        List<Charge> allCharges = chargeRepository.findAll();
+        
+        // Filtrer celles qui sont dans le mois (basé sur datePaiement si payée, sinon dateEcheance)
+        return allCharges.stream()
+                .filter(charge -> {
+                    LocalDate dateRef = charge.getDatePaiement() != null ? charge.getDatePaiement() : charge.getDateEcheance();
+                    return dateRef != null && !dateRef.isBefore(dateDebut) && !dateRef.isAfter(dateFin);
+                })
+                .filter(charge -> charge.getImposable() != null && charge.getImposable()) // Seulement les charges imposables (avec TVA)
+                .collect(java.util.stream.Collectors.toList());
     }
 }
 

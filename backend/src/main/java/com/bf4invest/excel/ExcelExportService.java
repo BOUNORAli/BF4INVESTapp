@@ -2,6 +2,7 @@ package com.bf4invest.excel;
 
 import com.bf4invest.model.BandeCommande;
 import com.bf4invest.model.Client;
+import com.bf4invest.model.Charge;
 import com.bf4invest.model.FactureAchat;
 import com.bf4invest.model.FactureVente;
 import com.bf4invest.model.HistoriqueSolde;
@@ -993,6 +994,7 @@ public class ExcelExportService {
             CellStyle dataStyle = createDefaultStyle(workbook);
             CellStyle dataAltStyle = createDataAltStyle(workbook);
             CellStyle dataGreenStyle = createDataGreenStyle(workbook);
+            CellStyle dataBlueStyle = createDataBlueStyle(workbook);
             CellStyle totalStyle = createTotalStyle(workbook);
             CellStyle currencyStyle = createCurrencyStyle(workbook);
             CellStyle dateStyle = createDateStyle(workbook);
@@ -1132,6 +1134,84 @@ public class ExcelExportService {
                 cell10.setCellStyle(rowStyle);
             }
             
+            // Ajouter les charges dans la section FACTURES FOURNISSEUR (avec fond bleu ciel)
+            int factureCount = facturesAchat.size();
+            for (Charge charge : charges) {
+                Row dataRow = sheet.createRow(rowNum++);
+                CellStyle rowStyle = dataBlueStyle; // Fond bleu ciel pour les charges
+                
+                // TVA MOIS
+                Cell cell0 = dataRow.createCell(0);
+                cell0.setCellValue(String.format("%s.-%d", moisAbrev, annee % 100));
+                cell0.setCellStyle(rowStyle);
+                
+                // N° facture (libellé de la charge)
+                Cell cell1 = dataRow.createCell(1);
+                cell1.setCellValue(charge.getLibelle() != null ? charge.getLibelle() : "");
+                cell1.setCellStyle(rowStyle);
+                
+                // Fournisseur (catégorie de la charge)
+                Cell cell2 = dataRow.createCell(2);
+                cell2.setCellValue(charge.getCategorie() != null ? charge.getCategorie() : "");
+                cell2.setCellStyle(rowStyle);
+                
+                // date (datePaiement si payée, sinon dateEcheance)
+                Cell cell3 = dataRow.createCell(3);
+                LocalDate chargeDate = charge.getDatePaiement() != null ? charge.getDatePaiement() : charge.getDateEcheance();
+                if (chargeDate != null) {
+                    cell3.setCellValue(chargeDate.format(DATE_FORMATTER));
+                    CellStyle dateStyleWithBg = createDateStyleWithBackground(workbook, rowStyle);
+                    cell3.setCellStyle(dateStyleWithBg);
+                } else {
+                    cell3.setCellValue("");
+                    cell3.setCellStyle(rowStyle);
+                }
+                
+                // MT TTC (montant de la charge avec TVA 20% par défaut)
+                Cell cell4 = dataRow.createCell(4);
+                Double chargeMontant = charge.getMontant() != null ? charge.getMontant() : 0.0;
+                // Calculer TTC avec TVA 20%
+                Double chargeTTC = chargeMontant * 1.20;
+                cell4.setCellValue(chargeTTC);
+                CellStyle currencyStyleWithBgCharge = createCurrencyStyleWithBackground(workbook, rowStyle);
+                cell4.setCellStyle(currencyStyleWithBgCharge);
+                totalTTCFournisseur += chargeTTC;
+                
+                // Taux TVA (20% par défaut pour les charges)
+                Cell cell5 = dataRow.createCell(5);
+                cell5.setCellValue(0.20);
+                CellStyle percentStyleWithBgCharge = createPercentStyleWithBackground(workbook, rowStyle);
+                cell5.setCellStyle(percentStyleWithBgCharge);
+                
+                // MT HT
+                Cell cell6 = dataRow.createCell(6);
+                cell6.setCellValue(chargeMontant);
+                cell6.setCellStyle(currencyStyleWithBgCharge);
+                totalHTFournisseur += chargeMontant;
+                
+                // Somme de TVA
+                Cell cell7 = dataRow.createCell(7);
+                Double chargeTVA = chargeTTC - chargeMontant;
+                cell7.setCellValue(chargeTVA);
+                cell7.setCellStyle(currencyStyleWithBgCharge);
+                totalTVAFournisseur += chargeTVA;
+                
+                // Moyen payement
+                Cell cell8 = dataRow.createCell(8);
+                cell8.setCellValue("");
+                cell8.setCellStyle(rowStyle);
+                
+                // REFERENCE
+                Cell cell9 = dataRow.createCell(9);
+                cell9.setCellValue("");
+                cell9.setCellStyle(rowStyle);
+                
+                // NATURE PIECE COMPTABLE
+                Cell cell10 = dataRow.createCell(10);
+                cell10.setCellValue("COPIE/ORIGINALE A RECEVOIR");
+                cell10.setCellStyle(rowStyle);
+            }
+            
             // Ligne de total FACTURES FOURNISSEUR
             Row totalRowFournisseur = sheet.createRow(rowNum++);
             Cell totalLabel = totalRowFournisseur.createCell(0);
@@ -1194,9 +1274,9 @@ public class ExcelExportService {
                     rowStyle = dataGreenStyle;
                 }
                 
-                // TVA MOIS
+                // TVA MOIS (format: "nov.-25" avec point avant le tiret)
                 Cell cell0 = dataRow.createCell(0);
-                cell0.setCellValue(String.format("%s-%d", moisAbrev, annee % 100));
+                cell0.setCellValue(String.format("%s.-%d", moisAbrev, annee % 100));
                 cell0.setCellStyle(rowStyle);
                 
                 // N° facture
@@ -1277,7 +1357,7 @@ public class ExcelExportService {
             if (facturesVente.isEmpty()) {
                 Row emptyRow = sheet.createRow(rowNum++);
                 Cell emptyCell0 = emptyRow.createCell(0);
-                emptyCell0.setCellValue(String.format("%s-%d", moisAbrev, annee % 100));
+                emptyCell0.setCellValue(String.format("%s.-%d", moisAbrev, annee % 100));
                 emptyCell0.setCellStyle(dataStyle);
                 
                 for (int i = 1; i < 11; i++) {
@@ -1462,6 +1542,7 @@ public class ExcelExportService {
         CellStyle style = workbook.createCellStyle();
         style.cloneStyleFrom(baseStyle);
         DataFormat format = workbook.createDataFormat();
+        // Format avec virgule pour décimales (Excel utilisera la locale du système pour les séparateurs)
         style.setDataFormat(format.getFormat("#,##0.00"));
         style.setAlignment(HorizontalAlignment.RIGHT);
         return style;
@@ -1476,6 +1557,18 @@ public class ExcelExportService {
         DataFormat format = workbook.createDataFormat();
         style.setDataFormat(format.getFormat("0.00%"));
         style.setAlignment(HorizontalAlignment.RIGHT);
+        return style;
+    }
+    
+    /**
+     * Style date avec fond (pour les lignes de données)
+     */
+    private CellStyle createDateStyleWithBackground(Workbook workbook, CellStyle baseStyle) {
+        CellStyle style = workbook.createCellStyle();
+        style.cloneStyleFrom(baseStyle);
+        DataFormat format = workbook.createDataFormat();
+        style.setDataFormat(format.getFormat("dd/mm/yyyy"));
+        style.setAlignment(HorizontalAlignment.CENTER);
         return style;
     }
     
@@ -1496,6 +1589,7 @@ public class ExcelExportService {
         style.setAlignment(HorizontalAlignment.RIGHT);
         style.setVerticalAlignment(VerticalAlignment.CENTER);
         DataFormat format = workbook.createDataFormat();
+        // Format standard avec virgule pour décimales
         style.setDataFormat(format.getFormat("#,##0.00"));
         return style;
     }
