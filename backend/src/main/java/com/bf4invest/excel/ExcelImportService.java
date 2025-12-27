@@ -1619,7 +1619,7 @@ public class ExcelImportService {
      * et met à jour les statuts des factures
      */
     private int processPaymentsFromOperations(ImportResult result) {
-        int paymentsProcessed = 0;
+        final java.util.concurrent.atomic.AtomicInteger paymentsProcessed = new java.util.concurrent.atomic.AtomicInteger(0);
         
         // Récupérer toutes les opérations de type PAIEMENT avec un montant de paiement > 0
         // Filtrer uniquement celles qui ont un numéro de facture (pour pouvoir les lier)
@@ -1683,7 +1683,7 @@ public class ExcelImportService {
                                                 
                                                 // Créer le paiement (qui mettra à jour automatiquement le statut de la facture)
                                                 paiementService.create(paiement);
-                                                paymentsProcessed++;
+                                                paymentsProcessed.incrementAndGet();
                                                 log.info("Created payment for facture achat {}: {} MAD", numeroFacture, montantPaiement);
                                             } else {
                                                 log.debug("Payment already exists for facture achat {} with reference {}", numeroFacture, operation.getReference());
@@ -1738,7 +1738,7 @@ public class ExcelImportService {
                                                 
                                                 // Créer le paiement (qui mettra à jour automatiquement le statut de la facture)
                                                 paiementService.create(paiement);
-                                                paymentsProcessed++;
+                                                paymentsProcessed.incrementAndGet();
                                                 log.info("Created payment for facture vente {}: {} MAD", numeroFacture, montantPaiement);
                                             } else {
                                                 log.debug("Payment already exists for facture vente {} with reference {}", numeroFacture, operation.getReference());
@@ -1760,7 +1760,7 @@ public class ExcelImportService {
             }
         }
         
-        return paymentsProcessed;
+        return paymentsProcessed.get();
     }
     
     /**
