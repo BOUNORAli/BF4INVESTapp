@@ -1618,6 +1618,160 @@ public class ExcelImportService {
      * Traite les paiements depuis les opérations comptables importées
      * et met à jour les statuts des factures
      */
+    /**
+     * Trouve une facture achat en utilisant plusieurs critères de matching
+     */
+    private Optional<FactureAchat> findFactureAchatByMultipleCriteria(
+            String numeroFacture, String nomPartenaire, LocalDate dateOperation, Double montantPaiement) {
+        
+        // 1. Chercher par numéro exact (si numéro fourni)
+        if (numeroFacture != null && !numeroFacture.trim().isEmpty()) {
+            Optional<FactureAchat> facture = factureAchatRepository.findByNumeroFactureAchat(numeroFacture);
+            if (facture.isPresent()) {
+                log.debug("Found facture achat by exact numero: {}", numeroFacture);
+                return facture;
+            }
+            
+            // 2. Chercher par correspondance partielle dans le numéro
+            List<FactureAchat> allFactures = factureAchatRepository.findAll();
+            facture = allFactures.stream()
+                    .filter(f -> f.getNumeroFactureAchat() != null && 
+                            (f.getNumeroFactureAchat().contains(numeroFacture) || 
+                             numeroFacture.contains(f.getNumeroFactureAchat())))
+                    .findFirst();
+            if (facture.isPresent()) {
+                log.debug("Found facture achat by partial numero match: {} -> {}", numeroFacture, facture.get().getNumeroFactureAchat());
+                return facture;
+            }
+        }
+        
+        // 3. Chercher par partenaire + date + montant (avec tolérance)
+        if (nomPartenaire != null && !nomPartenaire.trim().isEmpty() && dateOperation != null && montantPaiement != null) {
+            // Trouver le fournisseur par nom
+            Optional<Supplier> supplierOpt = supplierRepository.findByNom(nomPartenaire.trim());
+            if (supplierOpt.isPresent()) {
+                String supplierId = supplierOpt.get().getId();
+                List<FactureAchat> facturesBySupplier = factureAchatRepository.findByFournisseurId(supplierId);
+                
+                // Chercher par date (tolérance ±7 jours) et montant (tolérance 1%)
+                facture = facturesBySupplier.stream()
+                        .filter(f -> {
+                            boolean dateMatch = f.getDateFacture() != null && 
+                                    Math.abs(java.time.temporal.ChronoUnit.DAYS.between(f.getDateFacture(), dateOperation)) <= 7;
+                            boolean montantMatch = f.getTotalTTC() != null && 
+                                    Math.abs(f.getTotalTTC() - montantPaiement) / montantPaiement <= 0.01; // 1% tolerance
+                            return dateMatch && montantMatch;
+                        })
+                        .findFirst();
+                
+                if (facture.isPresent()) {
+                    log.debug("Found facture achat by supplier + date + amount: {} -> {}", nomPartenaire, facture.get().getNumeroFactureAchat());
+                    return facture;
+                }
+            }
+        }
+        
+        // 4. Chercher par date + montant uniquement (si pas de partenaire)
+        if (dateOperation != null && montantPaiement != null) {
+            facture = allFactures.stream()
+                    .filter(f -> {
+                        boolean dateMatch = f.getDateFacture() != null && 
+                                Math.abs(java.time.temporal.ChronoUnit.DAYS.between(f.getDateFacture(), dateOperation)) <= 7;
+                        boolean montantMatch = f.getTotalTTC() != null && 
+                                Math.abs(f.getTotalTTC() - montantPaiement) / montantPaiement <= 0.01;
+                        return dateMatch && montantMatch;
+                    })
+                    .findFirst();
+            
+            if (facture.isPresent()) {
+                log.debug("Found facture achat by date + amount: {}", facture.get().getNumeroFactureAchat());
+                return facture;
+            }
+        }
+        
+        log.debug("No facture achat found for numero: {}, partenaire: {}, date: {}, montant: {}", 
+                numeroFacture, nomPartenaire, dateOperation, montantPaiement);
+        return Optional.empty();
+    }
+    
+    /**
+     * Trouve une facture vente en utilisant plusieurs critères de matching
+     */
+    private Optional<FactureVente> findFactureVenteByMultipleCriteria(
+            String numeroFacture, String nomPartenaire, LocalDate dateOperation, Double montantPaiement) {
+        
+        // 1. Chercher par numéro exact (si numéro fourni)
+        if (numeroFacture != null && !numeroFacture.trim().isEmpty()) {
+            Optional<FactureVente> facture = factureVenteRepository.findByNumeroFactureVente(numeroFacture);
+            if (facture.isPresent()) {
+                log.debug("Found facture vente by exact numero: {}", numeroFacture);
+                return facture;
+            }
+            
+            // 2. Chercher par correspondance partielle dans le numéro
+            List<FactureVente> allFactures = factureVenteRepository.findAll();
+            facture = allFactures.stream()
+                    .filter(f -> f.getNumeroFactureVente() != null && 
+                            (f.getNumeroFactureVente().contains(numeroFacture) || 
+                             numeroFacture.contains(f.getNumeroFactureVente())))
+                    .findFirst();
+            if (facture.isPresent()) {
+                log.debug("Found facture vente by partial numero match: {} -> {}", numeroFacture, facture.get().getNumeroFactureVente());
+                return facture;
+            }
+        }
+        
+        // 3. Chercher par partenaire + date + montant (avec tolérance)
+        if (nomPartenaire != null && !nomPartenaire.trim().isEmpty() && dateOperation != null && montantPaiement != null) {
+            // Trouver le client par nom
+            Optional<Client> clientOpt = clientRepository.findAll().stream()
+                    .filter(c -> c.getNom() != null && c.getNom().equalsIgnoreCase(nomPartenaire.trim()))
+                    .findFirst();
+            if (clientOpt.isPresent()) {
+                String clientId = clientOpt.get().getId();
+                List<FactureVente> facturesByClient = factureVenteRepository.findByClientId(clientId);
+                
+                // Chercher par date (tolérance ±7 jours) et montant (tolérance 1%)
+                facture = facturesByClient.stream()
+                        .filter(f -> {
+                            boolean dateMatch = f.getDateFacture() != null && 
+                                    Math.abs(java.time.temporal.ChronoUnit.DAYS.between(f.getDateFacture(), dateOperation)) <= 7;
+                            boolean montantMatch = f.getTotalTTC() != null && 
+                                    Math.abs(f.getTotalTTC() - montantPaiement) / montantPaiement <= 0.01; // 1% tolerance
+                            return dateMatch && montantMatch;
+                        })
+                        .findFirst();
+                
+                if (facture.isPresent()) {
+                    log.debug("Found facture vente by client + date + amount: {} -> {}", nomPartenaire, facture.get().getNumeroFactureVente());
+                    return facture;
+                }
+            }
+        }
+        
+        // 4. Chercher par date + montant uniquement (si pas de partenaire)
+        if (dateOperation != null && montantPaiement != null) {
+            facture = allFactures.stream()
+                    .filter(f -> {
+                        boolean dateMatch = f.getDateFacture() != null && 
+                                Math.abs(java.time.temporal.ChronoUnit.DAYS.between(f.getDateFacture(), dateOperation)) <= 7;
+                        boolean montantMatch = f.getTotalTTC() != null && 
+                                Math.abs(f.getTotalTTC() - montantPaiement) / montantPaiement <= 0.01;
+                        return dateMatch && montantMatch;
+                    })
+                    .findFirst();
+            
+            if (facture.isPresent()) {
+                log.debug("Found facture vente by date + amount: {}", facture.get().getNumeroFactureVente());
+                return facture;
+            }
+        }
+        
+        log.debug("No facture vente found for numero: {}, partenaire: {}, date: {}, montant: {}", 
+                numeroFacture, nomPartenaire, dateOperation, montantPaiement);
+        return Optional.empty();
+    }
+    
     private int processPaymentsFromOperations(ImportResult result) {
         final java.util.concurrent.atomic.AtomicInteger paymentsProcessed = new java.util.concurrent.atomic.AtomicInteger(0);
         
@@ -1678,20 +1832,32 @@ public class ExcelImportService {
                         numeroFactureTemp = reference.trim();
                         log.debug("Using reference as invoice number: {}", numeroFactureTemp);
                     } else {
-                        log.debug("Skipping payment operation: no invoice number and no reference");
-                        continue;
+                        // Pas de numéro ni référence, mais on peut quand même essayer de matcher par partenaire + date + montant
+                        if (operation.getNomClientFrs() == null || operation.getNomClientFrs().trim().isEmpty() || 
+                            operation.getDateOperation() == null || montantPaiementTemp == null) {
+                            log.debug("Skipping payment operation: no invoice number, no reference, and missing partner/date/amount");
+                            continue;
+                        }
+                        // Utiliser une valeur vide pour le matching qui utilisera d'autres critères
+                        numeroFactureTemp = "";
+                        log.debug("Trying to match payment by partner + date + amount: {}, {}, {}", 
+                                operation.getNomClientFrs(), operation.getDateOperation(), montantPaiementTemp);
                     }
                 }
                 
                 // Créer des copies finales pour les lambdas
                 final String numeroFacture = numeroFactureTemp;
                 final Double montantPaiement = montantPaiementTemp;
+                final String nomPartenaire = operation.getNomClientFrs();
+                final LocalDate dateOperation = operation.getDateOperation();
                 
                 // Déterminer le type de facture selon typeOperation
                 if (typeOperation == TypeOperation.F) {
-                    // Facture Achat (Fournisseur)
-                    factureAchatRepository.findByNumeroFactureAchat(numeroFacture)
-                            .ifPresentOrElse(
+                    // Facture Achat (Fournisseur) - Matching intelligent
+                    Optional<FactureAchat> factureOpt = findFactureAchatByMultipleCriteria(
+                            numeroFacture, nomPartenaire, dateOperation, montantPaiement);
+                    
+                    factureOpt.ifPresentOrElse(
                                     facture -> {
                                         try {
                                             // Vérifier si un paiement existe déjà pour cette facture avec cette référence et date
@@ -1744,9 +1910,11 @@ public class ExcelImportService {
                                     }
                             );
                 } else if (typeOperation == TypeOperation.C) {
-                    // Facture Vente (Client)
-                    factureVenteRepository.findByNumeroFactureVente(numeroFacture)
-                            .ifPresentOrElse(
+                    // Facture Vente (Client) - Matching intelligent
+                    Optional<FactureVente> factureOpt = findFactureVenteByMultipleCriteria(
+                            numeroFacture, nomPartenaire, dateOperation, montantPaiement);
+                    
+                    factureOpt.ifPresentOrElse(
                                     facture -> {
                                         try {
                                             // Vérifier si un paiement existe déjà pour cette facture avec cette référence et date
