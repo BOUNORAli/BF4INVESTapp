@@ -1649,27 +1649,46 @@ public class ExcelImportService {
         
         // 3. Chercher par partenaire + date + montant (avec tolérance)
         if (nomPartenaire != null && !nomPartenaire.trim().isEmpty() && dateOperation != null && montantPaiement != null) {
-            // Trouver le fournisseur par nom
-            Optional<Supplier> supplierOpt = supplierRepository.findByNom(nomPartenaire.trim());
+            // Trouver le fournisseur par nom (insensible à la casse, recherche partielle)
+            String nomPartenaireNormalized = nomPartenaire.trim().toUpperCase();
+            Optional<Supplier> supplierOpt = supplierRepository.findAll().stream()
+                    .filter(s -> s.getNom() != null && s.getNom().toUpperCase().contains(nomPartenaireNormalized) || 
+                            nomPartenaireNormalized.contains(s.getNom().toUpperCase()))
+                    .findFirst();
+            
             if (supplierOpt.isPresent()) {
                 String supplierId = supplierOpt.get().getId();
                 List<FactureAchat> facturesBySupplier = factureAchatRepository.findByFournisseurId(supplierId);
+                log.debug("Found supplier {} (id: {}) with {} invoices", supplierOpt.get().getNom(), supplierId, facturesBySupplier.size());
                 
-                // Chercher par date (tolérance ±7 jours) et montant (tolérance 1%)
+                // Chercher par date (tolérance ±60 jours) et montant (tolérance 5%)
                 facture = facturesBySupplier.stream()
                         .filter(f -> {
                             boolean dateMatch = f.getDateFacture() != null && 
-                                    Math.abs(java.time.temporal.ChronoUnit.DAYS.between(f.getDateFacture(), dateOperation)) <= 7;
-                            boolean montantMatch = f.getTotalTTC() != null && 
-                                    Math.abs(f.getTotalTTC() - montantPaiement) / montantPaiement <= 0.01; // 1% tolerance
+                                    Math.abs(java.time.temporal.ChronoUnit.DAYS.between(f.getDateFacture(), dateOperation)) <= 60;
+                            boolean montantMatch = f.getTotalTTC() != null && montantPaiement > 0 &&
+                                    Math.abs(f.getTotalTTC() - montantPaiement) / montantPaiement <= 0.05; // 5% tolerance
+                            if (!dateMatch || !montantMatch) {
+                                log.debug("Invoice {} rejected: dateMatch={} (diff={} days), montantMatch={} (diff={}%)", 
+                                        f.getNumeroFactureAchat(), dateMatch,
+                                        f.getDateFacture() != null ? Math.abs(java.time.temporal.ChronoUnit.DAYS.between(f.getDateFacture(), dateOperation)) : -1,
+                                        montantMatch, f.getTotalTTC() != null && montantPaiement > 0 ? 
+                                        Math.abs(f.getTotalTTC() - montantPaiement) / montantPaiement * 100 : -1);
+                            }
                             return dateMatch && montantMatch;
                         })
                         .findFirst();
                 
                 if (facture.isPresent()) {
-                    log.debug("Found facture achat by supplier + date + amount: {} -> {}", nomPartenaire, facture.get().getNumeroFactureAchat());
+                    log.info("Found facture achat by supplier + date + amount: {} -> {} (supplier: {}, date: {}, amount: {})", 
+                            nomPartenaire, facture.get().getNumeroFactureAchat(), supplierOpt.get().getNom(), 
+                            facture.get().getDateFacture(), facture.get().getTotalTTC());
                     return facture;
+                } else {
+                    log.debug("No matching invoice found for supplier {} with {} invoices", supplierOpt.get().getNom(), facturesBySupplier.size());
                 }
+            } else {
+                log.debug("Supplier not found for name: {}", nomPartenaire);
             }
         }
         
@@ -1678,15 +1697,16 @@ public class ExcelImportService {
             facture = allFactures.stream()
                     .filter(f -> {
                         boolean dateMatch = f.getDateFacture() != null && 
-                                Math.abs(java.time.temporal.ChronoUnit.DAYS.between(f.getDateFacture(), dateOperation)) <= 7;
-                        boolean montantMatch = f.getTotalTTC() != null && 
-                                Math.abs(f.getTotalTTC() - montantPaiement) / montantPaiement <= 0.01;
+                                Math.abs(java.time.temporal.ChronoUnit.DAYS.between(f.getDateFacture(), dateOperation)) <= 60;
+                        boolean montantMatch = f.getTotalTTC() != null && montantPaiement > 0 &&
+                                Math.abs(f.getTotalTTC() - montantPaiement) / montantPaiement <= 0.05; // 5% tolerance
                         return dateMatch && montantMatch;
                     })
                     .findFirst();
             
             if (facture.isPresent()) {
-                log.debug("Found facture achat by date + amount: {}", facture.get().getNumeroFactureAchat());
+                log.info("Found facture achat by date + amount: {} (date: {}, amount: {})", 
+                        facture.get().getNumeroFactureAchat(), facture.get().getDateFacture(), facture.get().getTotalTTC());
                 return facture;
             }
         }
@@ -1727,29 +1747,46 @@ public class ExcelImportService {
         
         // 3. Chercher par partenaire + date + montant (avec tolérance)
         if (nomPartenaire != null && !nomPartenaire.trim().isEmpty() && dateOperation != null && montantPaiement != null) {
-            // Trouver le client par nom
+            // Trouver le client par nom (insensible à la casse, recherche partielle)
+            String nomPartenaireNormalized = nomPartenaire.trim().toUpperCase();
             Optional<Client> clientOpt = clientRepository.findAll().stream()
-                    .filter(c -> c.getNom() != null && c.getNom().equalsIgnoreCase(nomPartenaire.trim()))
+                    .filter(c -> c.getNom() != null && (c.getNom().toUpperCase().contains(nomPartenaireNormalized) || 
+                            nomPartenaireNormalized.contains(c.getNom().toUpperCase())))
                     .findFirst();
+            
             if (clientOpt.isPresent()) {
                 String clientId = clientOpt.get().getId();
                 List<FactureVente> facturesByClient = factureVenteRepository.findByClientId(clientId);
+                log.debug("Found client {} (id: {}) with {} invoices", clientOpt.get().getNom(), clientId, facturesByClient.size());
                 
-                // Chercher par date (tolérance ±7 jours) et montant (tolérance 1%)
+                // Chercher par date (tolérance ±60 jours) et montant (tolérance 5%)
                 facture = facturesByClient.stream()
                         .filter(f -> {
                             boolean dateMatch = f.getDateFacture() != null && 
-                                    Math.abs(java.time.temporal.ChronoUnit.DAYS.between(f.getDateFacture(), dateOperation)) <= 7;
-                            boolean montantMatch = f.getTotalTTC() != null && 
-                                    Math.abs(f.getTotalTTC() - montantPaiement) / montantPaiement <= 0.01; // 1% tolerance
+                                    Math.abs(java.time.temporal.ChronoUnit.DAYS.between(f.getDateFacture(), dateOperation)) <= 60;
+                            boolean montantMatch = f.getTotalTTC() != null && montantPaiement > 0 &&
+                                    Math.abs(f.getTotalTTC() - montantPaiement) / montantPaiement <= 0.05; // 5% tolerance
+                            if (!dateMatch || !montantMatch) {
+                                log.debug("Invoice {} rejected: dateMatch={} (diff={} days), montantMatch={} (diff={}%)", 
+                                        f.getNumeroFactureVente(), dateMatch,
+                                        f.getDateFacture() != null ? Math.abs(java.time.temporal.ChronoUnit.DAYS.between(f.getDateFacture(), dateOperation)) : -1,
+                                        montantMatch, f.getTotalTTC() != null && montantPaiement > 0 ? 
+                                        Math.abs(f.getTotalTTC() - montantPaiement) / montantPaiement * 100 : -1);
+                            }
                             return dateMatch && montantMatch;
                         })
                         .findFirst();
                 
                 if (facture.isPresent()) {
-                    log.debug("Found facture vente by client + date + amount: {} -> {}", nomPartenaire, facture.get().getNumeroFactureVente());
+                    log.info("Found facture vente by client + date + amount: {} -> {} (client: {}, date: {}, amount: {})", 
+                            nomPartenaire, facture.get().getNumeroFactureVente(), clientOpt.get().getNom(), 
+                            facture.get().getDateFacture(), facture.get().getTotalTTC());
                     return facture;
+                } else {
+                    log.debug("No matching invoice found for client {} with {} invoices", clientOpt.get().getNom(), facturesByClient.size());
                 }
+            } else {
+                log.debug("Client not found for name: {}", nomPartenaire);
             }
         }
         
@@ -1758,15 +1795,16 @@ public class ExcelImportService {
             facture = allFactures.stream()
                     .filter(f -> {
                         boolean dateMatch = f.getDateFacture() != null && 
-                                Math.abs(java.time.temporal.ChronoUnit.DAYS.between(f.getDateFacture(), dateOperation)) <= 7;
-                        boolean montantMatch = f.getTotalTTC() != null && 
-                                Math.abs(f.getTotalTTC() - montantPaiement) / montantPaiement <= 0.01;
+                                Math.abs(java.time.temporal.ChronoUnit.DAYS.between(f.getDateFacture(), dateOperation)) <= 60;
+                        boolean montantMatch = f.getTotalTTC() != null && montantPaiement > 0 &&
+                                Math.abs(f.getTotalTTC() - montantPaiement) / montantPaiement <= 0.05; // 5% tolerance
                         return dateMatch && montantMatch;
                     })
                     .findFirst();
             
             if (facture.isPresent()) {
-                log.debug("Found facture vente by date + amount: {}", facture.get().getNumeroFactureVente());
+                log.info("Found facture vente by date + amount: {} (date: {}, amount: {})", 
+                        facture.get().getNumeroFactureVente(), facture.get().getDateFacture(), facture.get().getTotalTTC());
                 return facture;
             }
         }
