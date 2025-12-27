@@ -493,7 +493,7 @@ export class StoreService {
       this.showToast('Données actualisées', 'success');
     } catch (error) {
       console.error('Error refreshing data:', error);
-      this.showToast('Erreur lors du rafra├«chissement', 'error');
+      this.showToast('Erreur lors du rafraîchissement', 'error');
     } finally {
       this.refreshing.set(false);
     }

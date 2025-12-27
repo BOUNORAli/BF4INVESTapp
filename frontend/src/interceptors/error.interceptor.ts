@@ -73,6 +73,8 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
           // Logout handled elsewhere if it was a protected route, otherwise login failed
         } else if (error.status === 403) {
           errorMessage = 'Accès refusé. Vous n\'avez pas les droits nécessaires.';
+          // Déconnecter l'utilisateur si accès refusé (droits insuffisants)
+          authService.logout();
         } else if (error.status === 404) {
           errorMessage = 'Ressource non trouvée.';
         } else if (error.status === 500) {
