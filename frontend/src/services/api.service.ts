@@ -1,7 +1,8 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpHeaders, HttpParams, HttpEvent, HttpEventType } from '@angular/common/http';
 import { Observable } from 'rxjs';
-import { map, filter } from 'rxjs/operators';
+import { map, filter, switchMap } from 'rxjs/operators';
+import { from } from 'rxjs';
 import { getApiBaseUrlDynamic } from '../config/environment';
 
 @Injectable({
@@ -79,8 +80,44 @@ export class ApiService {
     // Don't set Content-Type - browser will set it automatically with boundary for FormData
 
     return this.http.post(`${this.getApiUrl()}${endpoint}`, formData, {
-      headers: headers
-    });
+      headers: headers,
+      responseType: 'blob', // Accepter blob pour détecter les fichiers Excel
+      observe: 'response'
+    }).pipe(
+      switchMap(response => {
+        // Vérifier si c'est un fichier Excel (Content-Type contient 'spreadsheet' ou 'excel')
+        const contentType = response.headers.get('Content-Type') || '';
+        if (contentType.includes('spreadsheet') || contentType.includes('excel') || 
+            contentType.includes('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') ||
+            (contentType.includes('application/octet-stream') && response.headers.get('Content-Disposition'))) {
+          return new Observable(observer => {
+            observer.next({ isFile: true, blob: response.body, filename: this.extractFilename(response.headers) });
+            observer.complete();
+          });
+        }
+        // Sinon, c'est du JSON - convertir le blob en JSON
+        return from(response.body!.text()).pipe(
+          map(text => {
+            try {
+              return JSON.parse(text);
+            } catch (e) {
+              return { error: 'Erreur lors de la lecture de la réponse' };
+            }
+          })
+        );
+      })
+    );
+  }
+
+  private extractFilename(headers: HttpHeaders): string {
+    const contentDisposition = headers.get('Content-Disposition');
+    if (contentDisposition) {
+      const matches = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(contentDisposition);
+      if (matches != null && matches[1]) {
+        return matches[1].replace(/['"]/g, '');
+      }
+    }
+    return 'rapport_import.xlsx';
   }
 
   uploadFileWithParams<T = any>(endpoint: string, file: File, params?: Record<string, any>): Observable<T> {

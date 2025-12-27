@@ -99,7 +99,7 @@ public class ImportController {
     }
     
     @PostMapping("/produits")
-    public ResponseEntity<ImportResult> importProductCatalog(@RequestParam("file") MultipartFile file) {
+    public ResponseEntity<?> importProductCatalog(@RequestParam("file") MultipartFile file) {
         if (file.isEmpty()) {
             ImportResult result = new ImportResult();
             result.getErrors().add("Fichier vide");
@@ -126,6 +126,29 @@ public class ImportController {
                 .build();
         importLogRepository.save(log);
         
+        // Générer le fichier de rapport si il y a des erreurs ou des succès
+        if (!result.getErrorRows().isEmpty() || !result.getSuccessRows().isEmpty()) {
+            try {
+                byte[] reportBytes = excelImportService.generateImportReport(result, file);
+                
+                HttpHeaders headers = new HttpHeaders();
+                String reportFileName = file.getOriginalFilename() != null 
+                        ? file.getOriginalFilename().replace(".xlsx", "_rapport.xlsx").replace(".xls", "_rapport.xlsx")
+                        : "rapport_import.xlsx";
+                headers.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + reportFileName);
+                headers.add(HttpHeaders.CONTENT_TYPE, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+                
+                return ResponseEntity.ok()
+                        .headers(headers)
+                        .contentLength(reportBytes.length)
+                        .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                        .body(new ByteArrayResource(reportBytes));
+            } catch (Exception e) {
+                // Si erreur lors de la génération du rapport, retourner juste le résultat
+                return ResponseEntity.ok(result);
+            }
+        }
+        
         return ResponseEntity.ok(result);
     }
     
@@ -149,7 +172,7 @@ public class ImportController {
     }
     
     @PostMapping("/operations")
-    public ResponseEntity<ImportResult> importOperationsComptables(@RequestParam("file") MultipartFile file) {
+    public ResponseEntity<?> importOperationsComptables(@RequestParam("file") MultipartFile file) {
         if (file.isEmpty()) {
             ImportResult result = new ImportResult();
             result.getErrors().add("Fichier vide");
@@ -175,6 +198,29 @@ public class ImportController {
                 .createdAt(LocalDateTime.now())
                 .build();
         importLogRepository.save(log);
+        
+        // Générer le fichier de rapport si il y a des erreurs ou des succès
+        if (!result.getErrorRows().isEmpty() || !result.getSuccessRows().isEmpty()) {
+            try {
+                byte[] reportBytes = excelImportService.generateImportReport(result, file);
+                
+                HttpHeaders headers = new HttpHeaders();
+                String reportFileName = file.getOriginalFilename() != null 
+                        ? file.getOriginalFilename().replace(".xlsx", "_rapport.xlsx").replace(".xls", "_rapport.xlsx")
+                        : "rapport_import.xlsx";
+                headers.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + reportFileName);
+                headers.add(HttpHeaders.CONTENT_TYPE, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+                
+                return ResponseEntity.ok()
+                        .headers(headers)
+                        .contentLength(reportBytes.length)
+                        .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                        .body(new ByteArrayResource(reportBytes));
+            } catch (Exception e) {
+                // Si erreur lors de la génération du rapport, retourner juste le résultat
+                return ResponseEntity.ok(result);
+            }
+        }
         
         return ResponseEntity.ok(result);
     }

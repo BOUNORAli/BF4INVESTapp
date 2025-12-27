@@ -88,10 +88,26 @@ public class ExcelImportService {
                     processRow(row, columnMap, bcMap, faMap, fvMap, faLignesMap, fvLignesMap, 
                               faToBcNumMap, fvToBcNumMap, result);
                     processedRows++;
+                    
+                    // Stocker la ligne de succès (optionnel)
+                    Map<String, Object> rowData = extractRowData(row, columnMap, sheet.getRow(0));
+                    result.getSuccessRows().add(ImportResult.SuccessRow.builder()
+                            .rowNumber(i + 1)
+                            .rowData(rowData)
+                            .build());
                 } catch (Exception e) {
                     log.error("Error processing row {}: {}", i + 1, e.getMessage(), e);
-                    result.getErrors().add(String.format("Ligne %d: %s", i + 1, e.getMessage()));
+                    String errorMsg = e.getMessage() != null ? e.getMessage() : "Erreur inconnue";
+                    result.getErrors().add(String.format("Ligne %d: %s", i + 1, errorMsg));
                     result.setErrorCount(result.getErrorCount() + 1);
+                    
+                    // Stocker la ligne en erreur avec ses données
+                    Map<String, Object> rowData = extractRowData(row, columnMap, sheet.getRow(0));
+                    result.getErrorRows().add(ImportResult.ErrorRow.builder()
+                            .rowNumber(i + 1)
+                            .rowData(rowData)
+                            .errorMessage(errorMsg)
+                            .build());
                 }
             }
             
@@ -1268,18 +1284,33 @@ public class ExcelImportService {
                 Row row = sheet.getRow(i);
                 if (row == null) continue;
                 
+                Map<String, Object> rowData = extractRowData(row, columnMap, headerRow);
+                String errorMessage = null;
+                
                 try {
                     String refArticle = getCellValue(row, columnMap, "ref_article");
                     if (refArticle == null || refArticle.trim().isEmpty()) {
                         errorCount++;
-                        result.getErrors().add(String.format("Ligne %d: Référence article manquante", i + 1));
+                        errorMessage = "Référence article manquante";
+                        result.getErrors().add(String.format("Ligne %d: %s", i + 1, errorMessage));
+                        result.getErrorRows().add(ImportResult.ErrorRow.builder()
+                                .rowNumber(i + 1)
+                                .rowData(rowData)
+                                .errorMessage(errorMessage)
+                                .build());
                         continue;
                     }
                     
                     String designation = getCellValue(row, columnMap, "designation");
                     if (designation == null || designation.trim().isEmpty()) {
                         errorCount++;
-                        result.getErrors().add(String.format("Ligne %d: Désignation manquante", i + 1));
+                        errorMessage = "Désignation manquante";
+                        result.getErrors().add(String.format("Ligne %d: %s", i + 1, errorMessage));
+                        result.getErrorRows().add(ImportResult.ErrorRow.builder()
+                                .rowNumber(i + 1)
+                                .rowData(rowData)
+                                .errorMessage(errorMessage)
+                                .build());
                         continue;
                     }
                     
@@ -1291,14 +1322,26 @@ public class ExcelImportService {
                     Double prixAchat = getDoubleValue(row, columnMap, "prix_achat");
                     if (prixAchat == null || prixAchat < 0) {
                         errorCount++;
-                        result.getErrors().add(String.format("Ligne %d: Prix achat invalide", i + 1));
+                        errorMessage = "Prix achat invalide";
+                        result.getErrors().add(String.format("Ligne %d: %s", i + 1, errorMessage));
+                        result.getErrorRows().add(ImportResult.ErrorRow.builder()
+                                .rowNumber(i + 1)
+                                .rowData(rowData)
+                                .errorMessage(errorMessage)
+                                .build());
                         continue;
                     }
                     
                     Double prixVente = getDoubleValue(row, columnMap, "prix_vente");
                     if (prixVente == null || prixVente < 0) {
                         errorCount++;
-                        result.getErrors().add(String.format("Ligne %d: Prix vente invalide", i + 1));
+                        errorMessage = "Prix vente invalide";
+                        result.getErrors().add(String.format("Ligne %d: %s", i + 1, errorMessage));
+                        result.getErrorRows().add(ImportResult.ErrorRow.builder()
+                                .rowNumber(i + 1)
+                                .rowData(rowData)
+                                .errorMessage(errorMessage)
+                                .build());
                         continue;
                     }
                     
@@ -1361,10 +1404,23 @@ public class ExcelImportService {
                     }
                     
                     successCount++;
+                    // Stocker la ligne de succès
+                    result.getSuccessRows().add(ImportResult.SuccessRow.builder()
+                            .rowNumber(i + 1)
+                            .rowData(rowData)
+                            .build());
                 } catch (Exception e) {
                     errorCount++;
-                    result.getErrors().add(String.format("Ligne %d: %s", i + 1, e.getMessage()));
-                    log.error("Error processing product row {}: {}", i + 1, e.getMessage(), e);
+                    String errorMsg = e.getMessage() != null ? e.getMessage() : "Erreur inconnue";
+                    result.getErrors().add(String.format("Ligne %d: %s", i + 1, errorMsg));
+                    log.error("Error processing product row {}: {}", i + 1, errorMsg, e);
+                    
+                    // Stocker la ligne en erreur
+                    result.getErrorRows().add(ImportResult.ErrorRow.builder()
+                            .rowNumber(i + 1)
+                            .rowData(rowData)
+                            .errorMessage(errorMsg)
+                            .build());
                 }
             }
             
@@ -1579,8 +1635,22 @@ public class ExcelImportService {
                     if (operation != null) {
                         operationComptableRepository.save(operation);
                         successCount++;
+                        
+                        // Stocker la ligne de succès
+                        Map<String, Object> rowData = extractRowData(row, columnMap, headerRow);
+                        result.getSuccessRows().add(ImportResult.SuccessRow.builder()
+                                .rowNumber(i + 1)
+                                .rowData(rowData)
+                                .build());
                     } else {
                         errorCount++;
+                        // Stocker la ligne en erreur
+                        Map<String, Object> rowData = extractRowData(row, columnMap, headerRow);
+                        result.getErrorRows().add(ImportResult.ErrorRow.builder()
+                                .rowNumber(i + 1)
+                                .rowData(rowData)
+                                .errorMessage("Opération invalide ou incomplète")
+                                .build());
                     }
                 } catch (Exception e) {
                     errorCount++;
@@ -1590,6 +1660,14 @@ public class ExcelImportService {
                     }
                     result.getErrors().add(String.format("Ligne %d: %s", i + 1, errorMsg));
                     log.error("Error processing operation comptable row {}: {}", i + 1, errorMsg, e);
+                    
+                    // Stocker la ligne en erreur avec ses données
+                    Map<String, Object> rowData = extractRowData(row, columnMap, headerRow);
+                    result.getErrorRows().add(ImportResult.ErrorRow.builder()
+                            .rowNumber(i + 1)
+                            .rowData(rowData)
+                            .errorMessage(errorMsg)
+                            .build());
                 }
             }
             
@@ -2117,5 +2195,273 @@ public class ExcelImportService {
                 .build();
         
         return operation;
+    }
+    
+    /**
+     * Extrait les données d'une ligne Excel en Map (colonne -> valeur)
+     */
+    private Map<String, Object> extractRowData(Row row, Map<String, Integer> columnMap, Row headerRow) {
+        Map<String, Object> rowData = new LinkedHashMap<>();
+        
+        if (headerRow != null) {
+            // Extraire les valeurs selon les colonnes mappées
+            for (Map.Entry<String, Integer> entry : columnMap.entrySet()) {
+                String columnName = entry.getKey();
+                int colIndex = entry.getValue();
+                
+                Cell cell = row.getCell(colIndex);
+                Object value = null;
+                
+                if (cell != null) {
+                    switch (cell.getCellType()) {
+                        case STRING:
+                            value = cell.getStringCellValue();
+                            break;
+                        case NUMERIC:
+                            if (DateUtil.isCellDateFormatted(cell)) {
+                                value = cell.getDateCellValue();
+                            } else {
+                                value = cell.getNumericCellValue();
+                            }
+                            break;
+                        case BOOLEAN:
+                            value = cell.getBooleanCellValue();
+                            break;
+                        case FORMULA:
+                            value = cell.getCellFormula();
+                            break;
+                        default:
+                            value = getCellStringValue(cell);
+                    }
+                }
+                
+                rowData.put(columnName, value);
+            }
+            
+            // Ajouter aussi toutes les autres colonnes de la ligne
+            for (int i = 0; i < row.getLastCellNum(); i++) {
+                Cell headerCell = headerRow.getCell(i);
+                if (headerCell != null && !columnMap.containsValue(i)) {
+                    String headerName = getCellStringValue(headerCell);
+                    if (headerName != null && !headerName.trim().isEmpty()) {
+                        Cell cell = row.getCell(i);
+                        Object value = null;
+                        if (cell != null) {
+                            value = getCellStringValue(cell);
+                        }
+                        rowData.put(headerName, value);
+                    }
+                }
+            }
+        }
+        
+        return rowData;
+    }
+    
+    /**
+     * Génère un fichier Excel de rapport d'import avec les lignes en erreur et les lignes importées avec succès
+     */
+    public byte[] generateImportReport(ImportResult result, MultipartFile originalFile) {
+        try (XSSFWorkbook workbook = new XSSFWorkbook()) {
+            // Style pour l'en-tête
+            CellStyle headerStyle = workbook.createCellStyle();
+            Font headerFont = workbook.createFont();
+            headerFont.setBold(true);
+            headerFont.setColor(IndexedColors.WHITE.getIndex());
+            headerStyle.setFont(headerFont);
+            headerStyle.setFillForegroundColor(IndexedColors.DARK_BLUE.getIndex());
+            headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+            headerStyle.setAlignment(HorizontalAlignment.CENTER);
+            headerStyle.setBorderBottom(BorderStyle.THIN);
+            headerStyle.setBorderTop(BorderStyle.THIN);
+            headerStyle.setBorderLeft(BorderStyle.THIN);
+            headerStyle.setBorderRight(BorderStyle.THIN);
+            
+            // Style pour les lignes en erreur
+            CellStyle errorStyle = workbook.createCellStyle();
+            Font errorFont = workbook.createFont();
+            errorFont.setColor(IndexedColors.WHITE.getIndex());
+            errorStyle.setFont(errorFont);
+            errorStyle.setFillForegroundColor(IndexedColors.RED.getIndex());
+            errorStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+            errorStyle.setBorderBottom(BorderStyle.THIN);
+            errorStyle.setBorderTop(BorderStyle.THIN);
+            errorStyle.setBorderLeft(BorderStyle.THIN);
+            errorStyle.setBorderRight(BorderStyle.THIN);
+            
+            // Style pour les lignes de succès
+            CellStyle successStyle = workbook.createCellStyle();
+            Font successFont = workbook.createFont();
+            successFont.setColor(IndexedColors.DARK_GREEN.getIndex());
+            successStyle.setFont(successFont);
+            successStyle.setFillForegroundColor(IndexedColors.LIGHT_GREEN.getIndex());
+            successStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+            successStyle.setBorderBottom(BorderStyle.THIN);
+            successStyle.setBorderTop(BorderStyle.THIN);
+            successStyle.setBorderLeft(BorderStyle.THIN);
+            successStyle.setBorderRight(BorderStyle.THIN);
+            
+            // Style pour les données
+            CellStyle dataStyle = workbook.createCellStyle();
+            dataStyle.setBorderBottom(BorderStyle.THIN);
+            dataStyle.setBorderTop(BorderStyle.THIN);
+            dataStyle.setBorderLeft(BorderStyle.THIN);
+            dataStyle.setBorderRight(BorderStyle.THIN);
+            
+            // Feuille 1: Lignes en erreur
+            Sheet errorSheet = workbook.createSheet("Lignes en erreur");
+            int rowNum = 0;
+            
+            // En-tête
+            Row headerRow = errorSheet.createRow(rowNum++);
+            int colNum = 0;
+            headerRow.createCell(colNum++).setCellValue("N° Ligne");
+            headerRow.createCell(colNum++).setCellValue("Message d'erreur");
+            
+            // Récupérer tous les noms de colonnes uniques
+            Set<String> allColumnNames = new LinkedHashSet<>();
+            for (ImportResult.ErrorRow errorRow : result.getErrorRows()) {
+                if (errorRow.getRowData() != null) {
+                    allColumnNames.addAll(errorRow.getRowData().keySet());
+                }
+            }
+            
+            // Ajouter les colonnes de données
+            for (String colName : allColumnNames) {
+                headerRow.createCell(colNum++).setCellValue(colName);
+            }
+            
+            // Appliquer le style d'en-tête
+            for (int i = 0; i < colNum; i++) {
+                headerRow.getCell(i).setCellStyle(headerStyle);
+            }
+            
+            // Lignes en erreur
+            for (ImportResult.ErrorRow errorRow : result.getErrorRows()) {
+                Row row = errorSheet.createRow(rowNum++);
+                colNum = 0;
+                
+                // N° ligne
+                Cell cell0 = row.createCell(colNum++);
+                cell0.setCellValue(errorRow.getRowNumber());
+                cell0.setCellStyle(errorStyle);
+                
+                // Message d'erreur
+                Cell cell1 = row.createCell(colNum++);
+                cell1.setCellValue(errorRow.getErrorMessage() != null ? errorRow.getErrorMessage() : "");
+                cell1.setCellStyle(errorStyle);
+                
+                // Données de la ligne
+                if (errorRow.getRowData() != null) {
+                    for (String colName : allColumnNames) {
+                        Cell cell = row.createCell(colNum++);
+                        Object value = errorRow.getRowData().get(colName);
+                        if (value != null) {
+                            if (value instanceof String) {
+                                cell.setCellValue((String) value);
+                            } else if (value instanceof Number) {
+                                cell.setCellValue(((Number) value).doubleValue());
+                            } else if (value instanceof Boolean) {
+                                cell.setCellValue((Boolean) value);
+                            } else if (value instanceof Date) {
+                                cell.setCellValue((Date) value);
+                                CellStyle dateStyle = workbook.createCellStyle();
+                                dateStyle.cloneStyleFrom(dataStyle);
+                                dateStyle.setDataFormat(workbook.getCreationHelper().createDataFormat().getFormat("dd/mm/yyyy"));
+                                cell.setCellStyle(dateStyle);
+                            } else {
+                                cell.setCellValue(value.toString());
+                            }
+                        }
+                        cell.setCellStyle(dataStyle);
+                    }
+                }
+            }
+            
+            // Auto-size columns
+            for (int i = 0; i < colNum; i++) {
+                errorSheet.autoSizeColumn(i);
+            }
+            
+            // Feuille 2: Lignes importées avec succès (optionnel)
+            if (!result.getSuccessRows().isEmpty()) {
+                Sheet successSheet = workbook.createSheet("Lignes importées");
+                rowNum = 0;
+                
+                // En-tête
+                headerRow = successSheet.createRow(rowNum++);
+                colNum = 0;
+                headerRow.createCell(colNum++).setCellValue("N° Ligne");
+                
+                // Récupérer tous les noms de colonnes uniques
+                Set<String> successColumnNames = new LinkedHashSet<>();
+                for (ImportResult.SuccessRow successRow : result.getSuccessRows()) {
+                    if (successRow.getRowData() != null) {
+                        successColumnNames.addAll(successRow.getRowData().keySet());
+                    }
+                }
+                
+                // Ajouter les colonnes de données
+                for (String colName : successColumnNames) {
+                    headerRow.createCell(colNum++).setCellValue(colName);
+                }
+                
+                // Appliquer le style d'en-tête
+                for (int i = 0; i < colNum; i++) {
+                    headerRow.getCell(i).setCellStyle(headerStyle);
+                }
+                
+                // Lignes de succès
+                for (ImportResult.SuccessRow successRow : result.getSuccessRows()) {
+                    Row row = successSheet.createRow(rowNum++);
+                    colNum = 0;
+                    
+                    // N° ligne
+                    Cell cell0 = row.createCell(colNum++);
+                    cell0.setCellValue(successRow.getRowNumber());
+                    cell0.setCellStyle(successStyle);
+                    
+                    // Données de la ligne
+                    if (successRow.getRowData() != null) {
+                        for (String colName : successColumnNames) {
+                            Cell cell = row.createCell(colNum++);
+                            Object value = successRow.getRowData().get(colName);
+                            if (value != null) {
+                                if (value instanceof String) {
+                                    cell.setCellValue((String) value);
+                                } else if (value instanceof Number) {
+                                    cell.setCellValue(((Number) value).doubleValue());
+                                } else if (value instanceof Boolean) {
+                                    cell.setCellValue((Boolean) value);
+                                } else if (value instanceof Date) {
+                                    cell.setCellValue((Date) value);
+                                    CellStyle dateStyle = workbook.createCellStyle();
+                                    dateStyle.cloneStyleFrom(dataStyle);
+                                    dateStyle.setDataFormat(workbook.getCreationHelper().createDataFormat().getFormat("dd/mm/yyyy"));
+                                    cell.setCellStyle(dateStyle);
+                                } else {
+                                    cell.setCellValue(value.toString());
+                                }
+                            }
+                            cell.setCellStyle(dataStyle);
+                        }
+                    }
+                }
+                
+                // Auto-size columns
+                for (int i = 0; i < colNum; i++) {
+                    successSheet.autoSizeColumn(i);
+                }
+            }
+            
+            // Écrire dans un ByteArrayOutputStream
+            java.io.ByteArrayOutputStream outputStream = new java.io.ByteArrayOutputStream();
+            workbook.write(outputStream);
+            return outputStream.toByteArray();
+            
+        } catch (Exception e) {
+            log.error("Error generating import report", e);
+            throw new RuntimeException("Erreur lors de la génération du rapport d'import: " + e.getMessage(), e);
+        }
     }
 }

@@ -334,37 +334,32 @@ export class ImportComponent implements OnInit {
       } else if (type === 'operations') {
         endpoint = '/import/operations';
       }
-      const result = await this.api.uploadFile(endpoint, file).toPromise() as ImportResult;
+      const response = await this.api.uploadFile(endpoint, file).toPromise() as any;
       
       clearInterval(progressInterval);
       this.progress.set(100);
 
-      // Process result
-      const details: string[] = [];
-      if (result.successCount > 0) {
-        details.push(`${result.successCount} ligne(s) importée(s) avec succès`);
-      }
-      if (result.errorCount > 0) {
-        details.push(`${result.errorCount} erreur(s) détectée(s)`);
-      }
-      if (result.warnings.length > 0) {
-        details.push(`${result.warnings.length} avertissement(s)`);
-      }
-
-      const success = result.errorCount === 0 && result.successCount > 0;
-      const detailText = details.length > 0 ? details.join(', ') : 'Import effectué';
-
-      // Reload import history from backend
-      await this.loadImportHistory();
-
-      if (success) {
-        this.store.showToast('Importation réussie ! Données mises à jour.', 'success');
+      // Vérifier si c'est un fichier Excel (rapport)
+      if (response && response.isFile && response.blob) {
+        // Télécharger le fichier de rapport
+        const url = window.URL.createObjectURL(response.blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = response.filename || 'rapport_import.xlsx';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+        
+        this.store.showToast('Rapport d\'import téléchargé avec les lignes en erreur et les lignes importées', 'success');
+        
+        // Reload import history from backend
+        await this.loadImportHistory();
+        
         // Reload data
         if (type === 'produits') {
           await this.store.loadProducts();
         } else if (type === 'operations') {
-          // Les opérations comptables sont stockées séparément, pas besoin de recharger
-          // Mais on peut recharger le dashboard pour mettre à jour les KPIs
           await this.store.loadDashboardKPIs();
         } else {
           await this.store.loadBCs();
@@ -372,13 +367,48 @@ export class ImportComponent implements OnInit {
           await this.store.loadDashboardKPIs();
         }
       } else {
-        this.store.showToast(`Import terminé avec ${result.errorCount} erreur(s)`, 'error');
-      }
+        // C'est un ImportResult JSON (ancien format ou pas d'erreurs)
+        const result = response as ImportResult;
+        
+        // Process result
+        const details: string[] = [];
+        if (result.successCount > 0) {
+          details.push(`${result.successCount} ligne(s) importée(s) avec succès`);
+        }
+        if (result.errorCount > 0) {
+          details.push(`${result.errorCount} erreur(s) détectée(s)`);
+        }
+        if (result.warnings && result.warnings.length > 0) {
+          details.push(`${result.warnings.length} avertissement(s)`);
+        }
 
-      // Show errors if any
-      if (result.errors.length > 0) {
-        const errorDetails = result.errors.slice(0, 5).join('; ');
-        this.store.showToast(`Erreurs: ${errorDetails}`, 'error');
+        const success = result.errorCount === 0 && result.successCount > 0;
+        const detailText = details.length > 0 ? details.join(', ') : 'Import effectué';
+
+        // Reload import history from backend
+        await this.loadImportHistory();
+
+        if (success) {
+          this.store.showToast('Importation réussie ! Données mises à jour.', 'success');
+          // Reload data
+          if (type === 'produits') {
+            await this.store.loadProducts();
+          } else if (type === 'operations') {
+            await this.store.loadDashboardKPIs();
+          } else {
+            await this.store.loadBCs();
+            await this.store.loadInvoices();
+            await this.store.loadDashboardKPIs();
+          }
+        } else {
+          this.store.showToast(`Import terminé avec ${result.errorCount} erreur(s)`, 'error');
+        }
+
+        // Show errors if any
+        if (result.errors && result.errors.length > 0) {
+          const errorDetails = result.errors.slice(0, 5).join('; ');
+          this.store.showToast(`Erreurs: ${errorDetails}`, 'error');
+        }
       }
 
       // Reset
