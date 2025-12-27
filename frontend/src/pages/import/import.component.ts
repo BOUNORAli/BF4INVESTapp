@@ -362,6 +362,10 @@ export class ImportComponent implements OnInit {
         // Reload data
         if (type === 'produits') {
           await this.store.loadProducts();
+        } else if (type === 'operations') {
+          // Les opérations comptables sont stockées séparément, pas besoin de recharger
+          // Mais on peut recharger le dashboard pour mettre à jour les KPIs
+          await this.store.loadDashboardKPIs();
         } else {
           await this.store.loadBCs();
           await this.store.loadInvoices();

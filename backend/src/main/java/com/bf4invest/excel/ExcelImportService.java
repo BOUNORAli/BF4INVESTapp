@@ -1545,6 +1545,20 @@ public class ExcelImportService {
                 Row row = sheet.getRow(i);
                 if (row == null) continue;
                 
+                // Vérifier si la ligne est vide (toutes les cellules vides)
+                boolean isEmptyRow = true;
+                for (int j = 0; j < row.getLastCellNum(); j++) {
+                    Cell cell = row.getCell(j);
+                    if (cell != null) {
+                        String cellValue = getCellStringValue(cell);
+                        if (cellValue != null && !cellValue.trim().isEmpty()) {
+                            isEmptyRow = false;
+                            break;
+                        }
+                    }
+                }
+                if (isEmptyRow) continue;
+                
                 try {
                     OperationComptable operation = processOperationComptableRow(row, columnMap, result);
                     if (operation != null) {
@@ -1555,8 +1569,12 @@ public class ExcelImportService {
                     }
                 } catch (Exception e) {
                     errorCount++;
-                    result.getErrors().add(String.format("Ligne %d: %s", i + 1, e.getMessage()));
-                    log.error("Error processing operation comptable row {}: {}", i + 1, e.getMessage(), e);
+                    String errorMsg = e.getMessage();
+                    if (errorMsg == null || errorMsg.isEmpty()) {
+                        errorMsg = "Erreur inconnue lors du traitement de la ligne";
+                    }
+                    result.getErrors().add(String.format("Ligne %d: %s", i + 1, errorMsg));
+                    log.error("Error processing operation comptable row {}: {}", i + 1, errorMsg, e);
                 }
             }
             
@@ -1595,7 +1613,8 @@ public class ExcelImportService {
                 map.put("contre_partie", colIndex);
             } else if (normalized.contains("nom") && (normalized.contains("client") || normalized.contains("frs"))) {
                 map.put("nom_client_frs", colIndex);
-            } else if (normalized.equals("client/fourn") || normalized.contains("client/fourn")) {
+            } else if (normalized.equals("client/fourn") || normalized.contains("client/fourn") || 
+                       normalized.equals("clientfourn") || normalized.contains("type") && normalized.contains("operation")) {
                 map.put("type_operation", colIndex);
             } else if (normalized.contains("source") && normalized.contains("payement")) {
                 map.put("source_payement", colIndex);
@@ -1685,13 +1704,22 @@ public class ExcelImportService {
         String sourcePayement = getCellValue(row, columnMap, "source_payement");
         
         // Date (obligatoire)
-        LocalDate dateOperation = parseDateFromCell(row.getCell(columnMap.get("date")));
+        LocalDate dateOperation = null;
+        Integer dateColIndex = columnMap.get("date");
+        if (dateColIndex != null) {
+            Cell dateCell = row.getCell(dateColIndex);
+            if (dateCell != null) {
+                dateOperation = parseDateFromCell(dateCell);
+            }
+        }
         if (dateOperation == null) {
             String dateStr = getCellValue(row, columnMap, "date");
-            dateOperation = parseDate(dateStr);
-            if (dateOperation == null) {
-                throw new RuntimeException("Date invalide ou manquante");
+            if (dateStr != null && !dateStr.trim().isEmpty()) {
+                dateOperation = parseDate(dateStr);
             }
+        }
+        if (dateOperation == null) {
+            throw new RuntimeException("Date invalide ou manquante");
         }
         
         // Type mouvement
@@ -1740,13 +1768,19 @@ public class ExcelImportService {
         Double bilan = null;
         String bilanStr = getCellValue(row, columnMap, "bilan");
         if (bilanStr != null && !bilanStr.trim().isEmpty()) {
-            // Extraire le nombre du bilan (ex: "6600,00 C" -> 6600.0)
+            // Extraire le nombre du bilan (ex: "6600,00 C" -> 6600.0, "-22 334,30 F" -> -22334.30)
             try {
-                String numStr = bilanStr.replaceAll("[^0-9,.-]", "").replace(",", ".");
+                // Retirer tous les caractères sauf chiffres, virgule, point, moins et espaces
+                String numStr = bilanStr.replaceAll("[^0-9,.-\\s]", "").trim();
+                // Remplacer virgule par point pour le parsing
+                numStr = numStr.replace(",", ".");
+                // Retirer les espaces (séparateurs de milliers)
+                numStr = numStr.replace(" ", "");
                 if (!numStr.isEmpty()) {
                     bilan = Double.parseDouble(numStr);
                 }
             } catch (Exception e) {
+                log.warn("Cannot parse bilan value: {}", bilanStr);
                 // Ignorer si on ne peut pas parser
             }
         }
