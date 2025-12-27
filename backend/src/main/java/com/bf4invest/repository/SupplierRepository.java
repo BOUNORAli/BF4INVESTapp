@@ -9,6 +9,7 @@ import java.util.Optional;
 @Repository
 public interface SupplierRepository extends MongoRepository<Supplier, String> {
     Optional<Supplier> findByIce(String ice);
+    Optional<Supplier> findByNom(String nom);
 }
 
 

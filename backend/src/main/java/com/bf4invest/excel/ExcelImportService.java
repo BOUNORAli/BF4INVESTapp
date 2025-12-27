@@ -970,6 +970,39 @@ public class ExcelImportService {
         }
     }
     
+    private Integer getIntegerValue(Row row, Map<String, Integer> columnMap, String columnName) {
+        Integer colIndex = columnMap.get(columnName);
+        if (colIndex == null) return null;
+        
+        Cell cell = row.getCell(colIndex);
+        if (cell == null) return null;
+        
+        try {
+            switch (cell.getCellType()) {
+                case NUMERIC:
+                    return (int) cell.getNumericCellValue();
+                case STRING:
+                    String strValue = cell.getStringCellValue().trim();
+                    if (strValue.isEmpty()) return null;
+                    // Retirer les espaces
+                    strValue = strValue.replace(" ", "");
+                    try {
+                        return Integer.parseInt(strValue);
+                    } catch (NumberFormatException e) {
+                        log.warn("Cannot parse integer: {}", strValue);
+                        return null;
+                    }
+                case FORMULA:
+                    return (int) cell.getNumericCellValue();
+                default:
+                    return null;
+            }
+        } catch (Exception e) {
+            log.warn("Error getting integer value: {}", e.getMessage());
+            return null;
+        }
+    }
+    
     private LocalDate parseDate(String dateStr) {
         if (dateStr == null || dateStr.trim().isEmpty()) return null;
         
@@ -1090,6 +1123,244 @@ public class ExcelImportService {
             log.error("Error generating Excel template", e);
             throw new RuntimeException("Erreur lors de la génération du modèle Excel", e);
         }
+    }
+    
+    /**
+     * Génère un fichier Excel modèle pour l'import du catalogue produit
+     */
+    public byte[] generateProductCatalogTemplate() {
+        try (XSSFWorkbook workbook = new XSSFWorkbook()) {
+            Sheet sheet = workbook.createSheet("Catalogue Produits");
+            
+            // Style pour l'en-tête
+            CellStyle headerStyle = workbook.createCellStyle();
+            Font headerFont = workbook.createFont();
+            headerFont.setBold(true);
+            headerFont.setColor(IndexedColors.WHITE.getIndex());
+            headerStyle.setFont(headerFont);
+            headerStyle.setFillForegroundColor(IndexedColors.DARK_BLUE.getIndex());
+            headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+            headerStyle.setAlignment(HorizontalAlignment.CENTER);
+            headerStyle.setBorderBottom(BorderStyle.THIN);
+            headerStyle.setBorderTop(BorderStyle.THIN);
+            headerStyle.setBorderLeft(BorderStyle.THIN);
+            headerStyle.setBorderRight(BorderStyle.THIN);
+            
+            // Créer l'en-tête
+            Row headerRow = sheet.createRow(0);
+            String[] headers = {
+                "REF ARTICLE", "DESIGNATION", "UNITE", "PRIX ACHAT U HT", 
+                "PRIX VENTE U HT", "TVA (%)", "FOURNISSEUR", "QUANTITE STOCK"
+            };
+            
+            for (int i = 0; i < headers.length; i++) {
+                Cell cell = headerRow.createCell(i);
+                cell.setCellValue(headers[i]);
+                cell.setCellStyle(headerStyle);
+            }
+            
+            // Créer des lignes d'exemple
+            Row exampleRow1 = sheet.createRow(1);
+            exampleRow1.createCell(0).setCellValue("ART-001"); // REF ARTICLE
+            exampleRow1.createCell(1).setCellValue("Ciment Portland 42.5"); // DESIGNATION
+            exampleRow1.createCell(2).setCellValue("Sac"); // UNITE
+            exampleRow1.createCell(3).setCellValue(50.0); // PRIX ACHAT U HT
+            exampleRow1.createCell(4).setCellValue(65.0); // PRIX VENTE U HT
+            exampleRow1.createCell(5).setCellValue(20.0); // TVA (%)
+            exampleRow1.createCell(6).setCellValue("Fournisseur Ciment"); // FOURNISSEUR
+            exampleRow1.createCell(7).setCellValue(100); // QUANTITE STOCK
+            
+            Row exampleRow2 = sheet.createRow(2);
+            exampleRow2.createCell(0).setCellValue("ART-002");
+            exampleRow2.createCell(1).setCellValue("Sable fin");
+            exampleRow2.createCell(2).setCellValue("M3");
+            exampleRow2.createCell(3).setCellValue(120.0);
+            exampleRow2.createCell(4).setCellValue(150.0);
+            exampleRow2.createCell(5).setCellValue(20.0);
+            exampleRow2.createCell(6).setCellValue("Fournisseur Matériaux");
+            exampleRow2.createCell(7).setCellValue(50);
+            
+            // Ajuster la largeur des colonnes
+            for (int i = 0; i < headers.length; i++) {
+                sheet.autoSizeColumn(i);
+                // Limiter la largeur max à 50
+                int width = sheet.getColumnWidth(i);
+                if (width > 50 * 256) {
+                    sheet.setColumnWidth(i, 50 * 256);
+                }
+            }
+            
+            // Écrire dans un ByteArrayOutputStream
+            java.io.ByteArrayOutputStream outputStream = new java.io.ByteArrayOutputStream();
+            workbook.write(outputStream);
+            return outputStream.toByteArray();
+            
+        } catch (Exception e) {
+            log.error("Error generating product catalog Excel template", e);
+            throw new RuntimeException("Erreur lors de la génération du modèle Excel catalogue produit", e);
+        }
+    }
+    
+    /**
+     * Importe le catalogue produit depuis un fichier Excel
+     */
+    public ImportResult importProductCatalog(MultipartFile file) {
+        ImportResult result = new ImportResult();
+        
+        try (InputStream is = file.getInputStream();
+             Workbook workbook = new XSSFWorkbook(is)) {
+            
+            Sheet sheet = workbook.getSheetAt(0);
+            if (sheet.getLastRowNum() < 1) {
+                result.getErrors().add("Le fichier Excel est vide ou ne contient que l'en-tête");
+                return result;
+            }
+            
+            // Mapping des colonnes
+            Row headerRow = sheet.getRow(0);
+            Map<String, Integer> columnMap = new HashMap<>();
+            for (Cell cell : headerRow) {
+                if (cell == null) continue;
+                String cellValue = getCellStringValue(cell).toLowerCase().trim();
+                int colIndex = cell.getColumnIndex();
+                
+                if (cellValue.contains("ref") && cellValue.contains("article")) {
+                    columnMap.put("ref_article", colIndex);
+                } else if (cellValue.contains("designation")) {
+                    columnMap.put("designation", colIndex);
+                } else if (cellValue.contains("unite") || cellValue.equals("u")) {
+                    columnMap.put("unite", colIndex);
+                } else if (cellValue.contains("prix") && cellValue.contains("achat")) {
+                    columnMap.put("prix_achat", colIndex);
+                } else if (cellValue.contains("prix") && cellValue.contains("vente")) {
+                    columnMap.put("prix_vente", colIndex);
+                } else if (cellValue.contains("tva")) {
+                    columnMap.put("tva", colIndex);
+                } else if (cellValue.contains("fournisseur")) {
+                    columnMap.put("fournisseur", colIndex);
+                } else if (cellValue.contains("quantite") || cellValue.contains("stock")) {
+                    columnMap.put("quantite_stock", colIndex);
+                }
+            }
+            
+            result.setTotalRows(sheet.getLastRowNum());
+            int successCount = 0;
+            int errorCount = 0;
+            
+            // Traiter chaque ligne
+            for (int i = 1; i <= sheet.getLastRowNum(); i++) {
+                Row row = sheet.getRow(i);
+                if (row == null) continue;
+                
+                try {
+                    String refArticle = getCellValue(row, columnMap, "ref_article");
+                    if (refArticle == null || refArticle.trim().isEmpty()) {
+                        errorCount++;
+                        result.getErrors().add(String.format("Ligne %d: Référence article manquante", i + 1));
+                        continue;
+                    }
+                    
+                    String designation = getCellValue(row, columnMap, "designation");
+                    if (designation == null || designation.trim().isEmpty()) {
+                        errorCount++;
+                        result.getErrors().add(String.format("Ligne %d: Désignation manquante", i + 1));
+                        continue;
+                    }
+                    
+                    String unite = getCellValue(row, columnMap, "unite");
+                    if (unite == null || unite.trim().isEmpty()) {
+                        unite = "U"; // Valeur par défaut
+                    }
+                    
+                    Double prixAchat = getDoubleValue(row, columnMap, "prix_achat");
+                    if (prixAchat == null || prixAchat < 0) {
+                        errorCount++;
+                        result.getErrors().add(String.format("Ligne %d: Prix achat invalide", i + 1));
+                        continue;
+                    }
+                    
+                    Double prixVente = getDoubleValue(row, columnMap, "prix_vente");
+                    if (prixVente == null || prixVente < 0) {
+                        errorCount++;
+                        result.getErrors().add(String.format("Ligne %d: Prix vente invalide", i + 1));
+                        continue;
+                    }
+                    
+                    Double tva = getDoubleValue(row, columnMap, "tva");
+                    if (tva == null) {
+                        tva = 20.0; // Valeur par défaut
+                    }
+                    
+                    String fournisseurNom = getCellValue(row, columnMap, "fournisseur");
+                    String fournisseurId = null;
+                    if (fournisseurNom != null && !fournisseurNom.trim().isEmpty()) {
+                        // Chercher ou créer le fournisseur
+                        Supplier supplier = supplierRepository.findByNom(fournisseurNom.trim())
+                            .orElse(null);
+                        if (supplier == null) {
+                            supplier = Supplier.builder()
+                                .nom(fournisseurNom.trim())
+                                .build();
+                            supplier = supplierRepository.save(supplier);
+                        }
+                        fournisseurId = supplier.getId();
+                    }
+                    
+                    Integer quantiteStock = getIntegerValue(row, columnMap, "quantite_stock");
+                    if (quantiteStock == null) {
+                        quantiteStock = 0;
+                    }
+                    
+                    // Vérifier si le produit existe déjà
+                    Product existingProduct = productRepository.findByRefArticle(refArticle.trim())
+                        .orElse(null);
+                    
+                    Product product;
+                    if (existingProduct != null) {
+                        // Mettre à jour le produit existant
+                        existingProduct.setDesignation(designation.trim());
+                        existingProduct.setUnite(unite.trim());
+                        existingProduct.setPrixAchatUnitaireHT(prixAchat);
+                        existingProduct.setPrixVenteUnitaireHT(prixVente);
+                        existingProduct.setTva(tva);
+                        existingProduct.setFournisseurId(fournisseurId);
+                        existingProduct.setQuantiteEnStock(quantiteStock);
+                        existingProduct.setUpdatedAt(LocalDateTime.now());
+                        product = productRepository.save(existingProduct);
+                    } else {
+                        // Créer un nouveau produit
+                        product = Product.builder()
+                            .refArticle(refArticle.trim())
+                            .designation(designation.trim())
+                            .unite(unite.trim())
+                            .prixAchatUnitaireHT(prixAchat)
+                            .prixVenteUnitaireHT(prixVente)
+                            .tva(tva)
+                            .fournisseurId(fournisseurId)
+                            .quantiteEnStock(quantiteStock)
+                            .createdAt(LocalDateTime.now())
+                            .updatedAt(LocalDateTime.now())
+                            .build();
+                        product = productRepository.save(product);
+                    }
+                    
+                    successCount++;
+                } catch (Exception e) {
+                    errorCount++;
+                    result.getErrors().add(String.format("Ligne %d: %s", i + 1, e.getMessage()));
+                    log.error("Error processing product row {}: {}", i + 1, e.getMessage(), e);
+                }
+            }
+            
+            result.setSuccessCount(successCount);
+            result.setErrorCount(errorCount);
+            
+        } catch (Exception e) {
+            log.error("Error importing product catalog", e);
+            result.getErrors().add("Erreur lors de l'import: " + e.getMessage());
+        }
+        
+        return result;
     }
     
     /**

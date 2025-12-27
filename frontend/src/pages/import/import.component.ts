@@ -281,7 +281,9 @@ export class ImportComponent implements OnInit {
         });
       }, 200);
 
-      const result = await this.api.uploadFile('/import/excel', file).toPromise() as ImportResult;
+      // Utiliser le bon endpoint selon le type
+      const endpoint = type === 'produits' ? '/import/produits' : '/import/excel';
+      const result = await this.api.uploadFile(endpoint, file).toPromise() as ImportResult;
       
       clearInterval(progressInterval);
       this.progress.set(100);
@@ -307,9 +309,13 @@ export class ImportComponent implements OnInit {
       if (success) {
         this.store.showToast('Importation réussie ! Données mises à jour.', 'success');
         // Reload data
-        await this.store.loadBCs();
-        await this.store.loadInvoices();
-        await this.store.loadDashboardKPIs();
+        if (type === 'produits') {
+          await this.store.loadProducts();
+        } else {
+          await this.store.loadBCs();
+          await this.store.loadInvoices();
+          await this.store.loadDashboardKPIs();
+        }
       } else {
         this.store.showToast(`Import terminé avec ${result.errorCount} erreur(s)`, 'error');
       }
@@ -339,15 +345,19 @@ export class ImportComponent implements OnInit {
 
   async downloadTemplate(type: string) {
     try {
+      // Utiliser le bon endpoint selon le type
+      const endpoint = type === 'produits' ? '/import/template/produits' : '/import/template';
+      const filename = type === 'produits' ? 'Modele_Catalogue_Produits.xlsx' : 'Modele_Import_BF4Invest.xlsx';
+      
       // Télécharger le modèle depuis le backend
-      const blob = await this.api.downloadFile('/import/template').toPromise();
+      const blob = await this.api.downloadFile(endpoint).toPromise();
       
       if (blob) {
         // Créer un lien de téléchargement
         const url = window.URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = 'Modele_Import_BF4Invest.xlsx';
+        link.download = filename;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
