@@ -987,6 +987,19 @@ public class ExcelImportService {
                     if (strValue.isEmpty()) return null;
                     // Retirer les espaces
                     strValue = strValue.replace(" ", "");
+                    
+                    // Gérer le format "mois/année" (ex: "8/2025" -> extraire 8)
+                    if (strValue.contains("/")) {
+                        String[] parts = strValue.split("/");
+                        if (parts.length >= 1) {
+                            try {
+                                return Integer.parseInt(parts[0].trim());
+                            } catch (NumberFormatException e) {
+                                // Continuer avec le parsing normal
+                            }
+                        }
+                    }
+                    
                     try {
                         return Integer.parseInt(strValue);
                     } catch (NumberFormatException e) {
@@ -1766,22 +1779,34 @@ public class ExcelImportService {
         Double tvaYcRg = getDoubleValue(row, columnMap, "tva_yc_rg");
         Double tva = getDoubleValue(row, columnMap, "tva");
         Double bilan = null;
-        String bilanStr = getCellValue(row, columnMap, "bilan");
-        if (bilanStr != null && !bilanStr.trim().isEmpty()) {
-            // Extraire le nombre du bilan (ex: "6600,00 C" -> 6600.0, "-22 334,30 F" -> -22334.30)
-            try {
-                // Retirer tous les caractères sauf chiffres, virgule, point, moins et espaces
-                String numStr = bilanStr.replaceAll("[^0-9,.-\\s]", "").trim();
-                // Remplacer virgule par point pour le parsing
-                numStr = numStr.replace(",", ".");
-                // Retirer les espaces (séparateurs de milliers)
-                numStr = numStr.replace(" ", "");
-                if (!numStr.isEmpty()) {
-                    bilan = Double.parseDouble(numStr);
+        Integer bilanColIndex = columnMap.get("bilan");
+        if (bilanColIndex != null) {
+            Cell bilanCell = row.getCell(bilanColIndex);
+            if (bilanCell != null) {
+                try {
+                    // Si c'est déjà un nombre, l'utiliser directement
+                    if (bilanCell.getCellType() == CellType.NUMERIC) {
+                        bilan = bilanCell.getNumericCellValue();
+                    } else if (bilanCell.getCellType() == CellType.FORMULA) {
+                        bilan = bilanCell.getNumericCellValue();
+                    } else if (bilanCell.getCellType() == CellType.STRING) {
+                        // Parser depuis une chaîne (ex: "6600,00 C" -> 6600.0, "-22 334,30 F" -> -22334.30)
+                        String bilanStr = bilanCell.getStringCellValue().trim();
+                        if (!bilanStr.isEmpty()) {
+                            // Retirer tous les caractères sauf chiffres, virgule, point, moins et espaces
+                            String numStr = bilanStr.replaceAll("[^0-9,.-\\s]", "").trim();
+                            // Remplacer virgule par point pour le parsing
+                            numStr = numStr.replace(",", ".");
+                            // Retirer les espaces (séparateurs de milliers)
+                            numStr = numStr.replace(" ", "");
+                            if (!numStr.isEmpty()) {
+                                bilan = Double.parseDouble(numStr);
+                            }
+                        }
+                    }
+                } catch (Exception e) {
+                    // Ignorer silencieusement si on ne peut pas parser
                 }
-            } catch (Exception e) {
-                log.warn("Cannot parse bilan value: {}", bilanStr);
-                // Ignorer si on ne peut pas parser
             }
         }
         String ca = getCellValue(row, columnMap, "ca");
