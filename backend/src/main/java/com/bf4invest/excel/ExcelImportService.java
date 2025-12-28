@@ -570,7 +570,6 @@ public class ExcelImportService {
         
         // Utiliser la BC comme clé pour grouper les factures achats (une facture achat par BC)
         // Si plusieurs lignes ont la même BC, elles seront regroupées dans la même facture
-        final String finalNumeroBC = numeroBC; // Utiliser BC comme clé
         final String finalNumeroFactureFournisseur = numeroFactureFournisseur; // Référence fournisseur
         
         FactureAchat fa = faMap.computeIfAbsent(finalNumeroBC, k -> {
