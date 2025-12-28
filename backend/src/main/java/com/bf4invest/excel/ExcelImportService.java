@@ -1131,7 +1131,6 @@ public class ExcelImportService {
                             .toLocalDate();
                 } catch (NumberFormatException e3) {
                     // Ce n'est pas un nombre, continuer avec les autres formats
-                } catch (Exception e3) {
                     // Essayer de parser les formats de date Java comme "Thu Jan 02 00:00:00 CET 2025"
                     try {
                         // Format simple date
@@ -1144,9 +1143,16 @@ public class ExcelImportService {
                         log.warn("Cannot parse date: {}", dateStr);
                         return null;
                     }
+                } catch (Exception e3) {
+                    // Autre erreur lors du parsing Excel
+                    log.warn("Error parsing date as Excel number: {}", e3.getMessage());
+                    return null;
                 }
             }
         }
+        // Si aucun format ne fonctionne
+        log.warn("Cannot parse date: {}", dateStr);
+        return null;
     }
     
     /**
