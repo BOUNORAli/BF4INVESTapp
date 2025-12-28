@@ -1572,25 +1572,37 @@ public class ExcelImportService {
         if (cell == null) return null;
         
         try {
-            if (DateUtil.isCellDateFormatted(cell)) {
-                Date date = cell.getDateCellValue();
-                if (date == null) {
-                    return null;
+            CellType cellType = cell.getCellType();
+            
+            // Vérifier d'abord le type de cellule avant d'appeler isCellDateFormatted
+            // car isCellDateFormatted peut retourner true même pour STRING, ce qui cause des erreurs
+            if (cellType == CellType.NUMERIC) {
+                // Vérifier si c'est formaté comme date
+                if (DateUtil.isCellDateFormatted(cell)) {
+                    try {
+                        Date date = cell.getDateCellValue();
+                        if (date != null) {
+                            return date.toInstant()
+                                    .atZone(java.time.ZoneId.systemDefault())
+                                    .toLocalDate();
+                        }
+                    } catch (Exception e) {
+                        // Si getDateCellValue échoue, essayer comme nombre Excel
+                    }
                 }
-                return date.toInstant()
-                        .atZone(java.time.ZoneId.systemDefault())
-                        .toLocalDate();
-            } else if (cell.getCellType() == CellType.NUMERIC) {
                 // Date stockée comme nombre Excel
-                double excelDate = cell.getNumericCellValue();
-                Date javaDate = DateUtil.getJavaDate(excelDate);
-                if (javaDate == null) {
-                    return null;
+                try {
+                    double excelDate = cell.getNumericCellValue();
+                    Date javaDate = DateUtil.getJavaDate(excelDate);
+                    if (javaDate != null) {
+                        return javaDate.toInstant()
+                                .atZone(java.time.ZoneId.systemDefault())
+                                .toLocalDate();
+                    }
+                } catch (Exception e) {
+                    // Ignorer les erreurs
                 }
-                return javaDate.toInstant()
-                        .atZone(java.time.ZoneId.systemDefault())
-                        .toLocalDate();
-            } else if (cell.getCellType() == CellType.STRING) {
+            } else if (cellType == CellType.STRING) {
                 // Parser depuis string
                 String dateStr = cell.getStringCellValue();
                 if (dateStr == null || dateStr.trim().isEmpty()) {
@@ -1606,33 +1618,53 @@ public class ExcelImportService {
                     return null;
                 }
                 return parseDate(dateStr);
-            } else if (cell.getCellType() == CellType.FORMULA) {
+            } else if (cellType == CellType.FORMULA) {
                 // Vérifier le type de résultat de la formule
                 try {
-                    if (cell.getCachedFormulaResultType() == CellType.NUMERIC) {
-                        double excelDate = cell.getNumericCellValue();
-                        Date javaDate = DateUtil.getJavaDate(excelDate);
-                        if (javaDate != null) {
-                            return javaDate.toInstant()
-                                    .atZone(java.time.ZoneId.systemDefault())
-                                    .toLocalDate();
+                    CellType resultType = cell.getCachedFormulaResultType();
+                    if (resultType == CellType.NUMERIC) {
+                        // Vérifier si c'est formaté comme date
+                        if (DateUtil.isCellDateFormatted(cell)) {
+                            try {
+                                Date date = cell.getDateCellValue();
+                                if (date != null) {
+                                    return date.toInstant()
+                                            .atZone(java.time.ZoneId.systemDefault())
+                                            .toLocalDate();
+                                }
+                            } catch (Exception e) {
+                                // Si getDateCellValue échoue, essayer comme nombre Excel
+                            }
                         }
-                    } else if (cell.getCachedFormulaResultType() == CellType.STRING) {
+                        // Essayer comme nombre Excel
+                        try {
+                            double excelDate = cell.getNumericCellValue();
+                            Date javaDate = DateUtil.getJavaDate(excelDate);
+                            if (javaDate != null) {
+                                return javaDate.toInstant()
+                                        .atZone(java.time.ZoneId.systemDefault())
+                                        .toLocalDate();
+                            }
+                        } catch (Exception e) {
+                            // Ignorer les erreurs
+                        }
+                    } else if (resultType == CellType.STRING) {
                         String dateStr = cell.getStringCellValue();
                         if (dateStr != null && !dateStr.trim().isEmpty() && dateStr.matches(".*\\d+.*")) {
                             return parseDate(dateStr.trim());
                         }
                     }
                 } catch (Exception e) {
-                    // Ignorer les erreurs
+                    // Ignorer silencieusement les erreurs
                 }
                 return null;
-            } else if (cell.getCellType() == CellType.BLANK) {
+            } else if (cellType == CellType.BLANK) {
                 // Cellule vide
                 return null;
             }
         } catch (Exception e) {
-            log.warn("Error parsing date from cell: {}", e.getMessage());
+            // Ignorer silencieusement les erreurs de parsing de date
+            // Ne pas logger car cela génère trop de warnings pour des cellules normales
         }
         return null;
     }
