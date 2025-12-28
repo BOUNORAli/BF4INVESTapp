@@ -679,15 +679,15 @@ public class ExcelImportService {
         if (prixVenteHT == null || prixVenteHT == 0) {
             // Calculer depuis prix vente TTC si disponible
             Double prixVenteTTC = getDoubleValue(row, columnMap, "prix_vente_unitaire_ttc");
-            Double tauxTVA = getDoubleValue(row, columnMap, "taux_tva");
+            Double tauxTVA = getPercentageValue(row, columnMap, "taux_tva");
             if (prixVenteTTC != null && prixVenteTTC > 0 && tauxTVA != null) {
                 prixVenteHT = prixVenteTTC / (1 + (tauxTVA / 100));
             }
         }
         ligne.setPrixVenteUnitaireHT(prixVenteHT != null ? prixVenteHT : 0.0);
         
-        // TVA
-        Double tva = getDoubleValue(row, columnMap, "taux_tva");
+        // TVA (gérer le format pourcentage "20%" -> 20.0)
+        Double tva = getPercentageValue(row, columnMap, "taux_tva");
         ligne.setTva(tva != null ? tva : 20.0); // Défaut 20%
         
         // Calculer les totaux
@@ -1046,6 +1046,108 @@ public class ExcelImportService {
             }
         } catch (Exception e) {
             log.warn("Error parsing double from cell: {}", e.getMessage());
+            return null;
+        }
+    }
+    
+    /**
+     * Parse une valeur de pourcentage depuis une cellule Excel
+     * Gère les formats "20%" -> 20.0, "0.2" -> 20.0 (si < 1), "20" -> 20.0
+     */
+    private Double getPercentageValue(Row row, Map<String, Integer> columnMap, String columnName) {
+        Integer colIndex = columnMap.get(columnName);
+        if (colIndex == null) return null;
+        
+        Cell cell = row.getCell(colIndex);
+        if (cell == null) return null;
+        
+        try {
+            switch (cell.getCellType()) {
+                case NUMERIC:
+                    double numValue = cell.getNumericCellValue();
+                    // Si la valeur est < 1, c'est probablement un décimal (0.2 = 20%), multiplier par 100
+                    if (numValue < 1 && numValue > 0) {
+                        return numValue * 100;
+                    }
+                    return numValue;
+                case STRING:
+                    String strValue = cell.getStringCellValue().trim();
+                    if (strValue.isEmpty()) return null;
+                    
+                    // Retirer le signe % s'il existe
+                    boolean hasPercent = strValue.endsWith("%");
+                    if (hasPercent) {
+                        strValue = strValue.substring(0, strValue.length() - 1).trim();
+                    }
+                    
+                    // Ignorer les valeurs non numériques
+                    if (!strValue.matches(".*\\d+.*")) {
+                        return null;
+                    }
+                    
+                    // Gérer format français avec virgule
+                    strValue = strValue.replace(" ", "").replace(",", ".");
+                    try {
+                        double value = Double.parseDouble(strValue);
+                        // Si la valeur est < 1 et qu'il n'y avait pas de %, c'est probablement un décimal
+                        if (!hasPercent && value < 1 && value > 0) {
+                            return value * 100;
+                        }
+                        return value;
+                    } catch (NumberFormatException e) {
+                        // Essayer avec le format français
+                        try {
+                            double value = FRENCH_NUMBER_FORMAT.parse(strValue.replace(".", ",")).doubleValue();
+                            if (!hasPercent && value < 1 && value > 0) {
+                                return value * 100;
+                            }
+                            return value;
+                        } catch (ParseException e2) {
+                            return null;
+                        }
+                    }
+                case FORMULA:
+                    try {
+                        if (cell.getCachedFormulaResultType() == CellType.NUMERIC) {
+                            double numValue = cell.getNumericCellValue();
+                            // Si la valeur est < 1, multiplier par 100
+                            if (numValue < 1 && numValue > 0) {
+                                return numValue * 100;
+                            }
+                            return numValue;
+                        } else if (cell.getCachedFormulaResultType() == CellType.STRING) {
+                            String formulaStrValue = cell.getStringCellValue().trim();
+                            if (formulaStrValue.isEmpty()) return null;
+                            
+                            // Retirer le signe % s'il existe
+                            boolean hasPercent = formulaStrValue.endsWith("%");
+                            if (hasPercent) {
+                                formulaStrValue = formulaStrValue.substring(0, formulaStrValue.length() - 1).trim();
+                            }
+                            
+                            if (!formulaStrValue.matches(".*\\d+.*")) {
+                                return null;
+                            }
+                            
+                            formulaStrValue = formulaStrValue.replace(" ", "").replace(",", ".");
+                            try {
+                                double value = Double.parseDouble(formulaStrValue);
+                                if (!hasPercent && value < 1 && value > 0) {
+                                    return value * 100;
+                                }
+                                return value;
+                            } catch (NumberFormatException e) {
+                                return null;
+                            }
+                        }
+                        return null;
+                    } catch (Exception e) {
+                        return null;
+                    }
+                default:
+                    return null;
+            }
+        } catch (Exception e) {
             return null;
         }
     }
@@ -1475,7 +1577,7 @@ public class ExcelImportService {
                         continue;
                     }
                     
-                    Double tva = getDoubleValue(row, columnMap, "tva");
+                    Double tva = getPercentageValue(row, columnMap, "tva");
                     if (tva == null) {
                         tva = 20.0; // Valeur par défaut
                     }
@@ -2308,7 +2410,7 @@ public class ExcelImportService {
         // Montants
         Double totalTtcApresRg = getDoubleValue(row, columnMap, "total_ttc_apres_rg");
         Double totalPayementTtc = getDoubleValue(row, columnMap, "total_payement_ttc");
-        Double tauxTva = getDoubleValue(row, columnMap, "taux_tva");
+        Double tauxTva = getPercentageValue(row, columnMap, "taux_tva");
         Double tauxRg = getDoubleValue(row, columnMap, "taux_rg");
         
         // Paiement
@@ -2329,7 +2431,7 @@ public class ExcelImportService {
         Double factureHtYcRg = getDoubleValue(row, columnMap, "facture_ht_yc_rg");
         Double htPaye = getDoubleValue(row, columnMap, "ht_paye");
         Double tvaYcRg = getDoubleValue(row, columnMap, "tva_yc_rg");
-        Double tva = getDoubleValue(row, columnMap, "tva");
+        Double tva = getPercentageValue(row, columnMap, "tva");
         Double bilan = null;
         Integer bilanColIndex = columnMap.get("bilan");
         if (bilanColIndex != null) {
