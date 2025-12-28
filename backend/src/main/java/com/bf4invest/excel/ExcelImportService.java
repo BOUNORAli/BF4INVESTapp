@@ -1111,47 +1111,47 @@ public class ExcelImportService {
         
         dateStr = dateStr.trim();
         
+        // Format DD/MM/YYYY
         try {
-            // Format DD/MM/YYYY
             return LocalDate.parse(dateStr, DATE_FORMATTER_DDMMYYYY);
         } catch (DateTimeParseException e) {
-            try {
-                // Format YYYY-MM-DD
-                return LocalDate.parse(dateStr, DATE_FORMATTER_YYYYMMDD);
-            } catch (DateTimeParseException e2) {
-                try {
-                    // Format Excel (si c'est un nombre)
-                    double excelDate = Double.parseDouble(dateStr);
-                    Date javaDate = DateUtil.getJavaDate(excelDate);
-                    if (javaDate == null) {
-                        return null;
-                    }
-                    return javaDate.toInstant()
-                            .atZone(java.time.ZoneId.systemDefault())
-                            .toLocalDate();
-                } catch (NumberFormatException e3) {
-                    // Ce n'est pas un nombre, continuer avec les autres formats
-                    // Essayer de parser les formats de date Java comme "Thu Jan 02 00:00:00 CET 2025"
-                    try {
-                        // Format simple date
-                        java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("EEE MMM dd HH:mm:ss zzz yyyy", java.util.Locale.ENGLISH);
-                        Date parsed = sdf.parse(dateStr);
-                        return parsed.toInstant()
-                                .atZone(java.time.ZoneId.systemDefault())
-                                .toLocalDate();
-                    } catch (Exception e4) {
-                        log.warn("Cannot parse date: {}", dateStr);
-                        return null;
-                    }
-                } catch (Exception e3) {
-                    // Autre erreur lors du parsing Excel
-                    log.warn("Error parsing date as Excel number: {}", e3.getMessage());
-                    return null;
-                }
-            }
+            // Continuer avec les autres formats
         }
+        
+        // Format YYYY-MM-DD
+        try {
+            return LocalDate.parse(dateStr, DATE_FORMATTER_YYYYMMDD);
+        } catch (DateTimeParseException e) {
+            // Continuer avec les autres formats
+        }
+        
+        // Format Excel (si c'est un nombre)
+        try {
+            double excelDate = Double.parseDouble(dateStr);
+            Date javaDate = DateUtil.getJavaDate(excelDate);
+            if (javaDate != null) {
+                return javaDate.toInstant()
+                        .atZone(java.time.ZoneId.systemDefault())
+                        .toLocalDate();
+            }
+        } catch (NumberFormatException e) {
+            // Ce n'est pas un nombre, continuer avec les autres formats
+        } catch (Exception e) {
+            log.warn("Error parsing date as Excel number: {}", e.getMessage());
+        }
+        
+        // Essayer de parser les formats de date Java comme "Thu Jan 02 00:00:00 CET 2025"
+        try {
+            java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("EEE MMM dd HH:mm:ss zzz yyyy", java.util.Locale.ENGLISH);
+            Date parsed = sdf.parse(dateStr);
+            return parsed.toInstant()
+                    .atZone(java.time.ZoneId.systemDefault())
+                    .toLocalDate();
+        } catch (Exception e) {
+            log.warn("Cannot parse date: {}", dateStr);
+        }
+        
         // Si aucun format ne fonctionne
-        log.warn("Cannot parse date: {}", dateStr);
         return null;
     }
     
