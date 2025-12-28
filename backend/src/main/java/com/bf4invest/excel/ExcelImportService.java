@@ -1548,6 +1548,11 @@ public class ExcelImportService {
                 if (dateStr == null || dateStr.trim().isEmpty()) {
                     return null;
                 }
+                dateStr = dateStr.trim();
+                // Ignorer les valeurs qui sont clairement pas des dates (une seule lettre, etc.)
+                if (dateStr.length() == 1 && !Character.isDigit(dateStr.charAt(0))) {
+                    return null;
+                }
                 return parseDate(dateStr);
             } else if (cell.getCellType() == CellType.BLANK) {
                 // Cellule vide
@@ -2230,7 +2235,25 @@ public class ExcelImportService {
                     if (bilanCell.getCellType() == CellType.NUMERIC) {
                         bilan = bilanCell.getNumericCellValue();
                     } else if (bilanCell.getCellType() == CellType.FORMULA) {
-                        bilan = bilanCell.getNumericCellValue();
+                        // Vérifier le type de résultat de la formule
+                        if (bilanCell.getCachedFormulaResultType() == CellType.NUMERIC) {
+                            bilan = bilanCell.getNumericCellValue();
+                        } else if (bilanCell.getCachedFormulaResultType() == CellType.STRING) {
+                            // Essayer de parser depuis la string
+                            String formulaStr = bilanCell.getStringCellValue().trim();
+                            if (!formulaStr.isEmpty()) {
+                                // Retirer tous les caractères sauf chiffres, virgule, point, moins et espaces
+                                String numStr = formulaStr.replaceAll("[^0-9,.-\\s]", "").trim();
+                                numStr = numStr.replace(",", ".").replace(" ", "");
+                                if (!numStr.isEmpty()) {
+                                    try {
+                                        bilan = Double.parseDouble(numStr);
+                                    } catch (NumberFormatException e) {
+                                        // Ignorer si on ne peut pas parser
+                                    }
+                                }
+                            }
+                        }
                     } else if (bilanCell.getCellType() == CellType.STRING) {
                         // Parser depuis une chaîne (ex: "6600,00 C" -> 6600.0, "-22 334,30 F" -> -22334.30)
                         String bilanStr = bilanCell.getStringCellValue().trim();
