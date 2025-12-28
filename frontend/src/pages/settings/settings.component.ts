@@ -767,7 +767,7 @@ export class SettingsComponent implements OnInit {
         this.deleteResult.set(result);
         this.store.showToast(
           `Suppression terminée: ${result.totalDeleted} élément(s) supprimé(s)`,
-          result.errors && result.errors.length > 0 ? 'warning' : 'success'
+          result.errors && result.errors.length > 0 ? 'info' : 'success'
         );
         
         // Réinitialiser
