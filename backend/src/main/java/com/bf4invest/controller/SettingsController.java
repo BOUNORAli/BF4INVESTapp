@@ -1,7 +1,11 @@
 package com.bf4invest.controller;
 
+import com.bf4invest.dto.CollectionInfo;
+import com.bf4invest.dto.DeleteDataRequest;
+import com.bf4invest.dto.DeleteDataResponse;
 import com.bf4invest.dto.PaymentModeDto;
 import com.bf4invest.model.PaymentMode;
+import com.bf4invest.service.DataDeletionService;
 import com.bf4invest.service.PaymentModeService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -18,6 +22,7 @@ import java.util.stream.Collectors;
 public class SettingsController {
     
     private final PaymentModeService paymentModeService;
+    private final DataDeletionService dataDeletionService;
     
     @GetMapping("/payment-modes")
     public ResponseEntity<List<PaymentModeDto>> getPaymentModes() {
@@ -94,6 +99,35 @@ public class SettingsController {
             return ResponseEntity.noContent().build();
         } catch (RuntimeException e) {
             return ResponseEntity.notFound().build();
+        }
+    }
+    
+    // Endpoints pour la suppression de données
+    @GetMapping("/data/collections")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<List<CollectionInfo>> getAvailableCollections() {
+        List<CollectionInfo> collections = dataDeletionService.getAvailableCollections();
+        return ResponseEntity.ok(collections);
+    }
+    
+    @PostMapping("/data/delete")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<DeleteDataResponse> deleteAllData(@RequestBody DeleteDataRequest request) {
+        // Validation de la confirmation
+        if (request.getConfirmation() == null || !request.getConfirmation().equals("SUPPRIMER")) {
+            return ResponseEntity.badRequest().build();
+        }
+        
+        // Validation des collections
+        if (request.getCollections() == null || request.getCollections().isEmpty()) {
+            return ResponseEntity.badRequest().build();
+        }
+        
+        try {
+            DeleteDataResponse response = dataDeletionService.deleteAllData(request.getCollections());
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
     

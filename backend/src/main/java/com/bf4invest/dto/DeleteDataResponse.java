@@ -6,16 +6,15 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.util.List;
+import java.util.Map;
 
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class PrevisionTresorerieResponse {
-    private Double soldeActuel;
-    private List<PrevisionJournaliere> previsions;
-    private List<EcheanceDetail> echeances;
+public class DeleteDataResponse {
+    private Map<String, Long> deletedCounts;
+    private long totalDeleted;
+    private List<String> errors;
 }
-
-
 

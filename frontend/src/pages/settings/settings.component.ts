@@ -2,6 +2,8 @@ import { Component, inject, signal, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { StoreService } from '../../services/store.service';
+import { ApiService, CollectionInfo, DeleteDataResponse } from '../../services/api.service';
+import { AuthService } from '../../services/auth.service';
 
 @Component({
   selector: 'app-settings',
@@ -314,11 +316,201 @@ import { StoreService } from '../../services/store.service';
           }
         </div>
       </div>
+
+      <!-- Suppression des Données Card -->
+      @if (auth.currentUser()?.role === 'ADMIN') {
+        <div class="bg-red-50 rounded-xl shadow-sm border-2 border-red-200 overflow-hidden">
+          <div class="p-6 border-b border-red-100 bg-red-100/50 flex justify-between items-center">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-full flex items-center justify-center bg-red-200 text-red-700">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                </svg>
+              </div>
+              <div>
+                <h2 class="text-lg font-bold text-red-800">Suppression des Données</h2>
+                <p class="text-xs text-red-600">ATTENTION: Cette action est irréversible. Supprimez toutes les données sélectionnées.</p>
+              </div>
+            </div>
+          </div>
+          
+          <div class="p-6">
+            @if (isLoadingCollections()) {
+              <div class="text-center py-8 text-slate-500">Chargement des collections...</div>
+            } @else {
+              <div class="space-y-6">
+                <!-- Sélection des collections -->
+                <div class="space-y-4">
+                  <div class="flex items-center justify-between">
+                    <h3 class="text-base font-bold text-slate-700">Sélectionner les collections à supprimer</h3>
+                    <div class="flex gap-2">
+                      <button (click)="selectAllCollections()" 
+                              class="text-xs font-medium px-3 py-1.5 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition">
+                        Tout sélectionner
+                      </button>
+                      <button (click)="deselectAllCollections()" 
+                              class="text-xs font-medium px-3 py-1.5 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition">
+                        Tout désélectionner
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- Collections groupées par catégorie -->
+                  @for (category of getCategories(); track category) {
+                    <div class="bg-white p-4 rounded-lg border border-slate-200">
+                      <h4 class="text-sm font-bold text-slate-700 mb-3">{{ category }}</h4>
+                      <div class="space-y-2">
+                        @for (collection of getCollectionsByCategory(category); track collection.name) {
+                          <label class="flex items-center justify-between p-2 hover:bg-slate-50 rounded cursor-pointer group">
+                            <div class="flex items-center gap-3 flex-1">
+                              <input type="checkbox" 
+                                     [checked]="selectedCollections().includes(collection.name)"
+                                     (change)="toggleCollection(collection.name)"
+                                     class="w-4 h-4 text-red-600 border-slate-300 rounded focus:ring-red-500">
+                              <span class="text-sm font-medium text-slate-700">{{ collection.description }}</span>
+                              @if (collection.critical) {
+                                <span class="text-[10px] bg-red-100 text-red-700 px-2 py-0.5 rounded font-bold">CRITIQUE</span>
+                              }
+                            </div>
+                            <span class="text-xs text-slate-500">{{ collection.count }} élément(s)</span>
+                          </label>
+                        }
+                      </div>
+                    </div>
+                  }
+                </div>
+
+                <!-- Confirmation -->
+                <div class="bg-red-100 p-6 rounded-lg border-2 border-red-300">
+                  <h3 class="text-base font-bold text-red-800 mb-2">Confirmation requise</h3>
+                  <p class="text-sm text-red-700 mb-4">Pour confirmer la suppression, tapez <strong>SUPPRIMER</strong> dans le champ ci-dessous.</p>
+                  <input type="text" 
+                         [(ngModel)]="confirmationText"
+                         placeholder="Tapez SUPPRIMER"
+                         class="w-full px-4 py-2 border-2 border-red-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none transition font-mono"
+                         [class.border-red-500]="confirmationText() !== '' && confirmationText() !== 'SUPPRIMER'"
+                         [class.border-green-500]="confirmationText() === 'SUPPRIMER'">
+                  @if (confirmationText() !== '' && confirmationText() !== 'SUPPRIMER') {
+                    <p class="text-xs text-red-600 mt-2">Le texte doit être exactement "SUPPRIMER"</p>
+                  }
+                </div>
+
+                <!-- Bouton de suppression -->
+                <button (click)="openDeleteModal()" 
+                        [disabled]="selectedCollections().length === 0 || confirmationText() !== 'SUPPRIMER' || isDeleting()"
+                        class="w-full px-4 py-3 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 transition disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-red-600/20 flex items-center justify-center gap-2">
+                  @if (isDeleting()) {
+                    <svg class="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+                      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span>Suppression en cours...</span>
+                  } @else {
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                    </svg>
+                    <span>Supprimer les données sélectionnées</span>
+                  }
+                </button>
+
+                <!-- Résultat de la suppression -->
+                @if (deleteResult()) {
+                  <div class="bg-white p-6 rounded-lg border border-slate-200">
+                    <h3 class="text-base font-bold text-slate-700 mb-4">Résultat de la suppression</h3>
+                    <div class="space-y-2">
+                      <p class="text-sm text-slate-600">
+                        <strong>Total supprimé:</strong> {{ deleteResult()!.totalDeleted }} élément(s)
+                      </p>
+                      @if (Object.keys(deleteResult()!.deletedCounts).length > 0) {
+                        <div class="mt-4">
+                          <p class="text-sm font-semibold text-slate-700 mb-2">Détails par collection:</p>
+                          <ul class="space-y-1">
+                            @for (entry of Object.entries(deleteResult()!.deletedCounts); track entry[0]) {
+                              <li class="text-sm text-slate-600">
+                                <strong>{{ getCollectionDescription(entry[0]) }}:</strong> {{ entry[1] }} élément(s)
+                              </li>
+                            }
+                          </ul>
+                        </div>
+                      }
+                      @if (deleteResult()!.errors && deleteResult()!.errors.length > 0) {
+                        <div class="mt-4 p-3 bg-red-50 border border-red-200 rounded">
+                          <p class="text-sm font-semibold text-red-700 mb-2">Erreurs:</p>
+                          <ul class="space-y-1">
+                            @for (error of deleteResult()!.errors; track error) {
+                              <li class="text-sm text-red-600">{{ error }}</li>
+                            }
+                          </ul>
+                        </div>
+                      }
+                    </div>
+                  </div>
+                }
+              </div>
+            }
+          </div>
+        </div>
+      }
+
+      <!-- Modal de confirmation de suppression -->
+      @if (showDeleteModal()) {
+        <div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" (click)="closeDeleteModal()">
+          <div class="bg-white rounded-xl shadow-2xl max-w-2xl w-full p-6" (click)="$event.stopPropagation()">
+            <div class="flex items-center gap-3 mb-4">
+              <div class="w-12 h-12 rounded-full flex items-center justify-center bg-red-100 text-red-600">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                </svg>
+              </div>
+              <div>
+                <h3 class="text-xl font-bold text-red-800">Confirmation de suppression</h3>
+                <p class="text-sm text-red-600">Cette action est irréversible</p>
+              </div>
+            </div>
+
+            <div class="bg-red-50 border-2 border-red-200 rounded-lg p-4 mb-6">
+              <p class="text-sm font-semibold text-red-800 mb-2">Vous êtes sur le point de supprimer:</p>
+              <ul class="list-disc list-inside space-y-1 text-sm text-red-700">
+                @for (collectionName of selectedCollections(); track collectionName) {
+                  <li>{{ getCollectionDescription(collectionName) }} ({{ getCollectionCount(collectionName) }} élément(s))</li>
+                }
+              </ul>
+              <p class="text-sm font-bold text-red-800 mt-4">
+                Total: {{ getTotalSelectedCount() }} élément(s) seront supprimés définitivement.
+              </p>
+            </div>
+
+            <div class="flex gap-3">
+              <button (click)="closeDeleteModal()" 
+                      class="flex-1 px-4 py-2 bg-slate-200 text-slate-700 font-bold rounded-lg hover:bg-slate-300 transition">
+                Annuler
+              </button>
+              <button (click)="confirmDelete()" 
+                      [disabled]="isDeleting()"
+                      class="flex-1 px-4 py-2 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 transition disabled:opacity-50">
+                @if (isDeleting()) {
+                  <span class="flex items-center justify-center gap-2">
+                    <svg class="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+                      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Suppression...
+                  </span>
+                } @else {
+                  Confirmer la suppression
+                }
+              </button>
+            </div>
+          </div>
+        </div>
+      }
     </div>
   `
 })
 export class SettingsComponent implements OnInit {
   store = inject(StoreService);
+  api = inject(ApiService);
+  auth = inject(AuthService);
   newModeName = signal('');
   
   // Informations de l'entreprise
@@ -355,10 +547,22 @@ export class SettingsComponent implements OnInit {
   apportMotif = signal<string>('');
   apportDate = signal<string>('');
 
+  // Gestion de la suppression de données
+  collections = signal<CollectionInfo[]>([]);
+  selectedCollections = signal<string[]>([]);
+  confirmationText = signal<string>('');
+  isLoadingCollections = signal(false);
+  isDeleting = signal(false);
+  deleteResult = signal<DeleteDataResponse | null>(null);
+  showDeleteModal = signal(false);
+
   async ngOnInit() {
     await this.loadCompanyInfo();
     await this.loadParametresCalcul();
     await this.loadSoldeGlobal();
+    if (this.auth.currentUser()?.role === 'ADMIN') {
+      await this.loadCollections();
+    }
   }
   
   async loadSoldeGlobal() {
@@ -492,5 +696,108 @@ export class SettingsComponent implements OnInit {
         // Error already handled in store service
       }
     }
+  }
+
+  // Méthodes pour la suppression de données
+  async loadCollections() {
+    this.isLoadingCollections.set(true);
+    try {
+      const collections = await this.api.getAvailableCollections().toPromise();
+      if (collections) {
+        this.collections.set(collections);
+      }
+    } catch (error) {
+      console.error('Error loading collections:', error);
+      this.store.showToast('Erreur lors du chargement des collections', 'error');
+    } finally {
+      this.isLoadingCollections.set(false);
+    }
+  }
+
+  getCategories(): string[] {
+    const categories = new Set(this.collections().map(c => c.category));
+    return Array.from(categories).sort();
+  }
+
+  getCollectionsByCategory(category: string): CollectionInfo[] {
+    return this.collections().filter(c => c.category === category);
+  }
+
+  toggleCollection(collectionName: string) {
+    const current = this.selectedCollections();
+    if (current.includes(collectionName)) {
+      this.selectedCollections.set(current.filter(c => c !== collectionName));
+    } else {
+      this.selectedCollections.set([...current, collectionName]);
+    }
+  }
+
+  selectAllCollections() {
+    this.selectedCollections.set(this.collections().map(c => c.name));
+  }
+
+  deselectAllCollections() {
+    this.selectedCollections.set([]);
+  }
+
+  openDeleteModal() {
+    this.showDeleteModal.set(true);
+  }
+
+  closeDeleteModal() {
+    this.showDeleteModal.set(false);
+  }
+
+  async confirmDelete() {
+    if (this.selectedCollections().length === 0 || this.confirmationText() !== 'SUPPRIMER') {
+      return;
+    }
+
+    this.isDeleting.set(true);
+    this.showDeleteModal.set(false);
+    this.deleteResult.set(null);
+
+    try {
+      const result = await this.api.deleteAllData(
+        this.selectedCollections(),
+        this.confirmationText()
+      ).toPromise();
+
+      if (result) {
+        this.deleteResult.set(result);
+        this.store.showToast(
+          `Suppression terminée: ${result.totalDeleted} élément(s) supprimé(s)`,
+          result.errors && result.errors.length > 0 ? 'warning' : 'success'
+        );
+        
+        // Réinitialiser
+        this.selectedCollections.set([]);
+        this.confirmationText.set('');
+        
+        // Recharger les collections pour mettre à jour les compteurs
+        await this.loadCollections();
+      }
+    } catch (error: any) {
+      console.error('Error deleting data:', error);
+      this.store.showToast('Erreur lors de la suppression des données', 'error');
+    } finally {
+      this.isDeleting.set(false);
+    }
+  }
+
+  getCollectionDescription(name: string): string {
+    const collection = this.collections().find(c => c.name === name);
+    return collection ? collection.description : name;
+  }
+
+  getCollectionCount(name: string): number {
+    const collection = this.collections().find(c => c.name === name);
+    return collection ? collection.count : 0;
+  }
+
+  getTotalSelectedCount(): number {
+    return this.selectedCollections().reduce((total, name) => {
+      return total + this.getCollectionCount(name);
+    }, 0);
   }
 }

@@ -372,4 +372,35 @@ export class ApiService {
     const params = new HttpParams().set('fileId', fileId);
     return this.http.delete(`${this.getApiUrl()}/releve-bancaire/files`, { headers, params });
   }
+
+  /**
+   * Récupère la liste des collections disponibles pour la suppression
+   */
+  getAvailableCollections(): Observable<CollectionInfo[]> {
+    return this.get<CollectionInfo[]>('/settings/data/collections');
+  }
+
+  /**
+   * Supprime les collections sélectionnées
+   */
+  deleteAllData(collections: string[], confirmation: string): Observable<DeleteDataResponse> {
+    return this.post<DeleteDataResponse>('/settings/data/delete', {
+      collections,
+      confirmation
+    });
+  }
+}
+
+export interface CollectionInfo {
+  name: string;
+  description: string;
+  category: string;
+  critical: boolean;
+  count: number;
+}
+
+export interface DeleteDataResponse {
+  deletedCounts: { [key: string]: number };
+  totalDeleted: number;
+  errors: string[];
 }

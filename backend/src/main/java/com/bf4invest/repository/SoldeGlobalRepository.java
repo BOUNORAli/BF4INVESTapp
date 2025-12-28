@@ -9,3 +9,4 @@ public interface SoldeGlobalRepository extends MongoRepository<SoldeGlobal, Stri
 }
 
 
+
