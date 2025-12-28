@@ -45,6 +45,7 @@ public class ExcelImportService {
     private final OperationComptableRepository operationComptableRepository;
     private final com.bf4invest.service.PaiementService paiementService;
     private final com.bf4invest.service.ChargeService chargeService;
+    private final com.bf4invest.service.FactureAchatService factureAchatService;
     
     private static final DateTimeFormatter DATE_FORMATTER_DDMMYYYY = DateTimeFormatter.ofPattern("dd/MM/yyyy");
     private static final DateTimeFormatter DATE_FORMATTER_YYYYMMDD = DateTimeFormatter.ofPattern("yyyy-MM-dd");
@@ -138,7 +139,8 @@ public class ExcelImportService {
             
             // Calculer les totaux et ajouter les lignes pour les factures
             for (FactureAchat fa : faMap.values()) {
-                List<LineItem> lignes = faLignesMap.getOrDefault(fa.getNumeroFactureAchat(), new ArrayList<>());
+                // Utiliser bcReference comme clé pour récupérer les lignes
+                List<LineItem> lignes = faLignesMap.getOrDefault(fa.getBcReference(), new ArrayList<>());
                 fa.setLignes(lignes);
                 calculateFactureAchatTotals(fa);
             }
@@ -190,11 +192,8 @@ public class ExcelImportService {
             // Sauvegarder les factures achat
             for (FactureAchat fa : faMap.values()) {
                 try {
-                    fa.setCreatedAt(LocalDateTime.now());
-                    fa.setUpdatedAt(LocalDateTime.now());
-                    
-                    // Lier à la BC en utilisant la map temporaire
-                    String bcNum = faToBcNumMap.get(fa.getNumeroFactureAchat());
+                    // Lier à la BC en utilisant la map temporaire (utiliser bcReference comme clé)
+                    String bcNum = fa.getBcReference();
                     if (bcNum != null && bcNumToIdMap.containsKey(bcNum)) {
                         fa.setBandeCommandeId(bcNumToIdMap.get(bcNum));
                     } else {
@@ -209,17 +208,23 @@ public class ExcelImportService {
                         }
                     }
                     
-                    // Vérifier doublon
-                    Optional<FactureAchat> existing = factureAchatRepository.findByNumeroFactureAchat(fa.getNumeroFactureAchat());
-                    if (existing.isPresent()) {
-                        result.getWarnings().add("Facture Achat " + fa.getNumeroFactureAchat() + " déjà existante, ignorée");
-                        continue;
+                    // Vérifier doublon par BC (une facture achat par BC)
+                    if (fa.getBandeCommandeId() != null) {
+                        List<FactureAchat> existingByBC = factureAchatRepository.findByBandeCommandeId(fa.getBandeCommandeId());
+                        if (!existingByBC.isEmpty()) {
+                            result.getWarnings().add("Facture Achat pour BC " + fa.getBcReference() + " déjà existante, ignorée");
+                            continue;
+                        }
                     }
                     
-                    factureAchatRepository.save(fa);
+                    // Utiliser le service pour créer la facture (génère automatiquement le numéro)
+                    // Le service génère le numéro si non fourni
+                    factureAchatService.create(fa);
+                    
+                    result.setSuccessCount(result.getSuccessCount() + 1);
                 } catch (Exception e) {
-                    log.error("Error saving FA {}", fa.getNumeroFactureAchat(), e);
-                    result.getErrors().add("Erreur sauvegarde FA " + fa.getNumeroFactureAchat() + ": " + e.getMessage());
+                    log.error("Error saving FA for BC {}", fa.getBcReference(), e);
+                    result.getErrors().add("Erreur sauvegarde FA pour BC " + fa.getBcReference() + ": " + e.getMessage());
                     result.setErrorCount(result.getErrorCount() + 1);
                 }
             }
@@ -555,58 +560,76 @@ public class ExcelImportService {
         LineItem ligne = createLineItem(row, columnMap, result);
         bc.getLignes().add(ligne);
         
-        // 6. Créer ou récupérer la facture achat (N FAC FRS)
-        String numeroFA = getCellValue(row, columnMap, "numero_facture_fournisseur");
-        if (numeroFA != null && !numeroFA.trim().isEmpty()) {
-            numeroFA = numeroFA.trim();
-            final String finalNumeroFA = numeroFA; // Copie finale pour lambda
+        // 6. Créer ou récupérer la facture achat
+        // On crée toujours une facture achat pour chaque BC, même sans numéro facture fournisseur
+        // Le numéro facture fournisseur est stocké comme référence externe
+        String numeroFactureFournisseur = getCellValue(row, columnMap, "numero_facture_fournisseur");
+        if (numeroFactureFournisseur != null) {
+            numeroFactureFournisseur = numeroFactureFournisseur.trim();
+        }
+        
+        // Utiliser la BC comme clé pour grouper les factures achats (une facture achat par BC)
+        // Si plusieurs lignes ont la même BC, elles seront regroupées dans la même facture
+        final String finalNumeroBC = numeroBC; // Utiliser BC comme clé
+        final String finalNumeroFactureFournisseur = numeroFactureFournisseur; // Référence fournisseur
+        
+        FactureAchat fa = faMap.computeIfAbsent(finalNumeroBC, k -> {
+            FactureAchat newFa = new FactureAchat();
             
-            FactureAchat fa = faMap.computeIfAbsent(finalNumeroFA, k -> {
-                FactureAchat newFa = new FactureAchat();
-                newFa.setNumeroFactureAchat(finalNumeroFA);
-                
-                // Date facture achat (utiliser date BC si pas de date spécifique dans Excel)
-                LocalDate dateFacture = null;
-                Integer dateFACol = columnMap.get("date_facture_achat");
-                if (dateFACol != null) {
-                    Cell dateCell = row.getCell(dateFACol);
+            // Stocker le numéro facture fournisseur (référence externe)
+            newFa.setNumeroFactureFournisseur(finalNumeroFactureFournisseur);
+            
+            // Le numéro facture achat sera généré automatiquement par le service
+            // On ne le définit pas ici, il sera généré lors de la sauvegarde
+            
+            // Date facture achat (utiliser date BC si pas de date spécifique dans Excel)
+            LocalDate dateFacture = null;
+            Integer dateFACol = columnMap.get("date_facture_achat");
+            if (dateFACol != null) {
+                Cell dateCell = row.getCell(dateFACol);
+                dateFacture = parseDateFromCell(dateCell);
+            }
+            
+            // Fallback sur date BC si pas de date facture
+            if (dateFacture == null) {
+                Integer dateBCCol = columnMap.get("date_bc");
+                if (dateBCCol != null) {
+                    Cell dateCell = row.getCell(dateBCCol);
                     dateFacture = parseDateFromCell(dateCell);
                 }
-                
-                // Fallback sur date BC si pas de date facture
                 if (dateFacture == null) {
-                    Integer dateBCCol = columnMap.get("date_bc");
-                    if (dateBCCol != null) {
-                        Cell dateCell = row.getCell(dateBCCol);
-                        dateFacture = parseDateFromCell(dateCell);
-                    }
-                    if (dateFacture == null) {
-                        String dateFA = getCellValue(row, columnMap, "date_bc");
-                        dateFacture = parseDate(dateFA);
-                    }
+                    String dateFA = getCellValue(row, columnMap, "date_bc");
+                    dateFacture = parseDate(dateFA);
                 }
-                newFa.setDateFacture(dateFacture);
-                
-                // Date échéance = date facture + 2 mois (règle métier)
-                if (dateFacture != null) {
-                    newFa.setDateEcheance(dateFacture.plusMonths(2));
-                }
-                
-                newFa.setFournisseurId(finalFournisseurId);
-                newFa.setEtatPaiement("non_regle");
-                newFa.setLignes(new ArrayList<>());
-                newFa.setPaiements(new ArrayList<>());
-                
-                return newFa;
-            });
+            }
+            newFa.setDateFacture(dateFacture != null ? dateFacture : LocalDate.now());
             
-            // Stocker l'association FA -> BC
-            faToBcNumMap.put(finalNumeroFA, finalNumeroBC);
+            // Date échéance = date facture + 2 mois (règle métier)
+            if (newFa.getDateFacture() != null) {
+                newFa.setDateEcheance(newFa.getDateFacture().plusMonths(2));
+            }
             
-            // Ajouter la ligne à la facture achat
-            LineItem faLigne = createLineItemForFacture(row, columnMap, result);
-            faLignesMap.computeIfAbsent(finalNumeroFA, k -> new ArrayList<>()).add(faLigne);
+            newFa.setBcReference(finalNumeroBC);
+            newFa.setFournisseurId(finalFournisseurId);
+            newFa.setEtatPaiement("non_regle");
+            newFa.setLignes(new ArrayList<>());
+            newFa.setPaiements(new ArrayList<>());
+            
+            return newFa;
+        });
+        
+        // Si le numéro facture fournisseur est présent et n'est pas encore défini, le mettre à jour
+        if (finalNumeroFactureFournisseur != null && !finalNumeroFactureFournisseur.isEmpty() 
+                && (fa.getNumeroFactureFournisseur() == null || fa.getNumeroFactureFournisseur().isEmpty())) {
+            fa.setNumeroFactureFournisseur(finalNumeroFactureFournisseur);
         }
+        
+        // Stocker l'association FA -> BC (utiliser BC comme clé)
+        faToBcNumMap.put(finalNumeroBC, finalNumeroBC);
+        
+        // Ajouter la ligne à la facture achat
+        LineItem faLigne = createLineItemForFacture(row, columnMap, result);
+        faLignesMap.computeIfAbsent(finalNumeroBC, k -> new ArrayList<>()).add(faLigne);
         
         // 7. Créer ou récupérer la facture vente
         String numeroFV = getCellValue(row, columnMap, "numero_facture_vente");

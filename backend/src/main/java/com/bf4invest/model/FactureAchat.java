@@ -20,7 +20,8 @@ public class FactureAchat {
     @Id
     private String id;
     
-    private String numeroFactureAchat; // Format: FA-YYYY-NNN
+    private String numeroFactureAchat; // Format: FA-YYYY-NNN (notre numéro interne)
+    private String numeroFactureFournisseur; // Numéro de facture du fournisseur (référence externe)
     private LocalDate dateFacture;
     private LocalDate dateEcheance; // Calculé: dateFacture + 2 mois
     
