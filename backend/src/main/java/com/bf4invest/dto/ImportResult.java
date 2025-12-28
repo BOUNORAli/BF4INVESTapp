@@ -56,6 +56,35 @@ public class ImportResult {
         private int rowNumber; // Numéro de ligne dans le fichier Excel (1-based)
         private Map<String, Object> rowData; // Données de la ligne (colonne -> valeur)
     }
+    
+    /**
+     * Factures non trouvées lors du matching des paiements
+     */
+    @Builder.Default
+    private List<NotFoundInvoice> notFoundInvoices = new ArrayList<>();
+    
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class NotFoundInvoice {
+        private String numeroBc; // Numéro de BC
+        private String numeroFacture; // Numéro de facture (si disponible)
+        private String reference; // Référence (si disponible)
+        private String partenaire; // Nom du client/fournisseur
+        private String typeOperation; // C (Client) ou F (Fournisseur)
+        private Double montant; // Montant du paiement
+        private java.time.LocalDate dateOperation; // Date de l'opération
+        private String raison; // Raison de l'échec (ex: "Aucune facture trouvée pour BC")
+        private Map<String, Object> operationData; // Données complètes de l'opération
+    }
+    
+    /**
+     * Vérifie si un rapport Excel doit être généré
+     */
+    public boolean hasReport() {
+        return !errorRows.isEmpty() || !successRows.isEmpty() || !notFoundInvoices.isEmpty();
+    }
 }
 
 

@@ -2105,6 +2105,30 @@ public class ExcelImportService {
                     if (factures.isEmpty()) {
                         log.warn("No facture achat found for BC: {}", numeroBc);
                         result.getWarnings().add(String.format("Aucune facture achat trouvée pour BC: %s", numeroBc));
+                        
+                        // Capturer la facture non trouvée pour le rapport
+                        Map<String, Object> operationData = new HashMap<>();
+                        operationData.put("numeroBc", numeroBc);
+                        operationData.put("numeroFacture", operation.getNumeroFacture());
+                        operationData.put("reference", operation.getReference());
+                        operationData.put("partenaire", operation.getNomClientFrs());
+                        operationData.put("typeOperation", "F");
+                        operationData.put("montant", montantPaiement);
+                        operationData.put("dateOperation", dateOperation);
+                        operationData.put("moyenPayement", operation.getMoyenPayement());
+                        operationData.put("commentaire", commentaire);
+                        
+                        result.getNotFoundInvoices().add(ImportResult.NotFoundInvoice.builder()
+                                .numeroBc(numeroBc)
+                                .numeroFacture(operation.getNumeroFacture())
+                                .reference(operation.getReference())
+                                .partenaire(operation.getNomClientFrs())
+                                .typeOperation("F")
+                                .montant(montantPaiement)
+                                .dateOperation(dateOperation)
+                                .raison("Aucune facture achat trouvée pour BC: " + numeroBc)
+                                .operationData(operationData)
+                                .build());
                         continue;
                     }
                     
@@ -2171,6 +2195,30 @@ public class ExcelImportService {
                     if (factures.isEmpty()) {
                         log.warn("No facture vente found for BC: {}", numeroBc);
                         result.getWarnings().add(String.format("Aucune facture vente trouvée pour BC: %s", numeroBc));
+                        
+                        // Capturer la facture non trouvée pour le rapport
+                        Map<String, Object> operationData = new HashMap<>();
+                        operationData.put("numeroBc", numeroBc);
+                        operationData.put("numeroFacture", operation.getNumeroFacture());
+                        operationData.put("reference", operation.getReference());
+                        operationData.put("partenaire", operation.getNomClientFrs());
+                        operationData.put("typeOperation", "C");
+                        operationData.put("montant", montantPaiement);
+                        operationData.put("dateOperation", dateOperation);
+                        operationData.put("moyenPayement", operation.getMoyenPayement());
+                        operationData.put("commentaire", commentaire);
+                        
+                        result.getNotFoundInvoices().add(ImportResult.NotFoundInvoice.builder()
+                                .numeroBc(numeroBc)
+                                .numeroFacture(operation.getNumeroFacture())
+                                .reference(operation.getReference())
+                                .partenaire(operation.getNomClientFrs())
+                                .typeOperation("C")
+                                .montant(montantPaiement)
+                                .dateOperation(dateOperation)
+                                .raison("Aucune facture vente trouvée pour BC: " + numeroBc)
+                                .operationData(operationData)
+                                .build());
                         continue;
                     }
                     
@@ -2708,7 +2756,120 @@ public class ExcelImportService {
                 errorSheet.autoSizeColumn(i);
             }
             
-            // Feuille 2: Lignes importées avec succès (optionnel)
+            // Feuille 2: Factures non trouvées
+            if (!result.getNotFoundInvoices().isEmpty()) {
+                Sheet notFoundSheet = workbook.createSheet("Factures non trouvées");
+                rowNum = 0;
+                
+                // En-tête
+                Row notFoundHeaderRow = notFoundSheet.createRow(rowNum++);
+                colNum = 0;
+                notFoundHeaderRow.createCell(colNum++).setCellValue("N° BC");
+                notFoundHeaderRow.createCell(colNum++).setCellValue("N° Facture");
+                notFoundHeaderRow.createCell(colNum++).setCellValue("Référence");
+                notFoundHeaderRow.createCell(colNum++).setCellValue("Partenaire");
+                notFoundHeaderRow.createCell(colNum++).setCellValue("Type");
+                notFoundHeaderRow.createCell(colNum++).setCellValue("Montant");
+                notFoundHeaderRow.createCell(colNum++).setCellValue("Date");
+                notFoundHeaderRow.createCell(colNum++).setCellValue("Moyen de paiement");
+                notFoundHeaderRow.createCell(colNum++).setCellValue("Commentaire");
+                notFoundHeaderRow.createCell(colNum++).setCellValue("Raison");
+                
+                // Appliquer le style d'en-tête
+                for (int i = 0; i < colNum; i++) {
+                    notFoundHeaderRow.getCell(i).setCellStyle(headerStyle);
+                }
+                
+                // Style pour les lignes de factures non trouvées
+                CellStyle notFoundStyle = workbook.createCellStyle();
+                Font notFoundFont = workbook.createFont();
+                notFoundFont.setColor(IndexedColors.DARK_RED.getIndex());
+                notFoundStyle.setFont(notFoundFont);
+                notFoundStyle.setFillForegroundColor(IndexedColors.LIGHT_YELLOW.getIndex());
+                notFoundStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+                notFoundStyle.setBorderBottom(BorderStyle.THIN);
+                notFoundStyle.setBorderTop(BorderStyle.THIN);
+                notFoundStyle.setBorderLeft(BorderStyle.THIN);
+                notFoundStyle.setBorderRight(BorderStyle.THIN);
+                
+                // Lignes de factures non trouvées
+                for (ImportResult.NotFoundInvoice notFound : result.getNotFoundInvoices()) {
+                    Row row = notFoundSheet.createRow(rowNum++);
+                    colNum = 0;
+                    
+                    // N° BC
+                    Cell cell = row.createCell(colNum++);
+                    cell.setCellValue(notFound.getNumeroBc() != null ? notFound.getNumeroBc() : "");
+                    cell.setCellStyle(notFoundStyle);
+                    
+                    // N° Facture
+                    cell = row.createCell(colNum++);
+                    cell.setCellValue(notFound.getNumeroFacture() != null ? notFound.getNumeroFacture() : "");
+                    cell.setCellStyle(notFoundStyle);
+                    
+                    // Référence
+                    cell = row.createCell(colNum++);
+                    cell.setCellValue(notFound.getReference() != null ? notFound.getReference() : "");
+                    cell.setCellStyle(notFoundStyle);
+                    
+                    // Partenaire
+                    cell = row.createCell(colNum++);
+                    cell.setCellValue(notFound.getPartenaire() != null ? notFound.getPartenaire() : "");
+                    cell.setCellStyle(notFoundStyle);
+                    
+                    // Type
+                    cell = row.createCell(colNum++);
+                    cell.setCellValue(notFound.getTypeOperation() != null ? 
+                            (notFound.getTypeOperation().equals("C") ? "Client" : "Fournisseur") : "");
+                    cell.setCellStyle(notFoundStyle);
+                    
+                    // Montant
+                    cell = row.createCell(colNum++);
+                    if (notFound.getMontant() != null) {
+                        cell.setCellValue(notFound.getMontant());
+                    }
+                    cell.setCellStyle(notFoundStyle);
+                    
+                    // Date
+                    cell = row.createCell(colNum++);
+                    if (notFound.getDateOperation() != null) {
+                        cell.setCellValue(java.sql.Date.valueOf(notFound.getDateOperation()));
+                        CellStyle dateStyle = workbook.createCellStyle();
+                        dateStyle.cloneStyleFrom(notFoundStyle);
+                        dateStyle.setDataFormat(workbook.getCreationHelper().createDataFormat().getFormat("dd/mm/yyyy"));
+                        cell.setCellStyle(dateStyle);
+                    }
+                    cell.setCellStyle(notFoundStyle);
+                    
+                    // Moyen de paiement
+                    cell = row.createCell(colNum++);
+                    if (notFound.getOperationData() != null && notFound.getOperationData().containsKey("moyenPayement")) {
+                        Object moyenPayement = notFound.getOperationData().get("moyenPayement");
+                        cell.setCellValue(moyenPayement != null ? moyenPayement.toString() : "");
+                    }
+                    cell.setCellStyle(notFoundStyle);
+                    
+                    // Commentaire
+                    cell = row.createCell(colNum++);
+                    if (notFound.getOperationData() != null && notFound.getOperationData().containsKey("commentaire")) {
+                        Object commentaire = notFound.getOperationData().get("commentaire");
+                        cell.setCellValue(commentaire != null ? commentaire.toString() : "");
+                    }
+                    cell.setCellStyle(notFoundStyle);
+                    
+                    // Raison
+                    cell = row.createCell(colNum++);
+                    cell.setCellValue(notFound.getRaison() != null ? notFound.getRaison() : "");
+                    cell.setCellStyle(notFoundStyle);
+                }
+                
+                // Auto-size columns
+                for (int i = 0; i < colNum; i++) {
+                    notFoundSheet.autoSizeColumn(i);
+                }
+            }
+            
+            // Feuille 3: Lignes importées avec succès (optionnel)
             if (!result.getSuccessRows().isEmpty()) {
                 Sheet successSheet = workbook.createSheet("Lignes importées");
                 rowNum = 0;
