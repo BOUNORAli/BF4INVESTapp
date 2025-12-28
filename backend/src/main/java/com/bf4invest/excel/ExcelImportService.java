@@ -499,6 +499,14 @@ public class ExcelImportService {
                            Map<String, String> fvToBcNumMap, // Map temporaire: numeroFV -> numeroBC
                            ImportResult result) {
         
+        // Vérifier si c'est une ligne d'avoir (colonne "prix_vente_unitaire_ttc" contient "AVOIR")
+        String prixVenteTTCStr = getCellValue(row, columnMap, "prix_vente_unitaire_ttc");
+        if (prixVenteTTCStr != null && prixVenteTTCStr.trim().equalsIgnoreCase("AVOIR")) {
+            // Ignorer cette ligne car c'est un avoir, pas une vente normale
+            result.getWarnings().add("Ligne ignorée: avoir détecté dans prix de vente");
+            return;
+        }
+        
         // 1. Récupérer les données de base
         String numeroBC = getCellValue(row, columnMap, "numero_bc");
         if (numeroBC == null || numeroBC.trim().isEmpty()) {
@@ -985,6 +993,12 @@ public class ExcelImportService {
                 case STRING:
                     String strValue = cell.getStringCellValue().trim();
                     if (strValue.isEmpty()) return null;
+                    // Ignorer les valeurs non numériques comme "AVOIR"
+                    if (strValue.equalsIgnoreCase("AVOIR") || 
+                        strValue.equalsIgnoreCase("avoir") ||
+                        !strValue.matches(".*\\d+.*")) {
+                        return null;
+                    }
                     // Gérer format français avec virgule
                     strValue = strValue.replace(" ", "").replace(",", ".");
                     try {
@@ -994,7 +1008,10 @@ public class ExcelImportService {
                         try {
                             return FRENCH_NUMBER_FORMAT.parse(strValue.replace(".", ",")).doubleValue();
                         } catch (ParseException e2) {
-                            log.warn("Cannot parse number: {}", strValue);
+                            // Ne pas logger pour "AVOIR" car c'est normal
+                            if (!strValue.equalsIgnoreCase("AVOIR")) {
+                                log.warn("Cannot parse number: {}", strValue);
+                            }
                             return null;
                         }
                     }
@@ -1007,6 +1024,11 @@ public class ExcelImportService {
                             // Essayer de parser depuis la string
                             String formulaStrValue = cell.getStringCellValue().trim();
                             if (formulaStrValue.isEmpty()) return null;
+                            // Ignorer les valeurs non numériques comme "AVOIR"
+                            if (formulaStrValue.equalsIgnoreCase("AVOIR") || 
+                                !formulaStrValue.matches(".*\\d+.*")) {
+                                return null;
+                            }
                             formulaStrValue = formulaStrValue.replace(" ", "").replace(",", ".");
                             try {
                                 return Double.parseDouble(formulaStrValue);
@@ -1111,10 +1133,36 @@ public class ExcelImportService {
         
         dateStr = dateStr.trim();
         
+        // Extraire la date des formats comme "LIV 6/5", "LIV MARS", etc.
+        // Chercher un pattern de date dans la chaîne (DD/MM, DD/MM/YYYY, etc.)
+        java.util.regex.Pattern datePattern = java.util.regex.Pattern.compile("(\\d{1,2}/\\d{1,2}(?:/\\d{2,4})?)");
+        java.util.regex.Matcher matcher = datePattern.matcher(dateStr);
+        if (matcher.find()) {
+            dateStr = matcher.group(1);
+        } else {
+            // Si pas de pattern de date trouvé et que la chaîne contient du texte non numérique, retourner null
+            if (!dateStr.matches(".*\\d+.*")) {
+                return null;
+            }
+        }
+        
         // Format DD/MM/YYYY
         try {
             return LocalDate.parse(dateStr, DATE_FORMATTER_DDMMYYYY);
         } catch (DateTimeParseException e) {
+            // Continuer avec les autres formats
+        }
+        
+        // Format DD/MM (sans année, utiliser l'année actuelle)
+        try {
+            if (dateStr.matches("\\d{1,2}/\\d{1,2}")) {
+                String[] parts = dateStr.split("/");
+                int day = Integer.parseInt(parts[0]);
+                int month = Integer.parseInt(parts[1]);
+                int year = java.time.LocalDate.now().getYear();
+                return LocalDate.of(year, month, day);
+            }
+        } catch (Exception e) {
             // Continuer avec les autres formats
         }
         
@@ -1137,7 +1185,7 @@ public class ExcelImportService {
         } catch (NumberFormatException e) {
             // Ce n'est pas un nombre, continuer avec les autres formats
         } catch (Exception e) {
-            log.warn("Error parsing date as Excel number: {}", e.getMessage());
+            // Ignorer les erreurs de parsing Excel
         }
         
         // Essayer de parser les formats de date Java comme "Thu Jan 02 00:00:00 CET 2025"
@@ -1148,7 +1196,7 @@ public class ExcelImportService {
                     .atZone(java.time.ZoneId.systemDefault())
                     .toLocalDate();
         } catch (Exception e) {
-            log.warn("Cannot parse date: {}", dateStr);
+            // Ignorer silencieusement si on ne peut pas parser
         }
         
         // Si aucun format ne fonctionne
@@ -1549,11 +1597,36 @@ public class ExcelImportService {
                     return null;
                 }
                 dateStr = dateStr.trim();
-                // Ignorer les valeurs qui sont clairement pas des dates (une seule lettre, etc.)
+                // Ignorer les valeurs qui sont clairement pas des dates (une seule lettre, mots comme "AVOIR", etc.)
                 if (dateStr.length() == 1 && !Character.isDigit(dateStr.charAt(0))) {
                     return null;
                 }
+                // Ignorer les mots qui ne contiennent pas de chiffres
+                if (!dateStr.matches(".*\\d+.*")) {
+                    return null;
+                }
                 return parseDate(dateStr);
+            } else if (cell.getCellType() == CellType.FORMULA) {
+                // Vérifier le type de résultat de la formule
+                try {
+                    if (cell.getCachedFormulaResultType() == CellType.NUMERIC) {
+                        double excelDate = cell.getNumericCellValue();
+                        Date javaDate = DateUtil.getJavaDate(excelDate);
+                        if (javaDate != null) {
+                            return javaDate.toInstant()
+                                    .atZone(java.time.ZoneId.systemDefault())
+                                    .toLocalDate();
+                        }
+                    } else if (cell.getCachedFormulaResultType() == CellType.STRING) {
+                        String dateStr = cell.getStringCellValue();
+                        if (dateStr != null && !dateStr.trim().isEmpty() && dateStr.matches(".*\\d+.*")) {
+                            return parseDate(dateStr.trim());
+                        }
+                    }
+                } catch (Exception e) {
+                    // Ignorer les erreurs
+                }
+                return null;
             } else if (cell.getCellType() == CellType.BLANK) {
                 // Cellule vide
                 return null;
