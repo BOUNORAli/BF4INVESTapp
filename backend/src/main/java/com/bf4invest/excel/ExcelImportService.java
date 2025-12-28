@@ -1109,19 +1109,19 @@ public class ExcelImportService {
                 case FORMULA:
                     try {
                         if (cell.getCachedFormulaResultType() == CellType.NUMERIC) {
-                            double numValue = cell.getNumericCellValue();
+                            double formulaNumValue = cell.getNumericCellValue();
                             // Si la valeur est < 1, multiplier par 100
-                            if (numValue < 1 && numValue > 0) {
-                                return numValue * 100;
+                            if (formulaNumValue < 1 && formulaNumValue > 0) {
+                                return formulaNumValue * 100;
                             }
-                            return numValue;
+                            return formulaNumValue;
                         } else if (cell.getCachedFormulaResultType() == CellType.STRING) {
                             String formulaStrValue = cell.getStringCellValue().trim();
                             if (formulaStrValue.isEmpty()) return null;
                             
                             // Retirer le signe % s'il existe
-                            boolean hasPercent = formulaStrValue.endsWith("%");
-                            if (hasPercent) {
+                            boolean formulaHasPercent = formulaStrValue.endsWith("%");
+                            if (formulaHasPercent) {
                                 formulaStrValue = formulaStrValue.substring(0, formulaStrValue.length() - 1).trim();
                             }
                             
@@ -1132,7 +1132,7 @@ public class ExcelImportService {
                             formulaStrValue = formulaStrValue.replace(" ", "").replace(",", ".");
                             try {
                                 double value = Double.parseDouble(formulaStrValue);
-                                if (!hasPercent && value < 1 && value > 0) {
+                                if (!formulaHasPercent && value < 1 && value > 0) {
                                     return value * 100;
                                 }
                                 return value;
