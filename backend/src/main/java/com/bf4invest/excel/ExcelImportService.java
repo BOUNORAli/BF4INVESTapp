@@ -999,7 +999,26 @@ public class ExcelImportService {
                         }
                     }
                 case FORMULA:
-                    return cell.getNumericCellValue();
+                    try {
+                        // Vérifier si la formule retourne une valeur numérique
+                        if (cell.getCachedFormulaResultType() == CellType.NUMERIC) {
+                            return cell.getNumericCellValue();
+                        } else if (cell.getCachedFormulaResultType() == CellType.STRING) {
+                            // Essayer de parser depuis la string
+                            String strValue = cell.getStringCellValue().trim();
+                            if (strValue.isEmpty()) return null;
+                            strValue = strValue.replace(" ", "").replace(",", ".");
+                            try {
+                                return Double.parseDouble(strValue);
+                            } catch (NumberFormatException e) {
+                                return null;
+                            }
+                        }
+                        return null;
+                    } catch (Exception e) {
+                        log.warn("Error getting numeric value from formula cell: {}", e.getMessage());
+                        return null;
+                    }
                 default:
                     return null;
             }
@@ -1045,7 +1064,39 @@ public class ExcelImportService {
                         return null;
                     }
                 case FORMULA:
-                    return (int) cell.getNumericCellValue();
+                    try {
+                        // Vérifier si la formule retourne une valeur numérique
+                        if (cell.getCachedFormulaResultType() == CellType.NUMERIC) {
+                            return (int) cell.getNumericCellValue();
+                        } else if (cell.getCachedFormulaResultType() == CellType.STRING) {
+                            // Essayer de parser depuis la string
+                            String strValue = cell.getStringCellValue().trim();
+                            if (strValue.isEmpty()) return null;
+                            strValue = strValue.replace(" ", "");
+                            
+                            // Gérer le format "mois/année" (ex: "8/2025" -> extraire 8)
+                            if (strValue.contains("/")) {
+                                String[] parts = strValue.split("/");
+                                if (parts.length >= 1) {
+                                    try {
+                                        return Integer.parseInt(parts[0].trim());
+                                    } catch (NumberFormatException e) {
+                                        // Continuer avec le parsing normal
+                                    }
+                                }
+                            }
+                            
+                            try {
+                                return Integer.parseInt(strValue);
+                            } catch (NumberFormatException e) {
+                                return null;
+                            }
+                        }
+                        return null;
+                    } catch (Exception e) {
+                        log.warn("Error getting integer value from formula cell: {}", e.getMessage());
+                        return null;
+                    }
                 default:
                     return null;
             }
@@ -1072,9 +1123,14 @@ public class ExcelImportService {
                     // Format Excel (si c'est un nombre)
                     double excelDate = Double.parseDouble(dateStr);
                     Date javaDate = DateUtil.getJavaDate(excelDate);
+                    if (javaDate == null) {
+                        return null;
+                    }
                     return javaDate.toInstant()
                             .atZone(java.time.ZoneId.systemDefault())
                             .toLocalDate();
+                } catch (NumberFormatException e3) {
+                    // Ce n'est pas un nombre, continuer avec les autres formats
                 } catch (Exception e3) {
                     // Essayer de parser les formats de date Java comme "Thu Jan 02 00:00:00 CET 2025"
                     try {
@@ -1464,6 +1520,9 @@ public class ExcelImportService {
         try {
             if (DateUtil.isCellDateFormatted(cell)) {
                 Date date = cell.getDateCellValue();
+                if (date == null) {
+                    return null;
+                }
                 return date.toInstant()
                         .atZone(java.time.ZoneId.systemDefault())
                         .toLocalDate();
@@ -1471,12 +1530,22 @@ public class ExcelImportService {
                 // Date stockée comme nombre Excel
                 double excelDate = cell.getNumericCellValue();
                 Date javaDate = DateUtil.getJavaDate(excelDate);
+                if (javaDate == null) {
+                    return null;
+                }
                 return javaDate.toInstant()
                         .atZone(java.time.ZoneId.systemDefault())
                         .toLocalDate();
             } else if (cell.getCellType() == CellType.STRING) {
                 // Parser depuis string
-                return parseDate(cell.getStringCellValue());
+                String dateStr = cell.getStringCellValue();
+                if (dateStr == null || dateStr.trim().isEmpty()) {
+                    return null;
+                }
+                return parseDate(dateStr);
+            } else if (cell.getCellType() == CellType.BLANK) {
+                // Cellule vide
+                return null;
             }
         } catch (Exception e) {
             log.warn("Error parsing date from cell: {}", e.getMessage());
