@@ -1005,11 +1005,11 @@ public class ExcelImportService {
                             return cell.getNumericCellValue();
                         } else if (cell.getCachedFormulaResultType() == CellType.STRING) {
                             // Essayer de parser depuis la string
-                            String strValue = cell.getStringCellValue().trim();
-                            if (strValue.isEmpty()) return null;
-                            strValue = strValue.replace(" ", "").replace(",", ".");
+                            String formulaStrValue = cell.getStringCellValue().trim();
+                            if (formulaStrValue.isEmpty()) return null;
+                            formulaStrValue = formulaStrValue.replace(" ", "").replace(",", ".");
                             try {
-                                return Double.parseDouble(strValue);
+                                return Double.parseDouble(formulaStrValue);
                             } catch (NumberFormatException e) {
                                 return null;
                             }
@@ -1070,13 +1070,13 @@ public class ExcelImportService {
                             return (int) cell.getNumericCellValue();
                         } else if (cell.getCachedFormulaResultType() == CellType.STRING) {
                             // Essayer de parser depuis la string
-                            String strValue = cell.getStringCellValue().trim();
-                            if (strValue.isEmpty()) return null;
-                            strValue = strValue.replace(" ", "");
+                            String formulaStrValue = cell.getStringCellValue().trim();
+                            if (formulaStrValue.isEmpty()) return null;
+                            formulaStrValue = formulaStrValue.replace(" ", "");
                             
                             // Gérer le format "mois/année" (ex: "8/2025" -> extraire 8)
-                            if (strValue.contains("/")) {
-                                String[] parts = strValue.split("/");
+                            if (formulaStrValue.contains("/")) {
+                                String[] parts = formulaStrValue.split("/");
                                 if (parts.length >= 1) {
                                     try {
                                         return Integer.parseInt(parts[0].trim());
@@ -1087,7 +1087,7 @@ public class ExcelImportService {
                             }
                             
                             try {
-                                return Integer.parseInt(strValue);
+                                return Integer.parseInt(formulaStrValue);
                             } catch (NumberFormatException e) {
                                 return null;
                             }
