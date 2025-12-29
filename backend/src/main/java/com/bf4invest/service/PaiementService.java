@@ -88,7 +88,8 @@ public class PaiementService {
                                         client.getNom(),
                                         saved.getId(),
                                         referenceNumero,
-                                        "Paiement client - " + facture.getNumeroFactureVente()
+                                        "Paiement client - " + facture.getNumeroFactureVente(),
+                                        saved.getDate() // Utiliser la date du paiement (colonne DATE de l'Excel)
                                 );
                                 
                                 // Mettre à jour les soldes dans le paiement
@@ -112,7 +113,8 @@ public class PaiementService {
                                         supplier.getNom(),
                                         saved.getId(),
                                         referenceNumero,
-                                        "Paiement fournisseur - " + facture.getNumeroFactureAchat()
+                                        "Paiement fournisseur - " + facture.getNumeroFactureAchat(),
+                                        saved.getDate() // Utiliser la date du paiement (colonne DATE de l'Excel)
                                 );
                                 
                                 // Mettre à jour les soldes dans le paiement

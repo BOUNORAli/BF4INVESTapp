@@ -102,6 +102,25 @@ public class SoldeService {
             String referenceNumero,
             String description
     ) {
+        return enregistrerTransaction(type, montant, partenaireId, partenaireType, partenaireNom, 
+                referenceId, referenceNumero, description, null);
+    }
+    
+    /**
+     * Enregistre une transaction et met à jour les soldes avec une date spécifique
+     */
+    @Transactional
+    public HistoriqueSolde enregistrerTransaction(
+            String type, // "FACTURE_VENTE", "FACTURE_ACHAT", "PAIEMENT_CLIENT", "PAIEMENT_FOURNISSEUR"
+            Double montant,
+            String partenaireId,
+            String partenaireType, // "CLIENT" ou "FOURNISSEUR"
+            String partenaireNom,
+            String referenceId,
+            String referenceNumero,
+            String description,
+            LocalDate dateTransaction // Date de la transaction (colonne DATE de l'Excel)
+    ) {
         // Récupérer le solde global actuel
         Double soldeGlobalAvant = getSoldeGlobalActuel();
         Double soldePartenaireAvant = getSoldePartenaire(partenaireId, partenaireType);
@@ -115,6 +134,11 @@ public class SoldeService {
         
         // Mettre à jour le solde partenaire
         mettreAJourSoldePartenaire(partenaireId, partenaireType, soldePartenaireApres);
+        
+        // Utiliser la date de la transaction si fournie, sinon utiliser maintenant
+        LocalDateTime dateHistorique = dateTransaction != null 
+                ? dateTransaction.atStartOfDay() 
+                : LocalDateTime.now();
         
         // Créer l'historique
         HistoriqueSolde historique = HistoriqueSolde.builder()
@@ -130,7 +154,7 @@ public class SoldeService {
                 .referenceId(referenceId)
                 .referenceNumero(referenceNumero)
                 .description(description)
-                .date(LocalDateTime.now())
+                .date(dateHistorique)
                 .build();
         
         return historiqueSoldeRepository.save(historique);

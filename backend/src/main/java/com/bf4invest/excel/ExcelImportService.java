@@ -2050,7 +2050,7 @@ public class ExcelImportService {
         List<OperationComptable> allOperations = operationComptableRepository.findAll();
         log.info("Total operations in database: {}", allOperations.size());
         
-        // Filtrer les paiements
+        // Filtrer les paiements et trier par date (ordre chronologique)
         List<OperationComptable> paiements = allOperations.stream()
                 .filter(op -> {
                     // Vérifier le type mouvement
@@ -2063,9 +2063,18 @@ public class ExcelImportService {
                     return isPaiement;
                 })
                 .filter(op -> op.getTotalPayementTtc() != null && op.getTotalPayementTtc() > 0)
+                .sorted((op1, op2) -> {
+                    // Trier par date (ordre chronologique croissant)
+                    LocalDate date1 = op1.getDateOperation();
+                    LocalDate date2 = op2.getDateOperation();
+                    if (date1 == null && date2 == null) return 0;
+                    if (date1 == null) return 1; // Les dates null à la fin
+                    if (date2 == null) return -1;
+                    return date1.compareTo(date2);
+                })
                 .collect(java.util.stream.Collectors.toList());
         
-        log.info("Found {} payment operations to process", paiements.size());
+        log.info("Found {} payment operations to process (sorted chronologically)", paiements.size());
         
         for (OperationComptable operation : paiements) {
             try {
