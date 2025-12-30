@@ -72,7 +72,6 @@ public class PaiementService {
         if (saved.getMontant() != null && saved.getMontant() > 0) {
             try {
                 String typeTransaction;
-                String referenceNumero = saved.getReference() != null ? saved.getReference() : "Paiement";
                 
                 if (saved.getFactureVenteId() != null) {
                     // Paiement client
@@ -80,6 +79,11 @@ public class PaiementService {
                     factureVenteRepository.findById(saved.getFactureVenteId()).ifPresent(facture -> {
                         if (facture.getClientId() != null) {
                             clientService.findById(facture.getClientId()).ifPresent(client -> {
+                                // Utiliser le numéro de facture comme référence (pas la référence de l'opération comptable)
+                                String referenceNumero = facture.getNumeroFactureVente() != null 
+                                        ? facture.getNumeroFactureVente() 
+                                        : (saved.getReference() != null ? saved.getReference() : "Paiement");
+                                
                                 var historique = soldeService.enregistrerTransaction(
                                         typeTransaction,
                                         saved.getMontant(),
@@ -105,6 +109,11 @@ public class PaiementService {
                     factureAchatRepository.findById(saved.getFactureAchatId()).ifPresent(facture -> {
                         if (facture.getFournisseurId() != null) {
                             supplierService.findById(facture.getFournisseurId()).ifPresent(supplier -> {
+                                // Utiliser le numéro de facture comme référence (pas la référence de l'opération comptable)
+                                String referenceNumero = facture.getNumeroFactureAchat() != null 
+                                        ? facture.getNumeroFactureAchat() 
+                                        : (saved.getReference() != null ? saved.getReference() : "Paiement");
+                                
                                 var historique = soldeService.enregistrerTransaction(
                                         typeTransaction,
                                         saved.getMontant(),

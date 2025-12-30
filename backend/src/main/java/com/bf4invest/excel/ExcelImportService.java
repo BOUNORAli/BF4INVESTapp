@@ -1936,6 +1936,14 @@ public class ExcelImportService {
             Map<String, Integer> columnMap = mapOperationsComptablesColumns(headerRow);
             log.info("Mapped operations comptables columns: {}", columnMap);
             
+            // Vérifier que la colonne DATE est bien mappée
+            Integer dateColIndex = columnMap.get("date");
+            if (dateColIndex != null) {
+                log.info("Colonne DATE trouvée à l'index: {} (colonne Excel: {})", dateColIndex, dateColIndex + 1);
+            } else {
+                log.warn("Colonne DATE non trouvée dans le mapping !");
+            }
+            
             result.setTotalRows(sheet.getLastRowNum());
             int successCount = 0;
             int errorCount = 0;
@@ -1962,8 +1970,17 @@ public class ExcelImportService {
                 try {
                     OperationComptable operation = processOperationComptableRow(row, columnMap, result);
                     if (operation != null) {
+                        // Sauvegarder l'opération dans l'ordre chronologique (ordre du fichier Excel)
+                        // Les opérations sont déjà dans l'ordre car on les traite ligne par ligne
                         operationComptableRepository.save(operation);
                         successCount++;
+                        
+                        // Log pour tracer la date extraite de la colonne DATE
+                        if (operation.getDateOperation() != null) {
+                            log.debug("Opération comptable sauvegardée - Ligne: {}, Date (colonne DATE): {}, Type: {}, Montant: {}", 
+                                    i + 1, operation.getDateOperation(), operation.getTypeMouvement(), 
+                                    operation.getTotalPayementTtc() != null ? operation.getTotalPayementTtc() : operation.getTotalTtcApresRg());
+                        }
                         
                         // Stocker la ligne de succès
                         Map<String, Object> rowData = extractRowData(row, columnMap, headerRow);
@@ -2083,6 +2100,10 @@ public class ExcelImportService {
                 Double montantPaiement = operation.getTotalPayementTtc();
                 LocalDate dateOperation = operation.getDateOperation();
                 String commentaire = operation.getCommentaire();
+                
+                // Log pour tracer la date utilisée (colonne DATE de l'Excel)
+                log.debug("Traitement paiement - BC: {}, Date opération (colonne DATE): {}, Montant: {}, Référence opération: {}", 
+                        numeroBc, dateOperation, montantPaiement, operation.getReference());
                 
                 if (montantPaiement == null || montantPaiement <= 0) {
                     continue;
@@ -2208,8 +2229,8 @@ public class ExcelImportService {
                             
                             paiementService.create(paiement);
                             paymentsProcessed.incrementAndGet();
-                            log.info("Created payment for facture achat {} (BC: {}): {} MAD", 
-                                    facture.getNumeroFactureAchat(), numeroBc, montantPaiement);
+                            log.info("Created payment for facture achat {} (BC: {}): {} MAD - Date: {} (colonne DATE)", 
+                                    facture.getNumeroFactureAchat(), numeroBc, montantPaiement, dateOperation);
                         } else {
                             log.debug("Payment already exists for facture achat {} (BC: {})", 
                                     facture.getNumeroFactureAchat(), numeroBc);
@@ -2298,8 +2319,8 @@ public class ExcelImportService {
                             
                             paiementService.create(paiement);
                             paymentsProcessed.incrementAndGet();
-                            log.info("Created payment for facture vente {} (BC: {}): {} MAD", 
-                                    facture.getNumeroFactureVente(), numeroBc, montantPaiement);
+                            log.info("Created payment for facture vente {} (BC: {}): {} MAD - Date: {} (colonne DATE)", 
+                                    facture.getNumeroFactureVente(), numeroBc, montantPaiement, dateOperation);
                         } else {
                             log.debug("Payment already exists for facture vente {} (BC: {})", 
                                     facture.getNumeroFactureVente(), numeroBc);
@@ -2354,6 +2375,7 @@ public class ExcelImportService {
                 map.put("source_payement", colIndex);
             } else if (normalized.equals("date")) {
                 map.put("date", colIndex);
+                log.debug("Colonne DATE mappée à l'index: {} (colonne Excel: {})", colIndex, colIndex + 1);
             } else if (normalized.equals("type")) {
                 map.put("type_mouvement", colIndex);
             } else if (normalized.contains("facture") && (normalized.contains("n°") || normalized.contains("numero"))) {
@@ -2437,24 +2459,32 @@ public class ExcelImportService {
         // Source paiement
         String sourcePayement = getCellValue(row, columnMap, "source_payement");
         
-        // Date (obligatoire)
+        // Date (obligatoire) - Colonne 7 (colonne "DATE")
         LocalDate dateOperation = null;
         Integer dateColIndex = columnMap.get("date");
         if (dateColIndex != null) {
             Cell dateCell = row.getCell(dateColIndex);
             if (dateCell != null) {
                 dateOperation = parseDateFromCell(dateCell);
+                if (dateOperation != null) {
+                    log.debug("Date extraite depuis cellule DATE (colonne {}): {}", dateColIndex, dateOperation);
+                }
             }
         }
         if (dateOperation == null) {
             String dateStr = getCellValue(row, columnMap, "date");
             if (dateStr != null && !dateStr.trim().isEmpty()) {
                 dateOperation = parseDate(dateStr);
+                if (dateOperation != null) {
+                    log.debug("Date extraite depuis string DATE: {} -> {}", dateStr, dateOperation);
+                }
             }
         }
         if (dateOperation == null) {
-            throw new RuntimeException("Date invalide ou manquante");
+            log.error("Date invalide ou manquante dans la colonne DATE (colonne index: {})", dateColIndex);
+            throw new RuntimeException("Date invalide ou manquante dans la colonne DATE");
         }
+        log.debug("Date finale utilisée pour l'opération: {}", dateOperation);
         
         // Type mouvement
         String typeMouvStr = getCellValue(row, columnMap, "type_mouvement");
