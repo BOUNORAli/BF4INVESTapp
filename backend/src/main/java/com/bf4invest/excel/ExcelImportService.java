@@ -288,11 +288,12 @@ public class ExcelImportService {
         
         // Première passe: mapper les colonnes les plus spécifiques d'abord
         // Liste des clés dans l'ordre de priorité (plus spécifique en premier)
+        // Note: date_bc est maintenant optionnel dans la nouvelle structure
         List<String> priorityOrder = Arrays.asList(
             "numero_facture_fournisseur", // N FAC FRS avant FRS
             "numero_facture_vente",       // N FAC VTE avant autres
-            "date_facture_achat",
-            "date_facture_vente",
+            "date_facture_vente",         // DATE FAC VTE (priorité car toujours présent)
+            "date_facture_achat",         // Optionnel
             "numero_bc",
             "numero_article",
             "quantite_bc",
@@ -383,8 +384,8 @@ public class ExcelImportService {
     private Map<String, List<String>> getColumnAliases() {
         Map<String, List<String>> aliases = new HashMap<>();
         
-        // DATE BC
-        aliases.put("date_bc", Arrays.asList("date bc", "datebc", "date", "dat bc"));
+        // DATE BC (optionnel - peut ne pas exister dans la nouvelle structure)
+        aliases.put("date_bc", Arrays.asList("date bc", "datebc", "dat bc"));
         
         // N° FAC VTE
         aliases.put("numero_facture_vente", Arrays.asList("n° fac vte", "n fac vte", "numero fac vente", 
@@ -536,7 +537,7 @@ public class ExcelImportService {
             BandeCommande newBc = new BandeCommande();
             newBc.setNumeroBC(finalNumeroBC);
             
-            // Parser la date BC directement depuis la cellule Excel
+            // Parser la date BC - utiliser DATE FAC VTE comme fallback si DATE BC n'existe pas
             Integer dateBCCol = columnMap.get("date_bc");
             LocalDate dateBC = null;
             if (dateBCCol != null) {
@@ -547,6 +548,20 @@ public class ExcelImportService {
                     dateBC = parseDate(getCellValue(row, columnMap, "date_bc"));
                 }
             }
+            
+            // Si DATE BC n'existe pas, utiliser DATE FAC VTE comme fallback
+            if (dateBC == null) {
+                Integer dateFVCol = columnMap.get("date_facture_vente");
+                if (dateFVCol != null) {
+                    Cell dateCell = row.getCell(dateFVCol);
+                    dateBC = parseDateFromCell(dateCell);
+                    if (dateBC == null) {
+                        String dateFV = getCellValue(row, columnMap, "date_facture_vente");
+                        dateBC = parseDate(dateFV);
+                    }
+                }
+            }
+            
             newBc.setDateBC(dateBC);
             
             newBc.setClientId(finalClientId);
@@ -589,19 +604,39 @@ public class ExcelImportService {
                 dateFacture = parseDateFromCell(dateCell);
             }
             
-            // Fallback sur date BC si pas de date facture
+            // Fallback sur DATE FAC VTE si pas de date facture achat
+            if (dateFacture == null) {
+                Integer dateFVCol = columnMap.get("date_facture_vente");
+                if (dateFVCol != null) {
+                    Cell dateCell = row.getCell(dateFVCol);
+                    dateFacture = parseDateFromCell(dateCell);
+                    if (dateFacture == null) {
+                        String dateFV = getCellValue(row, columnMap, "date_facture_vente");
+                        dateFacture = parseDate(dateFV);
+                    }
+                }
+            }
+            
+            // Fallback sur date BC si toujours pas de date
             if (dateFacture == null) {
                 Integer dateBCCol = columnMap.get("date_bc");
                 if (dateBCCol != null) {
                     Cell dateCell = row.getCell(dateBCCol);
                     dateFacture = parseDateFromCell(dateCell);
-                }
-                if (dateFacture == null) {
-                    String dateFA = getCellValue(row, columnMap, "date_bc");
-                    dateFacture = parseDate(dateFA);
+                    if (dateFacture == null) {
+                        String dateFA = getCellValue(row, columnMap, "date_bc");
+                        dateFacture = parseDate(dateFA);
+                    }
                 }
             }
-            newFa.setDateFacture(dateFacture != null ? dateFacture : LocalDate.now());
+            
+            // Dernier fallback : date actuelle avec warning
+            if (dateFacture == null) {
+                dateFacture = LocalDate.now();
+                result.getWarnings().add("Date facture achat manquante pour BC " + finalNumeroBC + ", utilisation de la date actuelle");
+            }
+            
+            newFa.setDateFacture(dateFacture);
             
             // Date échéance = date facture + 2 mois (règle métier)
             if (newFa.getDateFacture() != null) {
@@ -1348,14 +1383,13 @@ public class ExcelImportService {
             headerStyle.setBorderLeft(BorderStyle.THIN);
             headerStyle.setBorderRight(BorderStyle.THIN);
             
-            // Créer l'en-tête
+            // Créer l'en-tête selon la nouvelle structure
             Row headerRow = sheet.createRow(0);
             String[] headers = {
-                "DATE BC", "N° FAC VTE", "DATE FAC VTE", "ICE", "N FAC FRS", "FRS", "CLENT",
-                "N° BC", "N° ARTICLE", "DESIGNATION", "U", "QT BC", "PRIX ACHAT U HT",
-                "PRIX ACHAT T HT", "TX TVA", "FACTURE ACHAT TTC", "PRIX ACHAT U TTC",
-                "PRIX DE VENTE U TTC", "MARGE U TTC", "QT LIVREE", "PRIX DE VENTE U HT",
-                "FACTURE VENTE TTC", "VERIFICATION TTC FACTURE VENTE"
+                "N° BC", "FRS", "N FAC FRS", "N° FAC VTE", "DATE FAC VTE", "ICE", "CLENT",
+                "N° ARTICLE", "DESIGNATION", "U", "QT BC", "PRIX ACHAT U HT",
+                "PRIX ACHAT U TTC", "PRIX ACHAT T HT", "TX TVA", "FACTURE ACHAT TTC",
+                "QT LIVREE", "PRIX DE VENTE U HT", "PRIX DE VENTE U TTC", "FACTURE VENTE T TTC"
             };
             
             for (int i = 0; i < headers.length; i++) {
@@ -1364,31 +1398,32 @@ public class ExcelImportService {
                 cell.setCellStyle(headerStyle);
             }
             
-            // Créer une ligne d'exemple
+            // Créer une ligne d'exemple selon la nouvelle structure
             Row exampleRow = sheet.createRow(1);
-            exampleRow.createCell(0).setCellValue("02/01/2025"); // DATE BC
-            exampleRow.createCell(1).setCellValue("0101/2025"); // N° FAC VTE
-            exampleRow.createCell(2).setCellValue("02/01/2025"); // DATE FAC VTE
-            exampleRow.createCell(3).setCellValue("123456789"); // ICE
-            exampleRow.createCell(4).setCellValue("FA-2025-001"); // N FAC FRS
-            exampleRow.createCell(5).setCellValue("Nom Fournisseur"); // FRS
-            exampleRow.createCell(6).setCellValue("Nom Client"); // CLENT
-            exampleRow.createCell(7).setCellValue("BF4-BC-2025-0001"); // N° BC
-            exampleRow.createCell(8).setCellValue("ART-001"); // N° ARTICLE
-            exampleRow.createCell(9).setCellValue("Désignation produit"); // DESIGNATION
-            exampleRow.createCell(10).setCellValue("sac"); // U
-            exampleRow.createCell(11).setCellValue(100); // QT BC
-            exampleRow.createCell(12).setCellValue(120.0); // PRIX ACHAT U HT
-            exampleRow.createCell(13).setCellValue(12000.0); // PRIX ACHAT T HT
+            exampleRow.createCell(0).setCellValue("PDA01AC/25"); // N° BC
+            exampleRow.createCell(1).setCellValue("ACHGHAL CHAREK"); // FRS
+            exampleRow.createCell(2).setCellValue("F250103"); // N FAC FRS
+            exampleRow.createCell(3).setCellValue("0101/2025"); // N° FAC VTE
+            exampleRow.createCell(4).setCellValue("31/01/2025"); // DATE FAC VTE
+            exampleRow.createCell(5).setCellValue("001549104000010"); // ICE
+            exampleRow.createCell(6).setCellValue("SONOFRERES"); // CLENT
+            exampleRow.createCell(7).setCellValue("1"); // N° ARTICLE
+            exampleRow.createCell(8).setCellValue("PIERES DE CONSTRUCTION RENDU"); // DESIGNATION
+            exampleRow.createCell(9).setCellValue("T"); // U
+            exampleRow.createCell(10).setCellValue(41.12); // QT BC
+            exampleRow.createCell(11).setCellValue(95.00); // PRIX ACHAT U HT
+            exampleRow.createCell(12).setCellValue(114.00); // PRIX ACHAT U TTC
+            exampleRow.createCell(13).setCellValue(3906.40); // PRIX ACHAT T HT
             exampleRow.createCell(14).setCellValue(20.0); // TX TVA
-            exampleRow.createCell(15).setCellValue(14400.0); // FACTURE ACHAT TTC
-            exampleRow.createCell(16).setCellValue(144.0); // PRIX ACHAT U TTC
-            exampleRow.createCell(17).setCellValue(180.0); // PRIX DE VENTE U TTC
-            exampleRow.createCell(18).setCellValue(36.0); // MARGE U TTC
-            exampleRow.createCell(19).setCellValue(100); // QT LIVREE
-            exampleRow.createCell(20).setCellValue(150.0); // PRIX DE VENTE U HT
-            exampleRow.createCell(21).setCellValue(18000.0); // FACTURE VENTE TTC
-            exampleRow.createCell(22).setCellValue(18000.0); // VERIFICATION TTC FACTURE VENTE
+            exampleRow.createCell(15).setCellValue(4687.68); // FACTURE ACHAT TTC
+            exampleRow.createCell(16).setCellValue(41.12); // QT LIVREE
+            exampleRow.createCell(17).setCellValue(101.65); // PRIX DE VENTE U HT
+            exampleRow.createCell(18).setCellValue(121.98); // PRIX DE VENTE U TTC
+            exampleRow.createCell(19).setCellValue(5015.82); // FACTURE VENTE T TTC
+            
+            // Note: Le template correspond maintenant à la nouvelle structure :
+            // N° BC, FRS, N FAC FRS, N° FAC VTE, DATE FAC VTE, ICE, CLENT, N° ARTICLE, etc.
+            // DATE BC n'est plus dans le template (optionnel dans la nouvelle structure)
             
             // Ajuster la largeur des colonnes
             for (int i = 0; i < headers.length; i++) {
