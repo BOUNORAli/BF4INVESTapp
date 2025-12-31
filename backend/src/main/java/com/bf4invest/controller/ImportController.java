@@ -5,6 +5,7 @@ import com.bf4invest.excel.ExcelImportService;
 import com.bf4invest.model.ImportLog;
 import com.bf4invest.repository.ImportLogRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -18,6 +19,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/import")
 @RequiredArgsConstructor
+@Slf4j
 public class ImportController {
     
     private final ExcelImportService excelImportService;
@@ -40,7 +42,7 @@ public class ImportController {
         ImportResult result = excelImportService.importExcel(file);
         
         // Store import log
-        ImportLog log = ImportLog.builder()
+        ImportLog importLog = ImportLog.builder()
                 .fileName(file.getOriginalFilename())
                 .details(String.format("%d ligne(s) importée(s) avec succès, %d erreur(s)", 
                         result.getSuccessCount(), result.getErrorCount()))
@@ -49,7 +51,7 @@ public class ImportController {
                 .errorCount(result.getErrorCount())
                 .createdAt(LocalDateTime.now())
                 .build();
-        importLogRepository.save(log);
+        importLogRepository.save(importLog);
         
         return ResponseEntity.ok(result);
     }
@@ -115,7 +117,7 @@ public class ImportController {
         ImportResult result = excelImportService.importProductCatalog(file);
         
         // Store import log
-        ImportLog log = ImportLog.builder()
+        ImportLog importLog = ImportLog.builder()
                 .fileName(file.getOriginalFilename())
                 .details(String.format("%d produit(s) importé(s) avec succès, %d erreur(s)", 
                         result.getSuccessCount(), result.getErrorCount()))
@@ -124,7 +126,7 @@ public class ImportController {
                 .errorCount(result.getErrorCount())
                 .createdAt(LocalDateTime.now())
                 .build();
-        importLogRepository.save(log);
+        importLogRepository.save(importLog);
         
         // Générer le fichier de rapport si il y a des erreurs ou des succès
         if (!result.getErrorRows().isEmpty() || !result.getSuccessRows().isEmpty()) {
@@ -173,22 +175,26 @@ public class ImportController {
     
     @PostMapping("/operations")
     public ResponseEntity<?> importOperationsComptables(@RequestParam("file") MultipartFile file) {
-        if (file.isEmpty()) {
-            ImportResult result = new ImportResult();
-            result.getErrors().add("Fichier vide");
-            return ResponseEntity.badRequest().body(result);
-        }
-        
-        if (!file.getOriginalFilename().endsWith(".xlsx") && !file.getOriginalFilename().endsWith(".xls")) {
-            ImportResult result = new ImportResult();
-            result.getErrors().add("Format de fichier non supporté. Utilisez .xlsx ou .xls");
-            return ResponseEntity.badRequest().body(result);
-        }
-        
-        ImportResult result = excelImportService.importOperationsComptables(file);
+        try {
+            if (file.isEmpty()) {
+                ImportResult result = new ImportResult();
+                result.getErrors().add("Fichier vide");
+                return ResponseEntity.badRequest().body(result);
+            }
+            
+            String filename = file.getOriginalFilename();
+            if (filename == null || (!filename.endsWith(".xlsx") && !filename.endsWith(".xls"))) {
+                ImportResult result = new ImportResult();
+                result.getErrors().add("Format de fichier non supporté. Utilisez .xlsx ou .xls");
+                return ResponseEntity.badRequest().body(result);
+            }
+            
+            log.info("Début import opérations comptables: {}", filename);
+            ImportResult result = excelImportService.importOperationsComptables(file);
+            log.info("Fin import opérations comptables: {} succès, {} erreurs", result.getSuccessCount(), result.getErrorCount());
         
         // Store import log
-        ImportLog log = ImportLog.builder()
+        ImportLog importLog = ImportLog.builder()
                 .fileName(file.getOriginalFilename())
                 .details(String.format("%d opération(s) importée(s) avec succès, %d erreur(s)", 
                         result.getSuccessCount(), result.getErrorCount()))
@@ -197,7 +203,7 @@ public class ImportController {
                 .errorCount(result.getErrorCount())
                 .createdAt(LocalDateTime.now())
                 .build();
-        importLogRepository.save(log);
+        importLogRepository.save(importLog);
         
         // Générer le fichier de rapport si il y a des erreurs ou des succès
         if (!result.getErrorRows().isEmpty() || !result.getSuccessRows().isEmpty()) {
@@ -223,6 +229,12 @@ public class ImportController {
         }
         
         return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            log.error("Erreur lors de l'import des opérations comptables: {}", e.getMessage(), e);
+            ImportResult errorResult = new ImportResult();
+            errorResult.getErrors().add("Erreur lors de l'import: " + (e.getMessage() != null ? e.getMessage() : "Erreur inconnue"));
+            return ResponseEntity.internalServerError().body(errorResult);
+        }
     }
 }
 
