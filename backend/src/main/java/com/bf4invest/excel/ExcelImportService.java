@@ -692,6 +692,9 @@ public class ExcelImportService {
                     newFv.setDateEcheance(dateFacture.plusDays(30));
                 }
                 
+                // CORRECTION: Définir la référence BC directement sur la facture
+                newFv.setBcReference(finalNumeroBC);
+                
                 newFv.setClientId(finalClientId);
                 newFv.setEtatPaiement("non_regle");
                 newFv.setLignes(new ArrayList<>());

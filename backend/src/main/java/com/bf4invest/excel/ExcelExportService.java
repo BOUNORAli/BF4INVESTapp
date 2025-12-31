@@ -154,8 +154,24 @@ public class ExcelExportService {
             for (BandeCommande bc : bcs) {
                 String bcReference = bc.getNumeroBC() != null ? bc.getNumeroBC() : "";
                 
-                // Récupérer les factures de vente liées
-                List<FactureVente> facturesVente = factureVenteRepository.findByBandeCommandeId(bc.getId());
+                // Récupérer les factures de vente liées (chercher par ID ET par référence)
+                List<FactureVente> facturesVente = new ArrayList<>();
+                
+                // Chercher par bandeCommandeId (ID MongoDB)
+                List<FactureVente> fvById = factureVenteRepository.findByBandeCommandeId(bc.getId());
+                facturesVente.addAll(fvById);
+                
+                // Chercher aussi par bcReference (référence textuelle) pour éviter les factures manquantes
+                if (bcReference != null && !bcReference.isEmpty()) {
+                    List<FactureVente> fvByRef = factureVenteRepository.findByBcReference(bcReference);
+                    // Ajouter seulement les factures qui ne sont pas déjà dans la liste (éviter doublons)
+                    for (FactureVente fv : fvByRef) {
+                        if (facturesVente.stream().noneMatch(existing -> existing.getId().equals(fv.getId()))) {
+                            facturesVente.add(fv);
+                        }
+                    }
+                }
+                
                 for (FactureVente fv : facturesVente) {
                     // S'assurer que tous les champs sont calculés
                     calculComptableService.calculerFactureVente(fv);
@@ -165,8 +181,24 @@ public class ExcelExportService {
                     allTransactions.add(row);
                 }
                 
-                // Récupérer les factures d'achat liées
-                List<FactureAchat> facturesAchat = factureAchatRepository.findByBandeCommandeId(bc.getId());
+                // Récupérer les factures d'achat liées (chercher par ID ET par référence)
+                List<FactureAchat> facturesAchat = new ArrayList<>();
+                
+                // Chercher par bandeCommandeId (ID MongoDB)
+                List<FactureAchat> faById = factureAchatRepository.findByBandeCommandeId(bc.getId());
+                facturesAchat.addAll(faById);
+                
+                // Chercher aussi par bcReference (référence textuelle)
+                if (bcReference != null && !bcReference.isEmpty()) {
+                    List<FactureAchat> faByRef = factureAchatRepository.findByBcReference(bcReference);
+                    // Ajouter seulement les factures qui ne sont pas déjà dans la liste (éviter doublons)
+                    for (FactureAchat fa : faByRef) {
+                        if (facturesAchat.stream().noneMatch(existing -> existing.getId().equals(fa.getId()))) {
+                            facturesAchat.add(fa);
+                        }
+                    }
+                }
+                
                 for (FactureAchat fa : facturesAchat) {
                     // S'assurer que tous les champs sont calculés
                     calculComptableService.calculerFactureAchat(fa);

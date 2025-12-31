@@ -67,14 +67,36 @@ public class BCAnalysisService {
         List<FactureVente> facturesVente = factureVenteRepository.findAll();
         
         Set<String> bcsAvecFacture = new HashSet<>();
+        
+        // Créer une map de référence BC -> ID pour la recherche
+        Map<String, String> bcRefToIdMap = new HashMap<>();
+        for (BandeCommande bc : bcs) {
+            if (bc.getNumeroBC() != null) {
+                bcRefToIdMap.put(bc.getNumeroBC(), bc.getId());
+            }
+        }
+        
+        // Parcourir les factures achat et trouver les BCs liés
         for (FactureAchat fa : facturesAchat) {
+            // Chercher par ID d'abord
             if (fa.getBandeCommandeId() != null) {
                 bcsAvecFacture.add(fa.getBandeCommandeId());
             }
+            // Sinon chercher par référence BC
+            else if (fa.getBcReference() != null && bcRefToIdMap.containsKey(fa.getBcReference())) {
+                bcsAvecFacture.add(bcRefToIdMap.get(fa.getBcReference()));
+            }
         }
+        
+        // Parcourir les factures vente et trouver les BCs liés
         for (FactureVente fv : facturesVente) {
+            // Chercher par ID d'abord
             if (fv.getBandeCommandeId() != null) {
                 bcsAvecFacture.add(fv.getBandeCommandeId());
+            }
+            // Sinon chercher par référence BC
+            else if (fv.getBcReference() != null && bcRefToIdMap.containsKey(fv.getBcReference())) {
+                bcsAvecFacture.add(bcRefToIdMap.get(fv.getBcReference()));
             }
         }
         

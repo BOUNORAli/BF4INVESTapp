@@ -317,6 +317,89 @@ import { AuthService } from '../../services/auth.service';
         </div>
       </div>
 
+      <!-- Migration des Données Card -->
+      @if (auth.currentUser()?.role === 'ADMIN') {
+        <div class="bg-blue-50 rounded-xl shadow-sm border-2 border-blue-200 overflow-hidden">
+          <div class="p-6 border-b border-blue-100 bg-blue-100/50 flex justify-between items-center">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-full flex items-center justify-center bg-blue-200 text-blue-700">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                </svg>
+              </div>
+              <div>
+                <h2 class="text-lg font-bold text-blue-800">Migration des Données</h2>
+                <p class="text-xs text-blue-600">Corrigez les liaisons entre factures et bons de commande</p>
+              </div>
+            </div>
+          </div>
+          
+          <div class="p-6">
+            <div class="space-y-4">
+              <div class="bg-white p-4 rounded-lg border border-blue-200">
+                <h3 class="text-base font-bold text-slate-700 mb-2">Synchroniser les références BC</h3>
+                <p class="text-sm text-slate-600 mb-4">
+                  Cette opération va mettre à jour toutes les factures existantes pour qu'elles aient la référence BC correcte.
+                  Cela corrige le problème où les factures ne sont pas trouvées pour un bon de commande.
+                </p>
+                <p class="text-xs text-slate-500 mb-4">
+                  La migration va :
+                  <ul class="list-disc list-inside ml-2 mt-2 space-y-1">
+                    <li>Récupérer toutes les factures avec un BC lié</li>
+                    <li>Définir le champ bcReference basé sur le numéro BC</li>
+                    <li>Sauvegarder les modifications</li>
+                  </ul>
+                </p>
+                
+                @if (migrationResult()) {
+                  <div class="mb-4 p-4 rounded-lg"
+                       [class.bg-green-50]="migrationResult()!.success"
+                       [class.border-green-200]="migrationResult()!.success"
+                       [class.bg-red-50]="!migrationResult()!.success"
+                       [class.border-red-200]="!migrationResult()!.success"
+                       class="border">
+                    <h4 class="text-sm font-bold mb-2"
+                        [class.text-green-700]="migrationResult()!.success"
+                        [class.text-red-700]="!migrationResult()!.success">
+                      {{ migrationResult()!.message }}
+                    </h4>
+                    @if (migrationResult()!.statistics) {
+                      <div class="space-y-1 text-xs text-slate-600">
+                        <p><strong>Factures achat mises à jour:</strong> {{ migrationResult()!.statistics.facturesAchatMisesAJour }}</p>
+                        <p><strong>Factures vente mises à jour:</strong> {{ migrationResult()!.statistics.facturesVenteMisesAJour }}</p>
+                        @if (migrationResult()!.statistics.erreursFacturesAchat > 0 || migrationResult()!.statistics.erreursFacturesVente > 0) {
+                          <p class="text-red-600">
+                            <strong>Erreurs:</strong> 
+                            {{ migrationResult()!.statistics.erreursFacturesAchat + migrationResult()!.statistics.erreursFacturesVente }} facture(s)
+                          </p>
+                        }
+                      </div>
+                    }
+                  </div>
+                }
+                
+                <button (click)="executeMigration()" 
+                        [disabled]="isMigrating()"
+                        class="w-full px-4 py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-blue-600/20 flex items-center justify-center gap-2">
+                  @if (isMigrating()) {
+                    <svg class="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+                      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span>Migration en cours...</span>
+                  } @else {
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                    </svg>
+                    <span>Exécuter la migration</span>
+                  }
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      }
+
       <!-- Suppression des Données Card -->
       @if (auth.currentUser()?.role === 'ADMIN') {
         <div class="bg-red-50 rounded-xl shadow-sm border-2 border-red-200 overflow-hidden">
@@ -547,6 +630,19 @@ export class SettingsComponent implements OnInit {
   apportMotif = signal<string>('');
   apportDate = signal<string>('');
 
+  // Gestion de la migration de données
+  isMigrating = signal(false);
+  migrationResult = signal<{
+    success: boolean;
+    message: string;
+    statistics?: {
+      facturesAchatMisesAJour: number;
+      facturesVenteMisesAJour: number;
+      erreursFacturesAchat: number;
+      erreursFacturesVente: number;
+    };
+  } | null>(null);
+  
   // Gestion de la suppression de données
   collections = signal<CollectionInfo[]>([]);
   selectedCollections = signal<string[]>([]);
@@ -698,6 +794,49 @@ export class SettingsComponent implements OnInit {
     }
   }
 
+  // Méthode pour la migration de données
+  async executeMigration() {
+    if (this.isMigrating()) {
+      return;
+    }
+    
+    if (!confirm('Êtes-vous sûr de vouloir exécuter cette migration ? Cette opération va mettre à jour toutes les factures existantes.')) {
+      return;
+    }
+    
+    this.isMigrating.set(true);
+    this.migrationResult.set(null);
+    
+    try {
+      const response = await this.api.post<any>('/admin/migration/sync-bc-references', {}).toPromise();
+      
+      if (response && response.success) {
+        this.migrationResult.set({
+          success: true,
+          message: response.message || 'Migration terminée avec succès',
+          statistics: response.statistics
+        });
+        this.store.showToast('Migration terminée avec succès', 'success');
+      } else {
+        this.migrationResult.set({
+          success: false,
+          message: response?.message || 'Erreur lors de la migration'
+        });
+        this.store.showToast('Erreur lors de la migration', 'error');
+      }
+    } catch (error: any) {
+      console.error('Error executing migration:', error);
+      const errorMessage = error?.error?.message || error?.message || 'Erreur inconnue';
+      this.migrationResult.set({
+        success: false,
+        message: 'Erreur lors de la migration: ' + errorMessage
+      });
+      this.store.showToast('Erreur lors de la migration', 'error');
+    } finally {
+      this.isMigrating.set(false);
+    }
+  }
+  
   // Méthodes pour la suppression de données
   async loadCollections() {
     this.isLoadingCollections.set(true);
