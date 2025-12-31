@@ -378,28 +378,46 @@ public class ExcelImportService {
             }
         }
         
-        // Si numero_bc n'a pas été mappé, vérifier si la première colonne (index 0) contient des numéros BC
-        // Ceci permet de gérer le cas où la première colonne n'a pas d'en-tête mais contient le N° BC
+        // Si numero_bc n'a pas été mappé, essayer de le détecter
+        // Format 2021/2022: colonne "N BC" peut être en 3ème position
+        // Format 2024: N BC peut être en première colonne sans en-tête
         if (!map.containsKey("numero_bc")) {
-            Cell firstCell = headerRow.getCell(0);
-            String firstCellValue = firstCell != null ? getCellStringValue(firstCell).trim() : "";
+            // Chercher manuellement dans toutes les colonnes pour "n bc" ou variantes
+            for (Cell cell : headerRow) {
+                if (cell == null) continue;
+                int colIndex = cell.getColumnIndex();
+                if (usedColumns.contains(colIndex)) continue;
+                
+                String cellValue = getCellStringValue(cell).toLowerCase().trim();
+                String normalized = normalizeColumnName(cellValue);
+                
+                // Chercher "n bc", "n° bc", "numero bc", etc. (format 2021/2022)
+                if (normalized.equals("n bc") || normalized.equals("numero bc") || 
+                    normalized.equals("no bc") || normalized.equals("num bc") ||
+                    (normalized.startsWith("n") && normalized.contains("bc") && normalized.length() <= 10)) {
+                    map.put("numero_bc", colIndex);
+                    usedColumns.add(colIndex);
+                    log.info("N° BC détecté dans la colonne '{}' (index {})", cellValue, colIndex);
+                    break;
+                }
+            }
             
-            // Si la première colonne est vide ou très courte, considérer qu'elle peut contenir le N° BC
-            // Le format typique d'un N° BC est comme "2YOU/23", "PDA01AC/24", etc.
-            if (firstCellValue.isEmpty() || firstCellValue.length() < 3) {
-                // Vérifier dans les premières lignes de données si on trouve un pattern de N° BC
-                // Pour l'instant, on assume que la première colonne contient le N° BC
-                map.put("numero_bc", 0);
-                usedColumns.add(0);
-                log.info("N° BC non trouvé dans les en-têtes, utilisation de la première colonne (index 0) comme numero_bc");
-            } else {
-                // Si la première colonne a un en-tête mais n'a pas été mappé, essayer de l'utiliser quand même
-                // si ça ressemble à un numéro BC (contient "/" ou format similaire)
-                String normalizedFirst = normalizeColumnName(firstCellValue);
-                if (normalizedFirst.contains("bc") || normalizedFirst.length() < 5) {
-                    map.put("numero_bc", 0);
-                    usedColumns.add(0);
-                    log.info("Première colonne '{}' utilisée comme numero_bc (fallback)", firstCellValue);
+            // Si toujours pas trouvé, utiliser la première colonne comme fallback (format 2024)
+            if (!map.containsKey("numero_bc")) {
+                Cell firstCell = headerRow.getCell(0);
+                String firstCellValue = firstCell != null ? getCellStringValue(firstCell).trim() : "";
+                
+                // Si la première colonne est vide ou très courte, considérer qu'elle peut contenir le N° BC
+                // Le format typique d'un N° BC est comme "2YOU/23", "PDA01AC/24", etc.
+                if (firstCellValue.isEmpty() || firstCellValue.length() < 10) {
+                    // Vérifier si la première colonne ne ressemble pas à "EXERCICE FACTURATION" ou "VENTE PAR"
+                    String normalizedFirst = normalizeColumnName(firstCellValue);
+                    if (!normalizedFirst.contains("exercice") && !normalizedFirst.contains("facturation") && 
+                        !normalizedFirst.contains("vente par")) {
+                        map.put("numero_bc", 0);
+                        usedColumns.add(0);
+                        log.info("N° BC non trouvé dans les en-têtes, utilisation de la première colonne (index 0) comme numero_bc");
+                    }
                 }
             }
         }
@@ -498,9 +516,22 @@ public class ExcelImportService {
         aliases.put("prix_vente_unitaire_ht", Arrays.asList("prix de vente u ht", "prix vente unitaire ht", 
                 "pv u ht", "prix vente u ht", "pu vente bf4 ht", "pu vente ht", "pv bf4 ht"));
         
-        // FACTURE VENTE TTC (format 2024: "PT VENTE BF4 TTC")
+        // FACTURE VENTE TTC (format 2024: "PT VENTE BF4 TTC", format 2021/2022: "PT VENTE BF4 TTC FORMULE")
         aliases.put("facture_vente_ttc", Arrays.asList("facture vente ttc", "facture vente ttc ", 
-                "fv ttc", "total vente ttc", "pt vente bf4 ttc", "pt vente ttc", "pv bf4 ttc"));
+                "fv ttc", "total vente ttc", "pt vente bf4 ttc", "pt vente ttc", "pv bf4 ttc",
+                "pt vente bf4 ttc formule", "pt vente bf4 ttc formule"));
+        
+        // PT TTC IMPORTE (format 2021/2022)
+        aliases.put("prix_ttc_importe", Arrays.asList("pt ttc importe", "pt ttc import", 
+                "prix ttc importe", "total ttc importe"));
+        
+        // DATE LIVRAISON AU CLIENT (format 2021/2022)
+        aliases.put("date_livraison_client", Arrays.asList("date livraison au client", "date livraison client",
+                "date livraison", "livraison client"));
+        
+        // N°BL BF4 (format 2021/2022)
+        aliases.put("numero_bl_bf4", Arrays.asList("n bl bf4", "n° bl bf4", "numero bl bf4",
+                "no bl bf4", "bl bf4"));
         
         return aliases;
     }
