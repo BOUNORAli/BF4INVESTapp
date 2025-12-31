@@ -973,16 +973,19 @@ export class BcFormComponent implements OnInit {
 
     // Construire les lignes d'achat
     const lignesAchat: LigneAchat[] = this.lignesAchatArray.value
-      .filter((l: any) => l.designation && l.produitRef) // Filtrer seulement les lignes avec produit sélectionné
+      .filter((l: any) => l.designation) // Filtrer seulement les lignes avec designation (produitRef peut être vide)
       .map((l: any) => {
         const prix = l.prixAchatUnitaireHT || 0;
         const qte = l.quantiteAchetee || 0;
+        // Utiliser designation comme fallback pour produitRef si vide
+        const produitRef = l.produitRef || l.designation;
+        
         // Si le prix est 0, essayer de le récupérer depuis le produit
         if (prix === 0 && l.produitRef) {
           const product = this.store.products().find(p => p.ref === l.produitRef);
           if (product && product.priceBuyHT) {
             return {
-              produitRef: l.produitRef || l.designation,
+              produitRef: produitRef,
               designation: l.designation,
               unite: l.unite || 'U',
               quantiteAchetee: qte,
@@ -992,7 +995,7 @@ export class BcFormComponent implements OnInit {
           }
         }
         return {
-          produitRef: l.produitRef || l.designation,
+          produitRef: produitRef,
           designation: l.designation,
           unite: l.unite || 'U',
           quantiteAchetee: qte,

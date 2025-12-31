@@ -132,8 +132,10 @@ public class ExcelImportService {
                 }
             }
             
-            // Calculer les totaux pour les BC
+            // Calculer les totaux pour les BC et convertir lignes vers lignesAchat
             for (BandeCommande bc : bcMap.values()) {
+                // Convertir les lignes (ancienne structure) vers lignesAchat (nouvelle structure)
+                convertLignesToLignesAchat(bc);
                 calculateBCTotals(bc);
             }
             
@@ -165,6 +167,7 @@ public class ExcelImportService {
                         // Mettre à jour la BC existante
                         BandeCommande existingBC = existing.get();
                         existingBC.setLignes(bc.getLignes());
+                        existingBC.setLignesAchat(bc.getLignesAchat()); // Mettre à jour aussi lignesAchat
                         existingBC.setDateBC(bc.getDateBC());
                         existingBC.setClientId(bc.getClientId());
                         existingBC.setFournisseurId(bc.getFournisseurId());
@@ -782,6 +785,48 @@ public class ExcelImportService {
             ligne.setMargeUnitaire(ligne.getPrixVenteUnitaireHT() - ligne.getPrixAchatUnitaireHT());
             ligne.setMargePourcentage((ligne.getMargeUnitaire() / ligne.getPrixAchatUnitaireHT()) * 100);
         }
+    }
+    
+    /**
+     * Convertit les lignes (ancienne structure) vers lignesAchat (nouvelle structure)
+     * pour assurer la compatibilité avec le nouveau modèle
+     */
+    private void convertLignesToLignesAchat(BandeCommande bc) {
+        // Si lignesAchat existe déjà, ne rien faire
+        if (bc.getLignesAchat() != null && !bc.getLignesAchat().isEmpty()) {
+            return;
+        }
+        
+        // Si pas de lignes, initialiser une liste vide
+        if (bc.getLignes() == null || bc.getLignes().isEmpty()) {
+            bc.setLignesAchat(new ArrayList<>());
+            return;
+        }
+        
+        // Convertir chaque LineItem en LigneAchat
+        List<LigneAchat> lignesAchat = new ArrayList<>();
+        for (LineItem ligne : bc.getLignes()) {
+            LigneAchat ligneAchat = LigneAchat.builder()
+                    .produitRef(ligne.getProduitRef())
+                    .designation(ligne.getDesignation())
+                    .unite(ligne.getUnite() != null ? ligne.getUnite() : "U")
+                    .quantiteAchetee(ligne.getQuantiteAchetee() != null ? ligne.getQuantiteAchetee().doubleValue() : 0.0)
+                    .prixAchatUnitaireHT(ligne.getPrixAchatUnitaireHT())
+                    .tva(ligne.getTva())
+                    .build();
+            
+            // Calculer les totaux pour cette ligne
+            if (ligneAchat.getQuantiteAchetee() != null && ligneAchat.getPrixAchatUnitaireHT() != null) {
+                ligneAchat.setTotalHT(ligneAchat.getQuantiteAchetee() * ligneAchat.getPrixAchatUnitaireHT());
+                if (ligneAchat.getTva() != null) {
+                    ligneAchat.setTotalTTC(ligneAchat.getTotalHT() * (1 + (ligneAchat.getTva() / 100.0)));
+                }
+            }
+            
+            lignesAchat.add(ligneAchat);
+        }
+        
+        bc.setLignesAchat(lignesAchat);
     }
     
     private void calculateBCTotals(BandeCommande bc) {

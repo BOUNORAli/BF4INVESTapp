@@ -53,5 +53,38 @@ public class MigrationController {
             return ResponseEntity.internalServerError().body(response);
         }
     }
+    
+    /**
+     * Migre les BCs de l'ancienne structure (lignes) vers la nouvelle structure (lignesAchat)
+     * Convertit toutes les BCs qui ont seulement des lignes sans lignesAchat
+     * 
+     * @return Statistiques de la migration
+     */
+    @PostMapping("/migrate-bc-lignes-to-lignes-achat")
+    public ResponseEntity<Map<String, Object>> migrateBC_LignesToLignesAchat() {
+        log.info("🔄 Démarrage de la migration lignes -> lignesAchat via API...");
+        
+        try {
+            Map<String, Integer> stats = migrationService.migrateBC_LignesToLignesAchat();
+            
+            Map<String, Object> response = Map.of(
+                "success", true,
+                "message", "Migration lignes -> lignesAchat terminée avec succès",
+                "statistics", stats
+            );
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            log.error("❌ Erreur lors de la migration lignes -> lignesAchat: {}", e.getMessage(), e);
+            
+            Map<String, Object> response = Map.of(
+                "success", false,
+                "message", "Erreur lors de la migration: " + e.getMessage()
+            );
+            
+            return ResponseEntity.internalServerError().body(response);
+        }
+    }
 }
 

@@ -166,6 +166,7 @@ public class BandeCommandePdfGenerator {
         double totalHT = 0.0;
         double tauxTVA = 20.0;
         
+        // Nouvelle structure: lignesAchat
         if (bc.getLignesAchat() != null && !bc.getLignesAchat().isEmpty()) {
             int lineNum = 1;
             for (var ligne : bc.getLignesAchat()) {
@@ -180,6 +181,32 @@ public class BandeCommandePdfGenerator {
                     Element.ALIGN_RIGHT);
                 
                 double lineTotalHT = (ligne.getQuantiteAchetee() != null ? ligne.getQuantiteAchetee() : 0) * 
+                    (ligne.getPrixAchatUnitaireHT() != null ? ligne.getPrixAchatUnitaireHT() : 0);
+                PdfDocumentHelper.addTableCell(table, PdfFormatHelper.formatAmount(lineTotalHT), Element.ALIGN_RIGHT);
+                
+                totalHT += lineTotalHT;
+                if (ligne.getTva() != null && ligne.getTva() > 0) {
+                    tauxTVA = ligne.getTva();
+                }
+            }
+        }
+        // Rétrocompatibilité: ancienne structure lignes
+        else if (bc.getLignes() != null && !bc.getLignes().isEmpty()) {
+            int lineNum = 1;
+            for (var ligne : bc.getLignes()) {
+                PdfDocumentHelper.addTableCell(table, String.valueOf(lineNum++), Element.ALIGN_CENTER);
+                PdfDocumentHelper.addTableCell(table, ligne.getDesignation() != null ? ligne.getDesignation() : "", 
+                    Element.ALIGN_LEFT);
+                PdfDocumentHelper.addTableCell(table, ligne.getUnite() != null ? ligne.getUnite() : "", 
+                    Element.ALIGN_CENTER);
+                // Convertir Integer en Double pour formatQuantity
+                Double qtyValue = ligne.getQuantiteAchetee() != null ? ligne.getQuantiteAchetee().doubleValue() : 0.0;
+                PdfDocumentHelper.addTableCell(table, PdfFormatHelper.formatQuantity(qtyValue), 
+                    Element.ALIGN_RIGHT);
+                PdfDocumentHelper.addTableCell(table, PdfFormatHelper.formatAmount(ligne.getPrixAchatUnitaireHT()), 
+                    Element.ALIGN_RIGHT);
+                
+                double lineTotalHT = (ligne.getQuantiteAchetee() != null ? ligne.getQuantiteAchetee().doubleValue() : 0) * 
                     (ligne.getPrixAchatUnitaireHT() != null ? ligne.getPrixAchatUnitaireHT() : 0);
                 PdfDocumentHelper.addTableCell(table, PdfFormatHelper.formatAmount(lineTotalHT), Element.ALIGN_RIGHT);
                 
