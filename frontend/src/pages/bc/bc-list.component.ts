@@ -390,7 +390,8 @@ export class BcListComponent implements OnInit {
     }
   }
 
-  formatCurrency(val: number) {
+  formatCurrency(val: number | null | undefined) {
+    if (val === null || val === undefined) return '0 MAD';
     return new Intl.NumberFormat('fr-MA', { style: 'currency', currency: 'MAD', maximumFractionDigits: 0 }).format(val);
   }
 
@@ -398,8 +399,8 @@ export class BcListComponent implements OnInit {
    * Calcule le total d'achat HT (nouvelle et ancienne structure)
    */
   getBuyTotal(bc: BC): number {
-    // Utiliser les totaux pré-calculés si disponibles
-    if (bc.totalAchatHT !== undefined) {
+    // Utiliser les totaux pré-calculés si disponibles (vérifier null aussi)
+    if (bc.totalAchatHT !== undefined && bc.totalAchatHT !== null) {
       return bc.totalAchatHT;
     }
     // Nouvelle structure
@@ -418,8 +419,8 @@ export class BcListComponent implements OnInit {
    * Calcule le total de vente HT (nouvelle et ancienne structure)
    */
   getSellTotal(bc: BC): number {
-    // Utiliser les totaux pré-calculés si disponibles
-    if (bc.totalVenteHT !== undefined) {
+    // Utiliser les totaux pré-calculés si disponibles (vérifier null aussi)
+    if (bc.totalVenteHT !== undefined && bc.totalVenteHT !== null) {
       return bc.totalVenteHT;
     }
     // Nouvelle structure
@@ -440,13 +441,13 @@ export class BcListComponent implements OnInit {
   }
 
   getMarginPercent(bc: BC): string {
-    // Utiliser le pourcentage pré-calculé si disponible
-    if (bc.margePourcentage !== undefined) {
+    // Utiliser le pourcentage pré-calculé si disponible (vérifier null aussi)
+    if (bc.margePourcentage !== undefined && bc.margePourcentage !== null) {
       return bc.margePourcentage.toFixed(1);
     }
     const buy = this.getBuyTotal(bc);
     const sell = this.getSellTotal(bc);
-    if (buy === 0) return '0';
+    if (buy === 0 || buy === null || sell === null) return '0';
     return (((sell - buy) / buy) * 100).toFixed(1);
   }
 
