@@ -342,22 +342,21 @@ import { AuthService } from '../../services/auth.service';
                   Cette opération va mettre à jour toutes les factures existantes pour qu'elles aient la référence BC correcte.
                   Cela corrige le problème où les factures ne sont pas trouvées pour un bon de commande.
                 </p>
-                <p class="text-xs text-slate-500 mb-4">
-                  La migration va :
+                <div class="text-xs text-slate-500 mb-4">
+                  <p class="mb-2">La migration va :</p>
                   <ul class="list-disc list-inside ml-2 mt-2 space-y-1">
                     <li>Récupérer toutes les factures avec un BC lié</li>
                     <li>Définir le champ bcReference basé sur le numéro BC</li>
                     <li>Sauvegarder les modifications</li>
                   </ul>
-                </p>
+                </div>
                 
                 @if (migrationResult()) {
-                  <div class="mb-4 p-4 rounded-lg"
+                  <div class="mb-4 p-4 rounded-lg border"
                        [class.bg-green-50]="migrationResult()!.success"
                        [class.border-green-200]="migrationResult()!.success"
                        [class.bg-red-50]="!migrationResult()!.success"
-                       [class.border-red-200]="!migrationResult()!.success"
-                       class="border">
+                       [class.border-red-200]="!migrationResult()!.success">
                     <h4 class="text-sm font-bold mb-2"
                         [class.text-green-700]="migrationResult()!.success"
                         [class.text-red-700]="!migrationResult()!.success">
