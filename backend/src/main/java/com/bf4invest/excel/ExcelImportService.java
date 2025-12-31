@@ -303,6 +303,7 @@ public class ExcelImportService {
             "quantite_livree",
             "prix_achat_unitaire_ht",
             "prix_achat_total_ht",
+            "prix_achat_ttc",
             "prix_achat_unitaire_ttc",
             "prix_vente_unitaire_ht",
             "prix_vente_unitaire_ttc",
@@ -377,6 +378,32 @@ public class ExcelImportService {
             }
         }
         
+        // Si numero_bc n'a pas été mappé, vérifier si la première colonne (index 0) contient des numéros BC
+        // Ceci permet de gérer le cas où la première colonne n'a pas d'en-tête mais contient le N° BC
+        if (!map.containsKey("numero_bc")) {
+            Cell firstCell = headerRow.getCell(0);
+            String firstCellValue = firstCell != null ? getCellStringValue(firstCell).trim() : "";
+            
+            // Si la première colonne est vide ou très courte, considérer qu'elle peut contenir le N° BC
+            // Le format typique d'un N° BC est comme "2YOU/23", "PDA01AC/24", etc.
+            if (firstCellValue.isEmpty() || firstCellValue.length() < 3) {
+                // Vérifier dans les premières lignes de données si on trouve un pattern de N° BC
+                // Pour l'instant, on assume que la première colonne contient le N° BC
+                map.put("numero_bc", 0);
+                usedColumns.add(0);
+                log.info("N° BC non trouvé dans les en-têtes, utilisation de la première colonne (index 0) comme numero_bc");
+            } else {
+                // Si la première colonne a un en-tête mais n'a pas été mappé, essayer de l'utiliser quand même
+                // si ça ressemble à un numéro BC (contient "/" ou format similaire)
+                String normalizedFirst = normalizeColumnName(firstCellValue);
+                if (normalizedFirst.contains("bc") || normalizedFirst.length() < 5) {
+                    map.put("numero_bc", 0);
+                    usedColumns.add(0);
+                    log.info("Première colonne '{}' utilisée comme numero_bc (fallback)", firstCellValue);
+                }
+            }
+        }
+        
         log.info("Final column mapping: {}", map);
         return map;
     }
@@ -411,12 +438,12 @@ public class ExcelImportService {
         // CLENT
         aliases.put("client", Arrays.asList("clent", "client", "clt"));
         
-        // N° BC
-        aliases.put("numero_bc", Arrays.asList("n° bc", "n bc", "numero bc", "numero_bc", "bc", "num bc"));
+        // N° BC (première colonne - peut être sans en-tête)
+        aliases.put("numero_bc", Arrays.asList("n° bc", "n bc", "numero bc", "numero_bc", "bc", "num bc", "n° bc", "no bc"));
         
         // N° ARTICLE
         aliases.put("numero_article", Arrays.asList("n° article", "n article", "numero article", 
-                "numero_article", "article", "n° artic", "n artic"));
+                "numero_article", "article", "n° artic", "n artic", "n° arti cl", "n arti cl"));
         
         // DESIGNATION
         aliases.put("designation", Arrays.asList("designation", "design", "desc", "description", "produit"));
@@ -428,9 +455,14 @@ public class ExcelImportService {
         aliases.put("quantite_bc", Arrays.asList("qt bc", "qtbc", "quantite bc", "quantite_achetee", 
                 "quantité achetée", "qte achat", "quantite achat"));
         
-        // PRIX ACHAT U HT
+        // QT LIVREE AU CLIENT (format 2024)
+        aliases.put("quantite_livree", Arrays.asList("qt livree", "qt livref", "quantite livree", 
+                "quantite_vendue", "quantité vendue", "qte vente", "quantite vente",
+                "qt livree au client", "qt livree au cl", "quantite livree au client"));
+        
+        // PRIX ACHAT U HT (format 2024: "PU achat HT")
         aliases.put("prix_achat_unitaire_ht", Arrays.asList("prix achat u ht", "prix achat unitaire ht", 
-                "prix achat unit ht", "pau ht", "pax ht"));
+                "prix achat unit ht", "pau ht", "pax ht", "pu achat ht", "pu achat u ht"));
         
         // PRIX ACHAT T HT
         aliases.put("prix_achat_total_ht", Arrays.asList("prix achat t ht", "prix achat total ht", 
@@ -442,6 +474,10 @@ public class ExcelImportService {
         // FACTURE ACHAT TTC
         aliases.put("facture_achat_ttc", Arrays.asList("facture achat ttc", "facture achat ttc ", 
                 "fa ttc", "total achat ttc"));
+        
+        // PRIX ACHAT TTC (format 2024: "PRIX ACHAT TTC")
+        aliases.put("prix_achat_ttc", Arrays.asList("prix achat ttc", "prix achat total ttc", 
+                "total achat ttc", "prix achat ttc", "pa ttc"));
         
         // PRIX ACHAT U TTC
         aliases.put("prix_achat_unitaire_ttc", Arrays.asList("prix achat u ttc", "prix achat unitaire ttc", 
@@ -458,13 +494,13 @@ public class ExcelImportService {
         aliases.put("quantite_livree", Arrays.asList("qt livree", "qt livref", "quantite livree", 
                 "quantite_vendue", "quantité vendue", "qte vente", "quantite vente"));
         
-        // PRIX DE VENTE U HT
+        // PRIX DE VENTE U HT (format 2024: "PU VENTE BF4 HT")
         aliases.put("prix_vente_unitaire_ht", Arrays.asList("prix de vente u ht", "prix vente unitaire ht", 
-                "pv u ht", "prix vente u ht"));
+                "pv u ht", "prix vente u ht", "pu vente bf4 ht", "pu vente ht", "pv bf4 ht"));
         
-        // FACTURE VENTE TTC
+        // FACTURE VENTE TTC (format 2024: "PT VENTE BF4 TTC")
         aliases.put("facture_vente_ttc", Arrays.asList("facture vente ttc", "facture vente ttc ", 
-                "fv ttc", "total vente ttc"));
+                "fv ttc", "total vente ttc", "pt vente bf4 ttc", "pt vente ttc", "pv bf4 ttc"));
         
         return aliases;
     }
