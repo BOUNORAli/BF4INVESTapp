@@ -423,6 +423,9 @@ public class ExcelImportService {
         }
         
         log.info("Final column mapping: {}", map);
+        log.info("Format détecté - Colonnes mappées: {}", map.keySet());
+        log.info("Colonnes d'achat: quantite_bc={}, prix_achat_unitaire_ht={}, prix_ttc_importe={}", 
+            map.get("quantite_bc"), map.get("prix_achat_unitaire_ht"), map.get("prix_ttc_importe"));
         return map;
     }
     
@@ -643,6 +646,13 @@ public class ExcelImportService {
         
         // 5. Créer la ligne produit
         LineItem ligne = createLineItem(row, columnMap, result);
+        
+        // Validation: ignorer les lignes sans données significatives
+        if (ligne.getDesignation() == null && ligne.getProduitRef() == null) {
+            result.getWarnings().add("Ligne ignorée pour BC " + numeroBC + ": pas de désignation ni référence produit");
+            return;
+        }
+        
         bc.getLignes().add(ligne);
         
         // 6. Créer ou récupérer la facture achat
@@ -796,13 +806,36 @@ public class ExcelImportService {
         
         // Quantités
         Double qteBC = getDoubleValue(row, columnMap, "quantite_bc");
+        // Fallback pour format 2021/2022: utiliser quantite_livree si quantite_bc n'existe pas
+        if (qteBC == null) {
+            qteBC = getDoubleValue(row, columnMap, "quantite_livree");
+        }
         ligne.setQuantiteAchetee(qteBC != null ? qteBC.intValue() : 0);
         
         Double qteLivree = getDoubleValue(row, columnMap, "quantite_livree");
         ligne.setQuantiteVendue(qteLivree != null ? qteLivree.intValue() : ligne.getQuantiteAchetee());
         
         // Prix d'achat unitaire HT
-        ligne.setPrixAchatUnitaireHT(getDoubleValue(row, columnMap, "prix_achat_unitaire_ht"));
+        Double prixAchatHT = getDoubleValue(row, columnMap, "prix_achat_unitaire_ht");
+        
+        // Fallback pour format 2021/2022: calculer depuis PT TTC IMPORTE si prix_achat_unitaire_ht n'existe pas
+        if (prixAchatHT == null) {
+            Double ptTTCImporte = getDoubleValue(row, columnMap, "prix_ttc_importe");
+            Double tva = getPercentageValue(row, columnMap, "taux_tva");
+            if (tva == null) tva = 20.0;
+            
+            if (ptTTCImporte != null && ptTTCImporte > 0) {
+                Integer qte = ligne.getQuantiteAchetee();
+                if (qte != null && qte > 0) {
+                    // Prix unitaire TTC = PT TTC / Quantite
+                    Double prixUnitaireTTC = ptTTCImporte / qte;
+                    // Prix unitaire HT = Prix TTC / (1 + TVA/100)
+                    prixAchatHT = prixUnitaireTTC / (1 + (tva / 100));
+                }
+            }
+        }
+        
+        ligne.setPrixAchatUnitaireHT(prixAchatHT);
         
         // Prix de vente unitaire HT
         Double prixVenteHT = getDoubleValue(row, columnMap, "prix_vente_unitaire_ht");
