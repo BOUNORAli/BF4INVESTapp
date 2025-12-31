@@ -151,6 +151,50 @@ public class ComptabiliteService {
     }
 
     /**
+     * S'assure que les comptes essentiels pour les écritures comptables existent
+     * Crée les comptes manquants si nécessaire
+     */
+    private void ensureEssentialAccountsExist() {
+        LocalDateTime now = LocalDateTime.now();
+        boolean needsSave = false;
+        List<CompteComptable> toSave = new ArrayList<>();
+
+        // Compte 5141 - Banques (essentiel pour les paiements)
+        if (compteRepository.findByCode("5141").isEmpty()) {
+            log.warn("Compte banque (5141) manquant, création automatique");
+            toSave.add(createCompte("5141", "Banques", "5", CompteComptable.TypeCompte.TRESORERIE, false, null, now));
+            needsSave = true;
+        }
+
+        // Compte 41111 - Clients - Ventes (pour les paiements clients)
+        if (compteRepository.findByCode("41111").isEmpty()) {
+            log.warn("Compte client (41111) manquant, création automatique");
+            // S'assurer que le compte parent 4111 existe aussi
+            if (compteRepository.findByCode("4111").isEmpty()) {
+                toSave.add(createCompte("4111", "Clients", "4", CompteComptable.TypeCompte.ACTIF, false, null, now));
+            }
+            toSave.add(createCompte("41111", "Clients - Ventes", "4", CompteComptable.TypeCompte.ACTIF, false, "4111", now));
+            needsSave = true;
+        }
+
+        // Compte 44111 - Fournisseurs - Achats (pour les paiements fournisseurs)
+        if (compteRepository.findByCode("44111").isEmpty()) {
+            log.warn("Compte fournisseur (44111) manquant, création automatique");
+            // S'assurer que le compte parent 4411 existe aussi
+            if (compteRepository.findByCode("4411").isEmpty()) {
+                toSave.add(createCompte("4411", "Fournisseurs", "4", CompteComptable.TypeCompte.PASSIF, false, null, now));
+            }
+            toSave.add(createCompte("44111", "Fournisseurs - Achats", "4", CompteComptable.TypeCompte.PASSIF, false, "4411", now));
+            needsSave = true;
+        }
+
+        if (needsSave) {
+            compteRepository.saveAll(toSave);
+            log.info("{} compte(s) essentiel(s) créé(s) automatiquement", toSave.size());
+        }
+    }
+
+    /**
      * Crée ou récupère l'exercice comptable pour l'année en cours
      */
     public ExerciceComptable getOrCreateCurrentExercice() {
@@ -464,12 +508,15 @@ public class ComptabiliteService {
             return null;
         }
 
+        // S'assurer que les comptes essentiels existent
+        ensureEssentialAccountsExist();
+
         Optional<CompteComptable> compteBanque = compteRepository.findByCode("5141");
         Optional<CompteComptable> compteClient = compteRepository.findByCode("41111");
         Optional<CompteComptable> compteFournisseur = compteRepository.findByCode("44111");
 
         if (compteBanque.isEmpty()) {
-            log.error("Compte banque (5141) manquant");
+            log.error("Compte banque (5141) manquant - impossible de créer après vérification");
             return null;
         }
 
@@ -562,13 +609,17 @@ public class ComptabiliteService {
             return null;
         }
 
+        // S'assurer que les comptes essentiels existent
+        ensureEssentialAccountsExist();
+
         // Déterminer le compte de charge selon la catégorie
         String compteChargeCode = getCompteChargeByCategorie(charge.getCategorie());
         Optional<CompteComptable> compteCharge = compteRepository.findByCode(compteChargeCode);
         Optional<CompteComptable> compteBanque = compteRepository.findByCode("5141");
 
         if (compteCharge.isEmpty() || compteBanque.isEmpty()) {
-            log.error("Comptes comptables manquants pour générer l'écriture de charge");
+            log.error("Comptes comptables manquants pour générer l'écriture de charge (compte charge: {}, compte banque: {})", 
+                    compteChargeCode, compteBanque.isPresent());
             return null;
         }
 
