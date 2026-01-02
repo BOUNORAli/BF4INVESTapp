@@ -65,7 +65,7 @@ public class OrdreVirementService {
         }
         
         // Récupérer et dénormaliser le nom du bénéficiaire et le RIB
-        if (ov.getBeneficiaireId() != null) {
+        if (ov.getBeneficiaireId() != null && !ov.getBeneficiaireId().isEmpty()) {
             Supplier supplier = supplierService.findById(ov.getBeneficiaireId())
                     .orElseThrow(() -> new IllegalArgumentException("Fournisseur non trouvé: " + ov.getBeneficiaireId()));
             ov.setNomBeneficiaire(supplier.getNom());
@@ -77,9 +77,14 @@ public class OrdreVirementService {
             if ((ov.getBanqueBeneficiaire() == null || ov.getBanqueBeneficiaire().isEmpty()) && supplier.getBanque() != null) {
                 ov.setBanqueBeneficiaire(supplier.getBanque());
             }
+        } else {
+            // Si beneficiaireId est null (personne physique), valider que nomBeneficiaire est fourni
+            if (ov.getNomBeneficiaire() == null || ov.getNomBeneficiaire().trim().isEmpty()) {
+                throw new IllegalArgumentException("Le nom du bénéficiaire est requis pour une personne physique");
+            }
+            // Préserver le nomBeneficiaire fourni (déjà dans l'objet ov)
+            // Ne rien faire, le nomBeneficiaire est déjà présent
         }
-        // Si beneficiaireId est null, préserver le nomBeneficiaire fourni (personne physique)
-        // Le nomBeneficiaire est déjà dans l'objet ov si fourni depuis le frontend
         
         // Initialiser le statut si non fourni
         if (ov.getStatut() == null || ov.getStatut().isEmpty()) {
@@ -146,7 +151,7 @@ public class OrdreVirementService {
                     }
                     
                     // Récupérer et dénormaliser le nom du bénéficiaire et le RIB
-                    if (existing.getBeneficiaireId() != null) {
+                    if (existing.getBeneficiaireId() != null && !existing.getBeneficiaireId().isEmpty()) {
                         Supplier supplier = supplierService.findById(existing.getBeneficiaireId())
                                 .orElseThrow(() -> new IllegalArgumentException("Fournisseur non trouvé: " + existing.getBeneficiaireId()));
                         existing.setNomBeneficiaire(supplier.getNom());
@@ -159,10 +164,14 @@ public class OrdreVirementService {
                             existing.setBanqueBeneficiaire(supplier.getBanque());
                         }
                     } else {
-                        // Si beneficiaireId est null (personne physique), préserver le nomBeneficiaire fourni
-                        if (ov.getNomBeneficiaire() != null && !ov.getNomBeneficiaire().isEmpty()) {
-                            existing.setNomBeneficiaire(ov.getNomBeneficiaire());
+                        // Si beneficiaireId est null (personne physique), valider et mettre à jour le nomBeneficiaire
+                        if (ov.getNomBeneficiaire() != null && !ov.getNomBeneficiaire().trim().isEmpty()) {
+                            existing.setNomBeneficiaire(ov.getNomBeneficiaire().trim());
+                        } else if (existing.getNomBeneficiaire() == null || existing.getNomBeneficiaire().trim().isEmpty()) {
+                            // Si le nomBeneficiaire n'est ni fourni ni existant, générer une erreur
+                            throw new IllegalArgumentException("Le nom du bénéficiaire est requis pour une personne physique");
                         }
+                        // Sinon, conserver le nomBeneficiaire existant (pas de changement)
                     }
                     
                     existing.setUpdatedAt(LocalDateTime.now());

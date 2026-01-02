@@ -730,14 +730,21 @@ export class OrdresVirementComponent implements OnInit {
       nomBeneficiaireValue = formValue.nomBeneficiaire && formValue.nomBeneficiaire.trim() ? formValue.nomBeneficiaire.trim() : undefined;
     }
 
+    // Construire l'objet sans utiliser spread pour éviter les conflits
     const ov: OrdreVirement = {
-      ...formValue,
+      dateOV: formValue.dateOV,
+      dateExecution: formValue.dateExecution || undefined,
       beneficiaireId: beneficiaireIdValue,
-      nomBeneficiaire: nomBeneficiaireValue,
+      nomBeneficiaire: nomBeneficiaireValue, // Important : toujours définir pour une personne physique
+      ribBeneficiaire: formValue.ribBeneficiaire,
+      banqueBeneficiaire: formValue.banqueBeneficiaire,
+      banqueEmettrice: formValue.banqueEmettrice,
+      motif: formValue.motif,
+      type: formValue.type || 'NORMAL',
+      statut: formValue.statut || 'EN_ATTENTE',
       montant: this.calculatedMontant(),
       facturesIds: facturesIds.length > 0 ? facturesIds : undefined,
-      facturesMontants: facturesMontants.length > 0 ? facturesMontants : undefined,
-      type: formValue.type || 'NORMAL'
+      facturesMontants: facturesMontants.length > 0 ? facturesMontants : undefined
     };
 
     try {
