@@ -9,6 +9,7 @@ import com.bf4invest.repository.OrdreVirementRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -26,6 +27,7 @@ public class OrdreVirementService {
     private final SupplierService supplierService;
     private final AuditService auditService;
     private final PaiementService paiementService;
+    private final SoldeService soldeService;
     
     public List<OrdreVirement> findAll() {
         return repository.findAll();
@@ -235,6 +237,7 @@ public class OrdreVirementService {
         repository.deleteById(id);
     }
     
+    @Transactional
     public OrdreVirement marquerExecute(String id) {
         return repository.findById(id)
                 .map(ov -> {
@@ -250,8 +253,32 @@ public class OrdreVirementService {
                     ov.setUpdatedAt(LocalDateTime.now());
                     OrdreVirement saved = repository.save(ov);
                     
-                    // Créer automatiquement les paiements pour les factures liées
-                    creerPaiementsPourOV(saved);
+                    // Créer automatiquement les paiements pour les factures liées (si factures existent)
+                    boolean hasFactures = (saved.getFacturesIds() != null && !saved.getFacturesIds().isEmpty()) ||
+                                         (saved.getFacturesMontants() != null && !saved.getFacturesMontants().isEmpty());
+                    
+                    if (hasFactures) {
+                        creerPaiementsPourOV(saved);
+                        // Les paiements créés vont automatiquement enregistrer dans l'historique de trésorerie
+                    } else {
+                        // Pour une personne physique (pas de factures), enregistrer directement dans l'historique de trésorerie
+                        try {
+                            LocalDate dateExecution = saved.getDateExecution() != null ? saved.getDateExecution() : saved.getDateOV();
+                            soldeService.enregistrerOrdreVirement(
+                                    saved.getMontant(),
+                                    saved.getNumeroOV(),
+                                    saved.getNomBeneficiaire(),
+                                    saved.getMotif(),
+                                    dateExecution,
+                                    saved.getId()
+                            );
+                            log.info("Ordre de virement {} (personne physique) enregistré dans l'historique de trésorerie", saved.getNumeroOV());
+                        } catch (Exception e) {
+                            log.error("Erreur lors de l'enregistrement de l'ordre de virement {} dans l'historique de trésorerie: {}", 
+                                    saved.getNumeroOV(), e.getMessage(), e);
+                            // Ne pas faire échouer l'exécution si l'enregistrement dans l'historique échoue
+                        }
+                    }
                     
                     auditService.logUpdate("OrdreVirement", id, 
                         "Statut: " + oldStatut, "Statut: EXECUTE");

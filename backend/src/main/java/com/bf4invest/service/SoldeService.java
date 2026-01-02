@@ -435,6 +435,68 @@ public class SoldeService {
     }
 
     /**
+     * Enregistre un ordre de virement dans l'historique de trésorerie et impacte le solde global.
+     * Utilisé pour les ordres de virement même s'ils sont pour une personne physique (pas de factures).
+     * 
+     * @param montant Montant du virement
+     * @param numeroOV Numéro de l'ordre de virement
+     * @param nomBeneficiaire Nom du bénéficiaire
+     * @param motif Motif/libellé du virement
+     * @param dateExecution Date d'exécution du virement
+     * @param ovId ID de l'ordre de virement (pour référence)
+     * @return HistoriqueSolde créé
+     */
+    @Transactional
+    public HistoriqueSolde enregistrerOrdreVirement(Double montant, String numeroOV, String nomBeneficiaire, 
+                                                     String motif, LocalDate dateExecution, String ovId) {
+        if (montant == null || montant <= 0) {
+            throw new IllegalArgumentException("Le montant doit être positif");
+        }
+        if (numeroOV == null || numeroOV.trim().isEmpty()) {
+            throw new IllegalArgumentException("Le numéro OV est requis");
+        }
+
+        // Récupérer le solde global actuel
+        Double soldeGlobalAvant = getSoldeGlobalActuel();
+        // Un virement est une sortie de trésorerie (diminue le solde)
+        Double soldeGlobalApres = soldeGlobalAvant - montant;
+
+        // Mettre à jour le solde global
+        mettreAJourSoldeGlobal(soldeGlobalApres);
+
+        // Construire la description
+        String description = "Ordre de virement " + numeroOV;
+        if (nomBeneficiaire != null && !nomBeneficiaire.trim().isEmpty()) {
+            description += " - " + nomBeneficiaire;
+        }
+        if (motif != null && !motif.trim().isEmpty()) {
+            description += " - " + motif;
+        }
+
+        // Créer l'historique
+        HistoriqueSolde historique = HistoriqueSolde.builder()
+                .type("ORDRE_VIREMENT")
+                .montant(montant)
+                .soldeGlobalAvant(soldeGlobalAvant)
+                .soldeGlobalApres(soldeGlobalApres)
+                .soldePartenaireAvant(null)
+                .soldePartenaireApres(null)
+                .partenaireId(null) // Pas de partenaire pour personne physique
+                .partenaireType(null)
+                .partenaireNom(nomBeneficiaire != null ? nomBeneficiaire.trim() : null)
+                .referenceId(ovId)
+                .referenceNumero(numeroOV)
+                .description(description)
+                .date(dateExecution != null ? dateExecution.atStartOfDay() : LocalDateTime.now())
+                .build();
+
+        HistoriqueSolde saved = historiqueSoldeRepository.save(historique);
+        log.info("Ordre de virement enregistré dans trésorerie: {} MAD - {} - Solde après: {}", 
+                montant, description, soldeGlobalApres);
+        return saved;
+    }
+
+    /**
      * Calcule le solde actuel projeté si tous les clients ont payé et tous les fournisseurs ont été payés
      * Formule : Solde Banque + Créances Clients - Dettes Fournisseurs
      * 
