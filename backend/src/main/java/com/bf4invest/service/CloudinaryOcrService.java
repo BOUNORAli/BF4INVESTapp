@@ -704,40 +704,57 @@ public class CloudinaryOcrService {
         }
         
         String trimmed = line.trim();
+        String upper = trimmed.toUpperCase();
         
         // Trop court (artefacts OCR comme "AS", "ZA", "CLA", "A S")
         // Retirer les espaces pour le test de longueur
         String withoutSpaces = trimmed.replaceAll("\\s+", "");
         if (withoutSpaces.length() <= 3) {
-            log.debug("🚫 [OCR] Désignation trop courte ({}): '{}'", withoutSpaces.length(), trimmed);
             return false;
         }
         
         // Doit contenir au moins 3 lettres consécutives
         if (!trimmed.matches(".*[A-Za-z]{3,}.*")) {
-            log.debug("🚫 [OCR] Désignation sans 3 lettres consécutives: '{}'", trimmed);
             return false;
         }
         
-        // Pas un mot-clé de bruit
-        String upper = trimmed.toUpperCase();
-        String[] noiseWords = {"DIVERS", "DATE", "FACTURE", "COMMANDE", "REFERENCE", "QTE", "PRIX", "MONTANT", "CLIENT"};
-        for (String noise : noiseWords) {
-            if (upper.equals(noise) || upper.startsWith(noise + " ")) {
-                log.debug("🚫 [OCR] Désignation = mot-clé bruit '{}': '{}'", noise, trimmed);
+        // FILTRAGE DES LIGNES DE BRUIT - Patterns critiques
+        
+        // ICE (identifiant fiscal)
+        if (upper.contains("ICE") && upper.matches(".*ICE.*\\d{10,}.*")) {
+            return false;
+        }
+        
+        // Mode de réglement, Code Client, Référence, etc.
+        String[] noisePatterns = {
+            "MODE DE", "REGLEMENT", "RÉGLEMENT", "CODE CLIENT", "FACTURE N",
+            "BL N°", "DATE:", "REFERENCE", "RÉFÉRENCES", "ECHÉANCE", "ECHEANCE",
+            "CONTACT", "E-MAIL", "EMAIL", "ADRESSE", "SIEGE", "QUARTIER",
+            "CERTIFIE", "CERTIFICAT", "MONTANT EN LETTRES", "NET HT", "TOTAL TVA",
+            "REMISE", "FRAIS", "ARRETEE", "ARRÊTÉE"
+        };
+        for (String pattern : noisePatterns) {
+            if (upper.contains(pattern)) {
                 return false;
             }
         }
         
-        // Pas une ligne de bruit générale (mais ne pas appeler isNoiseLine car trop restrictif)
-        // Vérifier seulement quelques patterns critiques
-        if (upper.contains("TEL:") || upper.contains("FAX:") || upper.startsWith("TEL") || upper.startsWith("FAX")) {
-            log.debug("🚫 [OCR] Désignation = téléphone/fax: '{}'", trimmed);
+        // Numéros de téléphone (séquences de chiffres avec tirets)
+        if (trimmed.matches(".*\\d{10}.*") || // Numéro à 10+ chiffres
+            trimmed.matches(".*\\d{4,}-\\d{4,}.*") || // Format avec tirets
+            upper.contains("TEL") || upper.contains("FAX")) {
             return false;
         }
         
-        // Accepter la ligne comme désignation
-        log.debug("✅ [OCR] Désignation valide: '{}'", trimmed);
+        // Mots-clés de structure de facture
+        String[] structureWords = {"DIVERS", "DATE", "FACTURE", "COMMANDE", "QTE", "PRIX", 
+                                   "MONTANT", "CLIENT", "QUANTITE", "TOTAL", "TTC", "HT"};
+        for (String word : structureWords) {
+            if (upper.equals(word)) {
+                return false;
+            }
+        }
+        
         return true;
     }
 
@@ -955,40 +972,48 @@ public class CloudinaryOcrService {
      * Vérifie si une ligne est du bruit (adresse, téléphone, etc.) et doit être ignorée
      */
     private boolean isNoiseLine(String line) {
-        String upperLine = line.toUpperCase();
+        String trimmed = line.trim();
+        String upperLine = trimmed.toUpperCase();
         
-        // Mots-clés à ignorer
+        // Ignorer les lignes trop courtes (< 5 caractères)
+        if (trimmed.length() < 5) {
+            return true;
+        }
+        
+        // Ignorer les lignes qui sont uniquement des nombres ou des symboles
+        if (trimmed.matches("^[0-9\\s\\.,\\-\\+/]+$")) {
+            return true;
+        }
+        
+        // Mots-clés à ignorer (métadonnées de facture)
         String[] noiseKeywords = {
-            "TEL", "FAX", "ADRESSE", "SIEGE", "SIÉGE", "SIE",
-            "ICE", "IF", "R.C", "RC", "CNSS", "PATENTE",
-            "RAISON SOCIALE", "CLIENT", "MODE DE REGLEMENT",
-            "RIB", "B.P", "BP", "VILLE", "COPIE", "COPL",
-            "SELOUANE", "NADOR", "MEKNES",
-            "GUARIMETAL", "SARL", "SIE SOCIAL",
-            "Z.INDUSTRIELLE", "ZONE INDUSTRIELLE",
-            "RECEPTION", "SIGNATURE", "NOM",
+            // Contacts
+            "TEL", "FAX", "E-MAIL", "EMAIL", "CONTACT", "@",
+            // Identifiants
+            "ICE", "IF ", "R.C", "RC ", "CNSS", "PATENTE",
+            // Adresses
+            "ADRESSE", "SIEGE", "SIÉGE", "QUARTIER", "RUE ", "ROUTE",
+            "Z.INDUSTRIELLE", "ZONE INDUSTRIELLE", "DEPOT",
+            "SELOUANE", "NADOR", "MEKNES", "MEKNÈS",
+            // Structure facture
+            "RAISON SOCIALE", "CODE CLIENT", "MODE DE", "REGLEMENT", "RÉGLEMENT",
+            "BL N°", "BL N", "FACTURE N", "REFERENCE", "RÉFÉRENCES", "ECHÉANCE", "ECHEANCE",
+            // Totaux et mentions légales
+            "TOTAL HT", "TOTAL TTC", "NET HT", "T.V.A", "TVA ", "REMISE",
             "DAHIR", "LOI", "PENALITE", "PENALITÉ",
-            "IMPORTANT", "CONFORMEMENT", "DISPOSITIONS"
+            "IMPORTANT", "CONFORMEMENT", "DISPOSITIONS",
+            "ARRETEE", "ARRÊTÉE", "SOMME", "DIRHAMS", "DHS",
+            // Certifications
+            "CERTIFIE", "CERTIFICAT", "BETON PRET",
+            // Signatures
+            "RECEPTION", "SIGNATURE", "MONTANT EN LETTRES",
+            // Noms d'entreprises (pas de produits)
+            "GUARIMETAL", "SORIMAC", "WESTMAT", "BF4 INVEST",
+            "SARL", "STE ", "S.A.R.L",
+            // Autres bruits
+            "COPIE", "COPL", "VILLE", "B.P", "BP ",
+            "CAPITALE", "VENTE MATERIAUX", "CONSTRUCTION"
         };
-        
-        // Pattern pour les lignes qui commencent par "Tél:" ou "Fax:"
-        if (upperLine.startsWith("TEL") || upperLine.startsWith("FAX") || 
-            upperLine.contains("TEL:") || upperLine.contains("FAX:")) {
-            return true;
-        }
-        
-        // Pattern spécial pour les numéros de téléphone (plusieurs nombres séparés par / ou espace)
-        // Exemple: "Tél: 05 36 35 89 60/05 36 60 94 34" ou "05 36 35 89 60/05 36 60 94 34"
-        // Séquence de 2 chiffres répétée plusieurs fois = numéro de téléphone
-        if (upperLine.matches(".*\\d{2}\\s+\\d{2}\\s+\\d{2}\\s+\\d{2}\\s+\\d{2}.*")) {
-            return true; // C'est un numéro de téléphone
-        }
-        
-        // Pattern pour les lignes qui contiennent un slash avec des nombres de chaque côté
-        // (typique des numéros de téléphone multiples: "60/05")
-        if (upperLine.matches(".*\\d{2,}.*/.*\\d{2,}.*")) {
-            return true;
-        }
         
         for (String keyword : noiseKeywords) {
             if (upperLine.contains(keyword)) {
@@ -996,13 +1021,36 @@ public class CloudinaryOcrService {
             }
         }
         
-        // Ignorer les lignes trop courtes (< 5 caractères)
-        if (line.trim().length() < 5) {
+        // Pattern pour les lignes qui commencent par "Tél:" ou "Fax:" ou "Contact"
+        if (upperLine.startsWith("TEL") || upperLine.startsWith("FAX") || 
+            upperLine.startsWith("CONTACT") || upperLine.contains("TEL:") || 
+            upperLine.contains("FAX:")) {
             return true;
         }
         
-        // Ignorer les lignes qui sont uniquement des nombres ou des symboles
-        if (line.trim().matches("^[0-9\\s\\.,\\-\\+/]+$")) {
+        // Pattern pour les numéros de téléphone (séquence 05 XX XX XX XX)
+        if (trimmed.matches(".*0[5-7]\\s*\\d{2}\\s*\\d{2}\\s*\\d{2}\\s*\\d{2}.*")) {
+            return true;
+        }
+        
+        // Pattern pour numéros avec tirets (0536334951-0536609733)
+        if (trimmed.matches(".*\\d{10}-\\d{10}.*")) {
+            return true;
+        }
+        
+        // Pattern pour les lignes qui contiennent un slash avec des nombres de chaque côté
+        // (typique des numéros de téléphone multiples: "60/05")
+        if (trimmed.matches(".*\\d{8,}.*/.*\\d{8,}.*")) {
+            return true;
+        }
+        
+        // Lignes contenant ICE suivi de chiffres (identifiant fiscal)
+        if (trimmed.matches(".*ICE[:\\s]*\\d{10,}.*")) {
+            return true;
+        }
+        
+        // Lignes qui ressemblent à des codes sans désignation (ex: "FT12/500" seul)
+        if (trimmed.matches("^[A-Z]{1,5}\\d{1,3}/\\d{1,4}$")) {
             return true;
         }
         
@@ -1017,23 +1065,62 @@ public class CloudinaryOcrService {
             return false;
         }
         
+        String designation = productLine.getDesignation();
+        
         // Désignation doit avoir au moins 3 caractères
-        if (productLine.getDesignation() == null || 
-            productLine.getDesignation().trim().length() < 3) {
+        if (designation == null || designation.trim().length() < 3) {
+            log.debug("🚫 [OCR] Produit rejeté - désignation trop courte: '{}'", designation);
             return false;
         }
         
         // Doit avoir au moins une quantité > 0
         if (productLine.getQuantite() == null || productLine.getQuantite() <= 0) {
+            log.debug("🚫 [OCR] Produit rejeté - quantité invalide: {} pour '{}'", productLine.getQuantite(), designation);
             return false;
         }
+        
+        String designationUpper = designation.toUpperCase();
         
         // La désignation ne doit pas être un mot-clé de bruit
-        String designation = productLine.getDesignation().toUpperCase();
         if (isNoiseLine(designation)) {
+            log.debug("🚫 [OCR] Produit rejeté - c'est une ligne de bruit: '{}'", designation);
             return false;
         }
         
+        // Rejeter les lignes qui contiennent des métadonnées de document
+        String[] metadataPatterns = {
+            "BL N°", "DATE:", "ICE:", "MODE DE", "RÉGLEMENT", "REGLEMENT",
+            "CODE CLIENT", "FACTURE N", "CONTACT", "E-MAIL", "EMAIL",
+            "CERTIFIE", "NET HT", "TOTAL", "REMISE"
+        };
+        for (String pattern : metadataPatterns) {
+            if (designationUpper.contains(pattern)) {
+                log.debug("🚫 [OCR] Produit rejeté - contient métadonnée '{}': '{}'", pattern, designation);
+                return false;
+            }
+        }
+        
+        // Rejeter si la désignation contient un email
+        if (designation.matches(".*[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}.*")) {
+            log.debug("🚫 [OCR] Produit rejeté - contient email: '{}'", designation);
+            return false;
+        }
+        
+        // Rejeter si la quantité est trop grande (probablement un numéro de téléphone mal parsé)
+        // Ex: 536609733 est un numéro de téléphone, pas une quantité
+        if (productLine.getQuantite() > 1000000) {
+            log.debug("🚫 [OCR] Produit rejeté - quantité suspecte (trop grande): {} pour '{}'", productLine.getQuantite(), designation);
+            return false;
+        }
+        
+        // Le prix unitaire doit être raisonnable (pas des millions)
+        if (productLine.getPrixUnitaireHT() != null && productLine.getPrixUnitaireHT() > 100000) {
+            log.debug("🚫 [OCR] Produit rejeté - prix unitaire suspect: {} pour '{}'", productLine.getPrixUnitaireHT(), designation);
+            return false;
+        }
+        
+        log.debug("✅ [OCR] Produit validé: {} - Qté: {} - PU: {} - Total: {}", 
+                  designation, productLine.getQuantite(), productLine.getPrixUnitaireHT(), productLine.getPrixTotalHT());
         return true;
     }
 
@@ -1207,8 +1294,9 @@ public class CloudinaryOcrService {
         // Si la ligne ne contient que du texte (pas de nombres), c'est probablement juste la désignation
         Pattern numberPattern = Pattern.compile("\\b\\d{4,}[.,]?\\d*\\b"); // Nombres de 4+ chiffres (pas les petits chiffres dans le nom)
         if (!numberPattern.matcher(line).find()) {
-            // Pas de grands nombres, c'est probablement juste la désignation
-            return line.trim();
+            // Pas de grands nombres, nettoyer et retourner
+            String cleaned = cleanDesignation(line.trim());
+            return cleaned;
         }
         
         // Approche: trouver où commence la zone numérique (colonnes Qté, Prix, Total)
@@ -1219,10 +1307,21 @@ public class CloudinaryOcrService {
         String[] parts = columnSeparator.split(line);
         
         if (parts.length >= 2) {
-            // Il y a des colonnes séparées, la première partie est probablement la désignation
+            // Il y a des colonnes séparées, la première partie est probablement Code + Désignation
             String designation = parts[0].trim();
-            // Nettoyer mais garder les chiffres qui sont partie intégrante (comme "DIAM 8", "CPJ 45")
-            designation = designation.replaceAll("\\s+", " ").trim();
+            
+            // Si la première partie a plusieurs colonnes (Code + Désignation), les joindre
+            // Ex: "FT12/500" "FER TOR/500 DIAM 12" -> "FER TOR/500 DIAM 12"
+            if (parts.length >= 3) {
+                // Vérifier si parts[0] ressemble à un code produit (ex: FT12/500, B30G)
+                if (parts[0].matches("^[A-Z0-9]{1,10}(/\\d+)?$") && parts[1].matches(".*[A-Za-z]{3,}.*")) {
+                    // Le premier élément est un code, prendre le deuxième comme désignation
+                    designation = parts[1].trim();
+                }
+            }
+            
+            // Nettoyer et retourner
+            designation = cleanDesignation(designation);
             return designation;
         }
         
@@ -1253,6 +1352,49 @@ public class CloudinaryOcrService {
         // Nettoyer: retirer les espaces multiples, caractères spéciaux en fin
         cleaned = cleaned.replaceAll("\\s+", " ").trim();
         cleaned = cleaned.replaceAll("[^a-zA-Z0-9\\s\\-]+$", ""); // Retirer ponctuation finale
+        
+        return cleanDesignation(cleaned);
+    }
+    
+    /**
+     * Nettoie une désignation:
+     * - Retire les codes produits du début (ex: "FT12/500", "B30G")
+     * - Retire les éléments de bruit
+     */
+    private String cleanDesignation(String designation) {
+        if (designation == null || designation.trim().isEmpty()) {
+            return designation;
+        }
+        
+        String cleaned = designation.trim();
+        
+        // Pattern pour les codes produits au début: FT12/500, B30G, ADJUVANT (si suivi d'un texte)
+        // Code produit: lettres+chiffres sans espaces, optionnellement suivi de /nombre
+        Pattern codeProductPattern = Pattern.compile("^([A-Z0-9]{2,10}(/\\d+)?)\\s+(.+)$", Pattern.CASE_INSENSITIVE);
+        Matcher matcher = codeProductPattern.matcher(cleaned);
+        
+        if (matcher.matches()) {
+            String potentialCode = matcher.group(1);
+            String restOfLine = matcher.group(3);
+            
+            // Vérifier si potentialCode ressemble vraiment à un code (pas une désignation)
+            // Un code est généralement court, avec des chiffres, et sans espace
+            // Une désignation contient des mots (plusieurs lettres consécutives)
+            boolean isCode = potentialCode.matches("^[A-Z]{1,4}\\d+(/\\d+)?$") || // FT12/500
+                             potentialCode.matches("^[A-Z0-9]{2,6}$"); // B30G
+            
+            // Mais si restOfLine est très court ou ne ressemble pas à une désignation, garder tout
+            boolean restIsDesignation = restOfLine.length() > 5 && 
+                                        restOfLine.matches(".*[A-Za-z]{3,}.*");
+            
+            if (isCode && restIsDesignation) {
+                cleaned = restOfLine;
+                log.debug("🔄 [OCR] Code produit retiré: '{}' -> '{}'", potentialCode, cleaned);
+            }
+        }
+        
+        // Nettoyer les espaces multiples
+        cleaned = cleaned.replaceAll("\\s+", " ").trim();
         
         return cleaned;
     }
@@ -1306,4 +1448,5 @@ public class CloudinaryOcrService {
         return count >= 2;
     }
 }
+
 
