@@ -351,7 +351,7 @@ public class CloudinaryOcrService {
 
     /**
      * Détecte le nom du fournisseur (recherche dans les premières lignes)
-     * Amélioré pour ne pas confondre avec le client
+     * Amélioré pour mieux détecter "GUARIMETAL sarl" et éviter le client
      */
     private String detectFournisseur(String[] lines) {
         // Chercher dans les 15 premières lignes
@@ -374,41 +374,53 @@ public class CloudinaryOcrService {
         }
         
         // Priorité 2: Chercher le nom de l'entreprise émettrice (en haut, souvent avec logo)
-        // Généralement avant la section "Client"
+        // Généralement AVANT la section "Client" et contient "SARL", "STE", etc. en minuscules ou majuscules
+        boolean foundClientSection = false;
         for (int i = 0; i < maxLines; i++) {
             String line = lines[i].trim();
-            // Chercher un nom d'entreprise en majuscules (SARL, STE, etc.) AVANT la section client
-            if (line.matches(".*[A-Z]{3,}.*(?:SARL|STE|EURL|SA).*") && 
-                !line.matches("(?i).*CLIENT.*")) {
-                // Nettoyer la ligne (retirer adresse, tel, etc.)
-                String cleaned = line.replaceAll("(?i)(SIE|SIEGE|SOCIAL|ADRESSE|TEL|FAX|ICE|IF|RC|CNSS|PATENTE|Z\\.|B\\.P|BP).*", "");
+            
+            // Si on trouve "Client", on est dans la section client, donc le fournisseur est avant
+            if (line.matches("(?i).*^CLIENT$.*")) {
+                foundClientSection = true;
+                break;
+            }
+            
+            // Chercher un nom d'entreprise avec SARL, STE, etc. (peut être en minuscules)
+            // Exemple: "GUARIMETAL sarl"
+            if (line.matches("(?i).*[A-Z]{2,}.*(?:SARL|STE|EURL|SA).*")) {
+                // Nettoyer la ligne (retirer activités, adresse, tel, etc.)
+                String cleaned = line;
+                // Retirer les activités (ex: "Vente de matériaux...")
+                cleaned = cleaned.replaceAll("(?i)(Vente|Import|Export|Transport|Travaux|Construction).*", "");
+                // Retirer adresse et coordonnées
+                cleaned = cleaned.replaceAll("(?i)(SIE|SIEGE|SOCIAL|ADRESSE|TEL|FAX|ICE|IF|RC|CNSS|PATENTE|Z\\.|B\\.P|BP|INDUSTRIELLE).*", "");
                 cleaned = cleaned.trim();
+                
                 // Ne pas prendre si c'est trop court ou contient des coordonnées
                 if (cleaned.length() > 5 && cleaned.length() < 100 && 
-                    !cleaned.matches(".*\\d{2}\\s*/\\s*\\d{2}.*")) { // Pas une date ou coordonnées
+                    !cleaned.matches(".*\\d{2}\\s*/\\s*\\d{2}.*") && // Pas une date
+                    !cleaned.matches(".*\\d{5,}.*")) { // Pas un code postal ou ICE
                     log.debug("🏢 [OCR] Fournisseur détecté (nom entreprise en haut): {}", cleaned);
                     return cleaned;
                 }
             }
         }
         
-        // Priorité 3: Chercher "Raison Sociale:" mais PAS si c'est suivi de "CLIENT"
-        for (int i = 0; i < maxLines; i++) {
-            String line = lines[i].trim();
-            // Vérifier que ce n'est pas la section Client
-            if (line.matches("(?i).*RAISON\\s+SOCIALE.*[:]\\s*(.+)") &&
-                !line.matches("(?i).*CLIENT.*")) {
-                Pattern pattern = Pattern.compile("(?i).*RAISON\\s+SOCIALE.*[:]\\s*(.+)");
-                Matcher matcher = pattern.matcher(line);
-                if (matcher.find()) {
-                    String name = matcher.group(1).trim();
-                    // Vérifier que la ligne suivante ne contient pas "CLIENT"
-                    if (i + 1 < lines.length && lines[i + 1].trim().matches("(?i).*CLIENT.*")) {
-                        continue; // C'est probablement le client, pas le fournisseur
-                    }
-                    if (name.length() > 3) {
-                        log.debug("🏢 [OCR] Fournisseur détecté (Raison Sociale, non-client): {}", name);
-                        return name;
+        // Si on a trouvé la section client, on sait que le fournisseur est avant
+        // Chercher dans les lignes avant "Client"
+        if (foundClientSection) {
+            for (int i = 0; i < maxLines; i++) {
+                String line = lines[i].trim();
+                if (line.matches("(?i).*CLIENT.*")) {
+                    break; // On a atteint la section client
+                }
+                // Chercher un nom d'entreprise (même sans SARL visible)
+                if (line.matches(".*[A-Z]{4,}.*") && line.length() < 80 && 
+                    !line.matches("(?i).*(?:FACTURE|BON|COMMANDE|DATE|TOTAL|HT|TTC|ICE|RC|CNSS|TEL|FAX|ADRESSE|SIE|SIEGE|Z\\.|B\\.P|BP).*")) {
+                    String cleaned = line.trim();
+                    if (cleaned.length() > 5 && cleaned.length() < 80) {
+                        log.debug("🏢 [OCR] Fournisseur détecté (avant section Client): {}", cleaned);
+                        return cleaned;
                     }
                 }
             }
@@ -467,8 +479,10 @@ public class CloudinaryOcrService {
             Pattern.compile("(?i)(?:FACTURE|BC|COMMANDE|DOC)\\s*(?:N°|No|NUM|NUMERO|REF|REFERENCE)?\\s*[:\\s]*([A-Z0-9\\-/]+)"),
             // Pattern pour "N° FACTURE: 000002366"
             Pattern.compile("(?i)(?:N°|NUM|REF|N°\\s*)?(?:FACTURE|BC|COMMANDE|DOC)?\\s*[:\\s]*([A-Z0-9\\-/]+)"),
-            // Pattern pour numéros longs avec zéros (000002366)
-            Pattern.compile("(?i)(?:FACTURE|BC|COMMANDE|DOC|N°|NUM|REF).*?([0-9]{6,})")
+            // Pattern spécifique pour "FACTURE N°" suivi d'un numéro long (ex: 000002366)
+            Pattern.compile("(?i)FACTURE\\s*N°\\s*([0-9]{4,})"),
+            // Pattern pour numéros longs avec zéros (000002366) dans une ligne contenant FACTURE
+            Pattern.compile("(?i).*FACTURE.*?([0-9]{6,})")
         };
 
         for (String line : lines) {
@@ -513,6 +527,7 @@ public class CloudinaryOcrService {
         log.info("📋 [OCR] Zone tableau détectée: lignes {} à {}", tableStartIndex, tableEndIndex);
 
         // Étape 3: Parser les lignes dans la zone du tableau
+        // Note: Dans certains formats OCR, la désignation peut être sur une ligne et les nombres sur la suivante
         for (int i = tableStartIndex; i < tableEndIndex; i++) {
             String line = lines[i].trim();
             if (line.isEmpty()) {
@@ -526,7 +541,35 @@ public class CloudinaryOcrService {
             }
 
             // Parser la ligne comme une ligne de produit
+            // Essayer d'abord la ligne seule
             OcrExtractResult.OcrProductLine productLine = parseProductLine(line);
+            
+            // Si pas de produit détecté mais la ligne contient du texte (pas que des nombres),
+            // essayer avec la ligne suivante pour les nombres
+            // Format OCR typique: désignation sur une ligne, nombres sur la suivante
+            if (productLine == null && i + 1 < tableEndIndex) {
+                // Si la ligne actuelle contient principalement du texte (désignation)
+                boolean isTextLine = line.matches(".*[A-Za-z]{3,}.*") && 
+                                     !line.matches(".*\\d{4,}.*"); // Pas trop de chiffres
+                
+                // Si c'est une ligne texte, regarder la ligne suivante
+                if (isTextLine) {
+                    String nextLine = lines[i + 1].trim();
+                    // Si la ligne suivante contient plusieurs nombres séparés (Qté, Prix, Total)
+                    // Pattern pour 2+ nombres avec espaces ou virgules
+                    if (nextLine.matches(".*\\d+[.,]?\\d*.*\\s+.*\\d+[.,]?\\d*.*")) {
+                        // Combiner les deux lignes avec un séparateur clair
+                        String combinedLine = line + "    " + nextLine; // Plusieurs espaces pour séparer
+                        productLine = parseProductLine(combinedLine);
+                        if (productLine != null && isValidProductLine(productLine)) {
+                            i++; // Skip la ligne suivante car on l'a déjà utilisée
+                        } else {
+                            productLine = null; // Réinitialiser si invalide
+                        }
+                    }
+                }
+            }
+            
             if (productLine != null && isValidProductLine(productLine)) {
                 productLines.add(productLine);
                 log.debug("✅ [OCR] Produit détecté: {} - Qté: {} - PU: {} - Total: {}", 
@@ -657,8 +700,28 @@ public class CloudinaryOcrService {
             "GUARIMETAL", "SARL", "SIE SOCIAL",
             "Z.INDUSTRIELLE", "ZONE INDUSTRIELLE",
             "RECEPTION", "SIGNATURE", "NOM",
-            "DAHIR", "LOI", "PENALITE", "PENALITÉ"
+            "DAHIR", "LOI", "PENALITE", "PENALITÉ",
+            "IMPORTANT", "CONFORMEMENT", "DISPOSITIONS"
         };
+        
+        // Pattern pour les lignes qui commencent par "Tél:" ou "Fax:"
+        if (upperLine.startsWith("TEL") || upperLine.startsWith("FAX") || 
+            upperLine.contains("TEL:") || upperLine.contains("FAX:")) {
+            return true;
+        }
+        
+        // Pattern spécial pour les numéros de téléphone (plusieurs nombres séparés par / ou espace)
+        // Exemple: "Tél: 05 36 35 89 60/05 36 60 94 34" ou "05 36 35 89 60/05 36 60 94 34"
+        // Séquence de 2 chiffres répétée plusieurs fois = numéro de téléphone
+        if (upperLine.matches(".*\\d{2}\\s+\\d{2}\\s+\\d{2}\\s+\\d{2}\\s+\\d{2}.*")) {
+            return true; // C'est un numéro de téléphone
+        }
+        
+        // Pattern pour les lignes qui contiennent un slash avec des nombres de chaque côté
+        // (typique des numéros de téléphone multiples: "60/05")
+        if (upperLine.matches(".*\\d{2,}.*/.*\\d{2,}.*")) {
+            return true;
+        }
         
         for (String keyword : noiseKeywords) {
             if (upperLine.contains(keyword)) {
@@ -739,70 +802,75 @@ public class CloudinaryOcrService {
         // Après extraction depuis la fin: [Total HT, Prix unitaire, Qté]
         
         if (numericValues.size() >= 3) {
-            // Trois valeurs détectées: Total HT (dernier), Prix unitaire (milieu), Qté (premier)
-            // Mais attention: l'ordre dans numericValues dépend de l'ordre dans la ligne
-            // On va utiliser la magnitude pour déterminer ce qui est quoi
+            // Trois valeurs détectées dans l'ordre de la ligne: [Qté, Prix unitaire, Total HT]
+            // Format typique: "200,000    8,083    1 616,67"
+            Double value1 = numericValues.get(0); // Premier nombre (généralement Qté)
+            Double value2 = numericValues.get(1); // Deuxième (généralement Prix unitaire)
+            Double value3 = numericValues.get(2); // Troisième (généralement Total HT)
             
-            Double value1 = numericValues.get(numericValues.size() - 1); // Dernier nombre trouvé (Total HT probablement)
-            Double value2 = numericValues.get(numericValues.size() - 2); // Avant-dernier (Prix unitaire probablement)
-            Double value3 = numericValues.get(numericValues.size() - 3); // Troisième depuis la fin (Qté probablement)
+            // Validation par magnitude:
+            // - La Qté peut être très grande (ex: 23500)
+            // - Le Prix unitaire est généralement moyen (ex: 8.08, 1.45, 10.38)
+            // - Le Total HT = Qté * Prix unitaire, donc généralement le plus grand
             
-            // Le Total HT est généralement le plus grand (valeur absolue)
-            // La Qté peut être grande aussi, mais le Prix unitaire est généralement moyen
-            // On va utiliser la logique: si value1 > value2, alors value1 est probablement le Total
+            // Si value3 ≈ value1 * value2, alors l'ordre est correct [Qté, Prix, Total]
+            double expectedTotal = value1 * value2;
+            double diff = Math.abs(value3 - expectedTotal);
+            double tolerance = expectedTotal * 0.1; // 10% de tolérance
             
-            if (value1 >= value2 && value1 >= value3) {
-                // value1 est probablement le Total HT
-                builder.prixTotalHT(value1);
+            if (diff <= tolerance) {
+                // L'ordre est correct: [Qté, Prix, Total]
+                builder.quantite(value1);
                 builder.prixUnitaireHT(value2);
-                builder.quantite(value3);
-            } else if (value3 >= value1 && value3 >= value2) {
-                // value3 est probablement la Qté (peut être très grande)
-                builder.quantite(value3);
-                builder.prixUnitaireHT(value2);
-                builder.prixTotalHT(value1);
+                builder.prixTotalHT(value3);
             } else {
-                // Par défaut: ordre standard [Qté, Prix, Total]
-                builder.quantite(value3);
-                builder.prixUnitaireHT(value2);
-                builder.prixTotalHT(value1);
+                // Essayer d'autres ordres possibles
+                // Le plus grand est probablement le Total
+                if (value3 >= value1 && value3 >= value2) {
+                    // value3 = Total, déterminer Qté et Prix
+                    if (value1 > value2 * 100) {
+                        // value1 est probablement la Qté (très grand), value2 = Prix
+                        builder.quantite(value1);
+                        builder.prixUnitaireHT(value2);
+                        builder.prixTotalHT(value3);
+                    } else {
+                        // Par défaut: [Qté, Prix, Total]
+                        builder.quantite(value1);
+                        builder.prixUnitaireHT(value2);
+                        builder.prixTotalHT(value3);
+                    }
+                } else {
+                    // Par défaut: ordre standard [Qté, Prix, Total]
+                    builder.quantite(value1);
+                    builder.prixUnitaireHT(value2);
+                    builder.prixTotalHT(value3);
+                }
             }
         } else if (numericValues.size() == 2) {
             // Deux valeurs: Qté et Prix unitaire (ou Qté et Total)
-            Double value1 = numericValues.get(numericValues.size() - 1); // Dernier
-            Double value2 = numericValues.get(numericValues.size() - 2); // Avant-dernier
+            Double value1 = numericValues.get(0); // Premier
+            Double value2 = numericValues.get(1); // Deuxième
             
-            // Si value1 est beaucoup plus grand que value2, value1 est probablement le Total HT
-            if (value1 > value2 * 10) {
-                // value1 = Total, value2 = Qté ou Prix
-                builder.prixTotalHT(value1);
-                // On va essayer de deviner: si value2 est très grand (> 100), c'est probablement la Qté
-                if (value2 > 100) {
-                    builder.quantite(value2);
-                } else {
-                    builder.prixUnitaireHT(value2);
+            // Si value2 est beaucoup plus grand que value1, value2 est probablement le Total HT
+            // Sinon, ordre standard [Qté, Prix]
+            if (value2 > value1 * 100) {
+                // value2 = Total, value1 = Qté (car très grand aussi possible)
+                builder.quantite(value1);
+                builder.prixTotalHT(value2);
+                // Calculer le prix unitaire
+                if (value1 > 0) {
+                    builder.prixUnitaireHT(value2 / value1);
                 }
+            } else if (value1 > 100 && value2 < 100) {
+                // value1 = Qté (grand), value2 = Prix unitaire (petit)
+                builder.quantite(value1);
+                builder.prixUnitaireHT(value2);
+                builder.prixTotalHT(value1 * value2);
             } else {
-                // Les valeurs sont proches, ordre standard [Qté, Prix]
-                // La Qté est généralement >= Prix unitaire dans les factures de matériaux
-                if (value2 >= value1 || value2 > 100) {
-                    builder.quantite(value2);
-                    builder.prixUnitaireHT(value1);
-                } else {
-                    builder.quantite(value1);
-                    builder.prixUnitaireHT(value2);
-                }
-            }
-            
-            // Calculer le total si on a Qté et Prix unitaire
-            // On va construire temporairement pour vérifier
-            OcrExtractResult.OcrProductLine temp = builder.build();
-            if (temp.getQuantite() != null && temp.getPrixUnitaireHT() != null) {
-                Double qte = temp.getQuantite();
-                Double prix = temp.getPrixUnitaireHT();
-                if (qte > 0 && prix > 0 && temp.getPrixTotalHT() == null) {
-                    builder.prixTotalHT(qte * prix);
-                }
+                // Par défaut: [Qté, Prix]
+                builder.quantite(value1);
+                builder.prixUnitaireHT(value2);
+                builder.prixTotalHT(value1 * value2);
             }
         } else if (numericValues.size() == 1) {
             // Une seule valeur: probablement la quantité
@@ -825,33 +893,42 @@ public class CloudinaryOcrService {
     /**
      * Extrait les nombres depuis la fin de la ligne
      * Retourne une liste de nombres trouvés (de droite à gauche dans la ligne)
+     * Amélioré pour mieux gérer les formats avec espaces (ex: "1 616,67", "23 500,000")
      */
     private List<Double> extractNumbersFromEnd(String line) {
         List<Double> numbers = new ArrayList<>();
         
-        // Pattern pour détecter les nombres (avec virgule, espaces pour milliers)
+        // Pattern amélioré pour détecter les nombres (avec virgule, espaces pour milliers)
         // Exemples: "1 616,67", "23 500,000", "8,083", "200,000"
-        Pattern numberPattern = Pattern.compile("\\b\\d{1,3}(?:[\\s,]\\d{3})*(?:[,\\.]\\d+)?\\b|\\b\\d+[,\\.]\\d+\\b|\\b\\d+\\b");
+        // Ne pas matcher les numéros de téléphone (séquences de 2 chiffres)
+        Pattern numberPattern = Pattern.compile(
+            "\\b\\d{1,3}(?:[\\s]\\d{3})*(?:[,\\.]\\d+)?\\b|" + // Format avec espaces: "1 616,67" ou "23 500,000"
+            "\\b\\d+[,\\.]\\d+\\b|" + // Format décimal: "8,083" ou "10.379"
+            "(?<!\\d\\s{1,2})\\b\\d{4,}(?:[,\\.]\\d+)?\\b" // Nombres de 4+ chiffres (évite les numéros de téléphone)
+        );
         
         Matcher matcher = numberPattern.matcher(line);
         List<Double> allNumbers = new ArrayList<>();
+        List<Integer> positions = new ArrayList<>();
         
         while (matcher.find()) {
             String numberStr = matcher.group();
             Double numValue = parseNumber(numberStr);
             if (numValue != null && numValue > 0) {
                 allNumbers.add(numValue);
+                positions.add(matcher.start()); // Garder la position pour trier
             }
         }
         
-        // Retourner les 3 derniers nombres (Qté, Prix unitaire, Total HT)
-        // ou tous s'il y en a moins
-        int startIndex = Math.max(0, allNumbers.size() - 3);
-        for (int i = startIndex; i < allNumbers.size(); i++) {
-            numbers.add(allNumbers.get(i));
+        // Si on a trouvé des nombres, les retourner dans l'ordre (de gauche à droite dans la ligne)
+        // Mais on veut les 3 derniers (les plus à droite) qui sont généralement Qté, Prix, Total
+        if (allNumbers.size() <= 3) {
+            return allNumbers;
+        } else {
+            // Prendre les 3 derniers (les plus à droite)
+            int startIndex = allNumbers.size() - 3;
+            return allNumbers.subList(startIndex, allNumbers.size());
         }
-        
-        return numbers;
     }
 
     /**
