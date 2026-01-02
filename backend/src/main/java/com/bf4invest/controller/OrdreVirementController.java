@@ -60,22 +60,26 @@ public class OrdreVirementController {
     }
     
     @PostMapping
-    public ResponseEntity<OrdreVirement> create(@RequestBody OrdreVirement ov) {
+    public ResponseEntity<?> create(@RequestBody OrdreVirement ov) {
         try {
             OrdreVirement created = service.create(ov);
             return ResponseEntity.status(HttpStatus.CREATED).body(created);
         } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().build();
+            return ResponseEntity.badRequest().body(java.util.Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(java.util.Map.of("error", "Erreur lors de la création: " + e.getMessage()));
         }
     }
     
     @PutMapping("/{id}")
-    public ResponseEntity<OrdreVirement> update(@PathVariable String id, @RequestBody OrdreVirement ov) {
+    public ResponseEntity<?> update(@PathVariable String id, @RequestBody OrdreVirement ov) {
         try {
             OrdreVirement updated = service.update(id, ov);
             return ResponseEntity.ok(updated);
         } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().build();
+            return ResponseEntity.badRequest().body(java.util.Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(java.util.Map.of("error", "Erreur lors de la mise à jour: " + e.getMessage()));
         }
     }
     

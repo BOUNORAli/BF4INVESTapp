@@ -732,10 +732,12 @@ export class OrdresVirementComponent implements OnInit {
 
     // Construire l'objet sans utiliser spread pour éviter les conflits
     const ov: OrdreVirement = {
-      numeroOV: this.isEditMode() && this.editingOV()?.numeroOV ? this.editingOV()!.numeroOV : '', // Sera généré par le backend si vide
+      // Pour une création, le backend génère le numeroOV automatiquement
+      // Pour une mise à jour, on doit fournir le numeroOV existant
+      numeroOV: this.isEditMode() && this.editingOV()?.numeroOV ? this.editingOV()!.numeroOV : '',
       dateOV: formValue.dateOV,
       dateExecution: formValue.dateExecution || undefined,
-      beneficiaireId: beneficiaireIdValue,
+      beneficiaireId: beneficiaireIdValue, // undefined pour personne physique
       nomBeneficiaire: nomBeneficiaireValue, // Important : toujours définir pour une personne physique
       ribBeneficiaire: formValue.ribBeneficiaire,
       banqueBeneficiaire: formValue.banqueBeneficiaire,
@@ -747,6 +749,11 @@ export class OrdresVirementComponent implements OnInit {
       facturesIds: facturesIds.length > 0 ? facturesIds : undefined,
       facturesMontants: facturesMontants.length > 0 ? facturesMontants : undefined
     };
+
+    // S'assurer que beneficiaireId est null et non undefined pour éviter les problèmes de sérialisation JSON
+    if (beneficiaireIdValue === undefined || beneficiaireIdValue === null || beneficiaireIdValue === '') {
+      (ov as any).beneficiaireId = null;
+    }
 
     try {
       if (this.isEditMode() && this.editingOV()?.id) {
@@ -760,7 +767,16 @@ export class OrdresVirementComponent implements OnInit {
       await this.store.loadOrdresVirement();
     } catch (error: any) {
       console.error('Error saving ordre virement:', error);
-      this.store.showToast(error?.message || 'Erreur lors de la sauvegarde', 'error');
+      // Extraire le message d'erreur du backend
+      let errorMessage = 'Erreur lors de la sauvegarde';
+      if (error?.error?.error) {
+        errorMessage = error.error.error;
+      } else if (error?.error?.message) {
+        errorMessage = error.error.message;
+      } else if (error?.message) {
+        errorMessage = error.message;
+      }
+      this.store.showToast(errorMessage, 'error');
     }
   }
 

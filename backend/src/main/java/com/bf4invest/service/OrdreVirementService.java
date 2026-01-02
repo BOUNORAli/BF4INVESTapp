@@ -124,9 +124,31 @@ public class OrdreVirementService {
                 .map(existing -> {
                     String oldStatut = existing.getStatut();
                     
+                    // Valider les champs requis
+                    if (ov.getDateOV() == null) {
+                        throw new IllegalArgumentException("La date OV est requise");
+                    }
+                    if (ov.getMontant() == null || ov.getMontant() <= 0) {
+                        throw new IllegalArgumentException("Le montant doit être supérieur à 0");
+                    }
+                    if (ov.getRibBeneficiaire() == null || ov.getRibBeneficiaire().trim().isEmpty()) {
+                        throw new IllegalArgumentException("Le RIB bénéficiaire est requis");
+                    }
+                    if (ov.getBanqueBeneficiaire() == null || ov.getBanqueBeneficiaire().trim().isEmpty()) {
+                        throw new IllegalArgumentException("La banque bénéficiaire est requise");
+                    }
+                    if (ov.getBanqueEmettrice() == null || ov.getBanqueEmettrice().trim().isEmpty()) {
+                        throw new IllegalArgumentException("La banque émettrice est requise");
+                    }
+                    if (ov.getMotif() == null || ov.getMotif().trim().isEmpty()) {
+                        throw new IllegalArgumentException("Le motif est requis");
+                    }
+                    
                     existing.setDateOV(ov.getDateOV());
                     existing.setMontant(ov.getMontant());
-                    existing.setBeneficiaireId(ov.getBeneficiaireId());
+                    // Normaliser beneficiaireId : chaîne vide devient null
+                    existing.setBeneficiaireId(ov.getBeneficiaireId() != null && !ov.getBeneficiaireId().trim().isEmpty() 
+                        ? ov.getBeneficiaireId() : null);
                     existing.setRibBeneficiaire(ov.getRibBeneficiaire());
                     existing.setBanqueBeneficiaire(ov.getBanqueBeneficiaire());
                     existing.setMotif(ov.getMotif());
