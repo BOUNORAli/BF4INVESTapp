@@ -60,19 +60,53 @@ public class CloudinaryOcrService {
             Cloudinary client = buildClient();
 
             // Upload avec paramètre OCR
+            // Note: L'OCR peut être asynchrone selon la configuration Cloudinary
+            // Essayer d'abord avec adv_ocr simple
             Map<String, Object> uploadParams = ObjectUtils.asMap(
                     "folder", facturesFolder + "/ocr",
                     "resource_type", "image",
-                    "ocr", "adv_ocr:document", // Utiliser adv_ocr:document pour les documents texte-heavy
-                    "overwrite", true
+                    "ocr", "adv_ocr", // Format standard pour OCR
+                    "overwrite", true,
+                    "eager", "ocr:adv_ocr" // Force l'extraction OCR immédiate
             );
 
             log.info("📤 [OCR] Upload vers Cloudinary avec OCR...");
             Map uploadResult = client.uploader().upload(file.getBytes(), uploadParams);
 
+            // Log la structure complète de la réponse pour débogage
+            log.info("📋 [OCR] Structure réponse Cloudinary - Clés principales: {}", uploadResult.keySet());
+            if (uploadResult.containsKey("info")) {
+                Map<String, Object> info = (Map<String, Object>) uploadResult.get("info");
+                log.info("📋 [OCR] Structure 'info' - Clés: {}", info != null ? info.keySet() : "null");
+                if (info != null && info.containsKey("ocr")) {
+                    Map<String, Object> ocr = (Map<String, Object>) info.get("ocr");
+                    log.info("📋 [OCR] Structure 'ocr' - Clés: {}", ocr != null ? ocr.keySet() : "null");
+                    if (ocr != null) {
+                        // Logger chaque clé dans ocr pour voir ce qui est disponible
+                        for (String key : ocr.keySet()) {
+                            Object value = ocr.get(key);
+                            if (value instanceof Map) {
+                                Map<String, Object> ocrMap = (Map<String, Object>) value;
+                                log.info("📋 [OCR] Clé 'ocr.{}' - Type: Map, Clés: {}", key, ocrMap.keySet());
+                            } else {
+                                log.info("📋 [OCR] Clé 'ocr.{}' - Type: {}, Valeur: {}", key, 
+                                    value != null ? value.getClass().getSimpleName() : "null", 
+                                    value instanceof String ? ((String) value).substring(0, Math.min(100, ((String) value).length())) : value);
+                            }
+                        }
+                    }
+                }
+            }
+
             // Extraire les données OCR
             String ocrText = extractOcrText(uploadResult);
             log.info("✅ [OCR] Texte extrait ({} caractères)", ocrText != null ? ocrText.length() : 0);
+            
+            // Si aucun texte n'a été extrait, logger plus de détails
+            if (ocrText == null || ocrText.isEmpty()) {
+                log.warn("⚠️ [OCR] Aucun texte extrait. Réponse complète (premiers 2000 caractères): {}", 
+                    uploadResult.toString().substring(0, Math.min(2000, uploadResult.toString().length())));
+            }
 
             if (ocrText == null || ocrText.trim().isEmpty()) {
                 log.warn("⚠️ [OCR] Aucun texte détecté dans l'image");
@@ -115,60 +149,152 @@ public class CloudinaryOcrService {
 
     /**
      * Extrait le texte depuis la réponse Cloudinary OCR
+     * Gère différentes structures de réponse Cloudinary
      */
     private String extractOcrText(Map<String, Object> uploadResult) {
         try {
-            // Structure de réponse OCR Cloudinary
+            // Structure de réponse OCR Cloudinary - plusieurs formats possibles
+            
+            // Format 1: info.ocr.adv_ocr (standard)
             Map<String, Object> info = (Map<String, Object>) uploadResult.get("info");
-            if (info == null) {
-                log.warn("⚠️ [OCR] Pas de section 'info' dans la réponse");
-                return null;
-            }
-
-            Map<String, Object> ocr = (Map<String, Object>) info.get("ocr");
-            if (ocr == null) {
-                log.warn("⚠️ [OCR] Pas de section 'ocr' dans la réponse");
-                return null;
-            }
-
-            Map<String, Object> advOcr = (Map<String, Object>) ocr.get("adv_ocr");
-            if (advOcr == null) {
-                log.warn("⚠️ [OCR] Pas de section 'adv_ocr' dans la réponse");
-                return null;
-            }
-
-            String status = (String) advOcr.get("status");
-            if (!"complete".equals(status)) {
-                log.warn("⚠️ [OCR] Statut OCR: {} (attendu: complete)", status);
-                return null;
-            }
-
-            List<Map<String, Object>> data = (List<Map<String, Object>>) advOcr.get("data");
-            if (data == null || data.isEmpty()) {
-                log.warn("⚠️ [OCR] Pas de données OCR dans la réponse");
-                return null;
-            }
-
-            // Extraire le texte de la première annotation (qui contient tout le texte)
-            StringBuilder fullText = new StringBuilder();
-            for (Map<String, Object> block : data) {
-                List<Map<String, Object>> textAnnotations = (List<Map<String, Object>>) block.get("textAnnotations");
-                if (textAnnotations != null && !textAnnotations.isEmpty()) {
-                    // La première annotation contient tout le texte
-                    Map<String, Object> firstAnnotation = textAnnotations.get(0);
-                    String description = (String) firstAnnotation.get("description");
-                    if (description != null) {
-                        fullText.append(description).append("\n");
+            if (info != null) {
+                Map<String, Object> ocr = (Map<String, Object>) info.get("ocr");
+                if (ocr != null) {
+                    // Essayer adv_ocr
+                    Map<String, Object> advOcr = (Map<String, Object>) ocr.get("adv_ocr");
+                    if (advOcr != null) {
+                        String text = extractTextFromAdvOcr(advOcr);
+                        if (text != null && !text.isEmpty()) {
+                            return text;
+                        }
+                    }
+                    
+                    // Essayer d'autres formats possibles dans ocr
+                    for (String key : ocr.keySet()) {
+                        log.debug("🔍 [OCR] Clé trouvée dans 'ocr': {}", key);
+                        Object value = ocr.get(key);
+                        if (value instanceof Map) {
+                            String text = extractTextFromAdvOcr((Map<String, Object>) value);
+                            if (text != null && !text.isEmpty()) {
+                                return text;
+                            }
+                        }
                     }
                 }
             }
 
-            return fullText.toString().trim();
+            // Format 2: OCR directement dans la réponse (peut-être dans pages ou autre)
+            // Essayer de trouver n'importe quelle structure contenant du texte
+            String textFromDirect = extractTextFromMap(uploadResult);
+            if (textFromDirect != null && !textFromDirect.isEmpty()) {
+                return textFromDirect;
+            }
+
+            // Format 3: Vérifier si l'OCR est asynchrone et nécessite un polling
+            // Pour l'instant, on retourne null et on log la structure complète
+            log.warn("⚠️ [OCR] Aucun texte OCR trouvé. Structure réponse complète: {}", uploadResult.keySet());
+            
+            return null;
 
         } catch (Exception e) {
             log.error("❌ [OCR] Erreur lors de l'extraction du texte OCR", e);
             return null;
         }
+    }
+
+    /**
+     * Extrait le texte depuis une structure adv_ocr
+     */
+    private String extractTextFromAdvOcr(Map<String, Object> advOcr) {
+        try {
+            String status = (String) advOcr.get("status");
+            if (status != null && !"complete".equals(status)) {
+                log.debug("⚠️ [OCR] Statut OCR: {} (attendu: complete)", status);
+                // Si le statut est "pending", l'OCR est peut-être asynchrone
+                if ("pending".equals(status)) {
+                    log.warn("⚠️ [OCR] OCR en cours de traitement (statut: pending). L'OCR peut être asynchrone.");
+                }
+                return null;
+            }
+
+            // Chercher les données dans différents formats possibles
+            Object dataObj = advOcr.get("data");
+            if (dataObj == null) {
+                return null;
+            }
+
+            StringBuilder fullText = new StringBuilder();
+
+            if (dataObj instanceof List) {
+                // Format: List<Map> avec textAnnotations
+                List<Map<String, Object>> data = (List<Map<String, Object>>) dataObj;
+                for (Map<String, Object> block : data) {
+                    List<Map<String, Object>> textAnnotations = (List<Map<String, Object>>) block.get("textAnnotations");
+                    if (textAnnotations != null && !textAnnotations.isEmpty()) {
+                        // La première annotation contient tout le texte
+                        Map<String, Object> firstAnnotation = textAnnotations.get(0);
+                        String description = (String) firstAnnotation.get("description");
+                        if (description != null) {
+                            fullText.append(description).append("\n");
+                        }
+                    }
+                }
+            } else if (dataObj instanceof Map) {
+                // Format alternatif: Map direct
+                Map<String, Object> dataMap = (Map<String, Object>) dataObj;
+                if (dataMap.containsKey("text")) {
+                    return (String) dataMap.get("text");
+                }
+                if (dataMap.containsKey("fullTextAnnotation")) {
+                    Map<String, Object> fullTextAnnotation = (Map<String, Object>) dataMap.get("fullTextAnnotation");
+                    if (fullTextAnnotation != null && fullTextAnnotation.containsKey("text")) {
+                        return (String) fullTextAnnotation.get("text");
+                    }
+                }
+            }
+
+            return fullText.length() > 0 ? fullText.toString().trim() : null;
+
+        } catch (Exception e) {
+            log.error("❌ [OCR] Erreur lors de l'extraction depuis adv_ocr", e);
+            return null;
+        }
+    }
+
+    /**
+     * Essaie d'extraire du texte depuis une Map quelconque (récursif)
+     */
+    private String extractTextFromMap(Map<String, Object> map) {
+        try {
+            for (Map.Entry<String, Object> entry : map.entrySet()) {
+                if ("text".equals(entry.getKey()) || "description".equals(entry.getKey())) {
+                    if (entry.getValue() instanceof String) {
+                        String text = (String) entry.getValue();
+                        if (text != null && text.trim().length() > 10) {
+                            return text;
+                        }
+                    }
+                } else if (entry.getValue() instanceof Map) {
+                    String text = extractTextFromMap((Map<String, Object>) entry.getValue());
+                    if (text != null && !text.isEmpty()) {
+                        return text;
+                    }
+                } else if (entry.getValue() instanceof List) {
+                    List<?> list = (List<?>) entry.getValue();
+                    for (Object item : list) {
+                        if (item instanceof Map) {
+                            String text = extractTextFromMap((Map<String, Object>) item);
+                            if (text != null && !text.isEmpty()) {
+                                return text;
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            // Ignorer les erreurs de parcours récursif
+        }
+        return null;
     }
 
     /**
