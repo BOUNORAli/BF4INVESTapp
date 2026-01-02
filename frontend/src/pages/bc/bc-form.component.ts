@@ -591,6 +591,23 @@ import type { BC } from '../../models/types';
                   </div>
                 }
                 
+                <!-- Texte brut OCR (pour débogage) -->
+                <div class="mb-4">
+                  <button 
+                    (click)="showRawText.set(!showRawText())" 
+                    class="w-full flex items-center justify-between p-3 bg-slate-50 hover:bg-slate-100 rounded-lg border border-slate-200 transition">
+                    <span class="text-sm font-medium text-slate-700">Texte brut extrait (débogage)</span>
+                    <svg class="w-4 h-4 text-slate-500 transform transition" [class.rotate-180]="showRawText()" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                    </svg>
+                  </button>
+                  @if (showRawText()) {
+                    <div class="mt-2 p-3 bg-slate-900 text-slate-100 rounded-lg border border-slate-700 max-h-64 overflow-y-auto">
+                      <pre class="text-xs whitespace-pre-wrap font-mono">{{ result.rawText }}</pre>
+                    </div>
+                  }
+                </div>
+                
                 <!-- Tableau des produits -->
                 @if (result.lignes && result.lignes.length > 0) {
                   <div class="overflow-x-auto border border-slate-200 rounded-lg">
@@ -671,6 +688,7 @@ export class BcFormComponent implements OnInit {
   ocrLoading = signal(false);
   showOcrModal = signal(false);
   ocrResult = signal<OcrExtractResult | null>(null);
+  showRawText = signal(false);
 
   constructor() {
     this.form = this.fb.group({
@@ -1282,6 +1300,7 @@ export class BcFormComponent implements OnInit {
   closeOcrModal() {
     this.showOcrModal.set(false);
     this.ocrResult.set(null);
+    this.showRawText.set(false);
   }
 
   applyOcrResults() {
