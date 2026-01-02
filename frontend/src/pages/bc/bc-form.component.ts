@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { ReactiveFormsModule, FormBuilder, FormGroup, Validators, FormArray } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { StoreService, LigneAchat, LigneVente, ClientVente, Product } from '../../services/store.service';
+import { OcrService, OcrExtractResult } from '../../services/ocr.service';
 import type { BC } from '../../models/types';
 
 @Component({
@@ -40,6 +41,46 @@ import type { BC } from '../../models/types';
         
         <!-- Left Column: Inputs -->
         <div class="flex-1 min-w-0 space-y-6">
+          
+          <!-- OCR Upload Card -->
+          @if (!isEditMode) {
+            <div class="bg-gradient-to-br from-blue-50 to-indigo-50 p-4 md:p-6 rounded-xl shadow-sm border border-blue-100">
+              <h2 class="text-base font-bold text-slate-800 mb-4 flex items-center gap-2">
+                <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                </svg>
+                Scanner un document (Facture/BC Fournisseur)
+              </h2>
+              <p class="text-sm text-slate-600 mb-4">Téléchargez une image de facture ou de bon de commande pour extraire automatiquement les produits</p>
+              
+              @if (ocrLoading()) {
+                <div class="flex items-center justify-center gap-3 p-8 bg-white rounded-lg border border-blue-200">
+                  <svg class="w-6 h-6 text-blue-600 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                  </svg>
+                  <span class="text-blue-700 font-medium">Analyse OCR en cours...</span>
+                </div>
+              } @else {
+                <label 
+                  for="ocr-file-input" 
+                  class="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed border-blue-300 rounded-lg cursor-pointer hover:bg-blue-50/50 transition-colors bg-white"
+                  (dragover)="onDragOver($event)"
+                  (dragleave)="onDragLeave($event)"
+                  (drop)="onDrop($event)">
+                  <div class="flex flex-col items-center justify-center pt-5 pb-6">
+                    <svg class="w-12 h-12 mb-3 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                    </svg>
+                    <p class="mb-2 text-sm text-slate-600">
+                      <span class="font-semibold text-blue-600">Cliquez pour uploader</span> ou glissez-déposez une image
+                    </p>
+                    <p class="text-xs text-slate-500">PNG, JPG, WEBP (MAX. 10MB)</p>
+                  </div>
+                  <input id="ocr-file-input" type="file" accept="image/*" (change)="onOcrFileSelect($event)" class="hidden">
+                </label>
+              }
+            </div>
+          }
           
           <!-- Card 1: Informations Générales -->
           <div class="bg-white p-4 md:p-6 rounded-xl shadow-sm border border-slate-100">
@@ -500,6 +541,101 @@ import type { BC } from '../../models/types';
        </aside>
 
       </form>
+      
+      <!-- OCR Confirmation Modal -->
+      @if (showOcrModal()) {
+        <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div class="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            <!-- Header -->
+            <div class="flex items-center justify-between p-6 border-b border-slate-200 bg-gradient-to-r from-blue-50 to-indigo-50">
+              <h2 class="text-xl font-bold text-slate-800 flex items-center gap-2">
+                <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                </svg>
+                Produits détectés ({{ ocrResult()?.lignes.length || 0 }})
+              </h2>
+              <button (click)="closeOcrModal()" class="p-2 text-slate-400 hover:text-slate-600 hover:bg-white rounded-lg transition">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+              </button>
+            </div>
+            
+            <!-- Body -->
+            <div class="flex-1 overflow-y-auto p-6">
+              @if (ocrResult()) {
+                @let result = ocrResult()!;
+                
+                <!-- Info détectées -->
+                @if (result.fournisseurNom || result.dateDocument || result.numeroDocument) {
+                  <div class="mb-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
+                    <h3 class="text-sm font-semibold text-slate-700 mb-2">Informations détectées</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+                      @if (result.fournisseurNom) {
+                        <div>
+                          <span class="text-slate-500">Fournisseur:</span>
+                          <span class="font-medium text-slate-800 ml-2">{{ result.fournisseurNom }}</span>
+                        </div>
+                      }
+                      @if (result.dateDocument) {
+                        <div>
+                          <span class="text-slate-500">Date:</span>
+                          <span class="font-medium text-slate-800 ml-2">{{ result.dateDocument }}</span>
+                        </div>
+                      }
+                      @if (result.numeroDocument) {
+                        <div>
+                          <span class="text-slate-500">N° Document:</span>
+                          <span class="font-medium text-slate-800 ml-2">{{ result.numeroDocument }}</span>
+                        </div>
+                      }
+                    </div>
+                  </div>
+                }
+                
+                <!-- Tableau des produits -->
+                @if (result.lignes && result.lignes.length > 0) {
+                  <div class="overflow-x-auto border border-slate-200 rounded-lg">
+                    <table class="w-full text-sm">
+                      <thead class="bg-slate-50 border-b border-slate-200">
+                        <tr>
+                          <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Désignation</th>
+                          <th class="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase">Quantité</th>
+                          <th class="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase">Prix U. HT</th>
+                          <th class="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase">Total HT</th>
+                        </tr>
+                      </thead>
+                      <tbody class="divide-y divide-slate-100">
+                        @for (ligne of result.lignes; track $index) {
+                          <tr class="hover:bg-slate-50">
+                            <td class="px-4 py-3 font-medium text-slate-800">{{ ligne.designation }}</td>
+                            <td class="px-4 py-3 text-right text-slate-600">{{ ligne.quantite || '-' }}</td>
+                            <td class="px-4 py-3 text-right text-slate-600">{{ ligne.prixUnitaireHT ? (ligne.prixUnitaireHT | number:'1.2-2') + ' MAD' : '-' }}</td>
+                            <td class="px-4 py-3 text-right font-semibold text-slate-800">{{ ligne.prixTotalHT ? (ligne.prixTotalHT | number:'1.2-2') + ' MAD' : '-' }}</td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  </div>
+                } @else {
+                  <div class="text-center py-8 text-slate-500">
+                    Aucun produit détecté dans le document
+                  </div>
+                }
+              }
+            </div>
+            
+            <!-- Footer -->
+            <div class="flex items-center justify-end gap-3 p-6 border-t border-slate-200 bg-slate-50">
+              <button (click)="closeOcrModal()" class="px-4 py-2 text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 font-medium transition">
+                Annuler
+              </button>
+              <button (click)="applyOcrResults()" [disabled]="!ocrResult() || !ocrResult()!.lignes || ocrResult()!.lignes.length === 0" 
+                      class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold transition shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">
+                Appliquer
+              </button>
+            </div>
+          </div>
+        </div>
+      }
     </div>
   `
 })
@@ -508,6 +644,7 @@ export class BcFormComponent implements OnInit {
   store = inject(StoreService);
   router = inject(Router);
   route = inject(ActivatedRoute);
+  ocrService = inject(OcrService);
 
   form!: FormGroup;
   isEditMode = false;
@@ -529,6 +666,11 @@ export class BcFormComponent implements OnInit {
 
   // Map pour stocker les prix d'achat par produit
   prixAchatMap: Map<string, number> = new Map();
+
+  // OCR state
+  ocrLoading = signal(false);
+  showOcrModal = signal(false);
+  ocrResult = signal<OcrExtractResult | null>(null);
 
   constructor() {
     this.form = this.fb.group({
@@ -1055,5 +1197,130 @@ export class BcFormComponent implements OnInit {
 
   goBack() {
     this.router.navigate(['/bc']);
+  }
+
+  // === OCR Methods ===
+
+  onOcrFileSelect(event: Event) {
+    const input = event.target as HTMLInputElement;
+    if (input.files && input.files[0]) {
+      this.processOcrFile(input.files[0]);
+    }
+  }
+
+  onDragOver(event: DragEvent) {
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = 'copy';
+    }
+  }
+
+  onDragLeave(event: DragEvent) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+
+  onDrop(event: DragEvent) {
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.dataTransfer?.files && event.dataTransfer.files.length > 0) {
+      const file = event.dataTransfer.files[0];
+      if (file.type.startsWith('image/')) {
+        this.processOcrFile(file);
+      } else {
+        this.store.showToast('Veuillez déposer une image valide', 'error');
+      }
+    }
+  }
+
+  async processOcrFile(file: File) {
+    // Validation
+    if (!file.type.startsWith('image/')) {
+      this.store.showToast('Veuillez sélectionner une image valide', 'error');
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      this.store.showToast('L\'image ne doit pas dépasser 10MB', 'error');
+      return;
+    }
+
+    this.ocrLoading.set(true);
+    try {
+      const result = await this.ocrService.extractFromImage(file).toPromise();
+      if (result) {
+        this.ocrResult.set(result);
+        this.showOcrModal.set(true);
+        
+        // Pré-remplir les champs détectés si disponibles
+        if (result.dateDocument) {
+          this.form.patchValue({ date: result.dateDocument });
+        }
+        
+        // Essayer de trouver le fournisseur si détecté
+        if (result.fournisseurNom) {
+          const matchingSupplier = this.store.suppliers().find(s => 
+            s.name.toLowerCase().includes(result.fournisseurNom!.toLowerCase()) ||
+            result.fournisseurNom!.toLowerCase().includes(s.name.toLowerCase())
+          );
+          if (matchingSupplier) {
+            this.form.patchValue({ supplierId: matchingSupplier.id });
+          }
+        }
+        
+        this.store.showToast(`${result.lignes.length} produit(s) détecté(s)`, 'success');
+      }
+    } catch (error) {
+      console.error('Erreur OCR:', error);
+      this.store.showToast('Erreur lors de l\'extraction OCR. Veuillez réessayer.', 'error');
+    } finally {
+      this.ocrLoading.set(false);
+    }
+  }
+
+  closeOcrModal() {
+    this.showOcrModal.set(false);
+    this.ocrResult.set(null);
+  }
+
+  applyOcrResults() {
+    const result = this.ocrResult();
+    if (!result || !result.lignes || result.lignes.length === 0) {
+      return;
+    }
+
+    // Vider les lignes d'achat existantes
+    while (this.lignesAchatArray.length > 0) {
+      this.lignesAchatArray.removeAt(0);
+    }
+
+    // Ajouter les lignes détectées
+    result.lignes.forEach(ligne => {
+      if (ligne.designation && ligne.quantite && ligne.quantite > 0) {
+        const ligneGroup = this.createLigneAchatGroup({
+          designation: ligne.designation,
+          quantiteAchetee: ligne.quantite,
+          prixAchatUnitaireHT: ligne.prixUnitaireHT || 0,
+          unite: ligne.unite || 'U',
+          tva: 20 // Par défaut
+        });
+        this.lignesAchatArray.push(ligneGroup);
+        
+        // Stocker le prix d'achat
+        if (ligne.prixUnitaireHT) {
+          // Utiliser la désignation comme clé si pas de référence produit
+          this.prixAchatMap.set(ligne.designation, ligne.prixUnitaireHT);
+        }
+      }
+    });
+
+    // Recalculer les totaux
+    this.calculateTotals();
+
+    // Fermer le modal
+    this.closeOcrModal();
+
+    this.store.showToast(`${result.lignes.length} produit(s) ajouté(s). Vous pouvez maintenant modifier si nécessaire.`, 'success');
   }
 }
