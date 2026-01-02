@@ -80,21 +80,35 @@ export class OrdreVirementService {
   }
 
   private toPayload(ov: OrdreVirement): any {
-    return {
+    const payload: any = {
       numeroOV: ov.numeroOV,
       dateOV: ov.dateOV,
       montant: ov.montant,
-      beneficiaireId: ov.beneficiaireId,
+      beneficiaireId: ov.beneficiaireId ?? null, // null si undefined pour inclure dans JSON
+      nomBeneficiaire: ov.nomBeneficiaire ?? null, // Important : toujours inclure nomBeneficiaire
       banqueBeneficiaire: ov.banqueBeneficiaire,
       ribBeneficiaire: ov.ribBeneficiaire,
       motif: ov.motif,
-      facturesIds: ov.facturesIds,
-      facturesMontants: ov.facturesMontants,
       banqueEmettrice: ov.banqueEmettrice,
-      dateExecution: ov.dateExecution,
+      dateExecution: ov.dateExecution ?? null,
       statut: ov.statut,
       type: ov.type || 'NORMAL'
     };
+    
+    // Inclure facturesIds et facturesMontants seulement s'ils existent
+    if (ov.facturesIds && ov.facturesIds.length > 0) {
+      payload.facturesIds = ov.facturesIds;
+    } else {
+      payload.facturesIds = null;
+    }
+    
+    if (ov.facturesMontants && ov.facturesMontants.length > 0) {
+      payload.facturesMontants = ov.facturesMontants;
+    } else {
+      payload.facturesMontants = null;
+    }
+    
+    return payload;
   }
 }
 
