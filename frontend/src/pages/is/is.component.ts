@@ -31,8 +31,15 @@ import { StoreService } from '../../services/store.service';
             <input type="date" [(ngModel)]="dateFin" class="w-full px-4 py-2 border border-slate-200 rounded-lg">
           </div>
         </div>
-        <button (click)="calculerIS()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium">
-          Calculer IS
+        <button (click)="calculerIS()" [disabled]="calculating()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
+          @if (calculating()) {
+            <svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+            </svg>
+            <span>Calcul en cours...</span>
+          } @else {
+            <span>Calculer IS</span>
+          }
         </button>
 
         @if (isData()) {
@@ -101,6 +108,7 @@ export class ISComponent implements OnInit {
 
   isData = signal<any>(null);
   acomptes = signal<any[]>([]);
+  calculating = signal(false);
   dateDebut: string = new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0];
   dateFin: string = new Date().toISOString().split('T')[0];
   anneeAcomptes: number = new Date().getFullYear();
@@ -110,9 +118,17 @@ export class ISComponent implements OnInit {
   }
 
   calculerIS() {
+    this.calculating.set(true);
     this.isService.calculerIS(this.dateDebut, this.dateFin).subscribe({
-      next: (data) => this.isData.set(data),
-      error: (err) => this.store.showToast('Erreur lors du calcul de l\'IS', 'error')
+      next: (data) => {
+        this.isData.set(data);
+        this.calculating.set(false);
+        this.store.showToast('IS calculé avec succès', 'success');
+      },
+      error: (err) => {
+        this.calculating.set(false);
+        this.store.showToast('Erreur lors du calcul de l\'IS', 'error');
+      }
     });
   }
 

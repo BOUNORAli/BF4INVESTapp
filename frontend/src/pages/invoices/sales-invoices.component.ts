@@ -1323,9 +1323,19 @@ export class SalesInvoicesComponent implements OnInit {
         totalTva = bc.items.reduce((acc, i) => acc + (i.qtySell * i.priceSellHT * (i.tvaRate/100)), 0);
       }
       
+      // Calculer la date d'émission = dernier jour du mois du BC
+      let dateEmission: string = '';
+      if (bc.date) {
+        const bcDate = new Date(bc.date);
+        // Obtenir le dernier jour du mois du BC
+        const lastDayOfMonth = new Date(bcDate.getFullYear(), bcDate.getMonth() + 1, 0);
+        dateEmission = lastDayOfMonth.toISOString().split('T')[0];
+      }
+      
       this.form.patchValue({
         amountHT: totalHT,
-        amountTTC: totalHT + totalTva
+        amountTTC: totalHT + totalTva,
+        date: dateEmission // Définir la date d'émission au dernier jour du mois du BC
       });
     } else {
       console.warn('🔵 sales-invoices.onBCChange - BC non trouvé pour id:', bcId);

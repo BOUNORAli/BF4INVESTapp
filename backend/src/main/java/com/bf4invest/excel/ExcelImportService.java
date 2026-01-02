@@ -2165,16 +2165,44 @@ public class ExcelImportService {
                                     operation.getTotalPayementTtc() != null ? operation.getTotalPayementTtc() : operation.getTotalTtcApresRg());
                         }
                         
-                        // Stocker la ligne de succès
-                        Map<String, Object> rowData = extractRowData(row, columnMap, headerRow);
+                        // Générer le détail de l'action
+                        StringBuilder actionDetail = new StringBuilder();
+                        if (operation.getTypeMouvement() != null) {
+                            actionDetail.append(operation.getTypeMouvement().name());
+                        } else {
+                            actionDetail.append("OPÉRATION");
+                        }
+                        actionDetail.append(" créé(e)");
+                        
+                        if (operation.getNumeroBc() != null && !operation.getNumeroBc().trim().isEmpty()) {
+                            actionDetail.append(" - BC: ").append(operation.getNumeroBc());
+                        }
+                        
+                        if (operation.getTotalPayementTtc() != null && operation.getTotalPayementTtc() > 0) {
+                            actionDetail.append(String.format(", Montant paiement: %.2f MAD", operation.getTotalPayementTtc()));
+                        } else if (operation.getTotalTtcApresRg() != null && operation.getTotalTtcApresRg() > 0) {
+                            actionDetail.append(String.format(", Montant facture: %.2f MAD", operation.getTotalTtcApresRg()));
+                        }
+                        
+                        if (operation.getReference() != null && !operation.getReference().trim().isEmpty()) {
+                            actionDetail.append(", Référence: ").append(operation.getReference());
+                        }
+                        
+                        if (operation.getDateOperation() != null) {
+                            actionDetail.append(", Date: ").append(operation.getDateOperation().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy")));
+                        }
+                        
+                        // Stocker la ligne de succès avec toutes les colonnes et le détail de l'action
+                        Map<String, Object> rowData = extractAllRowData(row, headerRow);
                         result.getSuccessRows().add(ImportResult.SuccessRow.builder()
                                 .rowNumber(i + 1)
                                 .rowData(rowData)
+                                .actionDetail(actionDetail.toString())
                                 .build());
                     } else {
                         errorCount++;
-                        // Stocker la ligne en erreur
-                        Map<String, Object> rowData = extractRowData(row, columnMap, headerRow);
+                        // Stocker la ligne en erreur avec toutes les colonnes
+                        Map<String, Object> rowData = extractAllRowData(row, headerRow);
                         result.getErrorRows().add(ImportResult.ErrorRow.builder()
                                 .rowNumber(i + 1)
                                 .rowData(rowData)
@@ -2190,8 +2218,8 @@ public class ExcelImportService {
                     result.getErrors().add(String.format("Ligne %d: %s", i + 1, errorMsg));
                     log.error("Error processing operation comptable row {}: {}", i + 1, errorMsg, e);
                     
-                    // Stocker la ligne en erreur avec ses données
-                    Map<String, Object> rowData = extractRowData(row, columnMap, headerRow);
+                    // Stocker la ligne en erreur avec toutes les colonnes
+                    Map<String, Object> rowData = extractAllRowData(row, headerRow);
                     result.getErrorRows().add(ImportResult.ErrorRow.builder()
                             .rowNumber(i + 1)
                             .rowData(rowData)
@@ -2876,6 +2904,86 @@ public class ExcelImportService {
     }
     
     /**
+     * Extrait toutes les colonnes d'une ligne basée sur le header (toutes les colonnes, pas seulement celles mappées)
+     * Utilisé pour le rapport d'import détaillé
+     */
+    private Map<String, Object> extractAllRowData(Row row, Row headerRow) {
+        Map<String, Object> rowData = new LinkedHashMap<>();
+        
+        if (headerRow == null || row == null) {
+            return rowData;
+        }
+        
+        // Itérer sur toutes les cellules du header
+        int maxCol = Math.max(row.getLastCellNum(), headerRow.getLastCellNum());
+        for (int i = 0; i < maxCol; i++) {
+            Cell headerCell = headerRow.getCell(i);
+            if (headerCell == null) {
+                // Colonne sans header, utiliser un nom par défaut
+                String headerName = "Colonne_" + (i + 1);
+                Cell cell = row.getCell(i);
+                Object value = getCellValue(cell);
+                rowData.put(headerName, value);
+            } else {
+                String headerName = getCellStringValue(headerCell);
+                if (headerName == null || headerName.trim().isEmpty()) {
+                    headerName = "Colonne_" + (i + 1);
+                }
+                
+                Cell cell = row.getCell(i);
+                Object value = getCellValue(cell);
+                rowData.put(headerName, value);
+            }
+        }
+        
+        return rowData;
+    }
+    
+    /**
+     * Extrait la valeur d'une cellule avec le bon type
+     */
+    private Object getCellValue(Cell cell) {
+        if (cell == null) {
+            return null;
+        }
+        
+        try {
+            switch (cell.getCellType()) {
+                case STRING:
+                    return cell.getStringCellValue();
+                case NUMERIC:
+                    if (DateUtil.isCellDateFormatted(cell)) {
+                        return cell.getDateCellValue();
+                    } else {
+                        return cell.getNumericCellValue();
+                    }
+                case BOOLEAN:
+                    return cell.getBooleanCellValue();
+                case FORMULA:
+                    // Pour les formules, essayer d'obtenir la valeur calculée
+                    try {
+                        if (DateUtil.isCellDateFormatted(cell)) {
+                            return cell.getDateCellValue();
+                        } else if (cell.getCachedFormulaResultType() == CellType.NUMERIC) {
+                            return cell.getNumericCellValue();
+                        } else if (cell.getCachedFormulaResultType() == CellType.STRING) {
+                            return cell.getStringCellValue();
+                        } else if (cell.getCachedFormulaResultType() == CellType.BOOLEAN) {
+                            return cell.getBooleanCellValue();
+                        }
+                    } catch (Exception e) {
+                        // Si erreur, retourner la formule comme string
+                    }
+                    return cell.getCellFormula();
+                default:
+                    return getCellStringValue(cell);
+            }
+        } catch (Exception e) {
+            return getCellStringValue(cell);
+        }
+    }
+    
+    /**
      * Génère un fichier Excel de rapport d'import avec les lignes en erreur et les lignes importées avec succès
      */
     public byte[] generateImportReport(ImportResult result, MultipartFile originalFile) {
@@ -2925,7 +3033,192 @@ public class ExcelImportService {
             dataStyle.setBorderLeft(BorderStyle.THIN);
             dataStyle.setBorderRight(BorderStyle.THIN);
             
-            // Feuille 1: Lignes en erreur
+            // Style pour les lignes ignorées
+            CellStyle ignoredStyle = workbook.createCellStyle();
+            Font ignoredFont = workbook.createFont();
+            ignoredFont.setColor(IndexedColors.GREY_50_PERCENT.getIndex());
+            ignoredStyle.setFont(ignoredFont);
+            ignoredStyle.setFillForegroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
+            ignoredStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+            ignoredStyle.setBorderBottom(BorderStyle.THIN);
+            ignoredStyle.setBorderTop(BorderStyle.THIN);
+            ignoredStyle.setBorderLeft(BorderStyle.THIN);
+            ignoredStyle.setBorderRight(BorderStyle.THIN);
+            
+            // Feuille 1: Résumé
+            Sheet summarySheet = workbook.createSheet("Résumé");
+            int summaryRowNum = 0;
+            
+            Row summaryHeader = summarySheet.createRow(summaryRowNum++);
+            summaryHeader.createCell(0).setCellValue("Statistiques de l'import");
+            CellStyle summaryHeaderStyle = workbook.createCellStyle();
+            Font summaryHeaderFont = workbook.createFont();
+            summaryHeaderFont.setBold(true);
+            summaryHeaderFont.setFontHeightInPoints((short) 14);
+            summaryHeaderStyle.setFont(summaryHeaderFont);
+            summaryHeader.getCell(0).setCellStyle(summaryHeaderStyle);
+            
+            summarySheet.createRow(summaryRowNum++); // Ligne vide
+            
+            CellStyle summaryDataStyle = workbook.createCellStyle();
+            summaryDataStyle.setBorderBottom(BorderStyle.THIN);
+            summaryDataStyle.setBorderTop(BorderStyle.THIN);
+            summaryDataStyle.setBorderLeft(BorderStyle.THIN);
+            summaryDataStyle.setBorderRight(BorderStyle.THIN);
+            
+            Row totalRow = summarySheet.createRow(summaryRowNum++);
+            totalRow.createCell(0).setCellValue("Total des lignes:");
+            totalRow.createCell(1).setCellValue(result.getTotalRows());
+            totalRow.getCell(0).setCellStyle(summaryDataStyle);
+            totalRow.getCell(1).setCellStyle(summaryDataStyle);
+            
+            Row successRow = summarySheet.createRow(summaryRowNum++);
+            successRow.createCell(0).setCellValue("Lignes importées avec succès:");
+            successRow.createCell(1).setCellValue(result.getSuccessCount());
+            successRow.getCell(0).setCellStyle(summaryDataStyle);
+            successRow.getCell(1).setCellStyle(successStyle);
+            
+            Row errorRow = summarySheet.createRow(summaryRowNum++);
+            errorRow.createCell(0).setCellValue("Lignes en erreur:");
+            errorRow.createCell(1).setCellValue(result.getErrorCount());
+            errorRow.getCell(0).setCellStyle(summaryDataStyle);
+            errorRow.getCell(1).setCellStyle(errorStyle);
+            
+            Row notFoundRow = summarySheet.createRow(summaryRowNum++);
+            notFoundRow.createCell(0).setCellValue("Factures non trouvées:");
+            notFoundRow.createCell(1).setCellValue(result.getNotFoundInvoices().size());
+            notFoundRow.getCell(0).setCellStyle(summaryDataStyle);
+            notFoundRow.getCell(1).setCellStyle(summaryDataStyle);
+            
+            summarySheet.autoSizeColumn(0);
+            summarySheet.autoSizeColumn(1);
+            
+            // Feuille 2: Toutes les lignes (succès + erreurs)
+            Sheet allRowsSheet = workbook.createSheet("Toutes les lignes");
+            int allRowsRowNum = 0;
+            
+            // Créer une Map pour fusionner toutes les lignes par numéro de ligne
+            Map<Integer, ImportResult.SuccessRow> successRowsMap = new LinkedHashMap<>();
+            for (ImportResult.SuccessRow successRow : result.getSuccessRows()) {
+                successRowsMap.put(successRow.getRowNumber(), successRow);
+            }
+            Map<Integer, ImportResult.ErrorRow> errorRowsMap = new LinkedHashMap<>();
+            for (ImportResult.ErrorRow errorRow : result.getErrorRows()) {
+                errorRowsMap.put(errorRow.getRowNumber(), errorRow);
+            }
+            
+            // Collecter toutes les colonnes uniques de toutes les lignes
+            Set<String> allColumnNamesAllRows = new LinkedHashSet<>();
+            for (ImportResult.SuccessRow successRow : result.getSuccessRows()) {
+                if (successRow.getRowData() != null) {
+                    allColumnNamesAllRows.addAll(successRow.getRowData().keySet());
+                }
+            }
+            for (ImportResult.ErrorRow errorRow : result.getErrorRows()) {
+                if (errorRow.getRowData() != null) {
+                    allColumnNamesAllRows.addAll(errorRow.getRowData().keySet());
+                }
+            }
+            
+            // En-tête pour "Toutes les lignes"
+            Row allRowsHeaderRow = allRowsSheet.createRow(allRowsRowNum++);
+            int allRowsColNum = 0;
+            allRowsHeaderRow.createCell(allRowsColNum++).setCellValue("N° Ligne");
+            allRowsHeaderRow.createCell(allRowsColNum++).setCellValue("Statut");
+            allRowsHeaderRow.createCell(allRowsColNum++).setCellValue("Action / Message");
+            
+            // Ajouter toutes les colonnes
+            for (String colName : allColumnNamesAllRows) {
+                allRowsHeaderRow.createCell(allRowsColNum++).setCellValue(colName);
+            }
+            
+            // Appliquer le style d'en-tête
+            for (int i = 0; i < allRowsColNum; i++) {
+                allRowsHeaderRow.getCell(i).setCellStyle(headerStyle);
+            }
+            
+            // Trier toutes les lignes par numéro de ligne
+            Set<Integer> allRowNumbers = new TreeSet<>();
+            allRowNumbers.addAll(successRowsMap.keySet());
+            allRowNumbers.addAll(errorRowsMap.keySet());
+            
+            // Ajouter les lignes dans l'ordre
+            for (Integer rowNum : allRowNumbers) {
+                Row row = allRowsSheet.createRow(allRowsRowNum++);
+                allRowsColNum = 0;
+                CellStyle rowStyle = dataStyle;
+                String status = "";
+                String actionMsg = "";
+                
+                ImportResult.SuccessRow successRow = successRowsMap.get(rowNum);
+                ImportResult.ErrorRow errorRow = errorRowsMap.get(rowNum);
+                Map<String, Object> rowData = null;
+                
+                if (errorRow != null) {
+                    // Ligne en erreur
+                    rowStyle = errorStyle;
+                    status = "ERREUR";
+                    actionMsg = errorRow.getErrorMessage() != null ? errorRow.getErrorMessage() : "";
+                    rowData = errorRow.getRowData();
+                } else if (successRow != null) {
+                    // Ligne de succès
+                    rowStyle = successStyle;
+                    status = "SUCCÈS";
+                    actionMsg = successRow.getActionDetail() != null ? successRow.getActionDetail() : "";
+                    rowData = successRow.getRowData();
+                } else {
+                    // Ne devrait pas arriver
+                    continue;
+                }
+                
+                // N° ligne
+                Cell cell = row.createCell(allRowsColNum++);
+                cell.setCellValue(rowNum);
+                cell.setCellStyle(rowStyle);
+                
+                // Statut
+                cell = row.createCell(allRowsColNum++);
+                cell.setCellValue(status);
+                cell.setCellStyle(rowStyle);
+                
+                // Action / Message
+                cell = row.createCell(allRowsColNum++);
+                cell.setCellValue(actionMsg);
+                cell.setCellStyle(rowStyle);
+                
+                // Données de la ligne
+                if (rowData != null) {
+                    for (String colName : allColumnNamesAllRows) {
+                        cell = row.createCell(allRowsColNum++);
+                        Object value = rowData.get(colName);
+                        if (value != null) {
+                            if (value instanceof String) {
+                                cell.setCellValue((String) value);
+                            } else if (value instanceof Number) {
+                                cell.setCellValue(((Number) value).doubleValue());
+                            } else if (value instanceof Boolean) {
+                                cell.setCellValue((Boolean) value);
+                            } else if (value instanceof Date) {
+                                cell.setCellValue((Date) value);
+                                CellStyle dateStyle = workbook.createCellStyle();
+                                dateStyle.cloneStyleFrom(rowStyle);
+                                dateStyle.setDataFormat(workbook.getCreationHelper().createDataFormat().getFormat("dd/mm/yyyy"));
+                                cell.setCellStyle(dateStyle);
+                            } else {
+                                cell.setCellValue(value.toString());
+                            }
+                        }
+                        cell.setCellStyle(rowStyle);
+                    }
+                }
+            }
+            
+            // Auto-size columns
+            for (int i = 0; i < allRowsColNum; i++) {
+                allRowsSheet.autoSizeColumn(i);
+            }
+            
+            // Feuille 3: Lignes en erreur
             Sheet errorSheet = workbook.createSheet("Lignes en erreur");
             int rowNum = 0;
             
@@ -3113,7 +3406,7 @@ public class ExcelImportService {
                 }
             }
             
-            // Feuille 3: Lignes importées avec succès (optionnel)
+            // Feuille 4: Lignes importées avec succès (optionnel)
             if (!result.getSuccessRows().isEmpty()) {
                 Sheet successSheet = workbook.createSheet("Lignes importées");
                 rowNum = 0;
@@ -3122,6 +3415,7 @@ public class ExcelImportService {
                 headerRow = successSheet.createRow(rowNum++);
                 colNum = 0;
                 headerRow.createCell(colNum++).setCellValue("N° Ligne");
+                headerRow.createCell(colNum++).setCellValue("Action Effectuée");
                 
                 // Récupérer tous les noms de colonnes uniques
                 Set<String> successColumnNames = new LinkedHashSet<>();
@@ -3150,6 +3444,11 @@ public class ExcelImportService {
                     Cell cell0 = row.createCell(colNum++);
                     cell0.setCellValue(successRow.getRowNumber());
                     cell0.setCellStyle(successStyle);
+                    
+                    // Action Effectuée
+                    Cell cell1 = row.createCell(colNum++);
+                    cell1.setCellValue(successRow.getActionDetail() != null ? successRow.getActionDetail() : "");
+                    cell1.setCellStyle(successStyle);
                     
                     // Données de la ligne
                     if (successRow.getRowData() != null) {

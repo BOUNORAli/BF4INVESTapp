@@ -55,6 +55,7 @@ public class ImportResult {
     public static class SuccessRow {
         private int rowNumber; // Numéro de ligne dans le fichier Excel (1-based)
         private Map<String, Object> rowData; // Données de la ligne (colonne -> valeur)
+        private String actionDetail; // Détail de l'action effectuée (ex: "PAIEMENT créé - BC: XXX, Montant: YYY MAD")
     }
     
     /**

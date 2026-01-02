@@ -149,9 +149,16 @@ import type { DeclarationTVA } from '../../models/types';
               </div>
             </div>
             <div class="flex gap-3 mt-6">
-              <button (click)="closeCalculModal()" class="flex-1 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition font-medium">Annuler</button>
-              <button (click)="calculer()" [disabled]="!selectedMois || !selectedAnnee" class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium disabled:opacity-50">
-                Calculer
+              <button (click)="closeCalculModal()" [disabled]="calculating()" class="flex-1 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed">Annuler</button>
+              <button (click)="calculer()" [disabled]="!selectedMois || !selectedAnnee || calculating()" class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                @if (calculating()) {
+                  <svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                  </svg>
+                  <span>Calcul en cours...</span>
+                } @else {
+                  <span>Calculer</span>
+                }
               </button>
             </div>
           </div>
@@ -226,6 +233,7 @@ export class TVAComponent implements OnInit {
   selectedAnnee: number = new Date().getFullYear();
   currentYear = signal(new Date().getFullYear());
   regenerating = signal(false);
+  calculating = signal(false);
 
   moisList = [
     { value: 1, label: 'Janvier' }, { value: 2, label: 'Février' }, { value: 3, label: 'Mars' },
@@ -267,13 +275,18 @@ export class TVAComponent implements OnInit {
 
   calculer() {
     if (!this.selectedMois || !this.selectedAnnee) return;
+    this.calculating.set(true);
     this.tvaService.calculerDeclaration(this.selectedMois, this.selectedAnnee).subscribe({
       next: () => {
+        this.calculating.set(false);
         this.store.showToast('Déclaration calculée avec succès', 'success');
         this.closeCalculModal();
         this.loadDeclarations();
       },
-      error: (err) => this.store.showToast('Erreur lors du calcul', 'error')
+      error: (err) => {
+        this.calculating.set(false);
+        this.store.showToast('Erreur lors du calcul', 'error');
+      }
     });
   }
 

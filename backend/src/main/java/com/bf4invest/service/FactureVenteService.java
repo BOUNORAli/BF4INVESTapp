@@ -1,10 +1,12 @@
 package com.bf4invest.service;
 
 import com.bf4invest.config.AppConfig;
+import com.bf4invest.model.BandeCommande;
 import com.bf4invest.model.FactureVente;
 import com.bf4invest.model.LineItem;
 import com.bf4invest.model.PrevisionPaiement;
 import com.bf4invest.model.Product;
+import com.bf4invest.repository.BandeCommandeRepository;
 import com.bf4invest.repository.FactureVenteRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,6 +23,7 @@ import java.util.Optional;
 public class FactureVenteService {
     
     private final FactureVenteRepository factureRepository;
+    private final BandeCommandeRepository bandeCommandeRepository;
     private final AppConfig appConfig;
     private final AuditService auditService;
     private final ProductService productService;
@@ -62,6 +65,21 @@ public class FactureVenteService {
     }
     
     public FactureVente create(FactureVente facture) {
+        // Si la facture est liée à un BC, définir la date d'émission au dernier jour du mois du BC
+        if (facture.getBandeCommandeId() != null && !facture.getBandeCommandeId().isEmpty()) {
+            Optional<BandeCommande> bcOpt = bandeCommandeRepository.findById(facture.getBandeCommandeId());
+            if (bcOpt.isPresent()) {
+                BandeCommande bc = bcOpt.get();
+                if (bc.getDateBC() != null) {
+                    // Calculer le dernier jour du mois du BC
+                    LocalDate bcDate = bc.getDateBC();
+                    LocalDate lastDayOfMonth = bcDate.withDayOfMonth(bcDate.lengthOfMonth());
+                    facture.setDateFacture(lastDayOfMonth);
+                    log.info("Date d'émission de la facture vente définie au dernier jour du mois du BC ({}): {}", bc.getNumeroBC(), lastDayOfMonth);
+                }
+            }
+        }
+        
         // Générer le numéro si non fourni
         if (facture.getNumeroFactureVente() == null || facture.getNumeroFactureVente().isEmpty()) {
             facture.setNumeroFactureVente(generateFactureNumber(facture.getDateFacture()));
