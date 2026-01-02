@@ -124,6 +124,10 @@ public class OrdreVirementService {
                 .map(existing -> {
                     String oldStatut = existing.getStatut();
                     
+                    // Log pour debug
+                    log.debug("Mise à jour OrdreVirement {} - beneficiaireId reçu: '{}', nomBeneficiaire reçu: '{}'", 
+                        id, ov.getBeneficiaireId(), ov.getNomBeneficiaire());
+                    
                     // Valider les champs requis
                     if (ov.getDateOV() == null) {
                         throw new IllegalArgumentException("La date OV est requise");
@@ -144,11 +148,13 @@ public class OrdreVirementService {
                         throw new IllegalArgumentException("Le motif est requis");
                     }
                     
+                    // Normaliser beneficiaireId : chaîne vide devient null
+                    String beneficiaireIdNormalise = (ov.getBeneficiaireId() != null && !ov.getBeneficiaireId().trim().isEmpty()) 
+                        ? ov.getBeneficiaireId().trim() : null;
+                    
                     existing.setDateOV(ov.getDateOV());
                     existing.setMontant(ov.getMontant());
-                    // Normaliser beneficiaireId : chaîne vide devient null
-                    existing.setBeneficiaireId(ov.getBeneficiaireId() != null && !ov.getBeneficiaireId().trim().isEmpty() 
-                        ? ov.getBeneficiaireId() : null);
+                    existing.setBeneficiaireId(beneficiaireIdNormalise);
                     existing.setRibBeneficiaire(ov.getRibBeneficiaire());
                     existing.setBanqueBeneficiaire(ov.getBanqueBeneficiaire());
                     existing.setMotif(ov.getMotif());
@@ -173,7 +179,7 @@ public class OrdreVirementService {
                     }
                     
                     // Récupérer et dénormaliser le nom du bénéficiaire et le RIB
-                    if (existing.getBeneficiaireId() != null && !existing.getBeneficiaireId().isEmpty()) {
+                    if (beneficiaireIdNormalise != null) {
                         Supplier supplier = supplierService.findById(existing.getBeneficiaireId())
                                 .orElseThrow(() -> new IllegalArgumentException("Fournisseur non trouvé: " + existing.getBeneficiaireId()));
                         existing.setNomBeneficiaire(supplier.getNom());
@@ -187,13 +193,20 @@ public class OrdreVirementService {
                         }
                     } else {
                         // Si beneficiaireId est null (personne physique), valider et mettre à jour le nomBeneficiaire
-                        if (ov.getNomBeneficiaire() != null && !ov.getNomBeneficiaire().trim().isEmpty()) {
-                            existing.setNomBeneficiaire(ov.getNomBeneficiaire().trim());
+                        String nomBeneficiaireFromRequest = ov.getNomBeneficiaire();
+                        
+                        // Log pour debug
+                        log.debug("Mise à jour personne physique - nomBeneficiaire reçu: '{}', nomBeneficiaire existant: '{}'", 
+                            nomBeneficiaireFromRequest, existing.getNomBeneficiaire());
+                        
+                        if (nomBeneficiaireFromRequest != null && !nomBeneficiaireFromRequest.trim().isEmpty()) {
+                            // Si un nom est fourni dans la requête, l'utiliser
+                            existing.setNomBeneficiaire(nomBeneficiaireFromRequest.trim());
                         } else if (existing.getNomBeneficiaire() == null || existing.getNomBeneficiaire().trim().isEmpty()) {
-                            // Si le nomBeneficiaire n'est ni fourni ni existant, générer une erreur
+                            // Si le nomBeneficiaire n'est ni fourni dans la requête ni existant, générer une erreur
                             throw new IllegalArgumentException("Le nom du bénéficiaire est requis pour une personne physique");
                         }
-                        // Sinon, conserver le nomBeneficiaire existant (pas de changement)
+                        // Sinon, conserver le nomBeneficiaire existant (pas de changement dans la requête)
                     }
                     
                     existing.setUpdatedAt(LocalDateTime.now());

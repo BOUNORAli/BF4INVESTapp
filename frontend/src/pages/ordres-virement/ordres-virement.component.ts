@@ -747,14 +747,13 @@ export class OrdresVirementComponent implements OnInit {
     }
 
     // Construire l'objet sans utiliser spread pour éviter les conflits
-    const ov: OrdreVirement = {
+    // IMPORTANT: Toujours inclure nomBeneficiaire dans le JSON pour éviter que TypeScript l'omette
+    const ov: any = {
       // Pour une création, le backend génère le numeroOV automatiquement
       // Pour une mise à jour, on doit fournir le numeroOV existant
       numeroOV: this.isEditMode() && this.editingOV()?.numeroOV ? this.editingOV()!.numeroOV : '',
       dateOV: formValue.dateOV,
-      dateExecution: formValue.dateExecution || undefined,
-      beneficiaireId: beneficiaireIdValue === undefined || beneficiaireIdValue === null || beneficiaireIdValue === '' ? undefined : beneficiaireIdValue,
-      nomBeneficiaire: nomBeneficiaireValue, // Toujours défini pour une personne physique (déjà validé plus haut)
+      dateExecution: formValue.dateExecution || null,
       ribBeneficiaire: formValue.ribBeneficiaire,
       banqueBeneficiaire: formValue.banqueBeneficiaire,
       banqueEmettrice: formValue.banqueEmettrice,
@@ -762,9 +761,22 @@ export class OrdresVirementComponent implements OnInit {
       type: formValue.type || 'NORMAL',
       statut: formValue.statut || 'EN_ATTENTE',
       montant: this.calculatedMontant(),
-      facturesIds: facturesIds.length > 0 ? facturesIds : undefined,
-      facturesMontants: facturesMontants.length > 0 ? facturesMontants : undefined
+      facturesIds: facturesIds.length > 0 ? facturesIds : null,
+      facturesMontants: facturesMontants.length > 0 ? facturesMontants : null
     };
+
+    // Gérer beneficiaireId et nomBeneficiaire selon le type
+    if (this.beneficiaryType() === 'SUPPLIER') {
+      // Pour un fournisseur, inclure beneficiaireId (le backend remplira nomBeneficiaire)
+      if (beneficiaireIdValue) {
+        ov.beneficiaireId = beneficiaireIdValue;
+        ov.nomBeneficiaire = null; // Le backend le remplira depuis le fournisseur
+      }
+    } else {
+      // Pour une personne physique, beneficiaireId doit être null et nomBeneficiaire doit être présent
+      ov.beneficiaireId = null; // Explicitement null pour s'assurer qu'il est dans le JSON
+      ov.nomBeneficiaire = nomBeneficiaireValue || null; // Toujours inclure dans le JSON
+    }
 
     // Debug: vérifier ce qui est envoyé
     console.log('Envoi OrdreVirement:', {
