@@ -351,45 +351,66 @@ public class CloudinaryOcrService {
 
     /**
      * Détecte le nom du fournisseur (recherche dans les premières lignes)
+     * Amélioré pour ne pas confondre avec le client
      */
     private String detectFournisseur(String[] lines) {
         // Chercher dans les 15 premières lignes
         int maxLines = Math.min(15, lines.length);
         
-        // Chercher des patterns comme "Raison Sociale:", "Fournisseur:", ou un nom en majuscules en haut
+        // Priorité 1: Chercher explicitement "Fournisseur:" (peu commun mais plus sûr)
         for (int i = 0; i < maxLines; i++) {
             String line = lines[i].trim();
-            
-            // Pattern: "Raison Sociale: NOM" ou "Fournisseur: NOM"
-            if (line.matches("(?i).*(?:RAISON\\s+SOCIALE|FOURNISSEUR|CLIENT|STE|SARL|EURL).*[:]\\s*(.+)")) {
-                Pattern pattern = Pattern.compile("(?i).*(?:RAISON\\s+SOCIALE|FOURNISSEUR|CLIENT|STE|SARL|EURL).*[:]\\s*(.+)");
+            if (line.matches("(?i).*FOURNISSEUR.*[:]\\s*(.+)")) {
+                Pattern pattern = Pattern.compile("(?i).*FOURNISSEUR.*[:]\\s*(.+)");
                 Matcher matcher = pattern.matcher(line);
                 if (matcher.find()) {
                     String name = matcher.group(1).trim();
                     if (name.length() > 3) {
+                        log.debug("🏢 [OCR] Fournisseur détecté (mot-clé 'Fournisseur'): {}", name);
                         return name;
                     }
                 }
             }
-            
-            // Chercher un nom d'entreprise en majuscules (SARL, STE, etc.)
-            if (line.matches(".*[A-Z]{3,}.*(?:SARL|STE|EURL|SA).*")) {
-                // Nettoyer la ligne
-                line = line.replaceAll("(?i)(SIE|SIEGE|SOCIAL|ADRESSE|TEL|FAX|ICE|IF|RC|CNSS).*", "");
-                line = line.trim();
-                if (line.length() > 5 && line.length() < 100) {
-                    return line;
+        }
+        
+        // Priorité 2: Chercher le nom de l'entreprise émettrice (en haut, souvent avec logo)
+        // Généralement avant la section "Client"
+        for (int i = 0; i < maxLines; i++) {
+            String line = lines[i].trim();
+            // Chercher un nom d'entreprise en majuscules (SARL, STE, etc.) AVANT la section client
+            if (line.matches(".*[A-Z]{3,}.*(?:SARL|STE|EURL|SA).*") && 
+                !line.matches("(?i).*CLIENT.*")) {
+                // Nettoyer la ligne (retirer adresse, tel, etc.)
+                String cleaned = line.replaceAll("(?i)(SIE|SIEGE|SOCIAL|ADRESSE|TEL|FAX|ICE|IF|RC|CNSS|PATENTE|Z\\.|B\\.P|BP).*", "");
+                cleaned = cleaned.trim();
+                // Ne pas prendre si c'est trop court ou contient des coordonnées
+                if (cleaned.length() > 5 && cleaned.length() < 100 && 
+                    !cleaned.matches(".*\\d{2}\\s*/\\s*\\d{2}.*")) { // Pas une date ou coordonnées
+                    log.debug("🏢 [OCR] Fournisseur détecté (nom entreprise en haut): {}", cleaned);
+                    return cleaned;
                 }
             }
         }
         
-        // Fallback: prendre la première ligne substantielle qui ne contient pas de mots clés
+        // Priorité 3: Chercher "Raison Sociale:" mais PAS si c'est suivi de "CLIENT"
         for (int i = 0; i < maxLines; i++) {
             String line = lines[i].trim();
-            if (line.length() > 5 && line.length() < 80 &&
-                !line.matches("(?i).*(?:FACTURE|BON|COMMANDE|DATE|TOTAL|HT|TTC|ICE|RC|CNSS|TEL|FAX|ADRESSE|SIE|SIEGE).*") &&
-                !line.matches(".*\\d{2}/\\d{2}/\\d{4}.*")) { // Pas une date
-                return line;
+            // Vérifier que ce n'est pas la section Client
+            if (line.matches("(?i).*RAISON\\s+SOCIALE.*[:]\\s*(.+)") &&
+                !line.matches("(?i).*CLIENT.*")) {
+                Pattern pattern = Pattern.compile("(?i).*RAISON\\s+SOCIALE.*[:]\\s*(.+)");
+                Matcher matcher = pattern.matcher(line);
+                if (matcher.find()) {
+                    String name = matcher.group(1).trim();
+                    // Vérifier que la ligne suivante ne contient pas "CLIENT"
+                    if (i + 1 < lines.length && lines[i + 1].trim().matches("(?i).*CLIENT.*")) {
+                        continue; // C'est probablement le client, pas le fournisseur
+                    }
+                    if (name.length() > 3) {
+                        log.debug("🏢 [OCR] Fournisseur détecté (Raison Sociale, non-client): {}", name);
+                        return name;
+                    }
+                }
             }
         }
         
@@ -437,19 +458,30 @@ public class CloudinaryOcrService {
 
     /**
      * Détecte le numéro de document (facture, BC, etc.)
+     * Amélioré pour mieux détecter les numéros comme "000002366"
      */
     private String detectNumeroDocument(String[] lines) {
         // Patterns: N° FACTURE, REF, NUM, etc.
         Pattern[] patterns = {
+            // Pattern pour "FACTURE N° 000002366" ou "FACTURE N°: 000002366"
+            Pattern.compile("(?i)(?:FACTURE|BC|COMMANDE|DOC)\\s*(?:N°|No|NUM|NUMERO|REF|REFERENCE)?\\s*[:\\s]*([A-Z0-9\\-/]+)"),
+            // Pattern pour "N° FACTURE: 000002366"
             Pattern.compile("(?i)(?:N°|NUM|REF|N°\\s*)?(?:FACTURE|BC|COMMANDE|DOC)?\\s*[:\\s]*([A-Z0-9\\-/]+)"),
-            Pattern.compile("(?i)(?:Facture|BC|Commande)\\s*(?:N°|No|#)?\\s*[:\\s]*([A-Z0-9\\-/]+)")
+            // Pattern pour numéros longs avec zéros (000002366)
+            Pattern.compile("(?i)(?:FACTURE|BC|COMMANDE|DOC|N°|NUM|REF).*?([0-9]{6,})")
         };
 
         for (String line : lines) {
             for (Pattern pattern : patterns) {
                 Matcher matcher = pattern.matcher(line);
                 if (matcher.find()) {
-                    return matcher.group(1).trim();
+                    String numero = matcher.group(1).trim();
+                    // Nettoyer si nécessaire (retirer caractères parasites)
+                    numero = numero.replaceAll("[^A-Z0-9\\-/]", "");
+                    if (numero.length() >= 3) {
+                        log.debug("📄 [OCR] Numéro document détecté: {}", numero);
+                        return numero;
+                    }
                 }
             }
         }
@@ -458,85 +490,50 @@ public class CloudinaryOcrService {
 
     /**
      * Extrait les lignes de produits du texte OCR
+     * Amélioré pour mieux détecter la zone du tableau et filtrer les faux positifs
      */
     private List<OcrExtractResult.OcrProductLine> extractProductLines(String[] lines) {
         List<OcrExtractResult.OcrProductLine> productLines = new ArrayList<>();
-        
-        DecimalFormat df = new DecimalFormat("#,##0.00", 
-            DecimalFormatSymbols.getInstance(Locale.FRANCE));
 
-        boolean inProductSection = false;
-        boolean foundHeader = false;
-        int consecutiveNumericLines = 0;
-        int lineIndex = 0;
-
-        // Chercher l'en-tête de la section produits
-        for (int i = 0; i < lines.length; i++) {
-            String line = lines[i].trim().toUpperCase();
-            // Détecter l'en-tête avec plusieurs colonnes (Désignation, Qté, Prix unitaire, Montant HT)
-            if (line.contains("DESIGNATION") && (line.contains("QTÉ") || line.contains("QTE") || line.contains("QUANTITE"))) {
-                inProductSection = true;
-                foundHeader = true;
-                lineIndex = i + 1;
-                log.debug("🎯 [OCR] En-tête produits détecté à la ligne {}", i);
-                break;
-            }
+        // Étape 1: Détecter le début du tableau
+        int tableStartIndex = findTableStart(lines);
+        if (tableStartIndex == -1) {
+            log.warn("⚠️ [OCR] Début de tableau non détecté, utilisation du fallback");
+            tableStartIndex = findTableStartFallback(lines);
         }
 
-        // Si on n'a pas trouvé d'en-tête, essayer une détection heuristique
-        if (!foundHeader) {
-            for (int i = 0; i < lines.length; i++) {
-                String line = lines[i].trim();
-                if (line.matches("(?i).*(?:DESIGNATION|ARTICLE|PRODUIT|LIBELLE).*") ||
-                    line.matches("(?i).*(?:QUANTITE|QTÉ|QTE).*")) {
-                    inProductSection = true;
-                    lineIndex = i + 1;
-                    log.debug("🎯 [OCR] Section produits détectée (heuristique) à la ligne {}", i);
-                    break;
-                }
-            }
+        // Étape 2: Détecter la fin du tableau
+        int tableEndIndex = findTableEnd(lines, tableStartIndex);
+
+        if (tableStartIndex == -1 || tableEndIndex <= tableStartIndex) {
+            log.warn("⚠️ [OCR] Impossible de déterminer la zone du tableau");
+            return productLines;
         }
 
-        // Parcourir les lignes après l'en-tête
-        for (int i = lineIndex; i < lines.length; i++) {
+        log.info("📋 [OCR] Zone tableau détectée: lignes {} à {}", tableStartIndex, tableEndIndex);
+
+        // Étape 3: Parser les lignes dans la zone du tableau
+        for (int i = tableStartIndex; i < tableEndIndex; i++) {
             String line = lines[i].trim();
             if (line.isEmpty()) {
-                consecutiveNumericLines = 0;
                 continue;
             }
 
-            // Arrêter si on atteint une section de totaux
-            if (line.matches("(?i).*TOTAL\\s+(HT|TTC).*") || 
-                line.matches("(?i).*T\\.V\\.A.*") ||
-                line.matches("(?i).*TOTAL\\s+[A-Z].*")) {
-                log.debug("🛑 [OCR] Section totaux détectée à la ligne {}, arrêt de l'extraction", i);
-                break;
+            // Filtrer les lignes de bruit (adresse, téléphone, etc.)
+            if (isNoiseLine(line)) {
+                log.debug("🚫 [OCR] Ligne ignorée (bruit): {}", line.substring(0, Math.min(50, line.length())));
+                continue;
             }
 
-            // Ignorer les lignes qui sont clairement des totaux ou notes
-            if (line.matches("(?i).*(?:ARRÊTER|ARRETE|IMPORTANT|CONFORMEMENT).*")) {
-                break;
-            }
-
-            // Essayer de parser la ligne comme une ligne de produit
+            // Parser la ligne comme une ligne de produit
             OcrExtractResult.OcrProductLine productLine = parseProductLine(line);
-            if (productLine != null && productLine.getDesignation() != null && 
-                productLine.getDesignation().trim().length() > 2 && // Désignation doit avoir au moins 3 caractères
-                productLine.getQuantite() != null && productLine.getQuantite() > 0) {
+            if (productLine != null && isValidProductLine(productLine)) {
                 productLines.add(productLine);
-                consecutiveNumericLines = 0;
-                log.debug("✅ [OCR] Produit détecté: {} - Qté: {} - PU: {}", 
-                    productLine.getDesignation(), productLine.getQuantite(), productLine.getPrixUnitaireHT());
-            } else if (hasNumericValues(line)) {
-                // Si la ligne contient des nombres mais n'a pas pu être parsée, on continue
-                consecutiveNumericLines++;
-                if (consecutiveNumericLines > 5) {
-                    // Si 5 lignes consécutives avec nombres mais non parsables, on s'arrête
-                    log.debug("🛑 [OCR] Trop de lignes non parsables, arrêt à la ligne {}", i);
-                    break;
-                }
-            } else {
-                consecutiveNumericLines = 0;
+                log.debug("✅ [OCR] Produit détecté: {} - Qté: {} - PU: {} - Total: {}", 
+                    productLine.getDesignation(), 
+                    productLine.getQuantite(), 
+                    productLine.getPrixUnitaireHT(),
+                    productLine.getPrixTotalHT());
             }
         }
 
@@ -545,109 +542,271 @@ public class CloudinaryOcrService {
     }
 
     /**
+     * Détecte le début du tableau de produits
+     * Cherche les lignes contenant "Désignation" + "Qté" ou "Quantité" ou "Prix"
+     */
+    private int findTableStart(String[] lines) {
+        for (int i = 0; i < lines.length; i++) {
+            String line = lines[i].trim().toUpperCase();
+            if (isTableHeader(line)) {
+                log.debug("🎯 [OCR] En-tête tableau détecté à la ligne {}: {}", i, lines[i].trim());
+                return i + 1; // Retourner la ligne suivante (après l'en-tête)
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * Fallback: cherche le début du tableau sans en-tête clair
+     * Cherche les premières lignes avec pattern de produit valide
+     */
+    private int findTableStartFallback(String[] lines) {
+        for (int i = 0; i < lines.length; i++) {
+            String line = lines[i].trim();
+            if (isNoiseLine(line)) {
+                continue;
+            }
+            // Si la ligne ressemble à une ligne de produit (texte + nombres)
+            if (hasNumericValues(line) && line.length() > 10) {
+                // Vérifier qu'il y a au moins 2 nombres (qté + prix)
+                Pattern numberPattern = Pattern.compile("\\b\\d+[.,\\s]?\\d*\\b");
+                Matcher matcher = numberPattern.matcher(line);
+                int count = 0;
+                while (matcher.find() && count < 3) {
+                    count++;
+                }
+                if (count >= 2) {
+                    log.debug("🎯 [OCR] Début tableau détecté (fallback) à la ligne {}: {}", i, line.substring(0, Math.min(50, line.length())));
+                    return i;
+                }
+            }
+        }
+        return 0; // Par défaut, commencer au début
+    }
+
+    /**
+     * Détecte la fin du tableau de produits
+     * Cherche les lignes contenant "TOTAL", "Total HT", "Sous-total", "T.V.A", etc.
+     */
+    private int findTableEnd(String[] lines, int startIndex) {
+        for (int i = startIndex; i < lines.length; i++) {
+            String line = lines[i].trim().toUpperCase();
+            if (isTableEnd(line)) {
+                log.debug("🛑 [OCR] Fin tableau détectée à la ligne {}: {}", i, lines[i].trim());
+                return i;
+            }
+        }
+        // Si pas de fin trouvée, arrêter avant la fin du document (dernières 10 lignes pour éviter le footer)
+        return Math.max(startIndex + 1, lines.length - 10);
+    }
+
+    /**
+     * Vérifie si une ligne est l'en-tête du tableau
+     */
+    private boolean isTableHeader(String line) {
+        String upperLine = line.toUpperCase();
+        boolean hasDesignation = upperLine.contains("DESIGNATION") || 
+                                 upperLine.contains("DESCRIPTION") || 
+                                 upperLine.contains("ARTICLE") || 
+                                 upperLine.contains("PRODUIT") ||
+                                 upperLine.contains("LIBELLE");
+        
+        boolean hasQuantity = upperLine.contains("QTÉ") || 
+                             upperLine.contains("QTE") || 
+                             upperLine.contains("QUANTITE") ||
+                             upperLine.contains("QT");
+        
+        boolean hasPrice = upperLine.contains("PRIX") || 
+                          upperLine.contains("MONTANT") ||
+                          upperLine.contains("TOTAL");
+        
+        return hasDesignation && (hasQuantity || hasPrice);
+    }
+
+    /**
+     * Vérifie si une ligne marque la fin du tableau
+     */
+    private boolean isTableEnd(String line) {
+        String upperLine = line.toUpperCase();
+        return upperLine.contains("TOTAL") && (upperLine.contains("HT") || upperLine.contains("TTC")) ||
+               upperLine.contains("T.V.A") ||
+               upperLine.contains("TVA") ||
+               upperLine.contains("SOUS-TOTAL") ||
+               upperLine.contains("SOUSTOTAL") ||
+               upperLine.matches(".*TOTAL\\s+[A-Z]{2,}.*") ||
+               upperLine.contains("ARRÊTER") ||
+               upperLine.contains("ARRETE") ||
+               upperLine.contains("IMPORTANT") ||
+               upperLine.contains("CONFORMEMENT") ||
+               upperLine.contains("MODE DE REGLEMENT");
+    }
+
+    /**
+     * Vérifie si une ligne est du bruit (adresse, téléphone, etc.) et doit être ignorée
+     */
+    private boolean isNoiseLine(String line) {
+        String upperLine = line.toUpperCase();
+        
+        // Mots-clés à ignorer
+        String[] noiseKeywords = {
+            "TEL", "FAX", "ADRESSE", "SIEGE", "SIÉGE", "SIE",
+            "ICE", "IF", "R.C", "RC", "CNSS", "PATENTE",
+            "RAISON SOCIALE", "CLIENT", "MODE DE REGLEMENT",
+            "RIB", "B.P", "BP", "VILLE", "COPIE", "COPL",
+            "SELOUANE", "NADOR", "MEKNES",
+            "GUARIMETAL", "SARL", "SIE SOCIAL",
+            "Z.INDUSTRIELLE", "ZONE INDUSTRIELLE",
+            "RECEPTION", "SIGNATURE", "NOM",
+            "DAHIR", "LOI", "PENALITE", "PENALITÉ"
+        };
+        
+        for (String keyword : noiseKeywords) {
+            if (upperLine.contains(keyword)) {
+                return true;
+            }
+        }
+        
+        // Ignorer les lignes trop courtes (< 5 caractères)
+        if (line.trim().length() < 5) {
+            return true;
+        }
+        
+        // Ignorer les lignes qui sont uniquement des nombres ou des symboles
+        if (line.trim().matches("^[0-9\\s\\.,\\-\\+/]+$")) {
+            return true;
+        }
+        
+        return false;
+    }
+
+    /**
+     * Valide qu'une ligne de produit est valide
+     */
+    private boolean isValidProductLine(OcrExtractResult.OcrProductLine productLine) {
+        if (productLine == null) {
+            return false;
+        }
+        
+        // Désignation doit avoir au moins 3 caractères
+        if (productLine.getDesignation() == null || 
+            productLine.getDesignation().trim().length() < 3) {
+            return false;
+        }
+        
+        // Doit avoir au moins une quantité > 0
+        if (productLine.getQuantite() == null || productLine.getQuantite() <= 0) {
+            return false;
+        }
+        
+        // La désignation ne doit pas être un mot-clé de bruit
+        String designation = productLine.getDesignation().toUpperCase();
+        if (isNoiseLine(designation)) {
+            return false;
+        }
+        
+        return true;
+    }
+
+    /**
      * Parse une ligne pour extraire les informations d'un produit
+     * Amélioré pour extraire les nombres depuis la fin de la ligne
      * Gère les formats: "DIAM 8 HB UNIVERS ACIER    200,000    8,083    1 616,67"
      *                  "CIMENT CPJ 45    23 500,000    1,452    34 125,92"
      */
     private OcrExtractResult.OcrProductLine parseProductLine(String line) {
-        // Essayer d'abord de détecter des colonnes séparées par plusieurs espaces ou tabs
-        String[] parts = line.split("\\s{3,}|\t+"); // Au moins 3 espaces ou tabs
-        
-        // Si pas de colonnes clairement séparées, essayer avec 2 espaces
-        if (parts.length < 3) {
-            parts = line.split("\\s{2,}");
-        }
-        
-        // Si toujours pas assez de colonnes, essayer avec 1 espace
-        if (parts.length < 3) {
-            parts = line.split("\\s+");
-        }
-
-        if (parts.length < 2) {
-            return null;
-        }
-
         OcrExtractResult.OcrProductLine.OcrProductLineBuilder builder = 
             OcrExtractResult.OcrProductLine.builder();
 
-        // Identifier les parties: désignation (texte) et nombres
-        List<String> designationParts = new ArrayList<>();
-        List<Double> numericValues = new ArrayList<>();
-        boolean foundFirstNumber = false;
-
-        for (String part : parts) {
-            part = part.trim();
-            if (part.isEmpty()) continue;
-
-            // Essayer de parser comme nombre
-            Double numValue = parseNumber(part);
-            if (numValue != null && numValue > 0) {
-                numericValues.add(numValue);
-                foundFirstNumber = true;
-            } else if (!foundFirstNumber) {
-                // Avant le premier nombre, c'est probablement la désignation
-                // Ignorer les mots trop courts qui sont probablement du bruit
-                if (part.length() > 1 && !part.matches("^[^a-zA-Z]*$")) {
-                    designationParts.add(part);
-                }
-            }
-        }
-
-        // Si on n'a pas trouvé de nombres, la ligne n'est probablement pas un produit
+        // Étape 1: Extraire tous les nombres depuis la fin de la ligne
+        List<Double> numericValues = extractNumbersFromEnd(line);
+        
         if (numericValues.isEmpty()) {
             return null;
         }
 
-        // Construire la désignation (même si vide, on essaiera de la compléter plus tard)
-        String designation = designationParts.isEmpty() ? "" : String.join(" ", designationParts);
+        // Étape 2: Extraire la désignation (tout ce qui reste après avoir retiré les nombres)
+        String designation = extractDesignation(line, numericValues);
         
-        // Si la désignation est vide ou trop courte, essayer de la récupérer du début de la ligne
-        if (designation.trim().isEmpty() || designation.trim().length() < 3) {
-            // Extraire tout le texte avant le premier nombre
-            Pattern firstNumberPattern = Pattern.compile("^(.*?)(\\d+[.,]?\\d*\\s*\\d*[.,]?\\d*)");
-            Matcher matcher = firstNumberPattern.matcher(line);
-            if (matcher.find()) {
-                String beforeNumber = matcher.group(1).trim();
-                // Nettoyer la désignation (retirer caractères spéciaux en fin)
-                beforeNumber = beforeNumber.replaceAll("[^a-zA-Z0-9\\s\\-]+$", "");
-                if (beforeNumber.length() >= 3) {
-                    designation = beforeNumber;
-                }
-            }
+        if (designation == null || designation.trim().length() < 3) {
+            return null;
         }
-        
+
         builder.designation(designation.trim());
 
-        // Assigner les valeurs numériques selon leur position
-        // Format typique: [qté, prix unitaire, montant HT]
-        // Parfois: [qté, prix unitaire] (on calculera le total)
-        if (numericValues.size() >= 1) {
-            // La première valeur est généralement la quantité
-            Double qte = numericValues.get(0);
-            // Si la quantité semble trop grande pour être un prix unitaire (> 10000), 
-            // et qu'on a plus de valeurs, la première pourrait être la quantité
-            if (numericValues.size() >= 2) {
-                builder.quantite(qte);
-                builder.prixUnitaireHT(numericValues.get(1));
-            } else {
-                // Une seule valeur, c'est probablement la quantité
-                builder.quantite(qte);
-            }
-        }
+        // Étape 3: Assigner les valeurs numériques selon leur position et magnitude
+        // Les nombres sont extraits depuis la fin, donc l'ordre dans la liste est inversé par rapport à la ligne
+        // Format typique d'une facture: [Désignation] [Qté] [Prix unitaire] [Total HT]
+        // Après extraction depuis la fin: [Total HT, Prix unitaire, Qté]
         
         if (numericValues.size() >= 3) {
-            // Trois valeurs: qté, prix unitaire, montant HT
-            builder.quantite(numericValues.get(0));
-            builder.prixUnitaireHT(numericValues.get(1));
-            builder.prixTotalHT(numericValues.get(2));
-        } else if (numericValues.size() == 2) {
-            // Deux valeurs: calculer le montant total si possible
-            builder.quantite(numericValues.get(0));
-            builder.prixUnitaireHT(numericValues.get(1));
-            // Calculer le total si on a qté et PU
-            if (numericValues.get(0) > 0 && numericValues.get(1) > 0) {
-                builder.prixTotalHT(numericValues.get(0) * numericValues.get(1));
+            // Trois valeurs détectées: Total HT (dernier), Prix unitaire (milieu), Qté (premier)
+            // Mais attention: l'ordre dans numericValues dépend de l'ordre dans la ligne
+            // On va utiliser la magnitude pour déterminer ce qui est quoi
+            
+            Double value1 = numericValues.get(numericValues.size() - 1); // Dernier nombre trouvé (Total HT probablement)
+            Double value2 = numericValues.get(numericValues.size() - 2); // Avant-dernier (Prix unitaire probablement)
+            Double value3 = numericValues.get(numericValues.size() - 3); // Troisième depuis la fin (Qté probablement)
+            
+            // Le Total HT est généralement le plus grand (valeur absolue)
+            // La Qté peut être grande aussi, mais le Prix unitaire est généralement moyen
+            // On va utiliser la logique: si value1 > value2, alors value1 est probablement le Total
+            
+            if (value1 >= value2 && value1 >= value3) {
+                // value1 est probablement le Total HT
+                builder.prixTotalHT(value1);
+                builder.prixUnitaireHT(value2);
+                builder.quantite(value3);
+            } else if (value3 >= value1 && value3 >= value2) {
+                // value3 est probablement la Qté (peut être très grande)
+                builder.quantite(value3);
+                builder.prixUnitaireHT(value2);
+                builder.prixTotalHT(value1);
+            } else {
+                // Par défaut: ordre standard [Qté, Prix, Total]
+                builder.quantite(value3);
+                builder.prixUnitaireHT(value2);
+                builder.prixTotalHT(value1);
             }
+        } else if (numericValues.size() == 2) {
+            // Deux valeurs: Qté et Prix unitaire (ou Qté et Total)
+            Double value1 = numericValues.get(numericValues.size() - 1); // Dernier
+            Double value2 = numericValues.get(numericValues.size() - 2); // Avant-dernier
+            
+            // Si value1 est beaucoup plus grand que value2, value1 est probablement le Total HT
+            if (value1 > value2 * 10) {
+                // value1 = Total, value2 = Qté ou Prix
+                builder.prixTotalHT(value1);
+                // On va essayer de deviner: si value2 est très grand (> 100), c'est probablement la Qté
+                if (value2 > 100) {
+                    builder.quantite(value2);
+                } else {
+                    builder.prixUnitaireHT(value2);
+                }
+            } else {
+                // Les valeurs sont proches, ordre standard [Qté, Prix]
+                // La Qté est généralement >= Prix unitaire dans les factures de matériaux
+                if (value2 >= value1 || value2 > 100) {
+                    builder.quantite(value2);
+                    builder.prixUnitaireHT(value1);
+                } else {
+                    builder.quantite(value1);
+                    builder.prixUnitaireHT(value2);
+                }
+            }
+            
+            // Calculer le total si on a Qté et Prix unitaire
+            // On va construire temporairement pour vérifier
+            OcrExtractResult.OcrProductLine temp = builder.build();
+            if (temp.getQuantite() != null && temp.getPrixUnitaireHT() != null) {
+                Double qte = temp.getQuantite();
+                Double prix = temp.getPrixUnitaireHT();
+                if (qte > 0 && prix > 0 && temp.getPrixTotalHT() == null) {
+                    builder.prixTotalHT(qte * prix);
+                }
+            }
+        } else if (numericValues.size() == 1) {
+            // Une seule valeur: probablement la quantité
+            builder.quantite(numericValues.get(0));
         }
 
         // Déterminer l'unité (U par défaut)
@@ -655,15 +814,98 @@ public class CloudinaryOcrService {
 
         OcrExtractResult.OcrProductLine result = builder.build();
         
-        // Valider que la ligne contient au moins une désignation et une quantité
-        if (result.getDesignation() == null || result.getDesignation().trim().isEmpty() || result.getDesignation().trim().length() < 2) {
-            return null;
-        }
+        // Validation finale
         if (result.getQuantite() == null || result.getQuantite() <= 0) {
             return null;
         }
 
         return result;
+    }
+
+    /**
+     * Extrait les nombres depuis la fin de la ligne
+     * Retourne une liste de nombres trouvés (de droite à gauche dans la ligne)
+     */
+    private List<Double> extractNumbersFromEnd(String line) {
+        List<Double> numbers = new ArrayList<>();
+        
+        // Pattern pour détecter les nombres (avec virgule, espaces pour milliers)
+        // Exemples: "1 616,67", "23 500,000", "8,083", "200,000"
+        Pattern numberPattern = Pattern.compile("\\b\\d{1,3}(?:[\\s,]\\d{3})*(?:[,\\.]\\d+)?\\b|\\b\\d+[,\\.]\\d+\\b|\\b\\d+\\b");
+        
+        Matcher matcher = numberPattern.matcher(line);
+        List<Double> allNumbers = new ArrayList<>();
+        
+        while (matcher.find()) {
+            String numberStr = matcher.group();
+            Double numValue = parseNumber(numberStr);
+            if (numValue != null && numValue > 0) {
+                allNumbers.add(numValue);
+            }
+        }
+        
+        // Retourner les 3 derniers nombres (Qté, Prix unitaire, Total HT)
+        // ou tous s'il y en a moins
+        int startIndex = Math.max(0, allNumbers.size() - 3);
+        for (int i = startIndex; i < allNumbers.size(); i++) {
+            numbers.add(allNumbers.get(i));
+        }
+        
+        return numbers;
+    }
+
+    /**
+     * Extrait la désignation en retirant les nombres de la ligne
+     * Préserve les chiffres qui font partie du nom du produit (ex: "DIAM 8", "CPJ 45")
+     */
+    private String extractDesignation(String line, List<Double> numericValues) {
+        // Approche: trouver le dernier grand nombre (probablement une valeur numérique de colonne)
+        // et retirer tout ce qui vient après, puis nettoyer
+        
+        // D'abord, essayer de trouver où commence la zone numérique (colonnes Qté, Prix, Total)
+        // Les valeurs numériques de colonnes sont généralement séparées par plusieurs espaces
+        
+        // Pattern pour détecter les séparations de colonnes (3+ espaces ou tabs)
+        Pattern columnSeparator = Pattern.compile("\\s{3,}|\t+");
+        String[] parts = columnSeparator.split(line);
+        
+        if (parts.length >= 2) {
+            // Il y a des colonnes séparées, la première partie est probablement la désignation
+            String designation = parts[0].trim();
+            // Nettoyer mais garder les chiffres qui sont partie intégrante (comme "DIAM 8")
+            designation = designation.replaceAll("\\s+", " ").trim();
+            return designation;
+        }
+        
+        // Fallback: retirer les nombres depuis la fin qui correspondent aux valeurs numériques détectées
+        String cleaned = line;
+        Pattern numberPattern = Pattern.compile("\\b\\d{1,3}(?:[\\s,]\\d{3})*(?:[,\\.]\\d+)?\\b|\\b\\d+[,\\.]\\d+\\b");
+        
+        // Trouver tous les nombres et retirer ceux qui correspondent aux valeurs détectées
+        Matcher matcher = numberPattern.matcher(line);
+        List<String> numbersToRemove = new ArrayList<>();
+        
+        while (matcher.find()) {
+            String numberStr = matcher.group();
+            Double numValue = parseNumber(numberStr);
+            if (numValue != null && numericValues.contains(numValue)) {
+                numbersToRemove.add(numberStr);
+            }
+        }
+        
+        // Retirer les nombres depuis la fin (garder les chiffres au début qui peuvent être dans le nom)
+        for (int i = numbersToRemove.size() - 1; i >= 0; i--) {
+            String numberToRemove = numbersToRemove.get(i);
+            // Retirer seulement si c'est à la fin de la ligne ou suivi d'espaces
+            cleaned = cleaned.replaceFirst("\\s*" + Pattern.quote(numberToRemove) + "\\s*$", "");
+            cleaned = cleaned.replaceFirst("\\s{2,}" + Pattern.quote(numberToRemove) + "\\s*", " ");
+        }
+        
+        // Nettoyer: retirer les espaces multiples, caractères spéciaux en fin
+        cleaned = cleaned.replaceAll("\\s+", " ").trim();
+        cleaned = cleaned.replaceAll("[^a-zA-Z0-9\\s\\-]+$", ""); // Retirer ponctuation finale
+        
+        return cleaned;
     }
 
     /**
