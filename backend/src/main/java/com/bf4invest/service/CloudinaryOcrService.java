@@ -507,17 +507,30 @@ public class CloudinaryOcrService {
      * Gère le cas spécial où les désignations sont groupées séparément des nombres
      */
     private List<OcrExtractResult.OcrProductLine> extractProductLines(String[] lines) {
+        log.info("🔎 [OCR] Début extraction produits - {} lignes à analyser", lines.length);
+        
+        // Logger les 30 premières lignes pour débogage
+        int maxPreview = Math.min(30, lines.length);
+        for (int i = 0; i < maxPreview; i++) {
+            String line = lines[i].trim();
+            if (!line.isEmpty()) {
+                log.info("📄 [OCR] Ligne {}: '{}'", i, line);
+            }
+        }
+        
         List<OcrExtractResult.OcrProductLine> productLines = new ArrayList<>();
 
         // Essayer d'abord l'approche "colonnes séparées" (désignations groupées, puis nombres groupés)
+        log.info("🔄 [OCR] Tentative format colonnes séparées...");
         productLines = extractProductLinesSeparatedFormat(lines);
         
         if (!productLines.isEmpty()) {
-            log.info("📦 [OCR] {} lignes de produits extraites (format colonnes séparées)", productLines.size());
+            log.info("✅ [OCR] {} lignes de produits extraites (format colonnes séparées)", productLines.size());
             return productLines;
         }
         
         // Sinon, utiliser l'approche classique (tout sur une ligne ou lignes consécutives)
+        log.info("🔄 [OCR] Tentative format classique...");
         productLines = extractProductLinesClassicFormat(lines);
         
         log.info("📦 [OCR] {} lignes de produits extraites (format classique)", productLines.size());
@@ -536,33 +549,50 @@ public class CloudinaryOcrService {
         int qteStart = -1;
         int tableEnd = -1;
         
+        log.info("🔍 [OCR] Recherche du format colonnes séparées...");
+        
         for (int i = 0; i < lines.length; i++) {
-            String line = lines[i].trim().toUpperCase();
+            String line = lines[i].trim();
+            String lineUpper = line.toUpperCase();
+            // Normaliser les accents pour la comparaison
+            String lineNormalized = lineUpper
+                .replace("É", "E")
+                .replace("È", "E")
+                .replace("Ê", "E")
+                .replace("À", "A");
             
             // Début des désignations
-            if (designationStart == -1 && line.contains("DESIGNATION")) {
+            if (designationStart == -1 && 
+                (lineNormalized.contains("DESIGNATION") || lineUpper.contains("DÉSIGNATION"))) {
                 designationStart = i + 1;
-                log.debug("📍 [OCR] Début désignations trouvé ligne {}", i);
+                log.info("📍 [OCR] Début désignations trouvé ligne {}: '{}'", i, line);
             }
-            // Début des quantités/nombres
+            // Début des quantités/nombres (chercher "Qté", "QTE", "Quantité", etc.)
             else if (qteStart == -1 && designationStart != -1 && 
-                     (line.equals("QTE") || line.equals("QTÉ") || line.contains("QUANTITE"))) {
+                     (lineNormalized.equals("QTE") || 
+                      lineNormalized.contains("QUANTITE") ||
+                      line.equalsIgnoreCase("Qté") ||
+                      line.matches("(?i)qt[eéè]?"))) {
                 qteStart = i;
-                log.debug("📍 [OCR] Début nombres trouvé ligne {}", i);
+                log.info("📍 [OCR] Début nombres trouvé ligne {}: '{}'", i, line);
             }
             // Fin du tableau
             else if (qteStart != -1 && tableEnd == -1 && 
-                     (line.contains("TOTAL") && (line.contains("HT") || line.contains("TTC")) || 
-                      line.contains("IMPORTANT"))) {
+                     ((lineUpper.contains("TOTAL") && (lineUpper.contains("HT") || lineUpper.contains("TTC"))) || 
+                      lineUpper.contains("IMPORTANT"))) {
                 tableEnd = i;
-                log.debug("📍 [OCR] Fin tableau trouvée ligne {}", i);
+                log.info("📍 [OCR] Fin tableau trouvée ligne {}: '{}'", i, line);
                 break;
             }
         }
         
+        log.info("📊 [OCR] Indices détectés - designationStart: {}, qteStart: {}, tableEnd: {}", 
+                 designationStart, qteStart, tableEnd);
+        
         // Vérifier qu'on a trouvé les deux sections
         if (designationStart == -1 || qteStart == -1 || qteStart <= designationStart) {
-            log.debug("⚠️ [OCR] Format colonnes séparées non détecté");
+            log.info("⚠️ [OCR] Format colonnes séparées non détecté (designationStart={}, qteStart={})", 
+                     designationStart, qteStart);
             return productLines;
         }
         
@@ -576,7 +606,9 @@ public class CloudinaryOcrService {
             String line = lines[i].trim();
             if (isValidDesignation(line)) {
                 designations.add(line);
-                log.debug("📝 [OCR] Désignation collectée: {}", line);
+                log.info("📝 [OCR] Désignation collectée: '{}'", line);
+            } else {
+                log.debug("🚫 [OCR] Désignation rejetée: '{}'", line);
             }
         }
         
@@ -585,22 +617,33 @@ public class CloudinaryOcrService {
         int numbersStart = qteStart;
         for (int i = qteStart; i < Math.min(qteStart + 5, tableEnd); i++) {
             String line = lines[i].trim().toUpperCase();
-            if (line.contains("PRIX") || line.contains("MONTANT") || line.contains("HT")) {
+            if (line.contains("PRIX") || line.contains("MONTANT") || line.equals("HT")) {
                 numbersStart = i + 1;
+                log.debug("📍 [OCR] Saut d'en-tête ligne {}: '{}'", i, line);
             }
         }
+        
+        log.info("📍 [OCR] Début des nombres ligne {}", numbersStart);
         
         List<Double> allNumbers = new ArrayList<>();
         for (int i = numbersStart; i < tableEnd; i++) {
             String line = lines[i].trim();
-            // Ignorer les lignes textuelles
-            if (line.matches(".*[A-Za-z]{3,}.*") && !line.matches(".*\\d{3,}.*")) {
+            
+            // Ignorer les lignes vides
+            if (line.isEmpty()) {
                 continue;
             }
+            
+            // Ignorer les lignes qui sont clairement du texte (pas de nombres significatifs)
+            if (line.matches(".*[A-Za-z]{4,}.*") && !line.matches(".*\\d{3,}.*")) {
+                log.debug("🚫 [OCR] Ligne texte ignorée: '{}'", line);
+                continue;
+            }
+            
             Double num = parseNumber(line);
             if (num != null && num > 0) {
                 allNumbers.add(num);
-                log.debug("🔢 [OCR] Nombre collecté: {} (ligne: {})", num, line);
+                log.info("🔢 [OCR] Nombre collecté: {} (ligne: '{}')", num, line);
             }
         }
         
@@ -644,10 +687,11 @@ public class CloudinaryOcrService {
                     .build();
             
             productLines.add(productLine);
-            log.debug("✅ [OCR] Produit assemblé: {} - Qté: {} - PU: {} - Total: {}", 
+            log.info("✅ [OCR] Produit assemblé: {} - Qté: {} - PU: {} - Total: {}", 
                     designation, qte, prix, total);
         }
         
+        log.info("📊 [OCR] Format séparé: {} produits extraits", productLines.size());
         return productLines;
     }
 
@@ -661,30 +705,39 @@ public class CloudinaryOcrService {
         
         String trimmed = line.trim();
         
-        // Trop court (artefacts OCR comme "AS", "ZA", "CLA")
-        if (trimmed.length() <= 3) {
+        // Trop court (artefacts OCR comme "AS", "ZA", "CLA", "A S")
+        // Retirer les espaces pour le test de longueur
+        String withoutSpaces = trimmed.replaceAll("\\s+", "");
+        if (withoutSpaces.length() <= 3) {
+            log.debug("🚫 [OCR] Désignation trop courte ({}): '{}'", withoutSpaces.length(), trimmed);
             return false;
         }
         
         // Doit contenir au moins 3 lettres consécutives
         if (!trimmed.matches(".*[A-Za-z]{3,}.*")) {
+            log.debug("🚫 [OCR] Désignation sans 3 lettres consécutives: '{}'", trimmed);
             return false;
         }
         
         // Pas un mot-clé de bruit
         String upper = trimmed.toUpperCase();
-        String[] noiseWords = {"DIVERS", "DATE", "FACTURE", "COMMANDE", "REFERENCE", "QTE", "PRIX", "MONTANT"};
+        String[] noiseWords = {"DIVERS", "DATE", "FACTURE", "COMMANDE", "REFERENCE", "QTE", "PRIX", "MONTANT", "CLIENT"};
         for (String noise : noiseWords) {
             if (upper.equals(noise) || upper.startsWith(noise + " ")) {
+                log.debug("🚫 [OCR] Désignation = mot-clé bruit '{}': '{}'", noise, trimmed);
                 return false;
             }
         }
         
-        // Pas une ligne de bruit générale
-        if (isNoiseLine(trimmed)) {
+        // Pas une ligne de bruit générale (mais ne pas appeler isNoiseLine car trop restrictif)
+        // Vérifier seulement quelques patterns critiques
+        if (upper.contains("TEL:") || upper.contains("FAX:") || upper.startsWith("TEL") || upper.startsWith("FAX")) {
+            log.debug("🚫 [OCR] Désignation = téléphone/fax: '{}'", trimmed);
             return false;
         }
         
+        // Accepter la ligne comme désignation
+        log.debug("✅ [OCR] Désignation valide: '{}'", trimmed);
         return true;
     }
 
