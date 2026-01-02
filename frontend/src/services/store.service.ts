@@ -23,6 +23,7 @@ export interface Product {
   priceBuyHT: number;
   priceSellHT: number;
   stock?: number; // Quantit├® en stock
+  imageUrl?: string; // URL de l'image (base64 data URL)
 }
 
 export interface Client {

@@ -14,7 +14,7 @@ export class ProductService {
   }
 
   async addProduct(product: Product): Promise<Product> {
-    const payload = {
+    const payload: any = {
       refArticle: product.ref,
       designation: product.name,
       unite: product.unit,
@@ -23,12 +23,19 @@ export class ProductService {
       quantiteEnStock: product.stock !== undefined ? product.stock : 0,
       tva: 20.0
     };
+    // Inclure l'image si présente (extraire base64 depuis data URL)
+    if (product.imageUrl) {
+      const base64Data = this.extractBase64FromDataUrl(product.imageUrl);
+      const contentType = this.extractContentTypeFromDataUrl(product.imageUrl);
+      payload.imageBase64 = base64Data;
+      payload.imageContentType = contentType;
+    }
     const created = await this.api.post<any>('/produits', payload).toPromise();
     return this.mapProduct(created);
   }
 
   async updateProduct(product: Product): Promise<Product> {
-    const payload = {
+    const payload: any = {
       refArticle: product.ref,
       designation: product.name,
       unite: product.unit,
@@ -36,8 +43,28 @@ export class ProductService {
       prixVenteUnitaireHT: product.priceSellHT,
       quantiteEnStock: product.stock !== undefined ? product.stock : 0
     };
+    // Inclure l'image si présente (extraire base64 depuis data URL)
+    if (product.imageUrl) {
+      const base64Data = this.extractBase64FromDataUrl(product.imageUrl);
+      const contentType = this.extractContentTypeFromDataUrl(product.imageUrl);
+      payload.imageBase64 = base64Data;
+      payload.imageContentType = contentType;
+    }
     const updated = await this.api.put<any>(`/produits/${product.id}`, payload).toPromise();
     return this.mapProduct(updated);
+  }
+
+  private extractBase64FromDataUrl(dataUrl: string): string {
+    // data:image/png;base64,iVBORw0KG... -> iVBORw0KG...
+    const base64Index = dataUrl.indexOf('base64,');
+    if (base64Index === -1) return dataUrl; // Déjà en base64 pur
+    return dataUrl.substring(base64Index + 7);
+  }
+
+  private extractContentTypeFromDataUrl(dataUrl: string): string {
+    // data:image/png;base64,... -> image/png
+    const match = dataUrl.match(/data:([^;]+)/);
+    return match ? match[1] : 'image/png';
   }
 
   async deleteProduct(id: string): Promise<void> {
@@ -45,6 +72,13 @@ export class ProductService {
   }
 
   private mapProduct(p: any): Product {
+    // Construire l'URL de l'image depuis base64 si présente
+    let imageUrl: string | undefined;
+    if (p.imageBase64) {
+      const contentType = p.imageContentType || 'image/png';
+      imageUrl = `data:${contentType};base64,${p.imageBase64}`;
+    }
+    
     return {
       id: p.id,
       ref: p.refArticle || p.ref,
@@ -52,7 +86,8 @@ export class ProductService {
       unit: p.unite || p.unit,
       priceBuyHT: p.prixAchatUnitaireHT || p.priceBuyHT || 0,
       priceSellHT: p.prixVenteUnitaireHT || p.priceSellHT || 0,
-      stock: p.quantiteEnStock !== undefined ? p.quantiteEnStock : (p.stock !== undefined ? p.stock : 0)
+      stock: p.quantiteEnStock !== undefined ? p.quantiteEnStock : (p.stock !== undefined ? p.stock : 0),
+      imageUrl: imageUrl
     };
   }
 }

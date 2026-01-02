@@ -37,10 +37,16 @@ import { StoreService, Product } from '../../services/store.service';
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
              </button>
 
-            <!-- Mock Image Area -->
-            <div class="h-40 bg-slate-50 relative overflow-hidden flex items-center justify-center">
-               <div class="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent"></div>
-               <svg class="w-16 h-16 text-slate-200 group-hover:text-blue-200 transition-colors transform group-hover:scale-110 duration-500" fill="currentColor" viewBox="0 0 24 24"><path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+            <!-- Product Image Area -->
+            <div class="h-40 bg-slate-50 relative overflow-hidden">
+               @if (prod.imageUrl) {
+                 <img [src]="prod.imageUrl" [alt]="prod.name" class="w-full h-full object-cover">
+               } @else {
+                 <div class="h-full flex items-center justify-center">
+                   <svg class="w-16 h-16 text-slate-200 group-hover:text-blue-200 transition-colors transform group-hover:scale-110 duration-500" fill="currentColor" viewBox="0 0 24 24"><path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                 </div>
+               }
+               <div class="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent pointer-events-none"></div>
                <span class="absolute top-3 left-3 bg-white/90 backdrop-blur px-2 py-1 text-xs font-bold text-slate-700 rounded shadow-sm border border-slate-100 uppercase tracking-wide">
                  {{ prod.ref }}
                </span>
@@ -113,6 +119,31 @@ import { StoreService, Product } from '../../services/store.service';
                </div>
                
                <form [formGroup]="form" (ngSubmit)="onSubmit()" class="flex-1 overflow-y-auto p-6 space-y-5">
+                  <!-- Image Upload Section -->
+                  <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-2">Image du Produit</label>
+                    @if (imagePreview()) {
+                      <div class="relative mb-3">
+                        <img [src]="imagePreview()!" alt="Aperçu" class="w-full h-48 object-cover rounded-lg border border-slate-200">
+                        <button type="button" (click)="removeImage()" class="absolute top-2 right-2 p-2 bg-red-500 text-white rounded-full hover:bg-red-600 transition shadow-lg">
+                          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                        </button>
+                      </div>
+                    }
+                    <label for="product-image-input" class="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50 transition-colors">
+                      <div class="flex flex-col items-center justify-center pt-5 pb-6">
+                        <svg class="w-10 h-10 mb-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                        </svg>
+                        <p class="mb-2 text-sm text-slate-500">
+                          <span class="font-semibold">Cliquez pour uploader</span> ou glissez-déposez
+                        </p>
+                        <p class="text-xs text-slate-500">PNG, JPG, WEBP (MAX. 2MB)</p>
+                      </div>
+                      <input id="product-image-input" type="file" accept="image/*" (change)="onImageSelect($event)" class="hidden">
+                    </label>
+                  </div>
+
                   <div>
                     <label class="block text-sm font-semibold text-slate-700 mb-1">Référence Article</label>
                     <input formControlName="ref" type="text" class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition uppercase placeholder-slate-400" placeholder="EX: CIM-001">
@@ -183,6 +214,8 @@ export class ProductsComponent {
   isEditMode = signal(false);
   editingId: string | null = null;
   searchTerm = signal('');
+  selectedImageFile: File | null = null;
+  imagePreview = signal<string | null>(null);
 
   form: FormGroup = this.fb.group({
     ref: ['', Validators.required],
@@ -223,6 +256,8 @@ export class ProductsComponent {
     this.isEditMode.set(false);
     this.editingId = null;
     this.form.reset({ unit: 'U', priceBuyHT: 0, priceSellHT: 0, stock: 0 });
+    this.selectedImageFile = null;
+    this.imagePreview.set(null);
     this.isFormOpen.set(true);
   }
 
@@ -234,6 +269,8 @@ export class ProductsComponent {
     this.isEditMode.set(true);
     this.editingId = prod.id;
     this.form.patchValue(prod);
+    this.selectedImageFile = null;
+    this.imagePreview.set(prod.imageUrl || null);
     this.isFormOpen.set(true);
   }
 
@@ -247,7 +284,54 @@ export class ProductsComponent {
     }
   }
 
-  onSubmit() {
+  async onImageSelect(event: Event) {
+    const input = event.target as HTMLInputElement;
+    if (input.files && input.files[0]) {
+      const file = input.files[0];
+      
+      // Valider le type de fichier
+      if (!file.type.startsWith('image/')) {
+        alert('Veuillez sélectionner une image valide');
+        return;
+      }
+      
+      // Valider la taille (max 2MB)
+      if (file.size > 2 * 1024 * 1024) {
+        alert('L\'image ne doit pas dépasser 2MB');
+        return;
+      }
+      
+      this.selectedImageFile = file;
+      
+      // Créer la prévisualisation
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        this.imagePreview.set(e.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  }
+
+  removeImage() {
+    this.selectedImageFile = null;
+    this.imagePreview.set(null);
+    // Réinitialiser l'input file
+    const fileInput = document.getElementById('product-image-input') as HTMLInputElement;
+    if (fileInput) {
+      fileInput.value = '';
+    }
+  }
+
+  private async fileToDataUrl(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = error => reject(error);
+    });
+  }
+
+  async onSubmit() {
     if (this.form.invalid) return;
 
     const val = this.form.value;
@@ -256,10 +340,24 @@ export class ProductsComponent {
       ...val
     };
 
+    // Ajouter l'image si un fichier a été sélectionné
+    if (this.selectedImageFile) {
+      try {
+        product.imageUrl = await this.fileToDataUrl(this.selectedImageFile);
+      } catch (error) {
+        console.error('Erreur lors de la conversion de l\'image:', error);
+        alert('Erreur lors du traitement de l\'image');
+        return;
+      }
+    } else if (this.imagePreview()) {
+      // Conserver l'image existante si aucune nouvelle image n'est sélectionnée
+      product.imageUrl = this.imagePreview() || undefined;
+    }
+
     if (this.isEditMode()) {
-      this.store.updateProduct(product);
+      await this.store.updateProduct(product);
     } else {
-      this.store.addProduct(product);
+      await this.store.addProduct(product);
     }
     this.closeForm();
   }

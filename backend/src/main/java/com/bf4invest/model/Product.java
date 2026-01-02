@@ -30,6 +30,9 @@ public class Product {
     
     private Integer quantiteEnStock; // Quantité en stock (défaut: 0)
     
+    private String imageBase64; // Image du produit en base64 (optionnel)
+    private String imageContentType; // Type MIME de l'image (image/png, image/jpeg, etc.)
+    
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

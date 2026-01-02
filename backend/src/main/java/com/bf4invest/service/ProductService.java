@@ -55,6 +55,11 @@ public class ProductService {
                     if (product.getQuantiteEnStock() != null) {
                         existing.setQuantiteEnStock(product.getQuantiteEnStock());
                     }
+                    // Mettre à jour l'image si fournie
+                    if (product.getImageBase64() != null) {
+                        existing.setImageBase64(product.getImageBase64());
+                        existing.setImageContentType(product.getImageContentType());
+                    }
                     existing.setUpdatedAt(LocalDateTime.now());
                     Product saved = productRepository.save(existing);
                     
