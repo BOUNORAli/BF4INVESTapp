@@ -3099,24 +3099,24 @@ public class ExcelImportService {
             
             // Créer une Map pour fusionner toutes les lignes par numéro de ligne
             Map<Integer, ImportResult.SuccessRow> successRowsMap = new LinkedHashMap<>();
-            for (ImportResult.SuccessRow successRow : result.getSuccessRows()) {
-                successRowsMap.put(successRow.getRowNumber(), successRow);
+            for (ImportResult.SuccessRow sr : result.getSuccessRows()) {
+                successRowsMap.put(sr.getRowNumber(), sr);
             }
             Map<Integer, ImportResult.ErrorRow> errorRowsMap = new LinkedHashMap<>();
-            for (ImportResult.ErrorRow errorRow : result.getErrorRows()) {
-                errorRowsMap.put(errorRow.getRowNumber(), errorRow);
+            for (ImportResult.ErrorRow er : result.getErrorRows()) {
+                errorRowsMap.put(er.getRowNumber(), er);
             }
             
             // Collecter toutes les colonnes uniques de toutes les lignes
             Set<String> allColumnNamesAllRows = new LinkedHashSet<>();
-            for (ImportResult.SuccessRow successRow : result.getSuccessRows()) {
-                if (successRow.getRowData() != null) {
-                    allColumnNamesAllRows.addAll(successRow.getRowData().keySet());
+            for (ImportResult.SuccessRow sr : result.getSuccessRows()) {
+                if (sr.getRowData() != null) {
+                    allColumnNamesAllRows.addAll(sr.getRowData().keySet());
                 }
             }
-            for (ImportResult.ErrorRow errorRow : result.getErrorRows()) {
-                if (errorRow.getRowData() != null) {
-                    allColumnNamesAllRows.addAll(errorRow.getRowData().keySet());
+            for (ImportResult.ErrorRow er : result.getErrorRows()) {
+                if (er.getRowData() != null) {
+                    allColumnNamesAllRows.addAll(er.getRowData().keySet());
                 }
             }
             
@@ -3150,22 +3150,22 @@ public class ExcelImportService {
                 String status = "";
                 String actionMsg = "";
                 
-                ImportResult.SuccessRow successRow = successRowsMap.get(rowNum);
-                ImportResult.ErrorRow errorRow = errorRowsMap.get(rowNum);
+                ImportResult.SuccessRow currentSuccessRow = successRowsMap.get(rowNum);
+                ImportResult.ErrorRow currentErrorRow = errorRowsMap.get(rowNum);
                 Map<String, Object> rowData = null;
                 
-                if (errorRow != null) {
+                if (currentErrorRow != null) {
                     // Ligne en erreur
                     rowStyle = errorStyle;
                     status = "ERREUR";
-                    actionMsg = errorRow.getErrorMessage() != null ? errorRow.getErrorMessage() : "";
-                    rowData = errorRow.getRowData();
-                } else if (successRow != null) {
+                    actionMsg = currentErrorRow.getErrorMessage() != null ? currentErrorRow.getErrorMessage() : "";
+                    rowData = currentErrorRow.getRowData();
+                } else if (currentSuccessRow != null) {
                     // Ligne de succès
                     rowStyle = successStyle;
                     status = "SUCCÈS";
-                    actionMsg = successRow.getActionDetail() != null ? successRow.getActionDetail() : "";
-                    rowData = successRow.getRowData();
+                    actionMsg = currentSuccessRow.getActionDetail() != null ? currentSuccessRow.getActionDetail() : "";
+                    rowData = currentSuccessRow.getRowData();
                 } else {
                     // Ne devrait pas arriver
                     continue;
@@ -3230,9 +3230,9 @@ public class ExcelImportService {
             
             // Récupérer tous les noms de colonnes uniques
             Set<String> allColumnNames = new LinkedHashSet<>();
-            for (ImportResult.ErrorRow errorRow : result.getErrorRows()) {
-                if (errorRow.getRowData() != null) {
-                    allColumnNames.addAll(errorRow.getRowData().keySet());
+            for (ImportResult.ErrorRow errRow : result.getErrorRows()) {
+                if (errRow.getRowData() != null) {
+                    allColumnNames.addAll(errRow.getRowData().keySet());
                 }
             }
             
@@ -3247,25 +3247,25 @@ public class ExcelImportService {
             }
             
             // Lignes en erreur
-            for (ImportResult.ErrorRow errorRow : result.getErrorRows()) {
+            for (ImportResult.ErrorRow errRow : result.getErrorRows()) {
                 Row row = errorSheet.createRow(rowNum++);
                 colNum = 0;
                 
                 // N° ligne
                 Cell cell0 = row.createCell(colNum++);
-                cell0.setCellValue(errorRow.getRowNumber());
+                cell0.setCellValue(errRow.getRowNumber());
                 cell0.setCellStyle(errorStyle);
                 
                 // Message d'erreur
                 Cell cell1 = row.createCell(colNum++);
-                cell1.setCellValue(errorRow.getErrorMessage() != null ? errorRow.getErrorMessage() : "");
+                cell1.setCellValue(errRow.getErrorMessage() != null ? errRow.getErrorMessage() : "");
                 cell1.setCellStyle(errorStyle);
                 
                 // Données de la ligne
-                if (errorRow.getRowData() != null) {
+                if (errRow.getRowData() != null) {
                     for (String colName : allColumnNames) {
                         Cell cell = row.createCell(colNum++);
-                        Object value = errorRow.getRowData().get(colName);
+                        Object value = errRow.getRowData().get(colName);
                         if (value != null) {
                             if (value instanceof String) {
                                 cell.setCellValue((String) value);
@@ -3419,9 +3419,9 @@ public class ExcelImportService {
                 
                 // Récupérer tous les noms de colonnes uniques
                 Set<String> successColumnNames = new LinkedHashSet<>();
-                for (ImportResult.SuccessRow successRow : result.getSuccessRows()) {
-                    if (successRow.getRowData() != null) {
-                        successColumnNames.addAll(successRow.getRowData().keySet());
+                for (ImportResult.SuccessRow succRow : result.getSuccessRows()) {
+                    if (succRow.getRowData() != null) {
+                        successColumnNames.addAll(succRow.getRowData().keySet());
                     }
                 }
                 
@@ -3436,25 +3436,25 @@ public class ExcelImportService {
                 }
                 
                 // Lignes de succès
-                for (ImportResult.SuccessRow successRow : result.getSuccessRows()) {
+                for (ImportResult.SuccessRow succRow : result.getSuccessRows()) {
                     Row row = successSheet.createRow(rowNum++);
                     colNum = 0;
                     
                     // N° ligne
                     Cell cell0 = row.createCell(colNum++);
-                    cell0.setCellValue(successRow.getRowNumber());
+                    cell0.setCellValue(succRow.getRowNumber());
                     cell0.setCellStyle(successStyle);
                     
                     // Action Effectuée
                     Cell cell1 = row.createCell(colNum++);
-                    cell1.setCellValue(successRow.getActionDetail() != null ? successRow.getActionDetail() : "");
+                    cell1.setCellValue(succRow.getActionDetail() != null ? succRow.getActionDetail() : "");
                     cell1.setCellStyle(successStyle);
                     
                     // Données de la ligne
-                    if (successRow.getRowData() != null) {
+                    if (succRow.getRowData() != null) {
                         for (String colName : successColumnNames) {
                             Cell cell = row.createCell(colNum++);
-                            Object value = successRow.getRowData().get(colName);
+                            Object value = succRow.getRowData().get(colName);
                             if (value != null) {
                                 if (value instanceof String) {
                                     cell.setCellValue((String) value);
