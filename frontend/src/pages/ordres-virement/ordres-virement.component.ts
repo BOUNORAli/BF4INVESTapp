@@ -344,6 +344,7 @@ import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, FormsModule } 
                     Montant Manuel <span class="text-red-500">*</span>
                   </label>
                   <input type="number" step="0.01" formControlName="montant" 
+                         (input)="onMontantChange($event)"
                          [class.border-red-300]="isFieldInvalid('montant')"
                          placeholder="0.00" 
                          class="w-full p-2 border border-emerald-300 rounded-lg focus:ring-2 focus:ring-emerald-500/20 outline-none text-right font-semibold">
@@ -409,6 +410,11 @@ export class OrdresVirementComponent implements OnInit {
       statut: ['EN_ATTENTE'],
       montant: [0] // Montant manuel si pas de factures
     });
+
+    // Écouter les changements du montant pour mettre à jour le signal
+    this.form.get('montant')?.valueChanges.subscribe(value => {
+      this.montantManuel.set(value || 0);
+    });
   }
 
   ngOnInit() {
@@ -461,6 +467,9 @@ export class OrdresVirementComponent implements OnInit {
     return this.store.invoices().filter(inv => inv.type === 'purchase' && inv.status !== 'paid');
   });
 
+  // Signal pour suivre le montant manuel
+  montantManuel = signal<number>(0);
+
   calculatedMontant = computed(() => {
     // Si des factures sont sélectionnées, calculer à partir des factures
     if (this.selectedFactures().length > 0) {
@@ -470,9 +479,8 @@ export class OrdresVirementComponent implements OnInit {
         return sum + (montantPartiel !== undefined && montantPartiel > 0 ? montantPartiel : f.amountTTC);
       }, 0);
     }
-    // Sinon, utiliser le montant manuel
-    const montantManuel = this.form.get('montant')?.value || 0;
-    return montantManuel;
+    // Sinon, utiliser le montant manuel depuis le signal
+    return this.montantManuel();
   });
 
   // Methods
@@ -502,6 +510,7 @@ export class OrdresVirementComponent implements OnInit {
     this.isEditMode.set(false);
     this.selectedFactures.set([]);
     this.facturesMontants.set(new Map());
+    this.montantManuel.set(0);
     this.beneficiaryType.set('SUPPLIER');
     this.form.reset({ 
       statut: 'EN_ATTENTE', 
@@ -542,6 +551,9 @@ export class OrdresVirementComponent implements OnInit {
     }
     this.facturesMontants.set(montantsMap);
     
+    const montantInitial = ov.facturesIds && ov.facturesIds.length > 0 ? 0 : (ov.montant || 0);
+    this.montantManuel.set(montantInitial);
+    
     this.form.patchValue({
       dateOV: ov.dateOV,
       dateExecution: ov.dateExecution || '',
@@ -553,7 +565,7 @@ export class OrdresVirementComponent implements OnInit {
       motif: ov.motif,
       type: ov.type || 'NORMAL',
       statut: ov.statut,
-      montant: ov.facturesIds && ov.facturesIds.length > 0 ? 0 : ov.montant
+      montant: montantInitial
     });
     
     this.updateBeneficiaryTypeValidation();
@@ -643,6 +655,13 @@ export class OrdresVirementComponent implements OnInit {
     return this.facturesMontants().get(factureId);
   }
 
+  onMontantChange(event: any) {
+    const value = parseFloat(event.target.value) || 0;
+    this.montantManuel.set(value);
+    // Mettre à jour aussi la valeur du formulaire
+    this.form.patchValue({ montant: value }, { emitEvent: false });
+  }
+
   onFactureToggle(factureId: string) {
     const current = this.selectedFactures();
     if (current.includes(factureId)) {
@@ -697,10 +716,24 @@ export class OrdresVirementComponent implements OnInit {
       facturesIds = this.selectedFactures();
     }
 
+    // Préparer les valeurs selon le type de bénéficiaire
+    let beneficiaireIdValue: string | undefined;
+    let nomBeneficiaireValue: string | undefined;
+
+    if (this.beneficiaryType() === 'SUPPLIER') {
+      // Pour un fournisseur, utiliser beneficiaireId et nomBeneficiaire sera rempli par le backend
+      beneficiaireIdValue = formValue.beneficiaireId && formValue.beneficiaireId.trim() ? formValue.beneficiaireId.trim() : undefined;
+      nomBeneficiaireValue = undefined; // Sera rempli par le backend depuis le fournisseur
+    } else {
+      // Pour une personne physique, beneficiaireId doit être undefined et nomBeneficiaire doit être rempli
+      beneficiaireIdValue = undefined;
+      nomBeneficiaireValue = formValue.nomBeneficiaire && formValue.nomBeneficiaire.trim() ? formValue.nomBeneficiaire.trim() : undefined;
+    }
+
     const ov: OrdreVirement = {
       ...formValue,
-      beneficiaireId: this.beneficiaryType() === 'SUPPLIER' ? formValue.beneficiaireId : undefined,
-      nomBeneficiaire: this.beneficiaryType() === 'OTHER' ? formValue.nomBeneficiaire : formValue.nomBeneficiaire,
+      beneficiaireId: beneficiaireIdValue,
+      nomBeneficiaire: nomBeneficiaireValue,
       montant: this.calculatedMontant(),
       facturesIds: facturesIds.length > 0 ? facturesIds : undefined,
       facturesMontants: facturesMontants.length > 0 ? facturesMontants : undefined,
