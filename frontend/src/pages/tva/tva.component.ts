@@ -41,18 +41,31 @@ import type { DeclarationTVA } from '../../models/types';
         </div>
       </div>
 
+      <!-- Filtre par année -->
+      <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+        <div class="flex items-center gap-4">
+          <label class="text-sm font-semibold text-slate-700">Filtrer par année :</label>
+          <select [(ngModel)]="selectedYearValue" (change)="onYearChange()" class="px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 outline-none bg-white">
+            <option [value]="null">Toutes les années</option>
+            @for (year of availableYears(); track year) {
+              <option [value]="year">{{ year }}</option>
+            }
+          </select>
+        </div>
+      </div>
+
       <!-- Dashboard TVA -->
       <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div class="bg-gradient-to-br from-blue-500 to-blue-600 p-6 rounded-xl shadow-lg text-white">
-          <div class="text-sm font-semibold opacity-90 mb-2">TVA Collectée ({{ currentYear() }})</div>
+          <div class="text-sm font-semibold opacity-90 mb-2">TVA Collectée ({{ yearLabel() }})</div>
           <div class="text-3xl font-bold">{{ totalCollectee() | number:'1.2-2' }} MAD</div>
         </div>
         <div class="bg-gradient-to-br from-orange-500 to-orange-600 p-6 rounded-xl shadow-lg text-white">
-          <div class="text-sm font-semibold opacity-90 mb-2">TVA Déductible ({{ currentYear() }})</div>
+          <div class="text-sm font-semibold opacity-90 mb-2">TVA Déductible ({{ yearLabel() }})</div>
           <div class="text-3xl font-bold">{{ totalDeductible() | number:'1.2-2' }} MAD</div>
         </div>
         <div class="bg-gradient-to-br from-emerald-500 to-emerald-600 p-6 rounded-xl shadow-lg text-white">
-          <div class="text-sm font-semibold opacity-90 mb-2">Solde TVA ({{ currentYear() }})</div>
+          <div class="text-sm font-semibold opacity-90 mb-2">Solde TVA ({{ yearLabel() }})</div>
           <div class="text-3xl font-bold">{{ soldeTVA() | number:'1.2-2' }} MAD</div>
           <div class="text-xs mt-2 opacity-75">{{ soldeTVA() >= 0 ? 'À payer' : 'Crédit' }}</div>
         </div>
@@ -62,12 +75,12 @@ import type { DeclarationTVA } from '../../models/types';
       <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         <div class="p-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
           <h2 class="text-lg font-bold text-slate-800">Historique des Déclarations</h2>
-          <button (click)="exportDeclarations()" [disabled]="declarations().length === 0" class="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition disabled:opacity-50 flex items-center gap-2">
+          <button (click)="exportDeclarations()" [disabled]="filteredDeclarations().length === 0" class="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition disabled:opacity-50 flex items-center gap-2">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
             Exporter Excel
           </button>
         </div>
-        @if (declarations().length === 0) {
+        @if (filteredDeclarations().length === 0) {
           <div class="p-12 text-center text-slate-500">
             <p>Aucune déclaration TVA trouvée.</p>
           </div>
@@ -87,7 +100,7 @@ import type { DeclarationTVA } from '../../models/types';
                 </tr>
               </thead>
               <tbody class="divide-y divide-slate-100">
-                @for (decl of declarations(); track decl.id) {
+                @for (decl of filteredDeclarations(); track decl.id) {
                   <tr class="hover:bg-slate-50">
                     <td class="px-4 py-3 font-medium">{{ decl.periode }}</td>
                     <td class="px-4 py-3 text-right">{{ decl.tvaCollecteeTotale | number:'1.2-2' }}</td>
@@ -232,6 +245,8 @@ export class TVAComponent implements OnInit {
   selectedMois: number | null = null;
   selectedAnnee: number = new Date().getFullYear();
   currentYear = signal(new Date().getFullYear());
+  selectedYearValue: number | null = null; // null = toutes les années (pour ngModel)
+  selectedYear = signal<number | null>(null); // Signal pour les computed
   regenerating = signal(false);
   calculating = signal(false);
 
@@ -242,25 +257,59 @@ export class TVAComponent implements OnInit {
     { value: 10, label: 'Octobre' }, { value: 11, label: 'Novembre' }, { value: 12, label: 'Décembre' }
   ];
 
+  // Filtrer les déclarations par année si une année est sélectionnée
+  filteredDeclarations = computed(() => {
+    const year = this.selectedYear();
+    if (year === null) {
+      return this.declarations();
+    }
+    return this.declarations().filter(d => d.annee === year);
+  });
+
   totalCollectee = computed(() => 
-    this.declarations().reduce((sum, d) => sum + (d.tvaCollecteeTotale || 0), 0)
+    this.filteredDeclarations().reduce((sum, d) => sum + (d.tvaCollecteeTotale || 0), 0)
   );
 
   totalDeductible = computed(() => 
-    this.declarations().reduce((sum, d) => sum + (d.tvaDeductibleTotale || 0), 0)
+    this.filteredDeclarations().reduce((sum, d) => sum + (d.tvaDeductibleTotale || 0), 0)
   );
 
   soldeTVA = computed(() => this.totalCollectee() - this.totalDeductible());
 
+  // Obtenir toutes les années disponibles dans les déclarations
+  availableYears = computed(() => {
+    const years = new Set<number>();
+    this.declarations().forEach(d => {
+      if (d.annee) {
+        years.add(d.annee);
+      }
+    });
+    return Array.from(years).sort((a, b) => b - a); // Tri décroissant
+  });
+
+  // Label pour l'affichage des totaux
+  yearLabel = computed(() => {
+    const year = this.selectedYear();
+    return year === null ? 'Toutes' : year.toString();
+  });
+
   ngOnInit() {
+    this.selectedYearValue = null; // Par défaut, afficher toutes les années
+    this.selectedYear.set(null);
     this.loadDeclarations();
   }
 
   loadDeclarations() {
-    this.tvaService.getDeclarations(this.currentYear()).subscribe({
+    // Charger toutes les déclarations sans filtre d'année
+    this.tvaService.getDeclarations().subscribe({
       next: (data) => this.declarations.set(data),
       error: (err) => this.store.showToast('Erreur lors du chargement', 'error')
     });
+  }
+
+  onYearChange() {
+    // Synchroniser la valeur avec le signal
+    this.selectedYear.set(this.selectedYearValue);
   }
 
   openCalculModal() {
@@ -333,12 +382,14 @@ export class TVAComponent implements OnInit {
   }
 
   exportDeclarations() {
-    this.tvaService.exportDeclarations(this.currentYear()).subscribe({
+    const year = this.selectedYear();
+    this.tvaService.exportDeclarations(year || undefined).subscribe({
       next: (blob) => {
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `declarations_tva_${this.currentYear()}.xlsx`;
+        const yearLabel = year ? year.toString() : 'toutes';
+        a.download = `declarations_tva_${yearLabel}.xlsx`;
         a.click();
         window.URL.revokeObjectURL(url);
         this.store.showToast('Déclarations exportées avec succès', 'success');
