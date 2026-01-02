@@ -20,7 +20,8 @@ public class SoldeGlobal {
     private String id;
     
     private Double soldeInitial; // Solde de départ configuré par l'utilisateur
-    private Double soldeActuel; // Solde calculé en temps réel
+    private Double soldeActuel; // Solde calculé en temps réel (solde banque)
+    private Double soldeActuelProjete; // Solde projeté si tous les clients ont payé et tous les fournisseurs ont été payés
     private LocalDate dateDebut; // Date de début de la comptabilité
     
     private LocalDateTime createdAt;

@@ -8,6 +8,8 @@ import com.bf4invest.model.Paiement;
 import com.bf4invest.model.SoldeGlobal;
 import com.bf4invest.model.Supplier;
 import com.bf4invest.repository.ClientRepository;
+import com.bf4invest.repository.FactureAchatRepository;
+import com.bf4invest.repository.FactureVenteRepository;
 import com.bf4invest.repository.HistoriqueSoldeRepository;
 import com.bf4invest.repository.SoldeGlobalRepository;
 import com.bf4invest.repository.SupplierRepository;
@@ -30,6 +32,8 @@ public class SoldeService {
     private final HistoriqueSoldeRepository historiqueSoldeRepository;
     private final ClientRepository clientRepository;
     private final SupplierRepository supplierRepository;
+    private final FactureVenteRepository factureVenteRepository;
+    private final FactureAchatRepository factureAchatRepository;
     
     /**
      * Initialise le solde de départ
@@ -274,7 +278,7 @@ public class SoldeService {
     }
     
     /**
-     * Récupère le solde global complet (avec solde initial)
+     * Récupère le solde global complet (avec solde initial et solde projeté)
      * Si aucun solde n'existe mais qu'il y a un historique, recalcule depuis l'historique
      */
     public Optional<SoldeGlobal> getSoldeGlobal() {
@@ -296,6 +300,8 @@ public class SoldeService {
                             .updatedAt(LocalDateTime.now())
                             .build();
                     soldeGlobal = soldeGlobalRepository.save(soldeGlobal);
+                    // Calculer et ajouter le solde projeté (non sauvegardé, calcul dynamique)
+                    soldeGlobal.setSoldeActuelProjete(calculerSoldeActuelProjete());
                     return Optional.of(soldeGlobal);
                 }
             }
@@ -311,12 +317,32 @@ public class SoldeService {
                     solde.setSoldeActuel(dernier.getSoldeGlobalApres());
                     solde.setUpdatedAt(LocalDateTime.now());
                     solde = soldeGlobalRepository.save(solde);
-                    return Optional.of(solde);
                 }
             }
+            // Toujours recalculer le solde projeté (calcul dynamique, ne pas sauvegarder)
+            solde.setSoldeActuelProjete(calculerSoldeActuelProjete());
+            return Optional.of(solde);
         }
         
-        return soldeOpt;
+        // Si aucun solde n'existe, créer un avec solde projeté calculé (ne pas sauvegarder car c'est juste pour retourner)
+        if (soldeOpt.isEmpty()) {
+            Double soldeProjete = calculerSoldeActuelProjete();
+            SoldeGlobal soldeGlobal = SoldeGlobal.builder()
+                    .soldeInitial(0.0)
+                    .soldeActuel(0.0)
+                    .soldeActuelProjete(soldeProjete)
+                    .dateDebut(LocalDate.now())
+                    .createdAt(LocalDateTime.now())
+                    .updatedAt(LocalDateTime.now())
+                    .build();
+            return Optional.of(soldeGlobal);
+        }
+        
+        // Mettre à jour le solde projeté (calcul dynamique, ne pas sauvegarder car c'est recalculé à chaque fois)
+        SoldeGlobal solde = soldeOpt.get();
+        solde.setSoldeActuelProjete(calculerSoldeActuelProjete());
+        // Ne pas sauvegarder le solde projeté car c'est un calcul dynamique qui doit être recalculé à chaque appel
+        return Optional.of(solde);
     }
     
     /**
@@ -406,6 +432,59 @@ public class SoldeService {
         HistoriqueSolde saved = historiqueSoldeRepository.save(historique);
         log.info("Charge payée enregistrée: {} MAD - {} - Solde après: {}", montant, libelle, soldeGlobalApres);
         return saved;
+    }
+
+    /**
+     * Calcule le solde actuel projeté si tous les clients ont payé et tous les fournisseurs ont été payés
+     * Formule : Solde Banque + Factures Vente Non Payées - Factures Achat Non Payées
+     * 
+     * @return Le solde projeté
+     */
+    public Double calculerSoldeActuelProjete() {
+        // Récupérer le solde banque actuel
+        Double soldeBanque = getSoldeGlobalActuel();
+        
+        // Calculer le total des factures de vente non payées
+        double facturesVenteNonPayees = factureVenteRepository.findAll().stream()
+                .filter(fv -> fv.getEtatPaiement() != null && !"regle".equals(fv.getEtatPaiement()))
+                .mapToDouble(fv -> {
+                    // Calculer le montant restant
+                    double totalTTC = fv.getTotalTTC() != null ? fv.getTotalTTC() : 0.0;
+                    double totalPaiements = 0.0;
+                    if (fv.getPaiements() != null && !fv.getPaiements().isEmpty()) {
+                        totalPaiements = fv.getPaiements().stream()
+                                .mapToDouble(p -> p.getMontant() != null ? p.getMontant() : 0.0)
+                                .sum();
+                    }
+                    double montantRestant = totalTTC - totalPaiements;
+                    return Math.max(0.0, montantRestant); // Ne prendre que les montants positifs
+                })
+                .sum();
+        
+        // Calculer le total des factures d'achat non payées
+        double facturesAchatNonPayees = factureAchatRepository.findAll().stream()
+                .filter(fa -> fa.getEtatPaiement() != null && !"regle".equals(fa.getEtatPaiement()))
+                .mapToDouble(fa -> {
+                    // Calculer le montant restant
+                    double totalTTC = fa.getTotalTTC() != null ? fa.getTotalTTC() : 0.0;
+                    double totalPaiements = 0.0;
+                    if (fa.getPaiements() != null && !fa.getPaiements().isEmpty()) {
+                        totalPaiements = fa.getPaiements().stream()
+                                .mapToDouble(p -> p.getMontant() != null ? p.getMontant() : 0.0)
+                                .sum();
+                    }
+                    double montantRestant = totalTTC - totalPaiements;
+                    return Math.max(0.0, montantRestant); // Ne prendre que les montants positifs
+                })
+                .sum();
+        
+        // Calculer le solde projeté
+        double soldeProjete = soldeBanque + facturesVenteNonPayees - facturesAchatNonPayees;
+        
+        log.debug("Calcul solde projeté - Banque: {}, Ventes non payées: {}, Achats non payés: {}, Projeté: {}", 
+                soldeBanque, facturesVenteNonPayees, facturesAchatNonPayees, soldeProjete);
+        
+        return soldeProjete;
     }
 }
 

@@ -35,12 +35,19 @@ public class SoldeController {
     @GetMapping("/global/complet")
     public ResponseEntity<SoldeGlobal> getSoldeGlobal() {
         Optional<SoldeGlobal> solde = soldeService.getSoldeGlobal();
-        return solde.map(ResponseEntity::ok)
-                .orElse(ResponseEntity.ok(SoldeGlobal.builder()
-                        .soldeInitial(0.0)
-                        .soldeActuel(0.0)
-                        .dateDebut(LocalDate.now())
-                        .build()));
+        if (solde.isPresent()) {
+            return ResponseEntity.ok(solde.get());
+        } else {
+            // Si aucun solde n'existe, créer un avec solde projeté calculé
+            Double soldeProjete = soldeService.calculerSoldeActuelProjete();
+            SoldeGlobal soldeGlobal = SoldeGlobal.builder()
+                    .soldeInitial(0.0)
+                    .soldeActuel(0.0)
+                    .soldeActuelProjete(soldeProjete)
+                    .dateDebut(LocalDate.now())
+                    .build();
+            return ResponseEntity.ok(soldeGlobal);
+        }
     }
     
     @PutMapping("/initial")
