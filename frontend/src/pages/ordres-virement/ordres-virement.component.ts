@@ -727,11 +727,15 @@ export class OrdresVirementComponent implements OnInit {
     } else {
       // Pour une personne physique, beneficiaireId doit être undefined et nomBeneficiaire doit être rempli
       beneficiaireIdValue = undefined;
-      const nomBeneficiaireInput = formValue.nomBeneficiaire?.trim();
-      if (!nomBeneficiaireInput) {
+      
+      // Récupérer la valeur du formulaire
+      const nomBeneficiaireRaw = this.form.get('nomBeneficiaire')?.value;
+      const nomBeneficiaireInput = nomBeneficiaireRaw ? String(nomBeneficiaireRaw).trim() : '';
+      
+      if (!nomBeneficiaireInput || nomBeneficiaireInput.length === 0) {
         // Si le nom n'est pas rempli, essayer de récupérer celui de l'ordre existant (en cas d'édition)
         if (this.isEditMode() && this.editingOV()?.nomBeneficiaire) {
-          nomBeneficiaireValue = this.editingOV()!.nomBeneficiaire;
+          nomBeneficiaireValue = this.editingOV()!.nomBeneficiaire.trim();
         } else {
           // Si toujours pas de nom, générer une erreur avant d'envoyer
           this.store.showToast('Veuillez saisir le nom du bénéficiaire', 'error');
@@ -750,7 +754,7 @@ export class OrdresVirementComponent implements OnInit {
       dateOV: formValue.dateOV,
       dateExecution: formValue.dateExecution || undefined,
       beneficiaireId: beneficiaireIdValue === undefined || beneficiaireIdValue === null || beneficiaireIdValue === '' ? undefined : beneficiaireIdValue,
-      nomBeneficiaire: nomBeneficiaireValue || undefined, // Toujours définir pour une personne physique
+      nomBeneficiaire: nomBeneficiaireValue, // Toujours défini pour une personne physique (déjà validé plus haut)
       ribBeneficiaire: formValue.ribBeneficiaire,
       banqueBeneficiaire: formValue.banqueBeneficiaire,
       banqueEmettrice: formValue.banqueEmettrice,
@@ -761,6 +765,16 @@ export class OrdresVirementComponent implements OnInit {
       facturesIds: facturesIds.length > 0 ? facturesIds : undefined,
       facturesMontants: facturesMontants.length > 0 ? facturesMontants : undefined
     };
+
+    // Debug: vérifier ce qui est envoyé
+    console.log('Envoi OrdreVirement:', {
+      beneficiaryType: this.beneficiaryType(),
+      beneficiaireId: ov.beneficiaireId,
+      nomBeneficiaire: ov.nomBeneficiaire,
+      montant: ov.montant,
+      formValue_nomBeneficiaire: formValue.nomBeneficiaire,
+      nomBeneficiaireValue: nomBeneficiaireValue
+    });
 
     try {
       if (this.isEditMode() && this.editingOV()?.id) {
