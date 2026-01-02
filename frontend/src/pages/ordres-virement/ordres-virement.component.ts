@@ -732,6 +732,7 @@ export class OrdresVirementComponent implements OnInit {
 
     // Construire l'objet sans utiliser spread pour éviter les conflits
     const ov: OrdreVirement = {
+      numeroOV: this.isEditMode() && this.editingOV()?.numeroOV ? this.editingOV()!.numeroOV : '', // Sera généré par le backend si vide
       dateOV: formValue.dateOV,
       dateExecution: formValue.dateExecution || undefined,
       beneficiaireId: beneficiaireIdValue,
