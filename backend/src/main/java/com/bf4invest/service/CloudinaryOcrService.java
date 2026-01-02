@@ -504,9 +504,194 @@ public class CloudinaryOcrService {
 
     /**
      * Extrait les lignes de produits du texte OCR
-     * Amélioré pour mieux détecter la zone du tableau et filtrer les faux positifs
+     * Gère le cas spécial où les désignations sont groupées séparément des nombres
      */
     private List<OcrExtractResult.OcrProductLine> extractProductLines(String[] lines) {
+        List<OcrExtractResult.OcrProductLine> productLines = new ArrayList<>();
+
+        // Essayer d'abord l'approche "colonnes séparées" (désignations groupées, puis nombres groupés)
+        productLines = extractProductLinesSeparatedFormat(lines);
+        
+        if (!productLines.isEmpty()) {
+            log.info("📦 [OCR] {} lignes de produits extraites (format colonnes séparées)", productLines.size());
+            return productLines;
+        }
+        
+        // Sinon, utiliser l'approche classique (tout sur une ligne ou lignes consécutives)
+        productLines = extractProductLinesClassicFormat(lines);
+        
+        log.info("📦 [OCR] {} lignes de produits extraites (format classique)", productLines.size());
+        return productLines;
+    }
+
+    /**
+     * Extraction pour le format où les désignations sont groupées séparément des nombres
+     * Ex: Toutes les désignations après "Désignation", puis tous les nombres après "Qté"
+     */
+    private List<OcrExtractResult.OcrProductLine> extractProductLinesSeparatedFormat(String[] lines) {
+        List<OcrExtractResult.OcrProductLine> productLines = new ArrayList<>();
+        
+        // Trouver les indices des sections
+        int designationStart = -1;
+        int qteStart = -1;
+        int tableEnd = -1;
+        
+        for (int i = 0; i < lines.length; i++) {
+            String line = lines[i].trim().toUpperCase();
+            
+            // Début des désignations
+            if (designationStart == -1 && line.contains("DESIGNATION")) {
+                designationStart = i + 1;
+                log.debug("📍 [OCR] Début désignations trouvé ligne {}", i);
+            }
+            // Début des quantités/nombres
+            else if (qteStart == -1 && designationStart != -1 && 
+                     (line.equals("QTE") || line.equals("QTÉ") || line.contains("QUANTITE"))) {
+                qteStart = i;
+                log.debug("📍 [OCR] Début nombres trouvé ligne {}", i);
+            }
+            // Fin du tableau
+            else if (qteStart != -1 && tableEnd == -1 && 
+                     (line.contains("TOTAL") && (line.contains("HT") || line.contains("TTC")) || 
+                      line.contains("IMPORTANT"))) {
+                tableEnd = i;
+                log.debug("📍 [OCR] Fin tableau trouvée ligne {}", i);
+                break;
+            }
+        }
+        
+        // Vérifier qu'on a trouvé les deux sections
+        if (designationStart == -1 || qteStart == -1 || qteStart <= designationStart) {
+            log.debug("⚠️ [OCR] Format colonnes séparées non détecté");
+            return productLines;
+        }
+        
+        if (tableEnd == -1) {
+            tableEnd = lines.length;
+        }
+        
+        // Collecter les désignations (entre "Désignation" et "Qté")
+        List<String> designations = new ArrayList<>();
+        for (int i = designationStart; i < qteStart; i++) {
+            String line = lines[i].trim();
+            if (isValidDesignation(line)) {
+                designations.add(line);
+                log.debug("📝 [OCR] Désignation collectée: {}", line);
+            }
+        }
+        
+        // Collecter les nombres (après "Qté", "Prix unitaire", "Montant HT")
+        // Sauter les en-têtes de colonnes
+        int numbersStart = qteStart;
+        for (int i = qteStart; i < Math.min(qteStart + 5, tableEnd); i++) {
+            String line = lines[i].trim().toUpperCase();
+            if (line.contains("PRIX") || line.contains("MONTANT") || line.contains("HT")) {
+                numbersStart = i + 1;
+            }
+        }
+        
+        List<Double> allNumbers = new ArrayList<>();
+        for (int i = numbersStart; i < tableEnd; i++) {
+            String line = lines[i].trim();
+            // Ignorer les lignes textuelles
+            if (line.matches(".*[A-Za-z]{3,}.*") && !line.matches(".*\\d{3,}.*")) {
+                continue;
+            }
+            Double num = parseNumber(line);
+            if (num != null && num > 0) {
+                allNumbers.add(num);
+                log.debug("🔢 [OCR] Nombre collecté: {} (ligne: {})", num, line);
+            }
+        }
+        
+        // Associer désignations et nombres (3 nombres par produit: Qté, Prix, Total)
+        int numbersPerProduct = 3;
+        int productCount = Math.min(designations.size(), allNumbers.size() / numbersPerProduct);
+        
+        log.info("📊 [OCR] {} désignations, {} nombres, {} produits attendus", 
+                 designations.size(), allNumbers.size(), productCount);
+        
+        for (int p = 0; p < productCount; p++) {
+            String designation = designations.get(p);
+            int numIndex = p * numbersPerProduct;
+            
+            Double qte = allNumbers.get(numIndex);
+            Double prix = allNumbers.get(numIndex + 1);
+            Double total = allNumbers.get(numIndex + 2);
+            
+            // Validation: total ≈ qté * prix (avec 10% de tolérance)
+            double expectedTotal = qte * prix;
+            double diff = Math.abs(total - expectedTotal);
+            double tolerance = expectedTotal * 0.1;
+            
+            if (diff > tolerance && expectedTotal > 0) {
+                // Les valeurs ne correspondent pas, essayer de réorganiser
+                // Peut-être que le total est en premier?
+                if (Math.abs(qte - prix * total) < qte * 0.1) {
+                    // Réorganiser: total était en premier
+                    Double temp = qte;
+                    qte = total;
+                    total = temp;
+                }
+            }
+            
+            OcrExtractResult.OcrProductLine productLine = OcrExtractResult.OcrProductLine.builder()
+                    .designation(designation)
+                    .quantite(qte)
+                    .prixUnitaireHT(prix)
+                    .prixTotalHT(total)
+                    .unite("U")
+                    .build();
+            
+            productLines.add(productLine);
+            log.debug("✅ [OCR] Produit assemblé: {} - Qté: {} - PU: {} - Total: {}", 
+                    designation, qte, prix, total);
+        }
+        
+        return productLines;
+    }
+
+    /**
+     * Vérifie si une ligne est une désignation valide
+     */
+    private boolean isValidDesignation(String line) {
+        if (line == null || line.trim().isEmpty()) {
+            return false;
+        }
+        
+        String trimmed = line.trim();
+        
+        // Trop court (artefacts OCR comme "AS", "ZA", "CLA")
+        if (trimmed.length() <= 3) {
+            return false;
+        }
+        
+        // Doit contenir au moins 3 lettres consécutives
+        if (!trimmed.matches(".*[A-Za-z]{3,}.*")) {
+            return false;
+        }
+        
+        // Pas un mot-clé de bruit
+        String upper = trimmed.toUpperCase();
+        String[] noiseWords = {"DIVERS", "DATE", "FACTURE", "COMMANDE", "REFERENCE", "QTE", "PRIX", "MONTANT"};
+        for (String noise : noiseWords) {
+            if (upper.equals(noise) || upper.startsWith(noise + " ")) {
+                return false;
+            }
+        }
+        
+        // Pas une ligne de bruit générale
+        if (isNoiseLine(trimmed)) {
+            return false;
+        }
+        
+        return true;
+    }
+
+    /**
+     * Extraction classique: tout sur une ligne ou lignes consécutives
+     */
+    private List<OcrExtractResult.OcrProductLine> extractProductLinesClassicFormat(String[] lines) {
         List<OcrExtractResult.OcrProductLine> productLines = new ArrayList<>();
 
         // Étape 1: Détecter le début du tableau
@@ -527,7 +712,6 @@ public class CloudinaryOcrService {
         log.info("📋 [OCR] Zone tableau détectée: lignes {} à {}", tableStartIndex, tableEndIndex);
 
         // Étape 3: Parser les lignes dans la zone du tableau
-        // Note: Dans certains formats OCR, la désignation peut être sur une ligne et les nombres sur la suivante
         int i = tableStartIndex;
         while (i < tableEndIndex) {
             String line = lines[i].trim();
@@ -536,65 +720,47 @@ public class CloudinaryOcrService {
                 continue;
             }
 
-            // Filtrer les lignes de bruit (adresse, téléphone, etc.)
+            // Filtrer les lignes de bruit
             if (isNoiseLine(line)) {
-                log.debug("🚫 [OCR] Ligne ignorée (bruit): {}", line.substring(0, Math.min(50, line.length())));
                 i++;
                 continue;
             }
 
-            // Filtrer les lignes très courtes qui sont probablement des artefacts OCR ("AS", "ZA", "CLA")
+            // Filtrer les lignes très courtes (artefacts OCR)
             if (line.length() <= 3 && line.matches("^[A-Z]+$")) {
-                log.debug("🚫 [OCR] Ligne ignorée (artefact court): {}", line);
                 i++;
                 continue;
             }
 
             // Parser la ligne comme une ligne de produit
-            // Essayer d'abord la ligne seule (cas où tout est sur une ligne)
             OcrExtractResult.OcrProductLine productLine = parseProductLine(line);
             
-            // Si pas de produit détecté mais la ligne contient du texte (désignation),
-            // essayer avec les lignes suivantes pour les nombres
-            // Format OCR typique: désignation sur une ligne, nombres sur la suivante
+            // Si pas de produit détecté, essayer avec la ligne suivante
             if (productLine == null && i + 1 < tableEndIndex) {
-                // Si la ligne actuelle contient principalement du texte (désignation)
-                // et pas uniquement des nombres
                 boolean isTextLine = line.matches(".*[A-Za-z]{3,}.*") && 
                                      !line.matches("^[0-9\\s\\.,]+$") &&
-                                     line.length() > 5; // Au moins quelques caractères
+                                     line.length() > 5;
                 
-                // Si c'est une ligne texte qui ressemble à une désignation
                 if (isTextLine) {
-                    // Chercher jusqu'à 3 lignes suivantes pour trouver les nombres
-                    // (en sautant les lignes vides ou courtes)
                     for (int lookAhead = 1; lookAhead <= 3 && i + lookAhead < tableEndIndex; lookAhead++) {
                         String nextLine = lines[i + lookAhead].trim();
                         
-                        // Ignorer les lignes vides ou très courtes (artefacts OCR comme "AS", "ZA", "CLA")
-                        if (nextLine.isEmpty() || 
-                            (nextLine.length() <= 3 && nextLine.matches("^[A-Z]+$"))) {
+                        if (nextLine.isEmpty() || (nextLine.length() <= 3 && nextLine.matches("^[A-Z]+$"))) {
                             continue;
                         }
                         
-                        // Si la ligne suivante contient plusieurs nombres séparés (Qté, Prix, Total)
-                        // Pattern pour détecter 2 ou 3 nombres avec espaces ou virgules
-                        boolean hasMultipleNumbers = nextLine.matches(".*\\d+[.,]?\\d*.*\\s+.*\\d+[.,]?\\d*.*\\s+.*\\d+[.,]?\\d*.*") || // 3 nombres
-                                                    nextLine.matches(".*\\d+[.,]?\\d*.*\\s+.*\\d+[.,]?\\d*.*"); // 2 nombres
-                        
-                        // Vérifier qu'il n'y a pas trop de texte (ce n'est pas une autre désignation)
-                        boolean isNumericLine = nextLine.matches(".*\\d{3,}.*") && // Contient au moins un nombre de 3+ chiffres
-                                               !nextLine.matches(".*[A-Za-z]{5,}.*"); // Pas trop de lettres (max 4 lettres ok)
+                        boolean hasMultipleNumbers = nextLine.matches(".*\\d+[.,]?\\d*.*\\s+.*\\d+[.,]?\\d*.*");
+                        boolean isNumericLine = nextLine.matches(".*\\d{3,}.*") && 
+                                               !nextLine.matches(".*[A-Za-z]{5,}.*");
                         
                         if (hasMultipleNumbers && isNumericLine) {
-                            // Combiner les deux lignes avec un séparateur clair
-                            String combinedLine = line + "    " + nextLine; // Plusieurs espaces pour séparer
+                            String combinedLine = line + "    " + nextLine;
                             productLine = parseProductLine(combinedLine);
                             if (productLine != null && isValidProductLine(productLine)) {
-                                i += lookAhead; // Skip les lignes utilisées (y compris les lignes courtes sautées)
+                                i += lookAhead;
                                 break;
                             } else {
-                                productLine = null; // Réinitialiser si invalide
+                                productLine = null;
                             }
                         }
                     }
@@ -603,17 +769,11 @@ public class CloudinaryOcrService {
             
             if (productLine != null && isValidProductLine(productLine)) {
                 productLines.add(productLine);
-                log.debug("✅ [OCR] Produit détecté: {} - Qté: {} - PU: {} - Total: {}", 
-                    productLine.getDesignation(), 
-                    productLine.getQuantite(), 
-                    productLine.getPrixUnitaireHT(),
-                    productLine.getPrixTotalHT());
             }
             
-            i++; // Passer à la ligne suivante
+            i++;
         }
 
-        log.info("📦 [OCR] {} lignes de produits extraites", productLines.size());
         return productLines;
     }
 
