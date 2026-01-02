@@ -38,15 +38,32 @@ public class CloudinaryOcrService {
     private String facturesFolder;
 
     private Cloudinary buildClient() {
+        log.debug("🔧 [OCR] Construction client Cloudinary - cloudName: {}, apiKey: {}, apiSecret: {}", 
+                cloudName != null && !cloudName.isEmpty() ? "présent" : "manquant",
+                apiKey != null && !apiKey.isEmpty() ? "présent" : "manquant",
+                apiSecret != null && !apiSecret.isEmpty() ? "présent" : "manquant");
+        
         if (StringUtils.isAnyBlank(cloudName, apiKey, apiSecret)) {
-            throw new IllegalStateException("Configuration Cloudinary manquante (cloud name / api key / api secret)");
+            String missing = "";
+            if (StringUtils.isBlank(cloudName)) missing += "cloud-name ";
+            if (StringUtils.isBlank(apiKey)) missing += "api-key ";
+            if (StringUtils.isBlank(apiSecret)) missing += "api-secret ";
+            throw new IllegalStateException("Configuration Cloudinary manquante: " + missing.trim());
         }
-        return new Cloudinary(ObjectUtils.asMap(
-                "cloud_name", cloudName,
-                "api_key", apiKey,
-                "api_secret", apiSecret,
-                "secure", true
-        ));
+        
+        try {
+            Cloudinary client = new Cloudinary(ObjectUtils.asMap(
+                    "cloud_name", cloudName,
+                    "api_key", apiKey,
+                    "api_secret", apiSecret,
+                    "secure", true
+            ));
+            log.debug("✅ [OCR] Client Cloudinary construit avec succès");
+            return client;
+        } catch (Exception e) {
+            log.error("❌ [OCR] Erreur lors de la construction du client Cloudinary", e);
+            throw new IllegalStateException("Impossible de construire le client Cloudinary: " + e.getMessage(), e);
+        }
     }
 
     /**
@@ -61,14 +78,14 @@ public class CloudinaryOcrService {
 
             // Upload avec paramètre OCR
             // Note: L'OCR peut être asynchrone selon la configuration Cloudinary
-            // Essayer d'abord avec adv_ocr simple
             Map<String, Object> uploadParams = ObjectUtils.asMap(
                     "folder", facturesFolder + "/ocr",
                     "resource_type", "image",
                     "ocr", "adv_ocr", // Format standard pour OCR
-                    "overwrite", true,
-                    "eager", "ocr:adv_ocr" // Force l'extraction OCR immédiate
+                    "overwrite", true
             );
+            
+            log.debug("📤 [OCR] Paramètres d'upload: {}", uploadParams);
 
             log.info("📤 [OCR] Upload vers Cloudinary avec OCR...");
             Map uploadResult = client.uploader().upload(file.getBytes(), uploadParams);
@@ -141,8 +158,18 @@ public class CloudinaryOcrService {
 
             return result;
 
+        } catch (IllegalStateException e) {
+            // Configuration manquante - relancer telle quelle
+            log.error("❌ [OCR] Configuration Cloudinary manquante", e);
+            throw e;
         } catch (Exception e) {
             log.error("❌ [OCR] Erreur lors de l'upload/extraction OCR", e);
+            log.error("❌ [OCR] Type d'exception: {}, Message: {}", e.getClass().getName(), e.getMessage());
+            if (e.getCause() != null) {
+                log.error("❌ [OCR] Cause: {}", e.getCause().getMessage());
+            }
+            // Stack trace complet pour débogage
+            log.error("❌ [OCR] Stack trace:", e);
             throw new IOException("Erreur lors de l'extraction OCR: " + e.getMessage(), e);
         }
     }
