@@ -436,7 +436,7 @@ public class SoldeService {
 
     /**
      * Calcule le solde actuel projeté si tous les clients ont payé et tous les fournisseurs ont été payés
-     * Formule : Solde Banque + Factures Vente Non Payées - Factures Achat Non Payées
+     * Formule : Solde Banque + Créances Clients - Dettes Fournisseurs
      * 
      * @return Le solde projeté
      */
@@ -444,45 +444,43 @@ public class SoldeService {
         // Récupérer le solde banque actuel
         Double soldeBanque = getSoldeGlobalActuel();
         
-        // Calculer le total des factures de vente non payées
-        double facturesVenteNonPayees = factureVenteRepository.findAll().stream()
-                .filter(fv -> fv.getEtatPaiement() != null && !"regle".equals(fv.getEtatPaiement()))
+        // Ce que les clients me doivent (factures vente non payées)
+        double creancesClients = factureVenteRepository.findAll().stream()
+                .filter(fv -> !"regle".equalsIgnoreCase(fv.getEtatPaiement())) // Inclut null et insensible à la casse
                 .mapToDouble(fv -> {
-                    // Calculer le montant restant
+                    // Utiliser montantRestant si disponible, sinon calculer
+                    if (fv.getMontantRestant() != null && fv.getMontantRestant() > 0) {
+                        return fv.getMontantRestant();
+                    }
+                    // Fallback: calculer si montantRestant est null
                     double totalTTC = fv.getTotalTTC() != null ? fv.getTotalTTC() : 0.0;
-                    double totalPaiements = 0.0;
-                    if (fv.getPaiements() != null && !fv.getPaiements().isEmpty()) {
-                        totalPaiements = fv.getPaiements().stream()
-                                .mapToDouble(p -> p.getMontant() != null ? p.getMontant() : 0.0)
-                                .sum();
-                    }
-                    double montantRestant = totalTTC - totalPaiements;
-                    return Math.max(0.0, montantRestant); // Ne prendre que les montants positifs
+                    double totalPaiements = fv.getPaiements() != null ? 
+                        fv.getPaiements().stream().mapToDouble(p -> p.getMontant() != null ? p.getMontant() : 0.0).sum() : 0.0;
+                    return Math.max(0.0, totalTTC - totalPaiements);
                 })
                 .sum();
         
-        // Calculer le total des factures d'achat non payées
-        double facturesAchatNonPayees = factureAchatRepository.findAll().stream()
-                .filter(fa -> fa.getEtatPaiement() != null && !"regle".equals(fa.getEtatPaiement()))
+        // Ce que je dois aux fournisseurs (factures achat non payées)
+        double dettesFournisseurs = factureAchatRepository.findAll().stream()
+                .filter(fa -> !"regle".equalsIgnoreCase(fa.getEtatPaiement())) // Inclut null et insensible à la casse
                 .mapToDouble(fa -> {
-                    // Calculer le montant restant
-                    double totalTTC = fa.getTotalTTC() != null ? fa.getTotalTTC() : 0.0;
-                    double totalPaiements = 0.0;
-                    if (fa.getPaiements() != null && !fa.getPaiements().isEmpty()) {
-                        totalPaiements = fa.getPaiements().stream()
-                                .mapToDouble(p -> p.getMontant() != null ? p.getMontant() : 0.0)
-                                .sum();
+                    // Utiliser montantRestant si disponible, sinon calculer
+                    if (fa.getMontantRestant() != null && fa.getMontantRestant() > 0) {
+                        return fa.getMontantRestant();
                     }
-                    double montantRestant = totalTTC - totalPaiements;
-                    return Math.max(0.0, montantRestant); // Ne prendre que les montants positifs
+                    // Fallback: calculer si montantRestant est null
+                    double totalTTC = fa.getTotalTTC() != null ? fa.getTotalTTC() : 0.0;
+                    double totalPaiements = fa.getPaiements() != null ? 
+                        fa.getPaiements().stream().mapToDouble(p -> p.getMontant() != null ? p.getMontant() : 0.0).sum() : 0.0;
+                    return Math.max(0.0, totalTTC - totalPaiements);
                 })
                 .sum();
         
-        // Calculer le solde projeté
-        double soldeProjete = soldeBanque + facturesVenteNonPayees - facturesAchatNonPayees;
+        // Solde projeté = Banque + Créances - Dettes
+        double soldeProjete = soldeBanque + creancesClients - dettesFournisseurs;
         
-        log.debug("Calcul solde projeté - Banque: {}, Ventes non payées: {}, Achats non payés: {}, Projeté: {}", 
-                soldeBanque, facturesVenteNonPayees, facturesAchatNonPayees, soldeProjete);
+        log.info("Solde projeté - Banque: {}, Créances clients: {}, Dettes fournisseurs: {}, Projeté: {}", 
+                soldeBanque, creancesClients, dettesFournisseurs, soldeProjete);
         
         return soldeProjete;
     }
