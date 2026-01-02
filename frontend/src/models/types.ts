@@ -292,12 +292,12 @@ export interface OrdreVirement {
   numeroOV: string;
   dateOV: string;
   montant: number;
-  beneficiaireId: string;
+  beneficiaireId?: string; // Optionnel pour permettre les personnes physiques
   nomBeneficiaire?: string;
   banqueBeneficiaire?: string; // Banque du bénéficiaire
   ribBeneficiaire: string;
   motif: string;
-  facturesIds: string[]; // Pour rétrocompatibilité
+  facturesIds?: string[]; // Optionnel : peut être vide pour virements sans factures
   facturesMontants?: FactureMontant[]; // Liste des factures avec montants partiels
   banqueEmettrice: string;
   dateExecution?: string;

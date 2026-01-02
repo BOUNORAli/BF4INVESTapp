@@ -78,6 +78,8 @@ public class OrdreVirementService {
                 ov.setBanqueBeneficiaire(supplier.getBanque());
             }
         }
+        // Si beneficiaireId est null, préserver le nomBeneficiaire fourni (personne physique)
+        // Le nomBeneficiaire est déjà dans l'objet ov si fourni depuis le frontend
         
         // Initialiser le statut si non fourni
         if (ov.getStatut() == null || ov.getStatut().isEmpty()) {
@@ -155,6 +157,11 @@ public class OrdreVirementService {
                         // Auto-remplir la banque bénéficiaire si non fournie et disponible dans le fournisseur
                         if ((existing.getBanqueBeneficiaire() == null || existing.getBanqueBeneficiaire().isEmpty()) && supplier.getBanque() != null) {
                             existing.setBanqueBeneficiaire(supplier.getBanque());
+                        }
+                    } else {
+                        // Si beneficiaireId est null (personne physique), préserver le nomBeneficiaire fourni
+                        if (ov.getNomBeneficiaire() != null && !ov.getNomBeneficiaire().isEmpty()) {
+                            existing.setNomBeneficiaire(ov.getNomBeneficiaire());
                         }
                     }
                     

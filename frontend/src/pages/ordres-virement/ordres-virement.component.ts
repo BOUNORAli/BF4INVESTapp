@@ -42,6 +42,7 @@ import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, FormsModule } 
           <label class="text-xs font-semibold text-slate-500 uppercase">Bénéficiaire</label>
           <select [(ngModel)]="filterBeneficiaire" class="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all appearance-none cursor-pointer outline-none">
             <option value="">Tous</option>
+            <option value="OTHER">Personnes Physiques</option>
             @for (sup of store.suppliers(); track sup.id) {
               <option [value]="sup.id">{{ sup.name }}</option>
             }
@@ -117,20 +118,24 @@ import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, FormsModule } 
                   </td>
                   <td class="px-6 py-4 text-right font-bold text-slate-800">{{ formatCurrency(ov.montant) }}</td>
                   <td class="px-6 py-4">
-                    <div class="flex flex-wrap gap-1">
-                      @for (factureId of ov.facturesIds; track factureId; let i = $index) {
-                        @if (i < 2) {
-                          <span class="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full text-xs font-medium">
-                            {{ getFactureNumber(factureId) }}
+                    @if (ov.facturesIds && ov.facturesIds.length > 0) {
+                      <div class="flex flex-wrap gap-1">
+                        @for (factureId of ov.facturesIds; track factureId; let i = $index) {
+                          @if (i < 2) {
+                            <span class="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full text-xs font-medium">
+                              {{ getFactureNumber(factureId) }}
+                            </span>
+                          }
+                        }
+                        @if (ov.facturesIds.length > 2) {
+                          <span class="px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full text-xs font-medium">
+                            +{{ ov.facturesIds.length - 2 }}
                           </span>
                         }
-                      }
-                      @if (ov.facturesIds.length > 2) {
-                        <span class="px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full text-xs font-medium">
-                          +{{ ov.facturesIds.length - 2 }}
-                        </span>
-                      }
-                    </div>
+                      </div>
+                    } @else {
+                      <span class="text-xs text-slate-400 italic">Aucune facture</span>
+                    }
                   </td>
                   <td class="px-6 py-4 text-center">
                     <span [class]="getStatutClass(ov.statut)">
@@ -222,16 +227,50 @@ import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, FormsModule } 
                 </div>
               </div>
 
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label class="block text-xs font-semibold text-slate-600 mb-1">Bénéficiaire <span class="text-red-500">*</span></label>
-                  <select formControlName="beneficiaireId" (change)="onBeneficiaireChange()" class="w-full p-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 outline-none">
-                    <option value="">Sélectionner un fournisseur</option>
-                    @for (sup of store.suppliers(); track sup.id) {
-                      <option [value]="sup.id">{{ sup.name }}</option>
-                    }
-                  </select>
+              <!-- Type de Bénéficiaire -->
+              <div class="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                <label class="block text-xs font-semibold text-slate-600 mb-3">Type de Bénéficiaire <span class="text-red-500">*</span></label>
+                <div class="flex gap-4">
+                  <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="radio" [checked]="beneficiaryType() === 'SUPPLIER'" (change)="beneficiaryType.set('SUPPLIER'); onBeneficiaryTypeChange()" class="w-4 h-4 text-blue-600 border-slate-300 focus:ring-blue-500">
+                    <span class="text-sm font-medium text-slate-700">Fournisseur</span>
+                  </label>
+                  <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="radio" [checked]="beneficiaryType() === 'OTHER'" (change)="beneficiaryType.set('OTHER'); onBeneficiaryTypeChange()" class="w-4 h-4 text-blue-600 border-slate-300 focus:ring-blue-500">
+                    <span class="text-sm font-medium text-slate-700">Autre / Personne Physique</span>
+                  </label>
                 </div>
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <!-- Bénéficiaire selon le type -->
+                @if (beneficiaryType() === 'SUPPLIER') {
+                  <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">Fournisseur <span class="text-red-500">*</span></label>
+                    <select formControlName="beneficiaireId" (change)="onBeneficiaireChange()" 
+                            [class.border-red-300]="isFieldInvalid('beneficiaireId')"
+                            class="w-full p-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 outline-none">
+                      <option value="">Sélectionner un fournisseur</option>
+                      @for (sup of store.suppliers(); track sup.id) {
+                        <option [value]="sup.id">{{ sup.name }}</option>
+                      }
+                    </select>
+                    @if (isFieldInvalid('beneficiaireId')) {
+                      <p class="text-xs text-red-500 mt-1">Le fournisseur est requis</p>
+                    }
+                  </div>
+                } @else {
+                  <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">Nom du Bénéficiaire <span class="text-red-500">*</span></label>
+                    <input type="text" formControlName="nomBeneficiaire" 
+                           placeholder="Ex: Prénom NOM"
+                           [class.border-red-300]="isFieldInvalid('nomBeneficiaire')"
+                           class="w-full p-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 outline-none">
+                    @if (isFieldInvalid('nomBeneficiaire')) {
+                      <p class="text-xs text-red-500 mt-1">Le nom du bénéficiaire est requis</p>
+                    }
+                  </div>
+                }
 
                 <div>
                   <label class="block text-xs font-semibold text-slate-600 mb-1">Type <span class="text-red-500">*</span></label>
@@ -263,31 +302,57 @@ import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, FormsModule } 
               </div>
             </div>
 
-            <!-- Factures -->
+            <!-- Factures ou Montant Manuel -->
             <div class="space-y-4">
-              <h3 class="text-sm font-bold text-slate-700 uppercase border-b border-slate-200 pb-2">Factures Concernées</h3>
+              <h3 class="text-sm font-bold text-slate-700 uppercase border-b border-slate-200 pb-2">
+                Factures Concernées 
+                <span class="text-xs font-normal text-slate-500 normal-case">(optionnel - sinon saisissez un montant manuel ci-dessous)</span>
+              </h3>
               
-              <div class="space-y-2 max-h-60 overflow-y-auto border border-slate-200 rounded-lg p-3">
-                @for (facture of availableFactures(); track facture.id) {
-                  <div class="p-2 hover:bg-slate-50 rounded border border-slate-100">
-                    <label class="flex items-center gap-3 cursor-pointer mb-2">
-                      <input type="checkbox" [value]="facture.id" (change)="onFactureToggle(facture.id)" [checked]="isFactureSelected(facture.id)" class="rounded border-slate-300 text-blue-600 focus:ring-blue-500">
-                      <div class="flex-1">
-                        <div class="font-medium text-sm">{{ facture.number }}</div>
-                        <div class="text-xs text-slate-500">{{ store.getSupplierName(facture.partnerId || '') }} - Total: {{ formatCurrency(facture.amountTTC) }}</div>
-                      </div>
-                    </label>
-                    @if (isFactureSelected(facture.id)) {
-                      <div class="ml-7 mt-2">
-                        <label class="block text-xs font-semibold text-slate-600 mb-1">
-                          Montant partiel (laisser vide pour total)
-                        </label>
-                        <input type="number" step="0.01" [value]="getFactureMontant(facture.id)" (input)="onFactureMontantChange(facture.id, $event)" placeholder="{{ formatCurrency(facture.amountTTC) }}" class="w-full p-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 outline-none text-sm">
-                      </div>
-                    }
-                  </div>
-                }
-              </div>
+              @if (availableFactures().length > 0) {
+                <div class="space-y-2 max-h-60 overflow-y-auto border border-slate-200 rounded-lg p-3">
+                  @for (facture of availableFactures(); track facture.id) {
+                    <div class="p-2 hover:bg-slate-50 rounded border border-slate-100">
+                      <label class="flex items-center gap-3 cursor-pointer mb-2">
+                        <input type="checkbox" [value]="facture.id" (change)="onFactureToggleWithValidation(facture.id)" [checked]="isFactureSelected(facture.id)" class="rounded border-slate-300 text-blue-600 focus:ring-blue-500">
+                        <div class="flex-1">
+                          <div class="font-medium text-sm">{{ facture.number }}</div>
+                          <div class="text-xs text-slate-500">{{ store.getSupplierName(facture.partnerId || '') }} - Total: {{ formatCurrency(facture.amountTTC) }}</div>
+                        </div>
+                      </label>
+                      @if (isFactureSelected(facture.id)) {
+                        <div class="ml-7 mt-2">
+                          <label class="block text-xs font-semibold text-slate-600 mb-1">
+                            Montant partiel (laisser vide pour total)
+                          </label>
+                          <input type="number" step="0.01" [value]="getFactureMontant(facture.id)" (input)="onFactureMontantChange(facture.id, $event)" placeholder="{{ formatCurrency(facture.amountTTC) }}" class="w-full p-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 outline-none text-sm">
+                        </div>
+                      }
+                    </div>
+                  }
+                </div>
+              } @else {
+                <div class="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                  <p class="text-sm text-amber-700">Aucune facture disponible. Utilisez le montant manuel ci-dessous.</p>
+                </div>
+              }
+
+              <!-- Montant Manuel (si aucune facture sélectionnée) -->
+              @if (selectedFactures().length === 0) {
+                <div class="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
+                  <label class="block text-xs font-semibold text-emerald-800 mb-1">
+                    Montant Manuel <span class="text-red-500">*</span>
+                  </label>
+                  <input type="number" step="0.01" formControlName="montant" 
+                         [class.border-red-300]="isFieldInvalid('montant')"
+                         placeholder="0.00" 
+                         class="w-full p-2 border border-emerald-300 rounded-lg focus:ring-2 focus:ring-emerald-500/20 outline-none text-right font-semibold">
+                  <p class="text-xs text-emerald-700 mt-1">Saisissez le montant du virement si aucune facture n'est sélectionnée</p>
+                  @if (isFieldInvalid('montant')) {
+                    <p class="text-xs text-red-500 mt-1">Le montant doit être supérieur à 0</p>
+                  }
+                </div>
+              }
 
               <div class="bg-blue-50 p-3 rounded-lg border border-blue-100">
                 <div class="text-sm font-semibold text-blue-800">Montant Total: {{ formatCurrency(calculatedMontant()) }}</div>
@@ -326,6 +391,7 @@ export class OrdresVirementComponent implements OnInit {
   selectedFactures = signal<string[]>([]);
   facturesMontants = signal<Map<string, number>>(new Map());
   editingOV = signal<OrdreVirement | null>(null);
+  beneficiaryType = signal<'SUPPLIER' | 'OTHER'>('SUPPLIER'); // Type de bénéficiaire
 
   form: FormGroup;
 
@@ -333,13 +399,15 @@ export class OrdresVirementComponent implements OnInit {
     this.form = this.fb.group({
       dateOV: ['', Validators.required],
       dateExecution: [''],
-      beneficiaireId: ['', Validators.required],
+      beneficiaireId: [''], // Plus obligatoire par défaut
+      nomBeneficiaire: [''], // Pour saisie manuelle
       ribBeneficiaire: ['', Validators.required],
       banqueBeneficiaire: ['', Validators.required],
       banqueEmettrice: ['', Validators.required],
       motif: ['', Validators.required],
       type: ['NORMAL', Validators.required],
-      statut: ['EN_ATTENTE']
+      statut: ['EN_ATTENTE'],
+      montant: [0] // Montant manuel si pas de factures
     });
   }
 
@@ -362,7 +430,8 @@ export class OrdresVirementComponent implements OnInit {
     }
     
     if (this.filterBeneficiaire()) {
-      ordres = ordres.filter(ov => ov.beneficiaireId === this.filterBeneficiaire());
+      ordres = ordres.filter(ov => ov.beneficiaireId === this.filterBeneficiaire() || 
+                                  (ov.beneficiaireId === undefined && this.filterBeneficiaire() === 'OTHER'));
     }
     
     if (this.filterStatut()) {
@@ -393,11 +462,17 @@ export class OrdresVirementComponent implements OnInit {
   });
 
   calculatedMontant = computed(() => {
-    const factures = this.availableFactures().filter(f => this.selectedFactures().includes(f.id));
-    return factures.reduce((sum, f) => {
-      const montantPartiel = this.facturesMontants().get(f.id);
-      return sum + (montantPartiel !== undefined && montantPartiel > 0 ? montantPartiel : f.amountTTC);
-    }, 0);
+    // Si des factures sont sélectionnées, calculer à partir des factures
+    if (this.selectedFactures().length > 0) {
+      const factures = this.availableFactures().filter(f => this.selectedFactures().includes(f.id));
+      return factures.reduce((sum, f) => {
+        const montantPartiel = this.facturesMontants().get(f.id);
+        return sum + (montantPartiel !== undefined && montantPartiel > 0 ? montantPartiel : f.amountTTC);
+      }, 0);
+    }
+    // Sinon, utiliser le montant manuel
+    const montantManuel = this.form.get('montant')?.value || 0;
+    return montantManuel;
   });
 
   // Methods
@@ -427,7 +502,13 @@ export class OrdresVirementComponent implements OnInit {
     this.isEditMode.set(false);
     this.selectedFactures.set([]);
     this.facturesMontants.set(new Map());
-    this.form.reset({ statut: 'EN_ATTENTE', type: 'NORMAL' });
+    this.beneficiaryType.set('SUPPLIER');
+    this.form.reset({ 
+      statut: 'EN_ATTENTE', 
+      type: 'NORMAL',
+      montant: 0
+    });
+    this.updateBeneficiaryTypeValidation();
   }
 
   closeForm() {
@@ -445,6 +526,13 @@ export class OrdresVirementComponent implements OnInit {
     this.editingOV.set(ov);
     this.selectedFactures.set(ov.facturesIds || []);
     
+    // Déterminer le type de bénéficiaire
+    if (ov.beneficiaireId) {
+      this.beneficiaryType.set('SUPPLIER');
+    } else {
+      this.beneficiaryType.set('OTHER');
+    }
+    
     // Récupérer les montants partiels
     const montantsMap = new Map<string, number>();
     if (ov.facturesMontants && ov.facturesMontants.length > 0) {
@@ -457,14 +545,68 @@ export class OrdresVirementComponent implements OnInit {
     this.form.patchValue({
       dateOV: ov.dateOV,
       dateExecution: ov.dateExecution || '',
-      beneficiaireId: ov.beneficiaireId,
+      beneficiaireId: ov.beneficiaireId || '',
+      nomBeneficiaire: ov.nomBeneficiaire || '',
       ribBeneficiaire: ov.ribBeneficiaire,
       banqueBeneficiaire: ov.banqueBeneficiaire || '',
       banqueEmettrice: ov.banqueEmettrice,
       motif: ov.motif,
       type: ov.type || 'NORMAL',
-      statut: ov.statut
+      statut: ov.statut,
+      montant: ov.facturesIds && ov.facturesIds.length > 0 ? 0 : ov.montant
     });
+    
+    this.updateBeneficiaryTypeValidation();
+  }
+
+  onBeneficiaryTypeChange() {
+    this.updateBeneficiaryTypeValidation();
+    
+    // Réinitialiser les champs selon le type
+    if (this.beneficiaryType() === 'SUPPLIER') {
+      this.form.patchValue({
+        nomBeneficiaire: '',
+        beneficiaireId: ''
+      });
+    } else {
+      this.form.patchValue({
+        beneficiaireId: '',
+        nomBeneficiaire: ''
+      });
+    }
+  }
+
+  updateBeneficiaryTypeValidation() {
+    const beneficiaireIdControl = this.form.get('beneficiaireId');
+    const nomBeneficiaireControl = this.form.get('nomBeneficiaire');
+    const montantControl = this.form.get('montant');
+    
+    if (this.beneficiaryType() === 'SUPPLIER') {
+      beneficiaireIdControl?.setValidators([Validators.required]);
+      nomBeneficiaireControl?.clearValidators();
+    } else {
+      beneficiaireIdControl?.clearValidators();
+      nomBeneficiaireControl?.setValidators([Validators.required]);
+    }
+    
+    // Validation du montant : requis si aucune facture n'est sélectionnée
+    if (this.selectedFactures().length === 0) {
+      montantControl?.setValidators([Validators.required, Validators.min(0.01)]);
+    } else {
+      montantControl?.clearValidators();
+    }
+    
+    beneficiaireIdControl?.updateValueAndValidity();
+    nomBeneficiaireControl?.updateValueAndValidity();
+    montantControl?.updateValueAndValidity();
+  }
+
+  onFactureToggleWithValidation(factureId: string) {
+    this.onFactureToggle(factureId);
+    // Mettre à jour la validation du montant après avoir changé la sélection
+    setTimeout(() => {
+      this.updateBeneficiaryTypeValidation();
+    }, 0);
   }
 
   onBeneficiaireChange() {
@@ -472,16 +614,16 @@ export class OrdresVirementComponent implements OnInit {
     if (beneficiaireId) {
       const supplier = this.store.suppliers().find(s => s.id === beneficiaireId);
       if (supplier) {
-        const updates: any = {};
+        const updates: any = {
+          nomBeneficiaire: supplier.name
+        };
         if (supplier.rib) {
           updates.ribBeneficiaire = supplier.rib;
         }
         if (supplier.banque) {
           updates.banqueBeneficiaire = supplier.banque;
         }
-        if (Object.keys(updates).length > 0) {
-          this.form.patchValue(updates);
-        }
+        this.form.patchValue(updates);
       }
     }
   }
@@ -515,41 +657,69 @@ export class OrdresVirementComponent implements OnInit {
   }
 
   async onSubmit() {
-    if (this.form.invalid || this.selectedFactures().length === 0) {
-      this.store.showToast('Veuillez remplir tous les champs requis et sélectionner au moins une facture', 'error');
+    // Validation selon le type de bénéficiaire
+    if (this.beneficiaryType() === 'SUPPLIER' && !this.form.get('beneficiaireId')?.value) {
+      this.store.showToast('Veuillez sélectionner un fournisseur', 'error');
+      return;
+    }
+    
+    if (this.beneficiaryType() === 'OTHER' && !this.form.get('nomBeneficiaire')?.value?.trim()) {
+      this.store.showToast('Veuillez saisir le nom du bénéficiaire', 'error');
+      return;
+    }
+    
+    if (this.form.invalid) {
+      this.store.showToast('Veuillez remplir tous les champs requis', 'error');
+      return;
+    }
+    
+    // Validation : factures ou montant manuel requis
+    if (this.selectedFactures().length === 0 && (!this.form.get('montant')?.value || this.form.get('montant')?.value <= 0)) {
+      this.store.showToast('Veuillez sélectionner au moins une facture ou saisir un montant manuel', 'error');
       return;
     }
 
     const formValue = this.form.value;
     
-    // Construire la liste des factures avec montants
-    const facturesMontants: FactureMontant[] = this.selectedFactures().map(factureId => {
-      const montantPartiel = this.facturesMontants().get(factureId);
-      const facture = this.availableFactures().find(f => f.id === factureId);
-      return {
-        factureId,
-        montant: montantPartiel !== undefined && montantPartiel > 0 ? montantPartiel : (facture?.amountTTC || 0)
-      };
-    });
+    // Construire la liste des factures avec montants (si des factures sont sélectionnées)
+    let facturesMontants: FactureMontant[] = [];
+    let facturesIds: string[] = [];
+    
+    if (this.selectedFactures().length > 0) {
+      facturesMontants = this.selectedFactures().map(factureId => {
+        const montantPartiel = this.facturesMontants().get(factureId);
+        const facture = this.availableFactures().find(f => f.id === factureId);
+        return {
+          factureId,
+          montant: montantPartiel !== undefined && montantPartiel > 0 ? montantPartiel : (facture?.amountTTC || 0)
+        };
+      });
+      facturesIds = this.selectedFactures();
+    }
 
     const ov: OrdreVirement = {
       ...formValue,
+      beneficiaireId: this.beneficiaryType() === 'SUPPLIER' ? formValue.beneficiaireId : undefined,
+      nomBeneficiaire: this.beneficiaryType() === 'OTHER' ? formValue.nomBeneficiaire : formValue.nomBeneficiaire,
       montant: this.calculatedMontant(),
-      facturesIds: this.selectedFactures(),
-      facturesMontants: facturesMontants,
+      facturesIds: facturesIds.length > 0 ? facturesIds : undefined,
+      facturesMontants: facturesMontants.length > 0 ? facturesMontants : undefined,
       type: formValue.type || 'NORMAL'
     };
 
     try {
       if (this.isEditMode() && this.editingOV()?.id) {
         await this.store.updateOrdreVirement(this.editingOV()!.id!, ov);
+        this.store.showToast('Ordre de virement modifié avec succès', 'success');
       } else {
         await this.store.addOrdreVirement(ov);
+        this.store.showToast('Ordre de virement créé avec succès', 'success');
       }
       this.closeForm();
       await this.store.loadOrdresVirement();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving ordre virement:', error);
+      this.store.showToast(error?.message || 'Erreur lors de la sauvegarde', 'error');
     }
   }
 
@@ -623,6 +793,11 @@ export class OrdresVirementComponent implements OnInit {
 
   formatCurrency(amount: number): string {
     return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'MAD' }).format(amount);
+  }
+
+  isFieldInvalid(fieldName: string): boolean {
+    const field = this.form.get(fieldName);
+    return !!(field && field.invalid && (field.dirty || field.touched));
   }
 
   Math = Math;
