@@ -79,10 +79,14 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
           errorMessage = 'Ressource non trouvée.';
         } else if (error.status === 500) {
           errorMessage = 'Erreur serveur interne. Veuillez réessayer plus tard.';
+        } else if (error.error?.error) {
+          // Backend retourne {error: "message"}
+          errorMessage = error.error.error;
         } else if (error.error?.message) {
+          // Backend retourne {message: "message"}
           errorMessage = error.error.message;
         } else if (typeof error.error === 'string') {
-            errorMessage = error.error;
+          errorMessage = error.error;
         }
       }
 

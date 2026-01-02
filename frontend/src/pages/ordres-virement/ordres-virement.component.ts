@@ -727,7 +727,19 @@ export class OrdresVirementComponent implements OnInit {
     } else {
       // Pour une personne physique, beneficiaireId doit être undefined et nomBeneficiaire doit être rempli
       beneficiaireIdValue = undefined;
-      nomBeneficiaireValue = formValue.nomBeneficiaire && formValue.nomBeneficiaire.trim() ? formValue.nomBeneficiaire.trim() : undefined;
+      const nomBeneficiaireInput = formValue.nomBeneficiaire?.trim();
+      if (!nomBeneficiaireInput) {
+        // Si le nom n'est pas rempli, essayer de récupérer celui de l'ordre existant (en cas d'édition)
+        if (this.isEditMode() && this.editingOV()?.nomBeneficiaire) {
+          nomBeneficiaireValue = this.editingOV()!.nomBeneficiaire;
+        } else {
+          // Si toujours pas de nom, générer une erreur avant d'envoyer
+          this.store.showToast('Veuillez saisir le nom du bénéficiaire', 'error');
+          return;
+        }
+      } else {
+        nomBeneficiaireValue = nomBeneficiaireInput;
+      }
     }
 
     // Construire l'objet sans utiliser spread pour éviter les conflits
@@ -737,8 +749,8 @@ export class OrdresVirementComponent implements OnInit {
       numeroOV: this.isEditMode() && this.editingOV()?.numeroOV ? this.editingOV()!.numeroOV : '',
       dateOV: formValue.dateOV,
       dateExecution: formValue.dateExecution || undefined,
-      beneficiaireId: beneficiaireIdValue, // undefined pour personne physique
-      nomBeneficiaire: nomBeneficiaireValue, // Important : toujours définir pour une personne physique
+      beneficiaireId: beneficiaireIdValue === undefined || beneficiaireIdValue === null || beneficiaireIdValue === '' ? undefined : beneficiaireIdValue,
+      nomBeneficiaire: nomBeneficiaireValue || undefined, // Toujours définir pour une personne physique
       ribBeneficiaire: formValue.ribBeneficiaire,
       banqueBeneficiaire: formValue.banqueBeneficiaire,
       banqueEmettrice: formValue.banqueEmettrice,
@@ -749,11 +761,6 @@ export class OrdresVirementComponent implements OnInit {
       facturesIds: facturesIds.length > 0 ? facturesIds : undefined,
       facturesMontants: facturesMontants.length > 0 ? facturesMontants : undefined
     };
-
-    // S'assurer que beneficiaireId est null et non undefined pour éviter les problèmes de sérialisation JSON
-    if (beneficiaireIdValue === undefined || beneficiaireIdValue === null || beneficiaireIdValue === '') {
-      (ov as any).beneficiaireId = null;
-    }
 
     try {
       if (this.isEditMode() && this.editingOV()?.id) {
