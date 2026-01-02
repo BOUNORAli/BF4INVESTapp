@@ -528,43 +528,74 @@ public class CloudinaryOcrService {
 
         // Étape 3: Parser les lignes dans la zone du tableau
         // Note: Dans certains formats OCR, la désignation peut être sur une ligne et les nombres sur la suivante
-        for (int i = tableStartIndex; i < tableEndIndex; i++) {
+        int i = tableStartIndex;
+        while (i < tableEndIndex) {
             String line = lines[i].trim();
             if (line.isEmpty()) {
+                i++;
                 continue;
             }
 
             // Filtrer les lignes de bruit (adresse, téléphone, etc.)
             if (isNoiseLine(line)) {
                 log.debug("🚫 [OCR] Ligne ignorée (bruit): {}", line.substring(0, Math.min(50, line.length())));
+                i++;
+                continue;
+            }
+
+            // Filtrer les lignes très courtes qui sont probablement des artefacts OCR ("AS", "ZA", "CLA")
+            if (line.length() <= 3 && line.matches("^[A-Z]+$")) {
+                log.debug("🚫 [OCR] Ligne ignorée (artefact court): {}", line);
+                i++;
                 continue;
             }
 
             // Parser la ligne comme une ligne de produit
-            // Essayer d'abord la ligne seule
+            // Essayer d'abord la ligne seule (cas où tout est sur une ligne)
             OcrExtractResult.OcrProductLine productLine = parseProductLine(line);
             
-            // Si pas de produit détecté mais la ligne contient du texte (pas que des nombres),
-            // essayer avec la ligne suivante pour les nombres
+            // Si pas de produit détecté mais la ligne contient du texte (désignation),
+            // essayer avec les lignes suivantes pour les nombres
             // Format OCR typique: désignation sur une ligne, nombres sur la suivante
             if (productLine == null && i + 1 < tableEndIndex) {
                 // Si la ligne actuelle contient principalement du texte (désignation)
+                // et pas uniquement des nombres
                 boolean isTextLine = line.matches(".*[A-Za-z]{3,}.*") && 
-                                     !line.matches(".*\\d{4,}.*"); // Pas trop de chiffres
+                                     !line.matches("^[0-9\\s\\.,]+$") &&
+                                     line.length() > 5; // Au moins quelques caractères
                 
-                // Si c'est une ligne texte, regarder la ligne suivante
+                // Si c'est une ligne texte qui ressemble à une désignation
                 if (isTextLine) {
-                    String nextLine = lines[i + 1].trim();
-                    // Si la ligne suivante contient plusieurs nombres séparés (Qté, Prix, Total)
-                    // Pattern pour 2+ nombres avec espaces ou virgules
-                    if (nextLine.matches(".*\\d+[.,]?\\d*.*\\s+.*\\d+[.,]?\\d*.*")) {
-                        // Combiner les deux lignes avec un séparateur clair
-                        String combinedLine = line + "    " + nextLine; // Plusieurs espaces pour séparer
-                        productLine = parseProductLine(combinedLine);
-                        if (productLine != null && isValidProductLine(productLine)) {
-                            i++; // Skip la ligne suivante car on l'a déjà utilisée
-                        } else {
-                            productLine = null; // Réinitialiser si invalide
+                    // Chercher jusqu'à 3 lignes suivantes pour trouver les nombres
+                    // (en sautant les lignes vides ou courtes)
+                    for (int lookAhead = 1; lookAhead <= 3 && i + lookAhead < tableEndIndex; lookAhead++) {
+                        String nextLine = lines[i + lookAhead].trim();
+                        
+                        // Ignorer les lignes vides ou très courtes (artefacts OCR comme "AS", "ZA", "CLA")
+                        if (nextLine.isEmpty() || 
+                            (nextLine.length() <= 3 && nextLine.matches("^[A-Z]+$"))) {
+                            continue;
+                        }
+                        
+                        // Si la ligne suivante contient plusieurs nombres séparés (Qté, Prix, Total)
+                        // Pattern pour détecter 2 ou 3 nombres avec espaces ou virgules
+                        boolean hasMultipleNumbers = nextLine.matches(".*\\d+[.,]?\\d*.*\\s+.*\\d+[.,]?\\d*.*\\s+.*\\d+[.,]?\\d*.*") || // 3 nombres
+                                                    nextLine.matches(".*\\d+[.,]?\\d*.*\\s+.*\\d+[.,]?\\d*.*"); // 2 nombres
+                        
+                        // Vérifier qu'il n'y a pas trop de texte (ce n'est pas une autre désignation)
+                        boolean isNumericLine = nextLine.matches(".*\\d{3,}.*") && // Contient au moins un nombre de 3+ chiffres
+                                               !nextLine.matches(".*[A-Za-z]{5,}.*"); // Pas trop de lettres (max 4 lettres ok)
+                        
+                        if (hasMultipleNumbers && isNumericLine) {
+                            // Combiner les deux lignes avec un séparateur clair
+                            String combinedLine = line + "    " + nextLine; // Plusieurs espaces pour séparer
+                            productLine = parseProductLine(combinedLine);
+                            if (productLine != null && isValidProductLine(productLine)) {
+                                i += lookAhead; // Skip les lignes utilisées (y compris les lignes courtes sautées)
+                                break;
+                            } else {
+                                productLine = null; // Réinitialiser si invalide
+                            }
                         }
                     }
                 }
@@ -578,6 +609,8 @@ public class CloudinaryOcrService {
                     productLine.getPrixUnitaireHT(),
                     productLine.getPrixTotalHT());
             }
+            
+            i++; // Passer à la ligne suivante
         }
 
         log.info("📦 [OCR] {} lignes de produits extraites", productLines.size());
@@ -668,20 +701,41 @@ public class CloudinaryOcrService {
 
     /**
      * Vérifie si une ligne marque la fin du tableau
+     * Amélioré pour ne pas s'arrêter trop tôt
      */
     private boolean isTableEnd(String line) {
         String upperLine = line.toUpperCase();
-        return upperLine.contains("TOTAL") && (upperLine.contains("HT") || upperLine.contains("TTC")) ||
-               upperLine.contains("T.V.A") ||
-               upperLine.contains("TVA") ||
-               upperLine.contains("SOUS-TOTAL") ||
-               upperLine.contains("SOUSTOTAL") ||
-               upperLine.matches(".*TOTAL\\s+[A-Z]{2,}.*") ||
-               upperLine.contains("ARRÊTER") ||
-               upperLine.contains("ARRETE") ||
-               upperLine.contains("IMPORTANT") ||
-               upperLine.contains("CONFORMEMENT") ||
-               upperLine.contains("MODE DE REGLEMENT");
+        
+        // Fin claire du tableau: "TOTAL HT" ou "TOTAL TTC" (pas seulement "TOTAL" seul)
+        if (upperLine.contains("TOTAL") && (upperLine.contains("HT") || upperLine.contains("TTC"))) {
+            return true;
+        }
+        
+        // T.V.A ou TVA (mais pas dans une ligne de produit)
+        if ((upperLine.contains("T.V.A") || upperLine.contains("TVA")) && 
+            upperLine.matches(".*T\\.?V\\.?A.*\\d+.*")) { // Doit contenir un pourcentage ou montant
+            return true;
+        }
+        
+        // Sous-total
+        if (upperLine.contains("SOUS-TOTAL") || upperLine.contains("SOUSTOTAL")) {
+            return true;
+        }
+        
+        // "ARRÊTER" ou "ARRETE" (dans le contexte d'une facture, c'est généralement la fin)
+        if (upperLine.contains("ARRÊTER") || upperLine.contains("ARRETE")) {
+            return true;
+        }
+        
+        // "MODE DE REGLEMENT" (mode de paiement, généralement après le tableau)
+        if (upperLine.contains("MODE DE REGLEMENT")) {
+            return true;
+        }
+        
+        // Ne pas s'arrêter sur "IMPORTANT" ou "CONFORMEMENT" car c'est généralement après les totaux
+        // Ces lignes ne marquent pas la fin du tableau de produits
+        
+        return false;
     }
 
     /**
@@ -934,12 +988,17 @@ public class CloudinaryOcrService {
     /**
      * Extrait la désignation en retirant les nombres de la ligne
      * Préserve les chiffres qui font partie du nom du produit (ex: "DIAM 8", "CPJ 45")
+     * Gère le cas où la désignation est sur une ligne et les nombres sur une autre
      */
     private String extractDesignation(String line, List<Double> numericValues) {
-        // Approche: trouver le dernier grand nombre (probablement une valeur numérique de colonne)
-        // et retirer tout ce qui vient après, puis nettoyer
+        // Si la ligne ne contient que du texte (pas de nombres), c'est probablement juste la désignation
+        Pattern numberPattern = Pattern.compile("\\b\\d{4,}[.,]?\\d*\\b"); // Nombres de 4+ chiffres (pas les petits chiffres dans le nom)
+        if (!numberPattern.matcher(line).find()) {
+            // Pas de grands nombres, c'est probablement juste la désignation
+            return line.trim();
+        }
         
-        // D'abord, essayer de trouver où commence la zone numérique (colonnes Qté, Prix, Total)
+        // Approche: trouver où commence la zone numérique (colonnes Qté, Prix, Total)
         // Les valeurs numériques de colonnes sont généralement séparées par plusieurs espaces
         
         // Pattern pour détecter les séparations de colonnes (3+ espaces ou tabs)
@@ -949,17 +1008,17 @@ public class CloudinaryOcrService {
         if (parts.length >= 2) {
             // Il y a des colonnes séparées, la première partie est probablement la désignation
             String designation = parts[0].trim();
-            // Nettoyer mais garder les chiffres qui sont partie intégrante (comme "DIAM 8")
+            // Nettoyer mais garder les chiffres qui sont partie intégrante (comme "DIAM 8", "CPJ 45")
             designation = designation.replaceAll("\\s+", " ").trim();
             return designation;
         }
         
-        // Fallback: retirer les nombres depuis la fin qui correspondent aux valeurs numériques détectées
+        // Fallback: retirer les grands nombres depuis la fin qui correspondent aux valeurs numériques détectées
         String cleaned = line;
-        Pattern numberPattern = Pattern.compile("\\b\\d{1,3}(?:[\\s,]\\d{3})*(?:[,\\.]\\d+)?\\b|\\b\\d+[,\\.]\\d+\\b");
+        Pattern bigNumberPattern = Pattern.compile("\\b\\d{1,3}(?:[\\s,]\\d{3})*(?:[,\\.]\\d+)?\\b|\\b\\d+[,\\.]\\d+\\b");
         
-        // Trouver tous les nombres et retirer ceux qui correspondent aux valeurs détectées
-        Matcher matcher = numberPattern.matcher(line);
+        // Trouver tous les grands nombres et retirer ceux qui correspondent aux valeurs détectées
+        Matcher matcher = bigNumberPattern.matcher(line);
         List<String> numbersToRemove = new ArrayList<>();
         
         while (matcher.find()) {
