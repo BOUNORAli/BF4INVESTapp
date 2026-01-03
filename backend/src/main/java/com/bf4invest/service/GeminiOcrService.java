@@ -23,7 +23,7 @@ public class GeminiOcrService {
     @Value("${gemini.api-key:}")
     private String apiKey;
 
-    @Value("${gemini.api-url:https://generativelanguage.googleapis.com/v1beta}")
+    @Value("${gemini.api-url:https://generativelanguage.googleapis.com/v1}")
     private String apiUrl;
 
     @Value("${gemini.model:gemini-1.5-flash-latest}")

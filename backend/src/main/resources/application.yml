@@ -68,7 +68,7 @@ cloudinary:
 # Google Gemini
 gemini:
   api-key: ${GEMINI_API_KEY:}
-  api-url: ${GEMINI_API_URL:https://generativelanguage.googleapis.com/v1beta}
+  api-url: ${GEMINI_API_URL:https://generativelanguage.googleapis.com/v1}
   model: ${GEMINI_MODEL:gemini-1.5-flash}
 
 # CORS Configuration
