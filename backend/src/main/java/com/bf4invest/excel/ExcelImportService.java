@@ -442,8 +442,9 @@ public class ExcelImportService {
         aliases.put("numero_facture_vente", Arrays.asList("n° fac vte", "n fac vte", "numero fac vente", 
                 "numero facture vente", "n° facture vente", "facture vente", "fac vte", "fv"));
         
-        // DATE FAC VTE
-        aliases.put("date_facture_vente", Arrays.asList("date fac vte", "datefac vte", "date facture vente"));
+        // DATE FAC VTE / DATE FAC VTF
+        aliases.put("date_facture_vente", Arrays.asList("date fac vte", "date fac vtf", "datefac vte", "datefac vtf", 
+                "date facture vente", "date facture vte", "date facture vtf"));
         
         // ICE
         aliases.put("ice", Arrays.asList("ice", "i.c.e"));
@@ -462,9 +463,10 @@ public class ExcelImportService {
         // N° BC (première colonne - peut être sans en-tête)
         aliases.put("numero_bc", Arrays.asList("n° bc", "n bc", "numero bc", "numero_bc", "bc", "num bc", "n° bc", "no bc"));
         
-        // N° ARTICLE
-        aliases.put("numero_article", Arrays.asList("n° article", "n article", "numero article", 
-                "numero_article", "article", "n° artic", "n artic", "n° arti cl", "n arti cl"));
+        // N° ARTICLE / N° ARTI
+        aliases.put("numero_article", Arrays.asList("n° article", "n° arti", "n article", "n arti", 
+                "numero article", "numero arti", "numero_article", "article", "n° artic", "n artic", 
+                "n° arti cl", "n arti cl"));
         
         // DESIGNATION
         aliases.put("designation", Arrays.asList("designation", "design", "desc", "description", "produit"));
@@ -472,12 +474,12 @@ public class ExcelImportService {
         // U
         aliases.put("unite", Arrays.asList("u", "unite", "unit", "unité"));
         
-        // QT BC
-        aliases.put("quantite_bc", Arrays.asList("qt bc", "qtbc", "quantite bc", "quantite_achetee", 
+        // QT BC / QT ACHAT
+        aliases.put("quantite_bc", Arrays.asList("qt bc", "qt achat", "qtbc", "quantite bc", "quantite_achetee", 
                 "quantité achetée", "qte achat", "quantite achat"));
         
-        // QT LIVREE AU CLIENT (format 2024)
-        aliases.put("quantite_livree", Arrays.asList("qt livree", "qt livref", "quantite livree", 
+        // QT LIVREE AU CLIENT / QT LIVREE CLT (format 2024)
+        aliases.put("quantite_livree", Arrays.asList("qt livree", "qt livree clt", "qt livref", "quantite livree", 
                 "quantite_vendue", "quantité vendue", "qte vente", "quantite vente",
                 "qt livree au client", "qt livree au cl", "quantite livree au client"));
         
@@ -510,10 +512,6 @@ public class ExcelImportService {
         
         // MARGE U TTC
         aliases.put("marge_unitaire_ttc", Arrays.asList("marge u ttc", "marge unitaire ttc", "marge", "marge ut"));
-        
-        // QT LIVREE
-        aliases.put("quantite_livree", Arrays.asList("qt livree", "qt livref", "quantite livree", 
-                "quantite_vendue", "quantité vendue", "qte vente", "quantite vente"));
         
         // PRIX DE VENTE U HT (format 2024: "PU VENTE BF4 HT")
         aliases.put("prix_vente_unitaire_ht", Arrays.asList("prix de vente u ht", "prix vente unitaire ht", 
@@ -1531,13 +1529,13 @@ public class ExcelImportService {
             headerStyle.setBorderLeft(BorderStyle.THIN);
             headerStyle.setBorderRight(BorderStyle.THIN);
             
-            // Créer l'en-tête selon la nouvelle structure
+            // Créer l'en-tête selon le format exact de l'image
             Row headerRow = sheet.createRow(0);
             String[] headers = {
-                "N° BC", "FRS", "N FAC FRS", "N° FAC VTE", "DATE FAC VTE", "ICE", "CLENT",
-                "N° ARTICLE", "DESIGNATION", "U", "QT BC", "PRIX ACHAT U HT",
+                "N° BC", "FRS", "N FAC FRS", "N° FAC VTE", "DATE FAC VTF", "ICE", "CLENT",
+                "N° ARTI", "DESIGNATION", "U", "QT ACHAT", "PRIX ACHAT U HT",
                 "PRIX ACHAT U TTC", "PRIX ACHAT T HT", "TX TVA", "FACTURE ACHAT TTC",
-                "QT LIVREE", "PRIX DE VENTE U HT", "PRIX DE VENTE U TTC", "FACTURE VENTE T TTC"
+                "QT LIVREE CLT", "PRIX DE VENTE U HT", "FACTURE VENTE T TTC"
             };
             
             for (int i = 0; i < headers.length; i++) {
@@ -1546,31 +1544,30 @@ public class ExcelImportService {
                 cell.setCellStyle(headerStyle);
             }
             
-            // Créer une ligne d'exemple selon la nouvelle structure
+            // Créer une ligne d'exemple selon le format exact de l'image
             Row exampleRow = sheet.createRow(1);
             exampleRow.createCell(0).setCellValue("PDA01AC/25"); // N° BC
             exampleRow.createCell(1).setCellValue("ACHGHAL CHAREK"); // FRS
             exampleRow.createCell(2).setCellValue("F250103"); // N FAC FRS
             exampleRow.createCell(3).setCellValue("0101/2025"); // N° FAC VTE
-            exampleRow.createCell(4).setCellValue("31/01/2025"); // DATE FAC VTE
+            exampleRow.createCell(4).setCellValue("31/01/2025"); // DATE FAC VTF
             exampleRow.createCell(5).setCellValue("001549104000010"); // ICE
             exampleRow.createCell(6).setCellValue("SONOFRERES"); // CLENT
-            exampleRow.createCell(7).setCellValue("1"); // N° ARTICLE
+            exampleRow.createCell(7).setCellValue("1"); // N° ARTI
             exampleRow.createCell(8).setCellValue("PIERES DE CONSTRUCTION RENDU"); // DESIGNATION
             exampleRow.createCell(9).setCellValue("T"); // U
-            exampleRow.createCell(10).setCellValue(41.12); // QT BC
+            exampleRow.createCell(10).setCellValue(41.12); // QT ACHAT
             exampleRow.createCell(11).setCellValue(95.00); // PRIX ACHAT U HT
             exampleRow.createCell(12).setCellValue(114.00); // PRIX ACHAT U TTC
             exampleRow.createCell(13).setCellValue(3906.40); // PRIX ACHAT T HT
             exampleRow.createCell(14).setCellValue(20.0); // TX TVA
             exampleRow.createCell(15).setCellValue(4687.68); // FACTURE ACHAT TTC
-            exampleRow.createCell(16).setCellValue(41.12); // QT LIVREE
+            exampleRow.createCell(16).setCellValue(41.12); // QT LIVREE CLT
             exampleRow.createCell(17).setCellValue(101.65); // PRIX DE VENTE U HT
-            exampleRow.createCell(18).setCellValue(121.98); // PRIX DE VENTE U TTC
-            exampleRow.createCell(19).setCellValue(5015.82); // FACTURE VENTE T TTC
+            exampleRow.createCell(18).setCellValue(5015.82); // FACTURE VENTE T TTC
             
-            // Note: Le template correspond maintenant à la nouvelle structure :
-            // N° BC, FRS, N FAC FRS, N° FAC VTE, DATE FAC VTE, ICE, CLENT, N° ARTICLE, etc.
+            // Note: Le template correspond exactement au format de l'image :
+            // N° BC, FRS, N FAC FRS, N° FAC VTE, DATE FAC VTF, ICE, CLENT, N° ARTI, etc.
             // DATE BC n'est plus dans le template (optionnel dans la nouvelle structure)
             
             // Ajuster la largeur des colonnes
