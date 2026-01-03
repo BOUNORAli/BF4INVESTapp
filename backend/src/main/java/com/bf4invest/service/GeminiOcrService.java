@@ -27,11 +27,11 @@ public class GeminiOcrService {
     @Value("${gemini.api-url:https://generativelanguage.googleapis.com/v1beta}")
     private String apiUrl;
 
-    // Utiliser une version spécifique (ex: gemini-1.5-flash-002) au lieu de l'alias générique
-    // L'alias gemini-1.5-flash peut être rejeté (404) par certaines clés API ou régions
-    // gemini-1.5-flash-002 est la version stable de septembre 2024
-    // Alternative: gemini-1.5-flash-001 ou gemini-1.5-flash-8b (plus rapide pour OCR simple)
-    @Value("${gemini.model:gemini-1.5-flash-002}")
+    // Modèle vérifié disponible avec cette clé API (liste obtenue via /v1beta/models)
+    // gemini-2.0-flash-001 : Version stable rapide et versatile (janvier 2025)
+    // Alternatives disponibles: gemini-2.0-flash, gemini-2.5-flash, gemini-flash-latest
+    // NOTE: gemini-1.5-flash n'existe PAS dans la liste des modèles disponibles
+    @Value("${gemini.model:gemini-2.0-flash-001}")
     private String model;
 
     private final WebClient webClient;
@@ -42,6 +42,68 @@ public class GeminiOcrService {
                 .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(10 * 1024 * 1024)) // 10MB
                 .build();
         this.objectMapper = new ObjectMapper();
+    }
+
+    /**
+     * Liste les modèles disponibles avec cette clé API (méthode de diagnostic)
+     */
+    public String listAvailableModels() throws IOException {
+        try {
+            String listUrl = String.format("%s/models?key=%s", apiUrl, apiKey);
+            
+            // #region agent log
+            try {
+                java.io.FileWriter fw = new java.io.FileWriter("c:\\Users\\PC\\Documents\\BF4INVESTapp\\.cursor\\debug.log", true);
+                fw.write(String.format("{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"E\",\"location\":\"GeminiOcrService.java:listAvailableModels\",\"message\":\"Listing available models\",\"data\":{\"apiUrl\":\"%s\",\"listUrl\":\"%s\"},\"timestamp\":%d}%n", 
+                    apiUrl, listUrl.replace(apiKey, "***"), System.currentTimeMillis()));
+                fw.close();
+            } catch (Exception e) {}
+            // #endregion
+            
+            log.info("🔍 [Gemini Diagnostic] Liste des modèles disponibles - URL: {}", listUrl.replace(apiKey, "***"));
+            
+            String response = webClient.get()
+                    .uri(listUrl)
+                    .retrieve()
+                    .onStatus(status -> status.is4xxClientError() || status.is5xxServerError(),
+                        clientResponse -> {
+                            log.error("❌ [Gemini Diagnostic] Erreur lors de la liste des modèles - Status: {}", clientResponse.statusCode());
+                            return clientResponse.bodyToMono(String.class)
+                                    .flatMap(errorBody -> {
+                                        log.error("❌ [Gemini Diagnostic] Détails de l'erreur: {}", errorBody);
+                                        
+                                        // #region agent log
+                                        try {
+                                            java.io.FileWriter fw = new java.io.FileWriter("c:\\Users\\PC\\Documents\\BF4INVESTapp\\.cursor\\debug.log", true);
+                                            fw.write(String.format("{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"E\",\"location\":\"GeminiOcrService.java:listAvailableModels\",\"message\":\"Error listing models\",\"data\":{\"status\":%d,\"error\":\"%s\"},\"timestamp\":%d}%n", 
+                                                clientResponse.statusCode(), errorBody.replace("\"", "\\\"").substring(0, Math.min(200, errorBody.length())), System.currentTimeMillis()));
+                                            fw.close();
+                                        } catch (Exception e) {}
+                                        // #endregion
+                                        
+                                        return Mono.error(new IOException("Erreur lors de la liste des modèles (" + clientResponse.statusCode() + "): " + errorBody));
+                                    });
+                        })
+                    .bodyToMono(String.class)
+                    .timeout(Duration.ofSeconds(10))
+                    .block();
+            
+            // #region agent log
+            try {
+                java.io.FileWriter fw = new java.io.FileWriter("c:\\Users\\PC\\Documents\\BF4INVESTapp\\.cursor\\debug.log", true);
+                fw.write(String.format("{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"A\",\"location\":\"GeminiOcrService.java:listAvailableModels\",\"message\":\"Models list received\",\"data\":{\"responseLength\":%d},\"timestamp\":%d}%n", 
+                    response != null ? response.length() : 0, System.currentTimeMillis()));
+                fw.close();
+            } catch (Exception e) {}
+            // #endregion
+            
+            log.info("✅ [Gemini Diagnostic] Liste des modèles reçue - Taille: {} caractères", response != null ? response.length() : 0);
+            return response;
+            
+        } catch (Exception e) {
+            log.error("❌ [Gemini Diagnostic] Erreur inattendue lors de la liste des modèles", e);
+            throw new IOException("Erreur lors de la liste des modèles: " + e.getMessage(), e);
+        }
     }
 
     /**
@@ -129,7 +191,25 @@ public class GeminiOcrService {
      */
     private String callGeminiAPI(String base64Image, String mimeType, String prompt) throws IOException {
         try {
+            // #region agent log
+            try {
+                java.io.FileWriter fw = new java.io.FileWriter("c:\\Users\\PC\\Documents\\BF4INVESTapp\\.cursor\\debug.log", true);
+                fw.write(String.format("{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"C\",\"location\":\"GeminiOcrService.java:callGeminiAPI\",\"message\":\"API call starting\",\"data\":{\"apiUrl\":\"%s\",\"model\":\"%s\",\"mimeType\":\"%s\",\"imageSize\":%d},\"timestamp\":%d}%n", 
+                    apiUrl, model, mimeType, base64Image.length(), System.currentTimeMillis()));
+                fw.close();
+            } catch (Exception e) {}
+            // #endregion
+            
             String url = String.format("%s/models/%s:generateContent?key=%s", apiUrl, model, apiKey);
+            
+            // #region agent log
+            try {
+                java.io.FileWriter fw = new java.io.FileWriter("c:\\Users\\PC\\Documents\\BF4INVESTapp\\.cursor\\debug.log", true);
+                fw.write(String.format("{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"C\",\"location\":\"GeminiOcrService.java:callGeminiAPI\",\"message\":\"URL constructed\",\"data\":{\"url\":\"%s\"},\"timestamp\":%d}%n", 
+                    url.replace(apiKey, "***"), System.currentTimeMillis()));
+                fw.close();
+            } catch (Exception e) {}
+            // #endregion
             
             log.debug("📡 [Gemini OCR] Appel API: {}", url.replace(apiKey, "***"));
 
@@ -167,6 +247,15 @@ public class GeminiOcrService {
             generationConfig.put("response_mime_type", "application/json");
             requestBody.put("generationConfig", generationConfig);
 
+            // #region agent log
+            try {
+                java.io.FileWriter fw = new java.io.FileWriter("c:\\Users\\PC\\Documents\\BF4INVESTapp\\.cursor\\debug.log", true);
+                fw.write(String.format("{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"D\",\"location\":\"GeminiOcrService.java:callGeminiAPI\",\"message\":\"Request body prepared\",\"data\":{\"model\":\"%s\",\"hasResponseMimeType\":true,\"temperature\":0.1},\"timestamp\":%d}%n", 
+                    model, System.currentTimeMillis()));
+                fw.close();
+            } catch (Exception e) {}
+            // #endregion
+
             log.info("📤 [Gemini OCR] Envoi requête à Gemini API...");
             log.debug("📤 [Gemini OCR] URL: {}", url.replace(apiKey, "***"));
             log.debug("📤 [Gemini OCR] Modèle: {}", model);
@@ -180,9 +269,30 @@ public class GeminiOcrService {
                     .onStatus(status -> status.is4xxClientError() || status.is5xxServerError(), 
                         clientResponse -> {
                             log.error("❌ [Gemini OCR] Erreur HTTP de l'API Gemini - Status: {}", clientResponse.statusCode());
+                            
+                            // #region agent log
+                            try {
+                                java.io.FileWriter fw = new java.io.FileWriter("c:\\Users\\PC\\Documents\\BF4INVESTapp\\.cursor\\debug.log", true);
+                                fw.write(String.format("{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"A\",\"location\":\"GeminiOcrService.java:callGeminiAPI\",\"message\":\"HTTP error received\",\"data\":{\"status\":%d,\"model\":\"%s\"},\"timestamp\":%d}%n", 
+                                    clientResponse.statusCode(), model, System.currentTimeMillis()));
+                                fw.close();
+                            } catch (Exception e) {}
+                            // #endregion
+                            
                             return clientResponse.bodyToMono(String.class)
                                     .flatMap(errorBody -> {
                                         log.error("❌ [Gemini OCR] Détails de l'erreur: {}", errorBody);
+                                        
+                                        // #region agent log
+                                        try {
+                                            java.io.FileWriter fw = new java.io.FileWriter("c:\\Users\\PC\\Documents\\BF4INVESTapp\\.cursor\\debug.log", true);
+                                            String errorPreview = errorBody.length() > 500 ? errorBody.substring(0, 500) : errorBody;
+                                            fw.write(String.format("{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"A\",\"location\":\"GeminiOcrService.java:callGeminiAPI\",\"message\":\"Error body received\",\"data\":{\"status\":%d,\"errorPreview\":\"%s\"},\"timestamp\":%d}%n", 
+                                                clientResponse.statusCode(), errorPreview.replace("\"", "\\\"").replace("\n", "\\n"), System.currentTimeMillis()));
+                                            fw.close();
+                                        } catch (Exception e) {}
+                                        // #endregion
+                                        
                                         try {
                                             // Essayer de parser l'erreur JSON de Gemini
                                             JsonNode errorNode = objectMapper.readTree(errorBody);
@@ -192,6 +302,16 @@ public class GeminiOcrService {
                                             } else if (errorNode.has("error")) {
                                                 errorMessage = errorNode.get("error").asText();
                                             }
+                                            
+                                            // #region agent log
+                                            try {
+                                                java.io.FileWriter fw = new java.io.FileWriter("c:\\Users\\PC\\Documents\\BF4INVESTapp\\.cursor\\debug.log", true);
+                                                fw.write(String.format("{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"A\",\"location\":\"GeminiOcrService.java:callGeminiAPI\",\"message\":\"Parsed error message\",\"data\":{\"errorMessage\":\"%s\"},\"timestamp\":%d}%n", 
+                                                    errorMessage.replace("\"", "\\\""), System.currentTimeMillis()));
+                                                fw.close();
+                                            } catch (Exception e) {}
+                                            // #endregion
+                                            
                                             return Mono.error(new IOException("Erreur API Gemini (" + clientResponse.statusCode() + "): " + errorMessage));
                                         } catch (Exception e) {
                                             return Mono.error(new IOException("Erreur API Gemini (" + clientResponse.statusCode() + "): " + errorBody));
@@ -203,6 +323,15 @@ public class GeminiOcrService {
                     .onErrorMap(java.util.concurrent.TimeoutException.class, e -> 
                         new IOException("Timeout lors de l'appel à l'API Gemini (60s dépassés)", e))
                     .block();
+
+            // #region agent log
+            try {
+                java.io.FileWriter fw = new java.io.FileWriter("c:\\Users\\PC\\Documents\\BF4INVESTapp\\.cursor\\debug.log", true);
+                fw.write(String.format("{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"A\",\"location\":\"GeminiOcrService.java:callGeminiAPI\",\"message\":\"Response received\",\"data\":{\"responseLength\":%d,\"model\":\"%s\"},\"timestamp\":%d}%n", 
+                    response != null ? response.length() : 0, model, System.currentTimeMillis()));
+                fw.close();
+            } catch (Exception e) {}
+            // #endregion
 
             log.debug("📥 [Gemini OCR] Réponse reçue - Taille: {} caractères", response != null ? response.length() : 0);
 

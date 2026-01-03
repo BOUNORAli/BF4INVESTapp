@@ -20,9 +20,30 @@ public class OcrController {
 
     private final GeminiOcrService ocrService;
 
+    @GetMapping("/diagnostic/models")
+    public ResponseEntity<?> listAvailableModels() {
+        try {
+            String modelsJson = ocrService.listAvailableModels();
+            return ResponseEntity.ok(Map.of("models", modelsJson));
+        } catch (Exception e) {
+            log.error("❌ [OCR Diagnostic] Erreur lors de la liste des modèles", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Erreur lors de la liste des modèles: " + e.getMessage()));
+        }
+    }
+
     @PostMapping("/extract-bc")
     public ResponseEntity<?> extractFromImage(
             @RequestParam("file") MultipartFile file) {
+        
+        // #region agent log
+        try {
+            java.io.FileWriter fw = new java.io.FileWriter("c:\\Users\\PC\\Documents\\BF4INVESTapp\\.cursor\\debug.log", true);
+            fw.write(String.format("{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"A\",\"location\":\"OcrController.java:extractFromImage\",\"message\":\"OCR request received\",\"data\":{\"filename\":\"%s\",\"size\":%d},\"timestamp\":%d}%n", 
+                file.getOriginalFilename(), file.getSize(), System.currentTimeMillis()));
+            fw.close();
+        } catch (Exception e) {}
+        // #endregion
         
         log.info("📄 [OCR] Requête d'extraction OCR - Fichier: {}, Taille: {} bytes", 
                 file.getOriginalFilename(), file.getSize());
