@@ -42,7 +42,7 @@ public class GeminiOcrService {
     /**
      * Extrait les informations d'une facture depuis une image en utilisant Gemini Pro Vision
      */
-    public OcrExtractResult extractFromImage(MultipartFile file) throws IOException {
+    public OcrExtractResult uploadAndExtract(MultipartFile file) throws IOException {
         log.info("🔍 [Gemini OCR] Début extraction - Fichier: {}, Taille: {} bytes", 
                 file.getOriginalFilename(), file.getSize());
 
