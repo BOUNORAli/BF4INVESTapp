@@ -132,12 +132,13 @@ public class GeminiOcrService {
             Map<String, Object> content = new HashMap<>();
             List<Map<String, Object>> parts = new ArrayList<>();
             
-            // Partie texte (prompt)
+            // Pour Gemini Vision, on peut mettre l'image ou le texte en premier
+            // On met d'abord le texte (instructions), puis l'image
             Map<String, Object> textPart = new HashMap<>();
             textPart.put("text", prompt);
             parts.add(textPart);
             
-            // Partie image
+            // Partie image (base64)
             Map<String, Object> imagePart = new HashMap<>();
             Map<String, Object> inlineData = new HashMap<>();
             inlineData.put("mime_type", mimeType);
@@ -158,10 +159,13 @@ public class GeminiOcrService {
             requestBody.put("generationConfig", generationConfig);
 
             log.info("📤 [Gemini OCR] Envoi requête à Gemini API...");
+            log.debug("📤 [Gemini OCR] URL: {}", url.replace(apiKey, "***"));
+            log.debug("📤 [Gemini OCR] Modèle: {}", model);
 
             // Faire l'appel HTTP avec gestion d'erreurs
             String response = webClient.post()
                     .uri(url)
+                    .header("Content-Type", "application/json")
                     .bodyValue(requestBody)
                     .retrieve()
                     .onStatus(status -> status.is4xxClientError() || status.is5xxServerError(), 
