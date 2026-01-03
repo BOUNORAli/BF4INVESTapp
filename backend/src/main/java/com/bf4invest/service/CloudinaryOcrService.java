@@ -529,6 +529,15 @@ public class CloudinaryOcrService {
             return productLines;
         }
         
+        // Essayer le format tabulaire (Code + Désignation + Qté + Prix + Total sur mêmes lignes)
+        log.info("🔄 [OCR] Tentative format tabulaire...");
+        productLines = extractProductLinesTabularFormat(lines);
+        
+        if (!productLines.isEmpty()) {
+            log.info("✅ [OCR] {} lignes de produits extraites (format tabulaire)", productLines.size());
+            return productLines;
+        }
+        
         // Sinon, utiliser l'approche classique (tout sur une ligne ou lignes consécutives)
         log.info("🔄 [OCR] Tentative format classique...");
         productLines = extractProductLinesClassicFormat(lines);
@@ -693,6 +702,181 @@ public class CloudinaryOcrService {
         
         log.info("📊 [OCR] Format séparé: {} produits extraits", productLines.size());
         return productLines;
+    }
+
+    /**
+     * Extraction pour le format tabulaire où Code, Désignation, Qté, Prix, Total sont sur la même ligne
+     * Ex: "FT12/500 FER TOR/500 DIAM 12 14 147.00 9.50 134 396.50"
+     */
+    private List<OcrExtractResult.OcrProductLine> extractProductLinesTabularFormat(String[] lines) {
+        List<OcrExtractResult.OcrProductLine> productLines = new ArrayList<>();
+        
+        // Détecter le début du tableau (ligne avec "Code", "Désignations", "Quantité", etc.)
+        int tableStart = -1;
+        int tableEnd = -1;
+        
+        for (int i = 0; i < lines.length; i++) {
+            String line = lines[i].trim().toUpperCase();
+            String lineNormalized = line.replace("É", "E");
+            
+            // Chercher un en-tête de tableau avec plusieurs colonnes
+            boolean hasCode = line.contains("CODE");
+            boolean hasDesignation = lineNormalized.contains("DESIGNATION") || lineNormalized.contains("DESIGNATIONS");
+            boolean hasQuantity = lineNormalized.contains("QUANTITE") || lineNormalized.contains("QTE") || line.contains("QTÉ");
+            boolean hasPrice = line.contains("PRIX");
+            boolean hasAmount = line.contains("MONTANT") || line.contains("TOTAL");
+            
+            if (tableStart == -1 && hasDesignation && (hasQuantity || hasPrice || hasAmount)) {
+                tableStart = i + 1; // Commencer après l'en-tête
+                log.info("📍 [OCR] Début tableau tabulaire ligne {}: '{}'", i, lines[i].trim());
+            }
+            
+            // Fin du tableau: ligne avec "TOTAL HT" ou "M.H.T" ou "ARRETEE"
+            if (tableStart != -1 && tableEnd == -1 &&
+                (line.contains("TOTAL HT") || line.contains("M.H.T") || line.contains("M.T.T.C") ||
+                 line.contains("ARRETEE") || line.contains("ARRÊTÉE"))) {
+                tableEnd = i;
+                log.info("📍 [OCR] Fin tableau tabulaire ligne {}: '{}'", i, lines[i].trim());
+                break;
+            }
+        }
+        
+        if (tableStart == -1 || tableEnd == -1 || tableEnd <= tableStart) {
+            log.info("⚠️ [OCR] Format tabulaire non détecté (tableStart={}, tableEnd={})", tableStart, tableEnd);
+            return productLines;
+        }
+        
+        // Parser chaque ligne entre tableStart et tableEnd
+        for (int i = tableStart; i < tableEnd; i++) {
+            String line = lines[i].trim();
+            if (line.isEmpty() || isNoiseLine(line)) {
+                continue;
+            }
+            
+            // Parser la ligne comme un produit
+            OcrExtractResult.OcrProductLine productLine = parseTabularProductLine(line);
+            if (productLine != null && isValidProductLine(productLine)) {
+                productLines.add(productLine);
+                log.info("✅ [OCR] Produit tabulaire: {} - Qté: {} - PU: {} - Total: {}", 
+                        productLine.getDesignation(), productLine.getQuantite(), 
+                        productLine.getPrixUnitaireHT(), productLine.getPrixTotalHT());
+            }
+        }
+        
+        return productLines;
+    }
+    
+    /**
+     * Parse une ligne de produit au format tabulaire
+     * Format: [Code?] [Désignation] [Qté] [Prix unitaire] [Total]
+     */
+    private OcrExtractResult.OcrProductLine parseTabularProductLine(String line) {
+        // Extraire tous les nombres depuis la fin
+        List<Double> numericValues = extractNumbersFromEnd(line);
+        
+        if (numericValues.size() < 2) {
+            return null; // Pas assez de nombres
+        }
+        
+        // Extraire la désignation (tout sauf les nombres à la fin)
+        String designation = extractDesignation(line, numericValues);
+        if (designation == null || designation.trim().length() < 5) {
+            return null;
+        }
+        
+        // Nettoyer la désignation (retirer code produit si présent)
+        designation = cleanDesignation(designation.trim());
+        
+        // Assigner les nombres: normalement les 3 derniers sont [Qté, Prix, Total]
+        Double qte = null;
+        Double prix = null;
+        Double total = null;
+        
+        if (numericValues.size() >= 3) {
+            // Prendre les 3 derniers nombres
+            Double val1 = numericValues.get(numericValues.size() - 3);
+            Double val2 = numericValues.get(numericValues.size() - 2);
+            Double val3 = numericValues.get(numericValues.size() - 1);
+            
+            // Le total est généralement le plus grand des 3
+            // La quantité peut être très grande aussi
+            // Le prix unitaire est généralement moyen (entre 5 et 1000)
+            
+            // Validation: total ≈ qté * prix
+            double expected1 = val1 * val2;
+            double diff1 = Math.abs(val3 - expected1);
+            
+            // Essayer l'autre ordre
+            double expected2 = val2 * val3;
+            double diff2 = Math.abs(val1 - expected2);
+            
+            if (diff1 < diff2 && diff1 < expected1 * 0.1) {
+                // Ordre correct: [Qté, Prix, Total]
+                qte = val1;
+                prix = val2;
+                total = val3;
+            } else if (diff2 < diff1 && diff2 < expected2 * 0.1) {
+                // Autre ordre: [Prix, Total, Qté]
+                prix = val1;
+                total = val2;
+                qte = val3;
+            } else {
+                // Par magnitude: le plus grand est le total, le moyen est le prix
+                if (val3 >= val1 && val3 >= val2) {
+                    total = val3;
+                    if (val1 > val2 * 10) {
+                        qte = val1;
+                        prix = val2;
+                    } else {
+                        qte = val2;
+                        prix = val1;
+                    }
+                } else {
+                    // Par défaut
+                    qte = val1;
+                    prix = val2;
+                    total = val3;
+                }
+            }
+        } else if (numericValues.size() == 2) {
+            // Deux nombres: Qté et Prix (ou Qté et Total)
+            Double val1 = numericValues.get(0);
+            Double val2 = numericValues.get(1);
+            
+            // Si val2 est beaucoup plus grand, c'est probablement Total
+            if (val2 > val1 * 100) {
+                qte = val1;
+                total = val2;
+            } else {
+                qte = val1;
+                prix = val2;
+            }
+        } else {
+            return null;
+        }
+        
+        // Validation finale: si on a prix et total, vérifier la cohérence
+        if (qte != null && prix != null && total != null) {
+            double expected = qte * prix;
+            double diff = Math.abs(total - expected);
+            if (diff > expected * 0.15) {
+                // Pas cohérent, peut-être que le prix est TTC
+                // Essayer avec TVA incluse (prix * 1.2)
+                double expectedTTC = qte * prix * 1.2;
+                if (Math.abs(total - expectedTTC) < diff) {
+                    // Le prix est TTC, convertir en HT
+                    prix = prix / 1.2;
+                }
+            }
+        }
+        
+        return OcrExtractResult.OcrProductLine.builder()
+                .designation(designation)
+                .quantite(qte)
+                .prixUnitaireHT(prix)
+                .prixTotalHT(total)
+                .unite("U")
+                .build();
     }
 
     /**
@@ -872,6 +1056,12 @@ public class CloudinaryOcrService {
             if (isNoiseLine(line)) {
                 continue;
             }
+            
+            // Ignorer les transactions bancaires (format: "31/12/2025 VIR...")
+            if (line.matches("^\\d{2}/\\d{2}/\\d{4}.*VIR.*")) {
+                continue;
+            }
+            
             // Si la ligne ressemble à une ligne de produit (texte + nombres)
             if (hasNumericValues(line) && line.length() > 10) {
                 // Vérifier qu'il y a au moins 2 nombres (qté + prix)
@@ -882,8 +1072,13 @@ public class CloudinaryOcrService {
                     count++;
                 }
                 if (count >= 2) {
-                    log.debug("🎯 [OCR] Début tableau détecté (fallback) à la ligne {}: {}", i, line.substring(0, Math.min(50, line.length())));
-                    return i;
+                    // Vérifier que ce n'est pas une ligne de date ou de transaction
+                    String upperLine = line.toUpperCase();
+                    if (!upperLine.startsWith("DATE") && !upperLine.contains("VIR") && 
+                        !upperLine.matches("^\\d{2}/\\d{2}/\\d{4}.*")) {
+                        log.debug("🎯 [OCR] Début tableau détecté (fallback) à la ligne {}: {}", i, line.substring(0, Math.min(50, line.length())));
+                        return i;
+                    }
                 }
             }
         }
@@ -977,6 +1172,11 @@ public class CloudinaryOcrService {
         
         // Ignorer les lignes trop courtes (< 5 caractères)
         if (trimmed.length() < 5) {
+            return true;
+        }
+        
+        // Ignorer les transactions bancaires (format: "31/12/2025 VIR EXP...")
+        if (trimmed.matches("^\\d{2}/\\d{2}/\\d{4}.*VIR.*")) {
             return true;
         }
         
@@ -1091,7 +1291,7 @@ public class CloudinaryOcrService {
         String[] metadataPatterns = {
             "BL N°", "DATE:", "ICE:", "MODE DE", "RÉGLEMENT", "REGLEMENT",
             "CODE CLIENT", "FACTURE N", "CONTACT", "E-MAIL", "EMAIL",
-            "CERTIFIE", "NET HT", "TOTAL", "REMISE"
+            "CERTIFIE", "NET HT", "TOTAL", "REMISE", "DESIGNATIONS"
         };
         for (String pattern : metadataPatterns) {
             if (designationUpper.contains(pattern)) {
@@ -1100,9 +1300,27 @@ public class CloudinaryOcrService {
             }
         }
         
+        // Rejeter les transactions bancaires (format: "31/12/2025 VIR EXP...")
+        if (designation.matches("^\\d{2}/\\d{2}/\\d{4}.*VIR.*")) {
+            log.debug("🚫 [OCR] Produit rejeté - transaction bancaire: '{}'", designation);
+            return false;
+        }
+        
+        // Rejeter les dates seules ou dates avec texte court
+        if (designation.matches("^\\d{2}/\\d{2}/\\d{4}.*") && designation.length() < 30) {
+            log.debug("🚫 [OCR] Produit rejeté - ligne de date: '{}'", designation);
+            return false;
+        }
+        
         // Rejeter si la désignation contient un email
         if (designation.matches(".*[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}.*")) {
             log.debug("🚫 [OCR] Produit rejeté - contient email: '{}'", designation);
+            return false;
+        }
+        
+        // Rejeter les codes de référence seuls (ex: "F01054/25")
+        if (designation.matches("^[A-Z0-9]{1,10}/\\d{1,4}$")) {
+            log.debug("🚫 [OCR] Produit rejeté - code référence seul: '{}'", designation);
             return false;
         }
         

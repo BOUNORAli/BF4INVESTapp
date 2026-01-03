@@ -65,6 +65,12 @@ cloudinary:
     factures: ${CLOUDINARY_FOLDER_FACTURES:bf4/factures}
     releves: ${CLOUDINARY_FOLDER_RELEVES:bf4/releves}
 
+# Google Gemini
+gemini:
+  api-key: ${GEMINI_API_KEY:}
+  api-url: ${GEMINI_API_URL:https://generativelanguage.googleapis.com/v1beta}
+  model: ${GEMINI_MODEL:gemini-1.5-flash-latest}
+
 # CORS Configuration
 cors:
   allowed:

@@ -1,7 +1,7 @@
 package com.bf4invest.controller;
 
 import com.bf4invest.dto.OcrExtractResult;
-import com.bf4invest.service.CloudinaryOcrService;
+import com.bf4invest.service.GeminiOcrService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -18,7 +18,7 @@ import java.util.Map;
 @Slf4j
 public class OcrController {
 
-    private final CloudinaryOcrService ocrService;
+    private final GeminiOcrService ocrService;
 
     @PostMapping("/extract-bc")
     public ResponseEntity<?> extractFromImage(
@@ -46,13 +46,13 @@ public class OcrController {
                     result.getLignes() != null ? result.getLignes().size() : 0);
             return ResponseEntity.ok(result);
         } catch (IllegalStateException e) {
-            log.error("❌ [OCR] Erreur de configuration: {}", e.getMessage(), e);
+            log.error("❌ [OCR] Erreur de configuration Gemini: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "Configuration OCR manquante: " + e.getMessage()));
+                    .body(Map.of("error", "Configuration Gemini OCR manquante: " + e.getMessage()));
         } catch (IOException e) {
-            log.error("❌ [OCR] Erreur lors de l'extraction OCR", e);
+            log.error("❌ [OCR] Erreur lors de l'extraction OCR avec Gemini", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "Erreur lors de l'extraction OCR: " + e.getMessage()));
+                    .body(Map.of("error", "Erreur lors de l'extraction OCR avec Gemini: " + e.getMessage()));
         } catch (Exception e) {
             log.error("❌ [OCR] Erreur inattendue lors de l'extraction OCR", e);
             log.error("❌ [OCR] Type d'exception: {}, Message: {}", e.getClass().getName(), e.getMessage());
