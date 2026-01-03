@@ -69,7 +69,9 @@ cloudinary:
 gemini:
   api-key: ${GEMINI_API_KEY:}
   api-url: ${GEMINI_API_URL:https://generativelanguage.googleapis.com/v1beta}
-  model: ${GEMINI_MODEL:gemini-1.5-flash}
+  # Utiliser une version spécifique (ex: gemini-1.5-flash-002) au lieu de l'alias générique
+  # L'alias gemini-1.5-flash peut être rejeté par certaines clés API ou régions
+  model: ${GEMINI_MODEL:gemini-1.5-flash-002}
 
 # CORS Configuration
 cors:

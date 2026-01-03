@@ -27,9 +27,11 @@ public class GeminiOcrService {
     @Value("${gemini.api-url:https://generativelanguage.googleapis.com/v1beta}")
     private String apiUrl;
 
-    // Utiliser gemini-1.5-flash (sans -latest) pour Google AI Studio API REST
-    // L'alias gemini-1.5-flash pointe automatiquement vers la dernière version stable
-    @Value("${gemini.model:gemini-1.5-flash}")
+    // Utiliser une version spécifique (ex: gemini-1.5-flash-002) au lieu de l'alias générique
+    // L'alias gemini-1.5-flash peut être rejeté (404) par certaines clés API ou régions
+    // gemini-1.5-flash-002 est la version stable de septembre 2024
+    // Alternative: gemini-1.5-flash-001 ou gemini-1.5-flash-8b (plus rapide pour OCR simple)
+    @Value("${gemini.model:gemini-1.5-flash-002}")
     private String model;
 
     private final WebClient webClient;
