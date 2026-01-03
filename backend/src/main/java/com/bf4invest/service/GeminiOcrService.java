@@ -23,7 +23,7 @@ public class GeminiOcrService {
     @Value("${gemini.api-key:}")
     private String apiKey;
 
-    @Value("${gemini.api-url:https://generativelanguage.googleapis.com/v1}")
+    @Value("${gemini.api-url:https://generativelanguage.googleapis.com/v1beta}")
     private String apiUrl;
 
     @Value("${gemini.model:gemini-1.5-flash-latest}")
@@ -158,8 +158,8 @@ public class GeminiOcrService {
             // Configuration de génération
             Map<String, Object> generationConfig = new HashMap<>();
             generationConfig.put("temperature", 0.1);
-            // Note: response_mime_type is only available in v1beta API, not in v1
-            // We rely on the prompt to ensure JSON response format
+            // response_mime_type est supporté dans v1beta pour forcer le format JSON
+            generationConfig.put("response_mime_type", "application/json");
             requestBody.put("generationConfig", generationConfig);
 
             log.info("📤 [Gemini OCR] Envoi requête à Gemini API...");
