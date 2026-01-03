@@ -10,6 +10,7 @@ import java.util.Optional;
 public interface ClientRepository extends MongoRepository<Client, String> {
     Optional<Client> findByIce(String ice);
     boolean existsByIce(String ice);
+    Optional<Client> findByNomIgnoreCase(String nom);
 }
 
 

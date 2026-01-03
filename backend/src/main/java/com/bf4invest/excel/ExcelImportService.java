@@ -83,6 +83,18 @@ public class ExcelImportService {
             // Mapping intelligent des colonnes
             Map<String, Integer> columnMap = mapColumnsIntelligent(sheet.getRow(0));
             log.info("Mapped columns: {}", columnMap);
+            log.info("Total columns mapped: {}/19 expected columns", columnMap.size());
+            
+            // Vérifier les colonnes critiques
+            if (!columnMap.containsKey("numero_bc")) {
+                log.warn("WARNING: Column 'numero_bc' not found! Import may fail.");
+            }
+            if (!columnMap.containsKey("quantite_bc") && !columnMap.containsKey("quantite_livree")) {
+                log.warn("WARNING: Neither 'quantite_bc' nor 'quantite_livree' found! Quantities may be 0.");
+            }
+            if (!columnMap.containsKey("prix_achat_unitaire_ht")) {
+                log.warn("WARNING: Column 'prix_achat_unitaire_ht' not found! Purchase prices may be 0.");
+            }
             
             result.setTotalRows(sheet.getLastRowNum());
             
@@ -100,37 +112,64 @@ public class ExcelImportService {
             Map<String, String> fvToBcNumMap = new HashMap<>(); // numeroFV -> numeroBC
             
             int processedRows = 0;
+            int totalRows = sheet.getLastRowNum();
+            log.info("Starting import of {} rows", totalRows);
             
-            for (int i = 1; i <= sheet.getLastRowNum(); i++) {
+            for (int i = 1; i <= totalRows; i++) {
                 Row row = sheet.getRow(i);
-                if (row == null || isEmptyRow(row)) continue;
+                if (row == null || isEmptyRow(row)) {
+                    if (i % 100 == 0) {
+                        log.info("Processed {}/{} rows (empty row skipped)", i, totalRows);
+                    }
+                    continue;
+                }
                 
                 try {
                     processRow(row, columnMap, bcMap, faMap, fvMap, faLignesMap, fvLignesMap, 
                               faToBcNumMap, fvToBcNumMap, result);
                     processedRows++;
                     
-                    // Stocker la ligne de succès (optionnel)
-                    Map<String, Object> rowData = extractRowData(row, columnMap, sheet.getRow(0));
-                    result.getSuccessRows().add(ImportResult.SuccessRow.builder()
-                            .rowNumber(i + 1)
-                            .rowData(rowData)
-                            .build());
+                    // Log progression tous les 100 lignes
+                    if (processedRows % 100 == 0) {
+                        log.info("Processed {}/{} rows successfully ({} BCs, {} FAs, {} FVs)", 
+                                processedRows, totalRows, bcMap.size(), faMap.size(), fvMap.size());
+                    }
+                    
+                    // Stocker la ligne de succès (optionnel - limiter pour éviter OutOfMemory)
+                    if (result.getSuccessRows().size() < 1000) { // Limiter à 1000 lignes de succès en mémoire
+                        Map<String, Object> rowData = extractRowData(row, columnMap, sheet.getRow(0));
+                        result.getSuccessRows().add(ImportResult.SuccessRow.builder()
+                                .rowNumber(i + 1)
+                                .rowData(rowData)
+                                .build());
+                    }
+                } catch (OutOfMemoryError e) {
+                    log.error("OutOfMemoryError at row {}: {}", i + 1, e.getMessage());
+                    result.getErrors().add(String.format("Ligne %d: Mémoire insuffisante - import arrêté", i + 1));
+                    result.setErrorCount(result.getErrorCount() + 1);
+                    // Arrêter l'import si OutOfMemoryError
+                    log.warn("Import stopped at row {} due to OutOfMemoryError. Processed {} rows successfully.", i + 1, processedRows);
+                    break;
                 } catch (Exception e) {
                     log.error("Error processing row {}: {}", i + 1, e.getMessage(), e);
                     String errorMsg = e.getMessage() != null ? e.getMessage() : "Erreur inconnue";
                     result.getErrors().add(String.format("Ligne %d: %s", i + 1, errorMsg));
                     result.setErrorCount(result.getErrorCount() + 1);
                     
-                    // Stocker la ligne en erreur avec ses données
-                    Map<String, Object> rowData = extractRowData(row, columnMap, sheet.getRow(0));
-                    result.getErrorRows().add(ImportResult.ErrorRow.builder()
-                            .rowNumber(i + 1)
-                            .rowData(rowData)
-                            .errorMessage(errorMsg)
-                            .build());
+                    // Stocker la ligne en erreur avec ses données (limiter aussi)
+                    if (result.getErrorRows().size() < 1000) {
+                        Map<String, Object> rowData = extractRowData(row, columnMap, sheet.getRow(0));
+                        result.getErrorRows().add(ImportResult.ErrorRow.builder()
+                                .rowNumber(i + 1)
+                                .rowData(rowData)
+                                .errorMessage(errorMsg)
+                                .build());
+                    }
                 }
             }
+            
+            log.info("Finished processing rows. Total processed: {}, BCs: {}, FAs: {}, FVs: {}", 
+                    processedRows, bcMap.size(), faMap.size(), fvMap.size());
             
             // Calculer les totaux pour les BC et convertir lignes vers lignesAchat
             for (BandeCommande bc : bcMap.values()) {
@@ -325,11 +364,19 @@ public class ExcelImportService {
             int colIndex = cell.getColumnIndex();
             if (usedColumns.contains(colIndex)) continue;
             
-            String cellValue = getCellStringValue(cell).toLowerCase().trim();
-            if (cellValue.isEmpty()) continue;
+            // Lire la valeur brute de la cellule (préserver les retours à la ligne pour la normalisation)
+            String rawCellValue = getCellStringValue(cell);
+            if (rawCellValue == null || rawCellValue.trim().isEmpty()) continue;
             
-            // Normaliser: retirer accents, espaces multiples, caractères spéciaux
+            String cellValue = rawCellValue.toLowerCase();
+            
+            // Normaliser: retirer accents, espaces multiples, caractères spéciaux, retours à la ligne
             String normalized = normalizeColumnName(cellValue);
+            
+            // Log pour debug des colonnes importantes
+            if (normalized.contains("prix") || normalized.contains("facture") || normalized.contains("quantite")) {
+                log.debug("Header cell [{}]: raw='{}', normalized='{}'", colIndex, rawCellValue, normalized);
+            }
             
             // Chercher dans l'ordre de priorité
             boolean matched = false;
@@ -483,28 +530,28 @@ public class ExcelImportService {
                 "quantite_vendue", "quantité vendue", "qte vente", "quantite vente",
                 "qt livree au client", "qt livree au cl", "quantite livree au client"));
         
-        // PRIX ACHAT U HT (format 2024: "PU achat HT")
-        aliases.put("prix_achat_unitaire_ht", Arrays.asList("prix achat u ht", "prix achat unitaire ht", 
-                "prix achat unit ht", "pau ht", "pax ht", "pu achat ht", "pu achat u ht"));
+        // PRIX ACHAT U HT (format 2024: "PU achat HT" - avec retours à la ligne possibles)
+        aliases.put("prix_achat_unitaire_ht", Arrays.asList("prix achat u ht", "prix achat\nu ht", "prix achat u ht", 
+                "prix achat unitaire ht", "prix achat unit ht", "pau ht", "pax ht", "pu achat ht", "pu achat u ht"));
         
-        // PRIX ACHAT T HT
-        aliases.put("prix_achat_total_ht", Arrays.asList("prix achat t ht", "prix achat total ht", 
-                "total achat ht", "tah ht"));
+        // PRIX ACHAT T HT (avec retours à la ligne possibles)
+        aliases.put("prix_achat_total_ht", Arrays.asList("prix achat t ht", "prix achat\nt ht", "prix achat t ht", 
+                "prix achat total ht", "total achat ht", "tah ht"));
         
         // TX TVA
         aliases.put("taux_tva", Arrays.asList("tx tva", "taux tva", "tva", "taxe", "tva %"));
         
-        // FACTURE ACHAT TTC
-        aliases.put("facture_achat_ttc", Arrays.asList("facture achat ttc", "facture achat ttc ", 
-                "fa ttc", "total achat ttc"));
+        // FACTURE ACHAT TTC (avec retours à la ligne et espaces en fin possibles)
+        aliases.put("facture_achat_ttc", Arrays.asList("facture achat ttc", "facture achat\nttc", "facture achat ttc ", 
+                "facture achat\nttc ", "fa ttc", "total achat ttc"));
         
         // PRIX ACHAT TTC (format 2024: "PRIX ACHAT TTC")
         aliases.put("prix_achat_ttc", Arrays.asList("prix achat ttc", "prix achat total ttc", 
                 "total achat ttc", "prix achat ttc", "pa ttc"));
         
-        // PRIX ACHAT U TTC
-        aliases.put("prix_achat_unitaire_ttc", Arrays.asList("prix achat u ttc", "prix achat unitaire ttc", 
-                "pau ttc"));
+        // PRIX ACHAT U TTC (avec retours à la ligne possibles)
+        aliases.put("prix_achat_unitaire_ttc", Arrays.asList("prix achat u ttc", "prix achat\nu ttc", "prix achat u ttc", 
+                "prix achat unitaire ttc", "pau ttc"));
         
         // PRIX DE VENTE U TTC
         aliases.put("prix_vente_unitaire_ttc", Arrays.asList("prix de vente u tt", "prix de vente u ttc", 
@@ -513,13 +560,13 @@ public class ExcelImportService {
         // MARGE U TTC
         aliases.put("marge_unitaire_ttc", Arrays.asList("marge u ttc", "marge unitaire ttc", "marge", "marge ut"));
         
-        // PRIX DE VENTE U HT (format 2024: "PU VENTE BF4 HT")
-        aliases.put("prix_vente_unitaire_ht", Arrays.asList("prix de vente u ht", "prix vente unitaire ht", 
-                "pv u ht", "prix vente u ht", "pu vente bf4 ht", "pu vente ht", "pv bf4 ht"));
+        // PRIX DE VENTE U HT (format 2024: "PU VENTE BF4 HT" - avec retours à la ligne possibles)
+        aliases.put("prix_vente_unitaire_ht", Arrays.asList("prix de vente u ht", "prix de vente\nu ht", "prix de vente u ht", 
+                "prix vente unitaire ht", "pv u ht", "prix vente u ht", "pu vente bf4 ht", "pu vente ht", "pv bf4 ht"));
         
-        // FACTURE VENTE TTC (format 2024: "PT VENTE BF4 TTC", format 2021/2022: "PT VENTE BF4 TTC FORMULE")
-        aliases.put("facture_vente_ttc", Arrays.asList("facture vente ttc", "facture vente ttc ", 
-                "fv ttc", "total vente ttc", "pt vente bf4 ttc", "pt vente ttc", "pv bf4 ttc",
+        // FACTURE VENTE TTC (format 2024: "PT VENTE BF4 TTC", format 2021/2022: "PT VENTE BF4 TTC FORMULE" - avec retours à la ligne possibles)
+        aliases.put("facture_vente_ttc", Arrays.asList("facture vente ttc", "facture vente\nt ttc", "facture vente t ttc", 
+                "facture vente ttc ", "fv ttc", "total vente ttc", "pt vente bf4 ttc", "pt vente ttc", "pv bf4 ttc",
                 "pt vente bf4 ttc formule", "pt vente bf4 ttc formule"));
         
         // PT TTC IMPORTE (format 2021/2022)
@@ -542,16 +589,19 @@ public class ExcelImportService {
         
         return name
                 .toLowerCase()
-                .replaceAll("[°'`]", "")  // Retirer caractères spéciaux
-                .replaceAll("[éèêë]", "e")  // Normaliser accents e
-                .replaceAll("[àâä]", "a")   // Normaliser accents a
-                .replaceAll("[îï]", "i")    // Normaliser accents i
-                .replaceAll("[ôö]", "o")    // Normaliser accents o
-                .replaceAll("[ùûü]", "u")   // Normaliser accents u
-                .replaceAll("ç", "c")       // Normaliser ç
+                .replaceAll("\r\n", " ")     // Remplacer retours à la ligne Windows par espace
+                .replaceAll("\n", " ")       // Remplacer retours à la ligne Unix par espace
+                .replaceAll("\r", " ")       // Remplacer retours chariot par espace
+                .replaceAll("[°'`]", "")     // Retirer caractères spéciaux
+                .replaceAll("[éèêë]", "e")   // Normaliser accents e
+                .replaceAll("[àâä]", "a")    // Normaliser accents a
+                .replaceAll("[îï]", "i")     // Normaliser accents i
+                .replaceAll("[ôö]", "o")     // Normaliser accents o
+                .replaceAll("[ùûü]", "u")    // Normaliser accents u
+                .replaceAll("ç", "c")        // Normaliser ç
                 .replaceAll("[^a-z0-9\\s]", "")  // Retirer autres caractères spéciaux
                 .replaceAll("\\s+", " ")    // Espaces multiples -> un seul espace
-                .trim();
+                .trim();                     // Retirer espaces en début/fin
     }
     
     private boolean isEmptyRow(Row row) {
@@ -808,6 +858,13 @@ public class ExcelImportService {
         if (qteBC == null) {
             qteBC = getDoubleValue(row, columnMap, "quantite_livree");
         }
+        if (qteBC == null) {
+            // Essayer aussi "qt achat" directement
+            String qteAchatStr = getCellValue(row, columnMap, "quantite_bc");
+            if (qteAchatStr != null && !qteAchatStr.trim().isEmpty()) {
+                log.debug("Trying to parse quantite_bc as string: {}", qteAchatStr);
+            }
+        }
         ligne.setQuantiteAchetee(qteBC != null ? qteBC.intValue() : 0);
         
         Double qteLivree = getDoubleValue(row, columnMap, "quantite_livree");
@@ -835,6 +892,11 @@ public class ExcelImportService {
         
         ligne.setPrixAchatUnitaireHT(prixAchatHT);
         
+        // Log pour debug si prix manquant
+        if (prixAchatHT == null && ligne.getDesignation() != null) {
+            log.debug("Row with designation '{}': prixAchatHT is null", ligne.getDesignation());
+        }
+        
         // Prix de vente unitaire HT
         Double prixVenteHT = getDoubleValue(row, columnMap, "prix_vente_unitaire_ht");
         if (prixVenteHT == null || prixVenteHT == 0) {
@@ -853,6 +915,12 @@ public class ExcelImportService {
         
         // Calculer les totaux
         calculateLineItemTotals(ligne);
+        
+        // Log pour debug si totaux à 0
+        if (ligne.getTotalHT() == null || ligne.getTotalHT() == 0) {
+            log.debug("LineItem totals are 0: qte={}, prixHT={}, totalHT={}", 
+                    ligne.getQuantiteAchetee(), ligne.getPrixAchatUnitaireHT(), ligne.getTotalHT());
+        }
         
         return ligne;
     }
@@ -929,6 +997,7 @@ public class ExcelImportService {
     
     private void calculateBCTotals(BandeCommande bc) {
         if (bc.getLignes() == null || bc.getLignes().isEmpty()) {
+            log.warn("BC {} has no lines, totals will be 0", bc.getNumeroBC());
             return;
         }
         
@@ -937,16 +1006,20 @@ public class ExcelImportService {
         double totalVenteHT = 0;
         double totalVenteTTC = 0;
         
+        int lignesAvecDonnees = 0;
         for (LineItem ligne : bc.getLignes()) {
-            if (ligne.getPrixAchatUnitaireHT() != null && ligne.getQuantiteAchetee() != null) {
+            if (ligne.getPrixAchatUnitaireHT() != null && ligne.getQuantiteAchetee() != null && 
+                ligne.getPrixAchatUnitaireHT() > 0 && ligne.getQuantiteAchetee() > 0) {
                 double ht = ligne.getPrixAchatUnitaireHT() * ligne.getQuantiteAchetee();
                 totalAchatHT += ht;
                 if (ligne.getTva() != null) {
                     totalAchatTTC += ht * (1 + (ligne.getTva() / 100));
                 }
+                lignesAvecDonnees++;
             }
             
-            if (ligne.getPrixVenteUnitaireHT() != null && ligne.getQuantiteVendue() != null) {
+            if (ligne.getPrixVenteUnitaireHT() != null && ligne.getQuantiteVendue() != null &&
+                ligne.getPrixVenteUnitaireHT() > 0 && ligne.getQuantiteVendue() > 0) {
                 double ht = ligne.getPrixVenteUnitaireHT() * ligne.getQuantiteVendue();
                 totalVenteHT += ht;
                 if (ligne.getTva() != null) {
@@ -963,6 +1036,15 @@ public class ExcelImportService {
         
         if (totalAchatHT > 0) {
             bc.setMargePourcentage(((totalVenteHT - totalAchatHT) / totalAchatHT) * 100);
+        }
+        
+        // Log pour debug si totaux à 0
+        if (totalAchatHT == 0 && totalVenteHT == 0) {
+            log.warn("BC {} has totals at 0: {} lines processed, {} lines with data", 
+                    bc.getNumeroBC(), bc.getLignes().size(), lignesAvecDonnees);
+        } else {
+            log.debug("BC {} totals: AchatHT={}, VenteHT={}, Marge={}%", 
+                    bc.getNumeroBC(), totalAchatHT, totalVenteHT, bc.getMargePourcentage());
         }
     }
     
@@ -1031,10 +1113,7 @@ public class ExcelImportService {
         }
         
         if (!shouldSkipSearch && nom != null && !nom.trim().isEmpty() && !nom.trim().equalsIgnoreCase("inconnu")) {
-            final String finalNom = nom.trim(); // Copie finale pour lambda
-            Optional<Client> existing = clientRepository.findAll().stream()
-                    .filter(c -> c.getNom() != null && c.getNom().equalsIgnoreCase(finalNom))
-                    .findFirst();
+            Optional<Client> existing = clientRepository.findByNomIgnoreCase(nom.trim());
             if (existing.isPresent()) {
                 return existing.get().getId();
             }
@@ -1080,11 +1159,7 @@ public class ExcelImportService {
         
         // Ne pas rechercher si c'était "Inconnu" - créer directement
         if (!shouldSkipSearch) {
-            final String finalNom = nom.trim(); // Copie finale pour lambda
-            Optional<Supplier> existing = supplierRepository.findAll().stream()
-                    .filter(f -> f.getNom() != null && f.getNom().equalsIgnoreCase(finalNom))
-                    .findFirst();
-            
+            Optional<Supplier> existing = supplierRepository.findByNom(nom.trim());
             if (existing.isPresent()) {
                 return existing.get().getId();
             }
@@ -1202,19 +1277,31 @@ public class ExcelImportService {
                         !strValue.matches(".*\\d+.*")) {
                         return null;
                     }
-                    // Gérer format français avec virgule
-                    strValue = strValue.replace(" ", "").replace(",", ".");
-                    try {
-                        return Double.parseDouble(strValue);
-                    } catch (NumberFormatException e) {
-                        // Essayer avec le format français
+                    // Gérer format français avec virgule et espaces (ex: "85 750,00")
+                    // Retirer tous les espaces (séparateurs de milliers)
+                    strValue = strValue.replaceAll("\\s+", "").trim();
+                    
+                    // Si la virgule est présente, c'est un format français
+                    if (strValue.contains(",")) {
+                        // Remplacer la virgule par un point pour le parsing
+                        strValue = strValue.replace(",", ".");
                         try {
-                            return FRENCH_NUMBER_FORMAT.parse(strValue.replace(".", ",")).doubleValue();
-                        } catch (ParseException e2) {
-                            // Ne pas logger pour "AVOIR" car c'est normal
-                            if (!strValue.equalsIgnoreCase("AVOIR")) {
-                                log.warn("Cannot parse number: {}", strValue);
+                            return Double.parseDouble(strValue);
+                        } catch (NumberFormatException e) {
+                            // Essayer avec le format français (virgule comme séparateur décimal)
+                            try {
+                                return FRENCH_NUMBER_FORMAT.parse(strValue.replace(".", ",")).doubleValue();
+                            } catch (ParseException e2) {
+                                log.warn("Cannot parse French number: {}", strValue);
+                                return null;
                             }
+                        }
+                    } else {
+                        // Format standard avec point
+                        try {
+                            return Double.parseDouble(strValue);
+                        } catch (NumberFormatException e) {
+                            log.warn("Cannot parse number: {}", strValue);
                             return null;
                         }
                     }
@@ -1232,7 +1319,11 @@ public class ExcelImportService {
                                 !formulaStrValue.matches(".*\\d+.*")) {
                                 return null;
                             }
-                            formulaStrValue = formulaStrValue.replace(" ", "").replace(",", ".");
+                            // Retirer tous les espaces et gérer format français
+                            formulaStrValue = formulaStrValue.replaceAll("\\s+", "").trim();
+                            if (formulaStrValue.contains(",")) {
+                                formulaStrValue = formulaStrValue.replace(",", ".");
+                            }
                             try {
                                 return Double.parseDouble(formulaStrValue);
                             } catch (NumberFormatException e) {
