@@ -23,10 +23,13 @@ public class GeminiOcrService {
     @Value("${gemini.api-key:}")
     private String apiKey;
 
+    // v1beta est recommandé pour le support de response_mime_type (JSON structuré)
     @Value("${gemini.api-url:https://generativelanguage.googleapis.com/v1beta}")
     private String apiUrl;
 
-    @Value("${gemini.model:gemini-1.5-flash-latest}")
+    // Utiliser gemini-1.5-flash (sans -latest) pour Google AI Studio API REST
+    // L'alias gemini-1.5-flash pointe automatiquement vers la dernière version stable
+    @Value("${gemini.model:gemini-1.5-flash}")
     private String model;
 
     private final WebClient webClient;
