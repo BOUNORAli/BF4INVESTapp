@@ -83,8 +83,11 @@ public class GeminiOcrService {
         return """
                 Tu es un expert en extraction de données de factures et bons de commande marocains.
                 
-                Analyse cette image de facture et extrais les informations suivantes au format JSON strict:
+                Analyse cette image de facture et extrais les informations suivantes au format JSON strict.
                 
+                IMPORTANT: Tu DOIS retourner UNIQUEMENT un objet JSON valide, sans aucun texte avant ou après, sans markdown, sans code blocks.
+                
+                Format JSON requis:
                 {
                   "rawText": "Le texte brut complet extrait de la facture",
                   "numeroDocument": "Le numéro de la facture ou bon de commande (ex: F01054/25, 000002366)",
@@ -112,7 +115,7 @@ public class GeminiOcrService {
                 - La date doit être au format YYYY-MM-DD
                 - Le numéro de document doit être exactement comme affiché sur la facture
                 - Ne confonds pas le fournisseur (émetteur) avec le client (destinataire)
-                - Retourne UNIQUEMENT le JSON, sans texte supplémentaire avant ou après
+                - RÉPONSE REQUISE: Retourne UNIQUEMENT le JSON brut, valide, sans markdown, sans ```json, sans explications
                 """;
     }
 
@@ -155,7 +158,8 @@ public class GeminiOcrService {
             // Configuration de génération
             Map<String, Object> generationConfig = new HashMap<>();
             generationConfig.put("temperature", 0.1);
-            generationConfig.put("response_mime_type", "application/json");
+            // Note: response_mime_type is only available in v1beta API, not in v1
+            // We rely on the prompt to ensure JSON response format
             requestBody.put("generationConfig", generationConfig);
 
             log.info("📤 [Gemini OCR] Envoi requête à Gemini API...");
