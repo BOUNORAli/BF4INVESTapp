@@ -718,11 +718,11 @@ public class ExcelImportService {
         FactureAchat fa = faMap.computeIfAbsent(finalNumeroBC, k -> {
             FactureAchat newFa = new FactureAchat();
             
-            // Stocker le numéro facture fournisseur (référence externe)
-            newFa.setNumeroFactureFournisseur(finalNumeroFactureFournisseur);
-            
-            // Le numéro facture achat sera généré automatiquement par le service
-            // On ne le définit pas ici, il sera généré lors de la sauvegarde
+            // Utiliser "N FAC FRS" comme numéro de facture achat (notre référence interne)
+            if (finalNumeroFactureFournisseur != null && !finalNumeroFactureFournisseur.isEmpty()) {
+                newFa.setNumeroFactureAchat(finalNumeroFactureFournisseur);
+                newFa.setNumeroFactureFournisseur(finalNumeroFactureFournisseur);
+            }
             
             // Date facture achat (utiliser date BC si pas de date spécifique dans Excel)
             LocalDate dateFacture = null;
@@ -781,9 +781,15 @@ public class ExcelImportService {
         });
         
         // Si le numéro facture fournisseur est présent et n'est pas encore défini, le mettre à jour
-        if (finalNumeroFactureFournisseur != null && !finalNumeroFactureFournisseur.isEmpty() 
-                && (fa.getNumeroFactureFournisseur() == null || fa.getNumeroFactureFournisseur().isEmpty())) {
-            fa.setNumeroFactureFournisseur(finalNumeroFactureFournisseur);
+        // Utiliser "N FAC FRS" comme numéro de facture achat (notre référence interne)
+        if (finalNumeroFactureFournisseur != null && !finalNumeroFactureFournisseur.isEmpty()) {
+            if (fa.getNumeroFactureFournisseur() == null || fa.getNumeroFactureFournisseur().isEmpty()) {
+                fa.setNumeroFactureFournisseur(finalNumeroFactureFournisseur);
+            }
+            // Mettre à jour le numéro facture achat si non défini
+            if (fa.getNumeroFactureAchat() == null || fa.getNumeroFactureAchat().isEmpty()) {
+                fa.setNumeroFactureAchat(finalNumeroFactureFournisseur);
+            }
         }
         
         // Stocker l'association FA -> BC (utiliser BC comme clé)
