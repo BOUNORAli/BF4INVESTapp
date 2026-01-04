@@ -26,34 +26,68 @@ public class ImportController {
     private final ImportLogRepository importLogRepository;
     
     @PostMapping("/excel")
-    public ResponseEntity<ImportResult> importExcel(@RequestParam("file") MultipartFile file) {
-        if (file.isEmpty()) {
-            ImportResult result = new ImportResult();
-            result.getErrors().add("Fichier vide");
-            return ResponseEntity.badRequest().body(result);
+    public ResponseEntity<?> importExcel(@RequestParam("file") MultipartFile file) {
+        try {
+            if (file.isEmpty()) {
+                ImportResult result = new ImportResult();
+                result.getErrors().add("Fichier vide");
+                return ResponseEntity.badRequest().body(result);
+            }
+            
+            String filename = file.getOriginalFilename();
+            if (filename == null || (!filename.endsWith(".xlsx") && !filename.endsWith(".xls"))) {
+                ImportResult result = new ImportResult();
+                result.getErrors().add("Format de fichier non supporté. Utilisez .xlsx ou .xls");
+                return ResponseEntity.badRequest().body(result);
+            }
+            
+            log.info("Début import historique commandes (BC): {}", filename);
+            ImportResult result = excelImportService.importExcel(file);
+            log.info("Fin import historique commandes (BC): {} succès, {} erreurs", result.getSuccessCount(), result.getErrorCount());
+            
+            // Store import log
+            ImportLog importLog = ImportLog.builder()
+                    .fileName(file.getOriginalFilename())
+                    .details(String.format("%d ligne(s) importée(s) avec succès, %d erreur(s)", 
+                            result.getSuccessCount(), result.getErrorCount()))
+                    .success(result.getErrorCount() == 0 && result.getSuccessCount() > 0)
+                    .successCount(result.getSuccessCount())
+                    .errorCount(result.getErrorCount())
+                    .createdAt(LocalDateTime.now())
+                    .build();
+            importLogRepository.save(importLog);
+            
+            // Générer le fichier de rapport si il y a des erreurs ou des succès
+            if (!result.getErrorRows().isEmpty() || !result.getSuccessRows().isEmpty()) {
+                try {
+                    byte[] reportBytes = excelImportService.generateImportReport(result, file);
+                    
+                    HttpHeaders headers = new HttpHeaders();
+                    String reportFileName = file.getOriginalFilename() != null 
+                            ? file.getOriginalFilename().replace(".xlsx", "_rapport.xlsx").replace(".xls", "_rapport.xlsx")
+                            : "rapport_import.xlsx";
+                    headers.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + reportFileName);
+                    headers.add(HttpHeaders.CONTENT_TYPE, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+                    
+                    return ResponseEntity.ok()
+                            .headers(headers)
+                            .contentLength(reportBytes.length)
+                            .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                            .body(new ByteArrayResource(reportBytes));
+                } catch (Exception e) {
+                    log.error("Erreur lors de la génération du rapport Excel: {}", e.getMessage(), e);
+                    // Si erreur lors de la génération du rapport, retourner juste le résultat JSON
+                    return ResponseEntity.ok(result);
+                }
+            }
+            
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            log.error("Erreur lors de l'import des historiques commandes (BC): {}", e.getMessage(), e);
+            ImportResult errorResult = new ImportResult();
+            errorResult.getErrors().add("Erreur lors de l'import: " + (e.getMessage() != null ? e.getMessage() : "Erreur inconnue"));
+            return ResponseEntity.internalServerError().body(errorResult);
         }
-        
-        if (!file.getOriginalFilename().endsWith(".xlsx") && !file.getOriginalFilename().endsWith(".xls")) {
-            ImportResult result = new ImportResult();
-            result.getErrors().add("Format de fichier non supporté. Utilisez .xlsx ou .xls");
-            return ResponseEntity.badRequest().body(result);
-        }
-        
-        ImportResult result = excelImportService.importExcel(file);
-        
-        // Store import log
-        ImportLog importLog = ImportLog.builder()
-                .fileName(file.getOriginalFilename())
-                .details(String.format("%d ligne(s) importée(s) avec succès, %d erreur(s)", 
-                        result.getSuccessCount(), result.getErrorCount()))
-                .success(result.getErrorCount() == 0 && result.getSuccessCount() > 0)
-                .successCount(result.getSuccessCount())
-                .errorCount(result.getErrorCount())
-                .createdAt(LocalDateTime.now())
-                .build();
-        importLogRepository.save(importLog);
-        
-        return ResponseEntity.ok(result);
     }
     
     @GetMapping("/template")
