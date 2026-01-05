@@ -222,12 +222,22 @@ import { StoreService, Client, Supplier } from '../../services/store.service';
                
                <form [formGroup]="form" (ngSubmit)="onSubmit()" class="flex-1 overflow-y-auto p-6 space-y-5">
                   <div>
-                    <label class="block text-sm font-semibold text-slate-700 mb-1">Nom de l'entreprise</label>
-                    <input formControlName="name" type="text" class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition">
+                    <label class="block text-sm font-semibold text-slate-700 mb-1">Nom de l'entreprise <span class="text-red-500">*</span></label>
+                    <input formControlName="name" type="text" 
+                           [class.border-red-300]="form.get('name')?.invalid && form.get('name')?.touched"
+                           class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition">
+                    @if (form.get('name')?.invalid && form.get('name')?.touched) {
+                      <p class="text-xs text-red-500 mt-1">Le nom est requis</p>
+                    }
                   </div>
                   <div>
-                    <label class="block text-sm font-semibold text-slate-700 mb-1">ICE (Identifiant Fiscal)</label>
-                    <input formControlName="ice" type="text" class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition">
+                    <label class="block text-sm font-semibold text-slate-700 mb-1">ICE (Identifiant Fiscal) <span class="text-red-500">*</span></label>
+                    <input formControlName="ice" type="text" 
+                           [class.border-red-300]="form.get('ice')?.invalid && form.get('ice')?.touched"
+                           class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition">
+                    @if (form.get('ice')?.invalid && form.get('ice')?.touched) {
+                      <p class="text-xs text-red-500 mt-1">L'ICE est requis</p>
+                    }
                   </div>
                   <div>
                     <label class="block text-sm font-semibold text-slate-700 mb-1">
@@ -256,8 +266,13 @@ import { StoreService, Client, Supplier } from '../../services/store.service';
                     </div>
                   }
                   <div>
-                    <label class="block text-sm font-semibold text-slate-700 mb-1">Contact Principal</label>
-                    <input formControlName="contact" type="text" class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition">
+                    <label class="block text-sm font-semibold text-slate-700 mb-1">Contact Principal <span class="text-red-500">*</span></label>
+                    <input formControlName="contact" type="text" 
+                           [class.border-red-300]="form.get('contact')?.invalid && form.get('contact')?.touched"
+                           class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition">
+                    @if (form.get('contact')?.invalid && form.get('contact')?.touched) {
+                      <p class="text-xs text-red-500 mt-1">Le contact est requis</p>
+                    }
                   </div>
                   <div class="grid grid-cols-2 gap-4">
                     <div>
@@ -266,7 +281,12 @@ import { StoreService, Client, Supplier } from '../../services/store.service';
                     </div>
                     <div>
                         <label class="block text-sm font-semibold text-slate-700 mb-1">Email</label>
-                        <input formControlName="email" type="email" class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition">
+                        <input formControlName="email" type="email" 
+                               [class.border-red-300]="form.get('email')?.invalid && form.get('email')?.touched"
+                               class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition">
+                        @if (form.get('email')?.invalid && form.get('email')?.touched) {
+                          <p class="text-xs text-red-500 mt-1">Format d'email invalide</p>
+                        }
                     </div>
                   </div>
                   <div>
