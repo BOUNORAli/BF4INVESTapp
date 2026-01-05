@@ -136,6 +136,26 @@ public class BandeCommandeService {
         bcRepository.deleteById(id);
     }
     
+    /**
+     * Génère un numéro unique pour une Bande de Commande.
+     * 
+     * Format : refClient + mois + refFournisseur + ordre + "/" + annee2chiffres
+     * Exemple : ABC01XYZ01/25 (Client ABC, mois 01, Fournisseur XYZ, ordre 01, année 2025)
+     * 
+     * IMPORTANT : Le numéro est basé sur le mois/année de la date BC (dateBC), 
+     * pas sur la date de création. Cela permet de créer un BC avec une date passée
+     * (par exemple, créer en mars un BC oublié de février) tout en conservant 
+     * une numérotation séquentielle correcte par mois.
+     * 
+     * Le comptage se fait uniquement parmi les BC existantes ayant :
+     * - Le même mois/année (extrait de dateBC)
+     * - Le même fournisseur
+     * - Le même client
+     * 
+     * @param bc La Bande de Commande pour laquelle générer le numéro
+     * @return Le numéro BC généré
+     * @throws IllegalArgumentException si la date BC, le client ou le fournisseur sont manquants
+     */
     private String generateBCNumber(BandeCommande bc) {
         if (bc.getDateBC() == null) {
             throw new IllegalArgumentException("La date BC est requise pour générer le numéro");
@@ -187,21 +207,31 @@ public class BandeCommandeService {
             supplierService.update(fournisseurId, supplier); // Sauvegarder la référence
         }
         
-        // 4. Extraire mois et année
+        // 4. Extraire mois et année de la date BC
+        // IMPORTANT : On utilise la date BC (pas la date de création) pour déterminer le mois/année
+        // Cela permet de créer un BC avec une date passée tout en ayant le bon numéro
         final int month = bc.getDateBC().getMonthValue();
         final int year = bc.getDateBC().getYear();
         String mois = String.format("%02d", month);
         String annee2chiffres = String.valueOf(year).substring(2);
         
         // 5. Compter les BC existantes pour ce client + fournisseur + mois + année
+        // Le filtrage est strict : même mois, même année, même fournisseur, même client
+        // Ce comptage garantit que même si on crée un BC avec une date passée, 
+        // le numéro d'ordre sera correct pour ce mois précis
         long count = bcRepository.findAll().stream()
                 .filter(existingBc -> {
+                    // Filtrer strictement par date BC (mois + année)
                     if (existingBc.getDateBC() == null) return false;
                     if (existingBc.getDateBC().getMonthValue() != month) return false;
                     if (existingBc.getDateBC().getYear() != year) return false;
+                    
+                    // Filtrer par fournisseur (avec vérification null)
+                    if (existingBc.getFournisseurId() == null) return false;
                     if (!existingBc.getFournisseurId().equals(fournisseurId)) return false;
                     
                     // Vérifier si cette BC concerne le même client
+                    // Support des deux structures : multi-clients (clientsVente) et rétrocompatibilité (clientId)
                     String existingClientId = null;
                     if (existingBc.getClientsVente() != null && !existingBc.getClientsVente().isEmpty()) {
                         existingClientId = existingBc.getClientsVente().get(0).getClientId();
@@ -209,17 +239,15 @@ public class BandeCommandeService {
                         existingClientId = existingBc.getClientId();
                     }
                     
+                    // Ne compter que si le client correspond
                     return finalClientId.equals(existingClientId);
                 })
                 .count();
         
-        // 6. Générer le numéro d'ordre : "01" si première, sinon "2", "3", etc.
-        String ordre;
-        if (count == 0) {
-            ordre = "01";
-        } else {
-            ordre = String.valueOf(count + 1);
-        }
+        // 6. Générer le numéro d'ordre : toujours utiliser 2 chiffres (01, 02, 03, etc.)
+        // Le comptage est basé uniquement sur le mois/année de la date BC, pas sur la date de création.
+        // Cela permet de créer un BC avec une date passée (mois oublié) tout en conservant la numérotation correcte.
+        String ordre = String.format("%02d", count + 1);
         
         // 7. Assembler : refClient + mois + refFournisseur + ordre + "/" + annee2chiffres
         return refClient + mois + refFournisseur + ordre + "/" + annee2chiffres;
