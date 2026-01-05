@@ -295,17 +295,28 @@ import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, FormsModule } 
 
               <div>
                 <label class="block text-xs font-semibold text-slate-600 mb-1">RIB Bénéficiaire <span class="text-red-500">*</span></label>
-                <input type="text" formControlName="ribBeneficiaire" placeholder="RIB du bénéficiaire (auto-rempli depuis le fournisseur)" class="w-full p-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 outline-none">
+                <input type="text" formControlName="ribBeneficiaire" 
+                       placeholder="RIB du bénéficiaire (auto-rempli depuis le fournisseur)" 
+                       class="w-full p-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 outline-none">
+                @if (beneficiaryType() === 'SUPPLIER' && form.get('beneficiaireId')?.value && form.get('ribBeneficiaire')?.value) {
+                  <p class="text-xs text-emerald-600 mt-1 flex items-center gap-1">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                    Rempli automatiquement depuis le fournisseur sélectionné
+                  </p>
+                }
               </div>
 
               <div>
                 <label class="block text-xs font-semibold text-slate-600 mb-1">Banque Bénéficiaire <span class="text-red-500">*</span></label>
-                <input type="text" formControlName="banqueBeneficiaire" placeholder="Banque du bénéficiaire (auto-rempli depuis le fournisseur)" class="w-full p-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 outline-none">
-              </div>
-
-              <div>
-                <label class="block text-xs font-semibold text-slate-600 mb-1">Banque Émettrice <span class="text-red-500">*</span></label>
-                <input type="text" formControlName="banqueEmettrice" placeholder="Nom de la banque" class="w-full p-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 outline-none">
+                <input type="text" formControlName="banqueBeneficiaire" 
+                       placeholder="Banque du bénéficiaire (auto-rempli depuis le fournisseur)" 
+                       class="w-full p-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 outline-none">
+                @if (beneficiaryType() === 'SUPPLIER' && form.get('beneficiaireId')?.value && form.get('banqueBeneficiaire')?.value) {
+                  <p class="text-xs text-emerald-600 mt-1 flex items-center gap-1">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                    Rempli automatiquement depuis le fournisseur sélectionné
+                  </p>
+                }
               </div>
 
               <div>
@@ -417,7 +428,6 @@ export class OrdresVirementComponent implements OnInit {
       nomBeneficiaire: [''], // Pour saisie manuelle
       ribBeneficiaire: ['', Validators.required],
       banqueBeneficiaire: ['', Validators.required],
-      banqueEmettrice: ['', Validators.required],
       motif: ['', Validators.required],
       type: ['NORMAL', Validators.required],
       statut: ['EN_ATTENTE'],
@@ -601,7 +611,6 @@ export class OrdresVirementComponent implements OnInit {
       nomBeneficiaire: ov.nomBeneficiaire || '',
       ribBeneficiaire: ov.ribBeneficiaire,
       banqueBeneficiaire: ov.banqueBeneficiaire || '',
-      banqueEmettrice: ov.banqueEmettrice,
       motif: ov.motif,
       type: ov.type || 'NORMAL',
       statut: ov.statut,
@@ -810,7 +819,6 @@ export class OrdresVirementComponent implements OnInit {
       dateExecution: formValue.dateExecution || null,
       ribBeneficiaire: formValue.ribBeneficiaire,
       banqueBeneficiaire: formValue.banqueBeneficiaire,
-      banqueEmettrice: formValue.banqueEmettrice,
       motif: formValue.motif,
       type: formValue.type || 'NORMAL',
       statut: formValue.statut || 'EN_ATTENTE',
