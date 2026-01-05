@@ -32,9 +32,8 @@ public class TVAController {
             if (annee != null) {
                 return ResponseEntity.ok(tvaService.getDeclarationsByAnnee(annee));
             }
-            // Par défaut, année en cours
-            int currentYear = LocalDate.now().getYear();
-            return ResponseEntity.ok(tvaService.getDeclarationsByAnnee(currentYear));
+            // Par défaut, retourner toutes les déclarations
+            return ResponseEntity.ok(tvaService.getAllDeclarations());
         } catch (Exception e) {
             log.error("Erreur lors du chargement des déclarations TVA", e);
             return ResponseEntity.internalServerError().build();
@@ -104,15 +103,18 @@ public class TVAController {
             if (annee != null) {
                 declarations = tvaService.getDeclarationsByAnnee(annee);
             } else {
-                int currentYear = LocalDate.now().getYear();
-                declarations = tvaService.getDeclarationsByAnnee(currentYear);
+                // Par défaut, exporter toutes les déclarations
+                declarations = tvaService.getAllDeclarations();
             }
             
             byte[] excel = excelExportService.exportDeclarationsTVA(declarations);
             
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
-            headers.setContentDispositionFormData("attachment", "declarations_tva.xlsx");
+            String filename = annee != null 
+                ? String.format("declarations_tva_%d.xlsx", annee)
+                : "declarations_tva_toutes.xlsx";
+            headers.setContentDispositionFormData("attachment", filename);
             
             return ResponseEntity.ok().headers(headers).body(excel);
         } catch (Exception e) {

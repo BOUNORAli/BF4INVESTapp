@@ -233,6 +233,23 @@ public class TVAService {
     }
 
     /**
+     * Récupère toutes les déclarations, triées par année décroissante puis mois décroissant
+     */
+    public List<DeclarationTVA> getAllDeclarations() {
+        return declarationRepository.findAll().stream()
+                .sorted((d1, d2) -> {
+                    // Trier par année décroissante
+                    int yearCompare = Integer.compare(d2.getAnnee(), d1.getAnnee());
+                    if (yearCompare != 0) {
+                        return yearCompare;
+                    }
+                    // Si même année, trier par mois décroissant
+                    return Integer.compare(d2.getMois(), d1.getMois());
+                })
+                .collect(java.util.stream.Collectors.toList());
+    }
+
+    /**
      * Récupère toutes les déclarations d'une année
      */
     public List<DeclarationTVA> getDeclarationsByAnnee(Integer annee) {
