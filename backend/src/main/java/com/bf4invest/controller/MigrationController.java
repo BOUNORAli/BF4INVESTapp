@@ -86,5 +86,38 @@ public class MigrationController {
             return ResponseEntity.internalServerError().body(response);
         }
     }
+    
+    /**
+     * Migre les prix unitaires vers les prix pondérés pour tous les produits.
+     * Copie d'abord les prix unitaires vers les prix pondérés, puis recalcule depuis toutes les BC.
+     * 
+     * @return Statistiques de la migration
+     */
+    @PostMapping("/migrate-product-prices-to-weighted")
+    public ResponseEntity<Map<String, Object>> migrateProductPricesToWeighted() {
+        log.info("🔄 Démarrage de la migration des prix unitaires vers prix pondérés via API...");
+        
+        try {
+            Map<String, Integer> stats = migrationService.migrateProductPricesToWeighted();
+            
+            Map<String, Object> response = Map.of(
+                "success", true,
+                "message", "Migration des prix terminée avec succès",
+                "statistics", stats
+            );
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            log.error("❌ Erreur lors de la migration des prix: {}", e.getMessage(), e);
+            
+            Map<String, Object> response = Map.of(
+                "success", false,
+                "message", "Erreur lors de la migration: " + e.getMessage()
+            );
+            
+            return ResponseEntity.internalServerError().body(response);
+        }
+    }
 }
 

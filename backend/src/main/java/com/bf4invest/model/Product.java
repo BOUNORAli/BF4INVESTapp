@@ -22,9 +22,19 @@ public class Product {
     private String designation;
     private String unite; // sac, palette, M3, etc.
     
+    // Anciens champs (conservés pour rétrocompatibilité/migration)
+    @Deprecated
     private Double prixAchatUnitaireHT;
+    @Deprecated
     private Double prixVenteUnitaireHT;
+    
+    // Nouveaux champs : prix pondérés (moyenne pondérée par quantité)
+    private Double prixAchatPondereHT; // Prix d'achat pondéré calculé depuis toutes les BC
+    private Double prixVentePondereHT; // Prix de vente pondéré calculé depuis toutes les BC
+    
     private Double tva; // en pourcentage (ex: 20.0)
+    
+    private LocalDateTime derniereMiseAJourPrix; // Date de dernière mise à jour des prix pondérés
     
     private String fournisseurId; // Référence au fournisseur
     

@@ -47,6 +47,7 @@ public class ExcelImportService {
     private final com.bf4invest.service.ChargeService chargeService;
     private final com.bf4invest.service.FactureAchatService factureAchatService;
     private final com.bf4invest.service.CompanyInfoService companyInfoService;
+    private final com.bf4invest.service.BandeCommandeService bandeCommandeService;
     
     private static final DateTimeFormatter DATE_FORMATTER_DDMMYYYY = DateTimeFormatter.ofPattern("dd/MM/yyyy");
     private static final DateTimeFormatter DATE_FORMATTER_YYYYMMDD = DateTimeFormatter.ofPattern("yyyy-MM-dd");
@@ -112,6 +113,15 @@ public class ExcelImportService {
             Map<String, String> faToBcNumMap = new HashMap<>(); // numeroFA -> numeroBC
             Map<String, String> fvToBcNumMap = new HashMap<>(); // numeroFV -> numeroBC
             
+            // NOUVELLE STRUCTURE : Agrégation des produits par BC pour éviter les doublons
+            // Map<BC_Numero, Map<ProduitKey, ProductAggregate>>
+            // ProduitKey = refArticle + "|" + designation + "|" + unite
+            Map<String, Map<String, ProductAggregate>> bcProductsMap = new HashMap<>();
+            
+            // Map pour gérer plusieurs factures vente par client/BC
+            // Map<BC_Numero + "|" + clientId, List<FactureVente>>
+            Map<String, List<FactureVente>> fvByBcAndClientMap = new HashMap<>();
+            
             int processedRows = 0;
             int totalRows = sheet.getLastRowNum();
             log.info("Starting import of {} rows", totalRows);
@@ -127,7 +137,7 @@ public class ExcelImportService {
                 
                 try {
                     processRow(row, columnMap, bcMap, faMap, fvMap, faLignesMap, fvLignesMap, 
-                              faToBcNumMap, fvToBcNumMap, result);
+                              faToBcNumMap, fvToBcNumMap, bcProductsMap, fvByBcAndClientMap, result);
                     processedRows++;
                     
                     // Log progression tous les 100 lignes
@@ -172,10 +182,140 @@ public class ExcelImportService {
             log.info("Finished processing rows. Total processed: {}, BCs: {}, FAs: {}, FVs: {}", 
                     processedRows, bcMap.size(), faMap.size(), fvMap.size());
             
-            // Calculer les totaux pour les BC et convertir lignes vers lignesAchat
-            for (BandeCommande bc : bcMap.values()) {
-                // Convertir les lignes (ancienne structure) vers lignesAchat (nouvelle structure)
-                convertLignesToLignesAchat(bc);
+            // NOUVELLE LOGIQUE : Convertir les ProductAggregate en LigneAchat et créer/mettre à jour les produits
+            for (Map.Entry<String, BandeCommande> bcEntry : bcMap.entrySet()) {
+                String bcNumero = bcEntry.getKey();
+                BandeCommande bc = bcEntry.getValue();
+                
+                // Récupérer les agrégats de produits pour cette BC
+                Map<String, ProductAggregate> productsMap = bcProductsMap.getOrDefault(bcNumero, new HashMap<>());
+                
+                // Convertir ProductAggregate en LigneAchat (une seule ligne par produit)
+                List<LigneAchat> lignesAchat = new ArrayList<>();
+                for (ProductAggregate agg : productsMap.values()) {
+                    // Créer/mettre à jour le produit avec prix pondérés
+                    createOrUpdateProductFromAggregate(agg, bc.getFournisseurId(), result);
+                    
+                    // Créer la LigneAchat
+                    LigneAchat ligneAchat = LigneAchat.builder()
+                        .produitRef(agg.produitRef)
+                        .designation(agg.designation)
+                        .unite(agg.unite != null ? agg.unite : "U")
+                        .quantiteAchetee(agg.quantiteAcheteeTotale)
+                        .prixAchatUnitaireHT(agg.getPrixAchatPondere())
+                        .tva(agg.tva)
+                        .build();
+                    
+                    // Calculer les totaux
+                    if (ligneAchat.getQuantiteAchetee() != null && ligneAchat.getPrixAchatUnitaireHT() != null) {
+                        ligneAchat.setTotalHT(ligneAchat.getQuantiteAchetee() * ligneAchat.getPrixAchatUnitaireHT());
+                        if (ligneAchat.getTva() != null) {
+                            ligneAchat.setTotalTTC(ligneAchat.getTotalHT() * (1 + (ligneAchat.getTva() / 100.0)));
+                        }
+                    }
+                    
+                    lignesAchat.add(ligneAchat);
+                }
+                
+                bc.setLignesAchat(lignesAchat);
+                
+                // Créer les ClientVente à partir des ventes agrégées
+                List<ClientVente> clientsVente = new ArrayList<>();
+                Map<String, ClientVente> clientVenteMap = new HashMap<>();
+                
+                for (ProductAggregate agg : productsMap.values()) {
+                    for (Map.Entry<String, List<VenteInfo>> clientEntry : agg.ventesParClient.entrySet()) {
+                        String clientId = clientEntry.getKey();
+                        List<VenteInfo> ventes = clientEntry.getValue();
+                        
+                        ClientVente clientVente = clientVenteMap.computeIfAbsent(clientId, k -> {
+                            ClientVente cv = new ClientVente();
+                            cv.setClientId(clientId);
+                            cv.setLignesVente(new ArrayList<>());
+                            return cv;
+                        });
+                        
+                        // Créer une LigneVente pour ce produit et ce client
+                        // Agréger toutes les ventes de ce produit pour ce client
+                        Double quantiteTotale = ventes.stream()
+                            .mapToDouble(v -> v.quantite != null ? v.quantite : 0.0)
+                            .sum();
+                        Double sommePrix = ventes.stream()
+                            .mapToDouble(v -> (v.quantite != null && v.prixUnitaireHT != null) ? v.quantite * v.prixUnitaireHT : 0.0)
+                            .sum();
+                        Double prixPondere = quantiteTotale > 0 ? sommePrix / quantiteTotale : null;
+                        
+                        LigneVente ligneVente = LigneVente.builder()
+                            .produitRef(agg.produitRef)
+                            .designation(agg.designation)
+                            .unite(agg.unite != null ? agg.unite : "U")
+                            .quantiteVendue(quantiteTotale)
+                            .prixVenteUnitaireHT(prixPondere)
+                            .tva(agg.tva)
+                            .build();
+                        
+                        // Calculer les totaux
+                        if (ligneVente.getQuantiteVendue() != null && ligneVente.getPrixVenteUnitaireHT() != null) {
+                            ligneVente.setTotalHT(ligneVente.getQuantiteVendue() * ligneVente.getPrixVenteUnitaireHT());
+                            if (ligneVente.getTva() != null) {
+                                ligneVente.setTotalTTC(ligneVente.getTotalHT() * (1 + (ligneVente.getTva() / 100.0)));
+                            }
+                        }
+                        
+                        clientVente.getLignesVente().add(ligneVente);
+                    }
+                }
+                
+                // Calculer les totaux pour chaque ClientVente
+                for (ClientVente cv : clientVenteMap.values()) {
+                    double totalHT = 0.0;
+                    double totalTTC = 0.0;
+                    double totalTVA = 0.0;
+                    double margeTotale = 0.0;
+                    
+                    for (LigneVente lv : cv.getLignesVente()) {
+                        if (lv.getTotalHT() != null) {
+                            totalHT += lv.getTotalHT();
+                        }
+                        if (lv.getTotalTTC() != null) {
+                            totalTTC += lv.getTotalTTC();
+                        }
+                        if (lv.getTva() != null && lv.getTotalHT() != null) {
+                            totalTVA += lv.getTotalHT() * (lv.getTva() / 100.0);
+                        }
+                        
+                        // Calculer la marge (prix vente - prix achat)
+                        if (lv.getPrixVenteUnitaireHT() != null && lv.getQuantiteVendue() != null) {
+                            // Trouver le prix d'achat correspondant
+                            for (LigneAchat la : lignesAchat) {
+                                if (la.getProduitRef() != null && la.getProduitRef().equals(lv.getProduitRef())) {
+                                    if (la.getPrixAchatUnitaireHT() != null) {
+                                        double margeUnitaire = lv.getPrixVenteUnitaireHT() - la.getPrixAchatUnitaireHT();
+                                        margeTotale += margeUnitaire * lv.getQuantiteVendue();
+                                        lv.setMargeUnitaire(margeUnitaire);
+                                        if (la.getPrixAchatUnitaireHT() > 0) {
+                                            lv.setMargePourcentage((margeUnitaire / la.getPrixAchatUnitaireHT()) * 100);
+                                        }
+                                    }
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    
+                    cv.setTotalVenteHT(totalHT);
+                    cv.setTotalVenteTTC(totalTTC);
+                    cv.setTotalTVA(totalTVA);
+                    cv.setMargeTotale(margeTotale);
+                    if (totalHT > 0) {
+                        cv.setMargePourcentage((margeTotale / totalHT) * 100);
+                    }
+                }
+                
+                clientsVente.addAll(clientVenteMap.values());
+                bc.setClientsVente(clientsVente);
+                
+                // Calculer les totaux globaux de la BC
                 calculateBCTotals(bc);
             }
             
@@ -224,6 +364,22 @@ public class ExcelImportService {
                     
                     bcNumToIdMap.put(bc.getNumeroBC(), bcId);
                     bc.setId(bcId); // Mettre à jour l'ID dans la map
+                    
+                    // Mettre à jour le stock automatiquement si ajouterAuStock est activé
+                    // Récupérer la BC sauvegardée pour avoir toutes les données
+                    BandeCommande savedBC = bcRepository.findById(bcId).orElse(bc);
+                    if (Boolean.TRUE.equals(savedBC.getAjouterAuStock()) || savedBC.getAjouterAuStock() == null) {
+                        // Par défaut, ajouter au stock si non spécifié
+                        try {
+                            bandeCommandeService.updateStockFromBC(savedBC);
+                            log.debug("Stock mis à jour pour BC {}", bc.getNumeroBC());
+                        } catch (Exception e) {
+                            log.warn("Erreur lors de la mise à jour du stock pour BC {}: {}", 
+                                bc.getNumeroBC(), e.getMessage());
+                            result.getWarnings().add("Erreur mise à jour stock pour BC " + bc.getNumeroBC() + ": " + e.getMessage());
+                        }
+                    }
+                    
                     result.setSuccessCount(result.getSuccessCount() + 1);
                 } catch (Exception e) {
                     log.error("Error saving BC {}", bc.getNumeroBC(), e);
@@ -625,6 +781,8 @@ public class ExcelImportService {
                            Map<String, List<LineItem>> fvLignesMap,
                            Map<String, String> faToBcNumMap, // Map temporaire: numeroFA -> numeroBC
                            Map<String, String> fvToBcNumMap, // Map temporaire: numeroFV -> numeroBC
+                           Map<String, Map<String, ProductAggregate>> bcProductsMap, // NOUVEAU: Agrégation produits par BC
+                           Map<String, List<FactureVente>> fvByBcAndClientMap, // NOUVEAU: Plusieurs FV par client/BC
                            ImportResult result) {
         
         // Vérifier si c'est une ligne d'avoir (colonne "prix_vente_unitaire_ttc" contient "AVOIR")
@@ -693,15 +851,89 @@ public class ExcelImportService {
             return newBc;
         });
         
-        // 5. Créer la ligne produit
-        LineItem ligne = createLineItem(row, columnMap, result);
+        // 5. NOUVELLE LOGIQUE : Agréger les données produit au lieu d'ajouter directement
+        // Récupérer les données du produit depuis la ligne Excel
+        String produitRef = getCellValue(row, columnMap, "numero_article");
+        String designation = getCellValue(row, columnMap, "designation");
+        String unite = getCellValue(row, columnMap, "unite");
         
         // Validation: ignorer les lignes sans données significatives
-        if (ligne.getDesignation() == null && ligne.getProduitRef() == null) {
+        if ((designation == null || designation.trim().isEmpty()) && 
+            (produitRef == null || produitRef.trim().isEmpty())) {
             result.getWarnings().add("Ligne ignorée pour BC " + numeroBC + ": pas de désignation ni référence produit");
             return;
         }
         
+        // Normaliser les valeurs
+        if (produitRef != null) produitRef = produitRef.trim();
+        if (designation != null) designation = designation.trim();
+        if (unite == null || unite.trim().isEmpty()) unite = "U";
+        else unite = unite.trim();
+        
+        // Créer la clé produit unique : refArticle + "|" + designation + "|" + unite
+        String produitKey = (produitRef != null ? produitRef : "") + "|" + 
+                           (designation != null ? designation : "") + "|" + unite;
+        
+        // Récupérer ou créer l'agrégat pour ce produit dans cette BC
+        Map<String, ProductAggregate> productsForBC = bcProductsMap.computeIfAbsent(finalNumeroBC, k -> new HashMap<>());
+        ProductAggregate productAgg = productsForBC.computeIfAbsent(produitKey, k -> {
+            ProductAggregate agg = new ProductAggregate();
+            agg.produitRef = produitRef;
+            agg.designation = designation;
+            agg.unite = unite;
+            return agg;
+        });
+        
+        // Récupérer les quantités et prix
+        Double qteBC = getDoubleValue(row, columnMap, "quantite_bc");
+        if (qteBC == null) {
+            qteBC = getDoubleValue(row, columnMap, "quantite_livree");
+        }
+        Double prixAchatHT = getDoubleValue(row, columnMap, "prix_achat_unitaire_ht");
+        
+        // Fallback pour format 2021/2022: calculer depuis PT TTC IMPORTE si prix_achat_unitaire_ht n'existe pas
+        if (prixAchatHT == null) {
+            Double ptTTCImporte = getDoubleValue(row, columnMap, "prix_ttc_importe");
+            Double tva = getPercentageValue(row, columnMap, "taux_tva");
+            if (tva == null) tva = 20.0;
+            
+            if (ptTTCImporte != null && ptTTCImporte > 0 && qteBC != null && qteBC > 0) {
+                Double prixUnitaireTTC = ptTTCImporte / qteBC;
+                prixAchatHT = prixUnitaireTTC / (1 + (tva / 100));
+            }
+        }
+        
+        // Récupérer TVA
+        Double tva = getPercentageValue(row, columnMap, "taux_tva");
+        if (tva == null) tva = 20.0;
+        productAgg.tva = tva;
+        
+        // Ajouter les données d'achat à l'agrégat
+        if (qteBC != null && qteBC > 0 && prixAchatHT != null && prixAchatHT > 0) {
+            productAgg.addAchat(qteBC, prixAchatHT);
+        }
+        
+        // Récupérer les données de vente
+        Double qteLivree = getDoubleValue(row, columnMap, "quantite_livree");
+        Double prixVenteHT = getDoubleValue(row, columnMap, "prix_vente_unitaire_ht");
+        if (prixVenteHT == null || prixVenteHT == 0) {
+            // Calculer depuis prix vente TTC si disponible
+            Double prixVenteTTC = getDoubleValue(row, columnMap, "prix_vente_unitaire_ttc");
+            Double tauxTVA = getPercentageValue(row, columnMap, "taux_tva");
+            if (prixVenteTTC != null && prixVenteTTC > 0 && tauxTVA != null) {
+                prixVenteHT = prixVenteTTC / (1 + (tauxTVA / 100));
+            }
+        }
+        
+        // Ajouter les données de vente à l'agrégat (si facture vente présente)
+        String numeroFV = getCellValue(row, columnMap, "numero_facture_vente");
+        if (numeroFV != null && !numeroFV.trim().isEmpty() && 
+            qteLivree != null && qteLivree > 0 && prixVenteHT != null && prixVenteHT > 0) {
+            productAgg.addVente(finalClientId, numeroFV.trim(), qteLivree, prixVenteHT);
+        }
+        
+        // Créer aussi une LineItem pour la rétrocompatibilité (sera convertie plus tard)
+        LineItem ligne = createLineItem(row, columnMap, result);
         bc.getLignes().add(ligne);
         
         // 6. Créer ou récupérer la facture achat
@@ -800,14 +1032,28 @@ public class ExcelImportService {
         LineItem faLigne = createLineItemForFacture(row, columnMap, result);
         faLignesMap.computeIfAbsent(finalNumeroBC, k -> new ArrayList<>()).add(faLigne);
         
-        // 7. Créer ou récupérer la facture vente
+        // 7. NOUVELLE LOGIQUE : Créer ou récupérer la facture vente (plusieurs FV possibles par client/BC)
         String numeroFV = getCellValue(row, columnMap, "numero_facture_vente");
         if (numeroFV != null && !numeroFV.trim().isEmpty()) {
             numeroFV = numeroFV.trim();
-            final String finalNumeroFV = numeroFV; // Copie finale pour lambda
-            FactureVente fv = fvMap.computeIfAbsent(finalNumeroFV, k -> {
-                FactureVente newFv = new FactureVente();
-                newFv.setNumeroFactureVente(finalNumeroFV);
+            final String finalNumeroFV = numeroFV;
+            
+            // Clé pour grouper les FV par BC et client
+            String bcClientKey = finalNumeroBC + "|" + finalClientId;
+            
+            // Récupérer ou créer la liste des FV pour ce BC+Client
+            List<FactureVente> fvList = fvByBcAndClientMap.computeIfAbsent(bcClientKey, k -> new ArrayList<>());
+            
+            // Chercher si cette FV existe déjà dans la liste
+            FactureVente fv = fvList.stream()
+                .filter(f -> finalNumeroFV.equals(f.getNumeroFactureVente()))
+                .findFirst()
+                .orElse(null);
+            
+            // Si la FV n'existe pas, la créer
+            if (fv == null) {
+                fv = new FactureVente();
+                fv.setNumeroFactureVente(finalNumeroFV);
                 
                 // Date facture vente
                 LocalDate dateFacture = null;
@@ -820,22 +1066,25 @@ public class ExcelImportService {
                     String dateFV = getCellValue(row, columnMap, "date_facture_vente");
                     dateFacture = parseDate(dateFV);
                 }
-                newFv.setDateFacture(dateFacture);
+                fv.setDateFacture(dateFacture);
                 
                 // Date échéance = date facture + 30 jours (défaut)
                 if (dateFacture != null) {
-                    newFv.setDateEcheance(dateFacture.plusDays(30));
+                    fv.setDateEcheance(dateFacture.plusDays(30));
                 }
                 
-                // CORRECTION: Définir la référence BC directement sur la facture
-                newFv.setBcReference(finalNumeroBC);
+                // Définir la référence BC directement sur la facture
+                fv.setBcReference(finalNumeroBC);
                 
-                newFv.setClientId(finalClientId);
-                newFv.setEtatPaiement("non_regle");
-                newFv.setLignes(new ArrayList<>());
-                newFv.setPaiements(new ArrayList<>());
-                return newFv;
-            });
+                fv.setClientId(finalClientId);
+                fv.setEtatPaiement("non_regle");
+                fv.setLignes(new ArrayList<>());
+                fv.setPaiements(new ArrayList<>());
+                
+                // Ajouter à la liste et à la map globale
+                fvList.add(fv);
+                fvMap.put(finalNumeroFV, fv); // Garder aussi dans fvMap pour compatibilité
+            }
             
             // Stocker l'association FV -> BC
             fvToBcNumMap.put(finalNumeroFV, finalNumeroBC);
@@ -843,6 +1092,86 @@ public class ExcelImportService {
             // Ajouter la ligne à la facture vente
             LineItem fvLigne = createLineItemForFactureVente(row, columnMap, result);
             fvLignesMap.computeIfAbsent(finalNumeroFV, k -> new ArrayList<>()).add(fvLigne);
+        }
+    }
+    
+    /**
+     * Crée ou met à jour un produit à partir d'un ProductAggregate.
+     * Calcule les prix pondérés et met à jour le produit dans la base de données.
+     */
+    private void createOrUpdateProductFromAggregate(ProductAggregate agg, String fournisseurId, ImportResult result) {
+        try {
+            // Calculer les prix pondérés depuis cet agrégat
+            Double prixAchatPondere = agg.getPrixAchatPondere();
+            Double prixVentePondere = agg.getPrixVentePondere();
+            
+            // Chercher produit existant par ref + designation + unite
+            Optional<Product> existingOpt = productRepository.findByRefArticleAndDesignationAndUnite(
+                agg.produitRef != null ? agg.produitRef : "",
+                agg.designation != null ? agg.designation : "",
+                agg.unite != null ? agg.unite : "U"
+            );
+            
+            Product product;
+            if (existingOpt.isPresent()) {
+                // Mettre à jour le produit existant
+                product = existingOpt.get();
+                
+                // Mettre à jour les prix pondérés
+                // Note: Pour un calcul global depuis toutes les BC, il faudra utiliser ProductPriceService
+                // Pour l'instant, on met à jour avec les prix de cette BC
+                if (prixAchatPondere != null) {
+                    product.setPrixAchatPondereHT(prixAchatPondere);
+                }
+                if (prixVentePondere != null) {
+                    product.setPrixVentePondereHT(prixVentePondere);
+                }
+                
+                // Mettre à jour les autres champs si nécessaire
+                if (agg.designation != null && !agg.designation.isEmpty()) {
+                    product.setDesignation(agg.designation);
+                }
+                if (agg.unite != null && !agg.unite.isEmpty()) {
+                    product.setUnite(agg.unite);
+                }
+                if (agg.tva != null) {
+                    product.setTva(agg.tva);
+                }
+                if (fournisseurId != null) {
+                    product.setFournisseurId(fournisseurId);
+                }
+                
+                product.setDerniereMiseAJourPrix(LocalDateTime.now());
+                product.setUpdatedAt(LocalDateTime.now());
+                
+                product = productRepository.save(product);
+                log.debug("Produit mis à jour: {} - Prix achat pondéré: {}, Prix vente pondéré: {}", 
+                    product.getRefArticle(), prixAchatPondere, prixVentePondere);
+            } else {
+                // Créer nouveau produit
+                product = Product.builder()
+                    .refArticle(agg.produitRef)
+                    .designation(agg.designation)
+                    .unite(agg.unite != null ? agg.unite : "U")
+                    .prixAchatPondereHT(prixAchatPondere)
+                    .prixVentePondereHT(prixVentePondere)
+                    .tva(agg.tva)
+                    .fournisseurId(fournisseurId)
+                    .quantiteEnStock(0)
+                    .derniereMiseAJourPrix(LocalDateTime.now())
+                    .createdAt(LocalDateTime.now())
+                    .updatedAt(LocalDateTime.now())
+                    .build();
+                
+                product = productRepository.save(product);
+                log.debug("Nouveau produit créé: {} - Prix achat pondéré: {}, Prix vente pondéré: {}", 
+                    product.getRefArticle(), prixAchatPondere, prixVentePondere);
+            }
+        } catch (Exception e) {
+            log.error("Erreur lors de la création/mise à jour du produit {}: {}", 
+                agg.produitRef != null ? agg.produitRef : "inconnu", e.getMessage(), e);
+            result.getWarnings().add("Erreur produit " + (agg.produitRef != null ? agg.produitRef : "inconnu") + 
+                ": " + e.getMessage());
         }
     }
     
@@ -3667,6 +3996,78 @@ public class ExcelImportService {
         } catch (Exception e) {
             log.error("Error generating import report", e);
             throw new RuntimeException("Erreur lors de la génération du rapport d'import: " + e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * Classe interne pour agréger les données d'un produit lors de l'import.
+     * Permet de dédupliquer les produits et de calculer les prix pondérés.
+     */
+    private static class ProductAggregate {
+        String produitRef;
+        String designation;
+        String unite;
+        Double quantiteAcheteeTotale = 0.0;
+        Double quantiteVendueTotale = 0.0;
+        Double sommePrixAchatPondere = 0.0; // somme(prix * qty) pour calcul pondéré
+        Double sommePrixVentePondere = 0.0; // somme(prix * qty) pour calcul pondéré
+        Double tva;
+        
+        // Structure pour gérer les ventes par client (plusieurs factures vente possibles)
+        // Map<clientId, List<VenteInfo>> où VenteInfo contient numeroFV, quantite, prix
+        Map<String, List<VenteInfo>> ventesParClient = new HashMap<>();
+        
+        /**
+         * Ajoute une quantité achetée avec son prix pour le calcul pondéré
+         */
+        void addAchat(Double quantite, Double prixUnitaireHT) {
+            if (quantite != null && quantite > 0 && prixUnitaireHT != null && prixUnitaireHT > 0) {
+                quantiteAcheteeTotale += quantite;
+                sommePrixAchatPondere += prixUnitaireHT * quantite;
+            }
+        }
+        
+        /**
+         * Ajoute une vente pour un client donné (peut être appelé plusieurs fois pour plusieurs factures)
+         */
+        void addVente(String clientId, String numeroFV, Double quantite, Double prixUnitaireHT) {
+            if (quantite != null && quantite > 0 && prixUnitaireHT != null && prixUnitaireHT > 0) {
+                quantiteVendueTotale += quantite;
+                sommePrixVentePondere += prixUnitaireHT * quantite;
+                
+                // Ajouter à la liste des ventes pour ce client
+                ventesParClient.computeIfAbsent(clientId, k -> new ArrayList<>())
+                    .add(new VenteInfo(numeroFV, quantite, prixUnitaireHT));
+            }
+        }
+        
+        /**
+         * Calcule le prix d'achat pondéré
+         */
+        Double getPrixAchatPondere() {
+            return quantiteAcheteeTotale > 0 ? sommePrixAchatPondere / quantiteAcheteeTotale : null;
+        }
+        
+        /**
+         * Calcule le prix de vente pondéré
+         */
+        Double getPrixVentePondere() {
+            return quantiteVendueTotale > 0 ? sommePrixVentePondere / quantiteVendueTotale : null;
+        }
+    }
+    
+    /**
+     * Classe interne pour stocker les informations d'une vente (facture vente)
+     */
+    private static class VenteInfo {
+        String numeroFactureVente;
+        Double quantite;
+        Double prixUnitaireHT;
+        
+        VenteInfo(String numeroFactureVente, Double quantite, Double prixUnitaireHT) {
+            this.numeroFactureVente = numeroFactureVente;
+            this.quantite = quantite;
+            this.prixUnitaireHT = prixUnitaireHT;
         }
     }
 }

@@ -11,6 +11,12 @@ import java.util.Optional;
 public interface ProductRepository extends MongoRepository<Product, String> {
     Optional<Product> findByRefArticle(String refArticle);
     List<Product> findByFournisseurId(String fournisseurId);
+    
+    /**
+     * Recherche un produit par référence article, désignation et unité.
+     * Utilisé pour identifier de manière unique un produit lors de l'import.
+     */
+    Optional<Product> findByRefArticleAndDesignationAndUnite(String refArticle, String designation, String unite);
 }
 
 

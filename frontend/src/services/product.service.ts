@@ -18,6 +18,9 @@ export class ProductService {
       refArticle: product.ref,
       designation: product.name,
       unite: product.unit,
+      prixAchatPondereHT: product.priceBuyHT, // Utiliser prix pondéré
+      prixVentePondereHT: product.priceSellHT, // Utiliser prix pondéré
+      // Garder aussi les anciens champs pour rétrocompatibilité
       prixAchatUnitaireHT: product.priceBuyHT,
       prixVenteUnitaireHT: product.priceSellHT,
       quantiteEnStock: product.stock !== undefined ? product.stock : 0,
@@ -39,6 +42,9 @@ export class ProductService {
       refArticle: product.ref,
       designation: product.name,
       unite: product.unit,
+      prixAchatPondereHT: product.priceBuyHT, // Utiliser prix pondéré
+      prixVentePondereHT: product.priceSellHT, // Utiliser prix pondéré
+      // Garder aussi les anciens champs pour rétrocompatibilité
       prixAchatUnitaireHT: product.priceBuyHT,
       prixVenteUnitaireHT: product.priceSellHT,
       quantiteEnStock: product.stock !== undefined ? product.stock : 0
@@ -84,8 +90,9 @@ export class ProductService {
       ref: p.refArticle || p.ref,
       name: p.designation || p.name,
       unit: p.unite || p.unit,
-      priceBuyHT: p.prixAchatUnitaireHT || p.priceBuyHT || 0,
-      priceSellHT: p.prixVenteUnitaireHT || p.priceSellHT || 0,
+      // Utiliser les prix pondérés en priorité, avec fallback sur prix unitaires pour rétrocompatibilité
+      priceBuyHT: p.prixAchatPondereHT ?? p.prixAchatUnitaireHT ?? p.priceBuyHT ?? 0,
+      priceSellHT: p.prixVentePondereHT ?? p.prixVenteUnitaireHT ?? p.priceSellHT ?? 0,
       stock: p.quantiteEnStock !== undefined ? p.quantiteEnStock : (p.stock !== undefined ? p.stock : 0),
       imageUrl: imageUrl
     };

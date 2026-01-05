@@ -5,9 +5,11 @@ import com.bf4invest.model.FactureAchat;
 import com.bf4invest.model.FactureVente;
 import com.bf4invest.model.LigneAchat;
 import com.bf4invest.model.LineItem;
+import com.bf4invest.model.Product;
 import com.bf4invest.repository.BandeCommandeRepository;
 import com.bf4invest.repository.FactureAchatRepository;
 import com.bf4invest.repository.FactureVenteRepository;
+import com.bf4invest.repository.ProductRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -29,6 +31,8 @@ public class DataMigrationService {
     private final BandeCommandeRepository bcRepository;
     private final FactureAchatRepository factureAchatRepository;
     private final FactureVenteRepository factureVenteRepository;
+    private final ProductRepository productRepository;
+    private final ProductPriceService productPriceService;
     
     /**
      * Synchronise les références BC pour toutes les factures
@@ -209,6 +213,92 @@ public class DataMigrationService {
         log.info("✅ Migration lignes -> lignesAchat terminée :");
         log.info("   - {} BCs traitées", stats.get("bcsTraitees"));
         log.info("   - {} BCs mises à jour", stats.get("bcsMisesAJour"));
+        log.info("   - {} erreurs", stats.get("erreurs"));
+        
+        return stats;
+    }
+    
+    /**
+     * Migre les prix unitaires vers les prix pondérés pour tous les produits.
+     * 
+     * 1. Copie les prix unitaires vers les prix pondérés (pour rétrocompatibilité)
+     * 2. Recalcule les prix pondérés depuis toutes les BC existantes
+     * 
+     * @return Map avec les statistiques de migration
+     */
+    public Map<String, Integer> migrateProductPricesToWeighted() {
+        log.info("🔄 Démarrage de la migration des prix unitaires vers prix pondérés...");
+        
+        Map<String, Integer> stats = new HashMap<>();
+        stats.put("produitsTraites", 0);
+        stats.put("produitsMisesAJour", 0);
+        stats.put("prixAchatCopies", 0);
+        stats.put("prixVenteCopies", 0);
+        stats.put("prixRecalcules", 0);
+        stats.put("erreurs", 0);
+        
+        List<Product> allProducts = productRepository.findAll();
+        log.info("   - {} produits à traiter", allProducts.size());
+        
+        for (Product product : allProducts) {
+            try {
+                boolean updated = false;
+                
+                // Étape 1: Copier les prix unitaires vers les prix pondérés si les prix pondérés sont null
+                if (product.getPrixAchatPondereHT() == null && product.getPrixAchatUnitaireHT() != null) {
+                    product.setPrixAchatPondereHT(product.getPrixAchatUnitaireHT());
+                    stats.put("prixAchatCopies", stats.get("prixAchatCopies") + 1);
+                    updated = true;
+                }
+                
+                if (product.getPrixVentePondereHT() == null && product.getPrixVenteUnitaireHT() != null) {
+                    product.setPrixVentePondereHT(product.getPrixVenteUnitaireHT());
+                    stats.put("prixVenteCopies", stats.get("prixVenteCopies") + 1);
+                    updated = true;
+                }
+                
+                // Étape 2: Recalculer les prix pondérés depuis toutes les BC
+                // Cela va écraser les prix copiés avec les vrais prix pondérés calculés
+                try {
+                    productPriceService.recalculateProductWeightedPrices(
+                        product.getRefArticle(),
+                        product.getDesignation(),
+                        product.getUnite()
+                    );
+                    stats.put("prixRecalcules", stats.get("prixRecalcules") + 1);
+                    updated = true;
+                } catch (Exception e) {
+                    log.warn("⚠️  Impossible de recalculer les prix pour produit {}: {}", 
+                        product.getRefArticle(), e.getMessage());
+                    // Continuer même si le recalcul échoue, on garde les prix copiés
+                }
+                
+                if (updated) {
+                    product.setUpdatedAt(LocalDateTime.now());
+                    productRepository.save(product);
+                    stats.put("produitsMisesAJour", stats.get("produitsMisesAJour") + 1);
+                }
+                
+                stats.put("produitsTraites", stats.get("produitsTraites") + 1);
+                
+                // Log progression tous les 100 produits
+                if (stats.get("produitsTraites") % 100 == 0) {
+                    log.info("   - {} produits traités...", stats.get("produitsTraites"));
+                }
+                
+            } catch (Exception e) {
+                log.error("❌ Erreur lors de la migration du produit {}: {}", 
+                    product.getId(), e.getMessage(), e);
+                stats.put("erreurs", stats.get("erreurs") + 1);
+            }
+        }
+        
+        log.info("✅ Migration des prix terminée :");
+        log.info("   - {} produits traités", stats.get("produitsTraites"));
+        log.info("   - {} produits mis à jour", stats.get("produitsMisesAJour"));
+        log.info("   - {} prix d'achat copiés", stats.get("prixAchatCopies"));
+        log.info("   - {} prix de vente copiés", stats.get("prixVenteCopies"));
+        log.info("   - {} prix recalculés depuis les BC", stats.get("prixRecalcules"));
         log.info("   - {} erreurs", stats.get("erreurs"));
         
         return stats;
