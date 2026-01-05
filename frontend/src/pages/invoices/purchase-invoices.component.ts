@@ -1531,10 +1531,11 @@ export class PurchaseInvoicesComponent implements OnInit {
   async showPaymentModal(inv: Invoice) {
     this.selectedInvoiceForPayments.set(inv);
     this.activeTab.set('paiements');
-    // Charger les paiements pour cette facture
-    await this.store.loadPaymentsForInvoice(inv.id, 'purchase');
-    // Recharger les factures pour avoir les prévisions
-    await this.store.loadInvoices();
+    // Charger les paiements pour cette facture (de manière asynchrone, non bloquant)
+    this.store.loadPaymentsForInvoice(inv.id, 'purchase').catch(err => {
+      console.error('Erreur lors du chargement des paiements:', err);
+    });
+    // Les prévisions sont déjà dans la facture (previsionsPaiement), pas besoin de recharger toutes les factures
     // Réinitialiser les formulaires
     this.paymentForm.reset({
       date: new Date().toISOString().split('T')[0],
@@ -1626,7 +1627,15 @@ export class PurchaseInvoicesComponent implements OnInit {
 
     try {
       await this.store.deletePrevision(inv.id, id, 'achat');
-      await this.store.loadInvoices();
+      // Mettre à jour localement la facture sélectionnée
+      const updatedInvoice = this.store.invoices().find(i => i.id === inv.id);
+      if (updatedInvoice) {
+        this.selectedInvoiceForPayments.set({ ...updatedInvoice });
+      }
+      // Recharger les factures en arrière-plan (non bloquant) pour synchroniser le store
+      this.store.loadInvoices().catch(err => {
+        console.error('Erreur lors du rechargement des factures:', err);
+      });
     } catch (error) {
       // Error already handled in store
     }
@@ -1672,6 +1681,7 @@ export class PurchaseInvoicesComponent implements OnInit {
     }
 
     const inv = this.selectedInvoiceForPayments()!;
+    const invoiceId = inv.id; // Sauvegarder l'ID avant les modifications
     const paymentData = {
       factureAchatId: inv.id,
       date: this.paymentForm.value.date!,
@@ -1683,17 +1693,28 @@ export class PurchaseInvoicesComponent implements OnInit {
 
     try {
       await this.store.addPaiement(paymentData);
-      // Recharger les paiements
-      await this.store.loadPaymentsForInvoice(inv.id, 'purchase');
-      // Recharger les factures pour mettre à jour le statut
-      await this.store.loadInvoices();
-      // Réinitialiser le formulaire
+      
+      // Réinitialiser le formulaire immédiatement pour une meilleure UX
       this.paymentForm.reset({
         date: new Date().toISOString().split('T')[0],
         montant: 0,
         mode: '',
         reference: '',
         notes: ''
+      });
+      
+      // Mettre à jour localement la facture sélectionnée si elle a été mise à jour dans le store
+      const updatedInvoice = this.store.invoices().find(i => i.id === invoiceId);
+      if (updatedInvoice) {
+        this.selectedInvoiceForPayments.set({ ...updatedInvoice });
+      }
+      
+      // Recharger les paiements et factures en arrière-plan (non bloquant) pour synchroniser
+      this.store.loadPaymentsForInvoice(inv.id, 'purchase').catch(err => {
+        console.error('Erreur lors du rechargement des paiements:', err);
+      });
+      this.store.loadInvoices().catch(err => {
+        console.error('Erreur lors du rechargement des factures:', err);
       });
     } catch (error) {
       console.error('Error adding payment:', error);
@@ -1873,17 +1894,21 @@ export class PurchaseInvoicesComponent implements OnInit {
               this.uploadedFileId.set(null);
               this.uploadedFileName.set(null);
               this.uploadedFileUrl.set(null);
+              // Mettre à jour localement la facture dans le modal
+              const currentInvoice = this.uploadModalInvoice();
+              if (currentInvoice) {
+                const updatedInvoice = { ...currentInvoice } as any;
+                updatedInvoice.fichierFactureId = undefined;
+                updatedInvoice.fichierFactureNom = undefined;
+                updatedInvoice.fichierFactureUrl = undefined;
+                this.uploadModalInvoice.set(updatedInvoice);
+              }
               this.store.showToast('Fichier supprimé avec succès', 'success');
             });
             
-            // Recharger les factures pour mettre à jour l'affichage
-            this.store.loadInvoices().then(() => {
-              this.ngZone.run(() => {
-                const updatedInvoice = this.store.invoices().find(inv => inv.id === this.uploadModalInvoice()?.id);
-                if (updatedInvoice) {
-                  this.uploadModalInvoice.set(updatedInvoice);
-                }
-              });
+            // Recharger les factures en arrière-plan (non bloquant) pour synchroniser le store
+            this.store.loadInvoices().catch(err => {
+              console.error('Erreur lors du rechargement des factures:', err);
             });
           },
           error: () => {
@@ -2104,25 +2129,16 @@ export class PurchaseInvoicesComponent implements OnInit {
             this.store.showToast(`Fichier "${result.filename}" uploadé avec succès`, 'success');
           });
           
-          // Recharger les factures pour mettre à jour l'affichage
-          await this.store.loadInvoices();
-          
-          // Mettre à jour la facture dans le modal si elle existe toujours
+          // Mettre à jour la facture dans le modal localement avec les données de la réponse
           this.ngZone.run(() => {
-            const updatedInvoice = this.store.invoices().find(inv => inv.id === this.uploadModalInvoice()?.id);
-            if (updatedInvoice) {
+            const currentInvoice = this.uploadModalInvoice();
+            if (currentInvoice) {
+              // Mettre à jour localement la facture avec les nouvelles informations de fichier
+              const updatedInvoice = { ...currentInvoice } as any;
+              updatedInvoice.fichierFactureId = result.fileId;
+              updatedInvoice.fichierFactureNom = result.filename;
+              updatedInvoice.fichierFactureUrl = result.signedUrl || null;
               this.uploadModalInvoice.set(updatedInvoice);
-              const factureAchat = updatedInvoice as any;
-              if (factureAchat.fichierFactureId) {
-                this.uploadedFileId.set(factureAchat.fichierFactureId);
-                this.uploadedFileName.set(factureAchat.fichierFactureNom || 'Fichier joint');
-                this.uploadedFileUrl.set(factureAchat.fichierFactureUrl || null);
-              }
-            } else {
-              // Si la facture n'est pas trouvée, utiliser les données de la réponse
-              this.uploadedFileId.set(result.fileId);
-              this.uploadedFileName.set(result.filename);
-              this.uploadedFileUrl.set(result.signedUrl || null);
             }
             
             // Réinitialiser la progression après un court délai
@@ -2130,6 +2146,11 @@ export class PurchaseInvoicesComponent implements OnInit {
               this.uploadProgress.set(0);
             }, 1000);
             this.uploadingFile.set(false);
+          });
+          
+          // Recharger les factures en arrière-plan (non bloquant) pour synchroniser le store
+          this.store.loadInvoices().catch(err => {
+            console.error('Erreur lors du rechargement des factures:', err);
           });
         } else {
           this.ngZone.run(() => {
@@ -2344,16 +2365,12 @@ export class PurchaseInvoicesComponent implements OnInit {
     return !!(facture.fichierFactureId);
   }
   
-  async openUploadModal(inv: Invoice) {
+  openUploadModal(inv: Invoice) {
     this.uploadModalInvoice.set(inv);
     this.editingId = inv.id;
     
-    // Recharger les factures pour avoir les données à jour
-    await this.store.loadInvoices();
-    
-    // Recharger les informations du fichier depuis la facture mise à jour
-    const updatedInvoice = this.store.invoices().find(i => i.id === inv.id);
-    const factureAchat = (updatedInvoice || inv) as any;
+    // Utiliser directement les données de la facture passée en paramètre (déjà à jour dans le store)
+    const factureAchat = inv as any;
     if (factureAchat.fichierFactureId) {
       this.uploadedFileId.set(factureAchat.fichierFactureId);
       this.uploadedFileName.set(factureAchat.fichierFactureNom || 'Fichier joint');

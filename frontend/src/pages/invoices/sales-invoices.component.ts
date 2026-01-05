@@ -1439,10 +1439,11 @@ export class SalesInvoicesComponent implements OnInit {
   async showPaymentModal(inv: Invoice) {
     this.selectedInvoiceForPayments.set(inv);
     this.activeTab.set('paiements');
-    // Charger les paiements pour cette facture
-    await this.store.loadPaymentsForInvoice(inv.id, 'sale');
-    // Recharger les factures pour avoir les prévisions
-    await this.store.loadInvoices();
+    // Charger les paiements pour cette facture (de manière asynchrone, non bloquant)
+    this.store.loadPaymentsForInvoice(inv.id, 'sale').catch(err => {
+      console.error('Erreur lors du chargement des paiements:', err);
+    });
+    // Les prévisions sont déjà dans la facture (previsionsPaiement), pas besoin de recharger toutes les factures
     // Réinitialiser les formulaires
     this.paymentForm.reset({
       date: new Date().toISOString().split('T')[0],
@@ -1534,7 +1535,15 @@ export class SalesInvoicesComponent implements OnInit {
 
     try {
       await this.store.deletePrevision(inv.id, id, 'vente');
-      await this.store.loadInvoices();
+      // Mettre à jour localement la facture sélectionnée
+      const updatedInvoice = this.store.invoices().find(i => i.id === inv.id);
+      if (updatedInvoice) {
+        this.selectedInvoiceForPayments.set({ ...updatedInvoice });
+      }
+      // Recharger les factures en arrière-plan (non bloquant) pour synchroniser le store
+      this.store.loadInvoices().catch(err => {
+        console.error('Erreur lors du rechargement des factures:', err);
+      });
     } catch (error) {
       // Error already handled in store
     }
@@ -1579,6 +1588,7 @@ export class SalesInvoicesComponent implements OnInit {
     }
 
     const inv = this.selectedInvoiceForPayments()!;
+    const invoiceId = inv.id; // Sauvegarder l'ID avant les modifications
     const paymentData = {
       factureVenteId: inv.id,
       date: this.paymentForm.value.date!,
@@ -1590,17 +1600,28 @@ export class SalesInvoicesComponent implements OnInit {
 
     try {
       await this.store.addPaiement(paymentData);
-      // Recharger les paiements
-      await this.store.loadPaymentsForInvoice(inv.id, 'sale');
-      // Recharger les factures pour mettre à jour le statut
-      await this.store.loadInvoices();
-      // Réinitialiser le formulaire
+      
+      // Réinitialiser le formulaire immédiatement pour une meilleure UX
       this.paymentForm.reset({
         date: new Date().toISOString().split('T')[0],
         montant: 0,
         mode: '',
         reference: '',
         notes: ''
+      });
+      
+      // Mettre à jour localement la facture sélectionnée si elle a été mise à jour dans le store
+      const updatedInvoice = this.store.invoices().find(i => i.id === invoiceId);
+      if (updatedInvoice) {
+        this.selectedInvoiceForPayments.set({ ...updatedInvoice });
+      }
+      
+      // Recharger les paiements et factures en arrière-plan (non bloquant) pour synchroniser
+      this.store.loadPaymentsForInvoice(inv.id, 'sale').catch(err => {
+        console.error('Erreur lors du rechargement des paiements:', err);
+      });
+      this.store.loadInvoices().catch(err => {
+        console.error('Erreur lors du rechargement des factures:', err);
       });
     } catch (error) {
       console.error('Error adding payment:', error);
