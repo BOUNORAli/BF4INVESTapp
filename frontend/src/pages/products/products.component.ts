@@ -2,6 +2,7 @@ import { Component, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, FormsModule } from '@angular/forms';
 import { StoreService, Product } from '../../services/store.service';
+import { matchesFlexibleSearch } from '../../utils/product-search.util';
 
 @Component({
   selector: 'app-products',
@@ -227,9 +228,12 @@ export class ProductsComponent {
   });
 
   filteredProducts = computed(() => {
-    const term = this.searchTerm().toLowerCase();
+    const term = this.searchTerm();
+    if (!term || term.trim() === '') {
+      return this.store.products();
+    }
     return this.store.products().filter(p => 
-      p.name.toLowerCase().includes(term) || p.ref.toLowerCase().includes(term)
+      matchesFlexibleSearch({ name: p.name, ref: p.ref }, term)
     );
   });
 

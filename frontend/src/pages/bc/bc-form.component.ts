@@ -5,6 +5,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { StoreService, LigneAchat, LigneVente, ClientVente, Product } from '../../services/store.service';
 import { OcrService, OcrExtractResult } from '../../services/ocr.service';
 import type { BC } from '../../models/types';
+import { matchesFlexibleSearch } from '../../utils/product-search.util';
 
 @Component({
   selector: 'app-bc-form',
@@ -896,10 +897,9 @@ export class BcFormComponent implements OnInit {
 
   filterProducts(term: string): Product[] {
     const products = this.store.products();
-    if (!term) return products.slice(0, 10);
-    const t = term.toLowerCase();
+    if (!term || term.trim() === '') return products.slice(0, 10);
     return products.filter(p => 
-      p.name.toLowerCase().includes(t) || p.ref.toLowerCase().includes(t)
+      matchesFlexibleSearch({ name: p.name, ref: p.ref }, term)
     ).slice(0, 10);
   }
 
