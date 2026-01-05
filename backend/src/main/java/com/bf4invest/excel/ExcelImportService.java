@@ -46,6 +46,7 @@ public class ExcelImportService {
     private final com.bf4invest.service.PaiementService paiementService;
     private final com.bf4invest.service.ChargeService chargeService;
     private final com.bf4invest.service.FactureAchatService factureAchatService;
+    private final com.bf4invest.service.CompanyInfoService companyInfoService;
     
     private static final DateTimeFormatter DATE_FORMATTER_DDMMYYYY = DateTimeFormatter.ofPattern("dd/MM/yyyy");
     private static final DateTimeFormatter DATE_FORMATTER_YYYYMMDD = DateTimeFormatter.ofPattern("yyyy-MM-dd");
@@ -2328,6 +2329,10 @@ public class ExcelImportService {
             // Phase post-import : traiter les paiements pour mettre à jour les statuts des factures
             if (successCount > 0) {
                 try {
+                    // Traiter les opérations CAPITAL (avant les paiements)
+                    int capitalOperationsProcessed = processCapitalOperations(result);
+                    log.info("Processed {} capital operations", capitalOperationsProcessed);
+                    
                     int paymentsProcessed = processPaymentsFromOperations(result);
                     log.info("Processed {} payments from imported operations", paymentsProcessed);
                 } catch (Exception e) {
@@ -2342,6 +2347,71 @@ public class ExcelImportService {
         }
         
         return result;
+    }
+    
+    /**
+     * Traite les opérations CAPITAL pour mettre à jour le capital actuel
+     */
+    private int processCapitalOperations(ImportResult result) {
+        int capitalOperationsProcessed = 0;
+        
+        // Récupérer toutes les opérations avec AFFECTATION = "CAPITAL"
+        List<OperationComptable> allOperations = operationComptableRepository.findAll();
+        
+        List<OperationComptable> capitalOperations = allOperations.stream()
+                .filter(op -> {
+                    String numeroBc = op.getNumeroBc();
+                    return numeroBc != null && numeroBc.trim().equalsIgnoreCase("CAPITAL");
+                })
+                .sorted((op1, op2) -> {
+                    // Trier par date (ordre chronologique croissant)
+                    LocalDate date1 = op1.getDateOperation();
+                    LocalDate date2 = op2.getDateOperation();
+                    if (date1 == null && date2 == null) return 0;
+                    if (date1 == null) return 1;
+                    if (date2 == null) return -1;
+                    return date1.compareTo(date2);
+                })
+                .collect(java.util.stream.Collectors.toList());
+        
+        log.info("Found {} capital operations to process", capitalOperations.size());
+        
+        for (OperationComptable operation : capitalOperations) {
+            try {
+                Double montant = null;
+                String typeOperation = operation.getTypeOperation() != null ? operation.getTypeOperation().name() : "";
+                
+                // Déterminer le montant selon le type de mouvement
+                if (operation.getTypeMouvement() == TypeMouvement.PAIEMENT) {
+                    // Pour les paiements, c'est un apport au capital (positif)
+                    montant = operation.getTotalPayementTtc();
+                } else if (operation.getTypeMouvement() == TypeMouvement.FACTURE) {
+                    // Pour les factures, c'est un retrait de capital (négatif)
+                    montant = operation.getTotalTtcApresRg() != null ? -operation.getTotalTtcApresRg() : null;
+                } else {
+                    // Si type mouvement est null, essayer de déterminer par les montants
+                    if (operation.getTotalPayementTtc() != null && operation.getTotalPayementTtc() > 0) {
+                        montant = operation.getTotalPayementTtc();
+                    } else if (operation.getTotalTtcApresRg() != null && operation.getTotalTtcApresRg() > 0) {
+                        montant = -operation.getTotalTtcApresRg();
+                    }
+                }
+                
+                if (montant != null && montant != 0) {
+                    companyInfoService.updateCapitalActuel(montant);
+                    capitalOperationsProcessed++;
+                    log.info("Updated capital actuel: {} MAD (from operation type: {}, date: {})", 
+                            montant, typeOperation, operation.getDateOperation());
+                } else {
+                    log.warn("Capital operation with no valid amount: {}", operation.getId());
+                }
+            } catch (Exception e) {
+                log.error("Error processing capital operation {}: {}", operation.getId(), e.getMessage(), e);
+                result.getWarnings().add(String.format("Erreur traitement opération CAPITAL: %s", e.getMessage()));
+            }
+        }
+        
+        return capitalOperationsProcessed;
     }
     
     /**
@@ -2414,6 +2484,12 @@ public class ExcelImportService {
                     continue;
                 }
                 
+                // 0. Ignorer les opérations CAPITAL (elles sont traitées dans processCapitalOperations)
+                if (numeroBc != null && numeroBc.trim().equalsIgnoreCase("CAPITAL")) {
+                    log.debug("Skipping CAPITAL operation in payment processing (already handled in processCapitalOperations)");
+                    continue;
+                }
+                
                 // 1. Vérifier si c'est une charge (bureaux, etc.)
                 if (numeroBc != null && isChargeOperation(numeroBc)) {
                     try {
@@ -2422,13 +2498,19 @@ public class ExcelImportService {
                                 ? commentaire.trim() 
                                 : ("Charge " + numeroBc);
                         
+                        // Déterminer si imposable basé sur le taux de TVA
+                        // Si taux_tva est null ou 0%, alors non imposable (imposable = false)
+                        // Si taux_tva > 0% (10%, 20%, etc.), alors imposable (imposable = true)
+                        Double tauxTva = operation.getTauxTva();
+                        Boolean imposable = (tauxTva != null && tauxTva > 0);
+                        
                         Charge charge = Charge.builder()
                                 .libelle(libelle)
                                 .categorie("AUTRE")
                                 .montant(montantPaiement)
                                 .dateEcheance(dateOperation != null ? dateOperation : LocalDate.now())
                                 .statut("PREVUE")
-                                .imposable(true)
+                                .imposable(imposable)
                                 .notes(commentaire)
                                 .build();
                         
@@ -2752,13 +2834,13 @@ public class ExcelImportService {
         // Type opération (obligatoire)
         String typeOpStr = getCellValue(row, columnMap, "type_operation");
         if (typeOpStr == null || typeOpStr.trim().isEmpty()) {
-            throw new RuntimeException("Type opération manquant (C, F, IS, TVA, CNSS, FB, LOY)");
+            throw new RuntimeException("Type opération manquant (C, F, IS, TVA, CNSS, FB, LOY, IT, S)");
         }
         TypeOperation typeOperation;
         try {
             typeOperation = TypeOperation.valueOf(typeOpStr.trim().toUpperCase());
         } catch (IllegalArgumentException e) {
-            throw new RuntimeException("Type opération invalide: " + typeOpStr + ". Valeurs possibles: C, F, IS, TVA, CNSS, FB, LOY");
+            throw new RuntimeException("Type opération invalide: " + typeOpStr + ". Valeurs possibles: C, F, IS, TVA, CNSS, FB, LOY, IT, S");
         }
         
         // Source paiement

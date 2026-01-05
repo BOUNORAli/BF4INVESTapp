@@ -65,6 +65,9 @@ public class CompanyInfoService {
         if (info.getCapital() != null) {
             existing.setCapital(info.getCapital());
         }
+        if (info.getCapitalActuel() != null) {
+            existing.setCapitalActuel(info.getCapitalActuel());
+        }
         if (info.getTelephone() != null) {
             existing.setTelephone(info.getTelephone());
         }
@@ -88,6 +91,29 @@ public class CompanyInfoService {
         }
         existing.setUpdatedAt(LocalDateTime.now());
 
+        return repository.save(existing);
+    }
+
+    /**
+     * Met à jour le capital actuel de l'entreprise.
+     * @param montant Le montant à ajouter au capital actuel (peut être négatif pour une diminution)
+     */
+    public CompanyInfo updateCapitalActuel(Double montant) {
+        CompanyInfo existing = getCompanyInfo();
+        Double capitalActuel = existing.getCapitalActuel() != null ? existing.getCapitalActuel() : 0.0;
+        capitalActuel += montant;
+        existing.setCapitalActuel(capitalActuel);
+        existing.setUpdatedAt(LocalDateTime.now());
+        return repository.save(existing);
+    }
+
+    /**
+     * Initialise le capital actuel avec une valeur donnée.
+     */
+    public CompanyInfo setCapitalActuel(Double montant) {
+        CompanyInfo existing = getCompanyInfo();
+        existing.setCapitalActuel(montant);
+        existing.setUpdatedAt(LocalDateTime.now());
         return repository.save(existing);
     }
 }

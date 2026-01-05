@@ -194,6 +194,14 @@ import { AuthService } from '../../services/auth.service';
                 </div>
                 
                 <div>
+                  <label class="block text-sm font-semibold text-slate-700 mb-1">Capital Actuel</label>
+                  <div class="w-full px-4 py-2 border border-slate-200 rounded-lg bg-slate-50 text-slate-700">
+                    {{ companyInfo().capitalActuel != null ? (companyInfo().capitalActuel | number:'1.2-2') : '0,00' }} MAD
+                  </div>
+                  <p class="text-xs text-slate-500 mt-1">Capital actuel calculé depuis les opérations comptables</p>
+                </div>
+                
+                <div>
                   <label class="block text-sm font-semibold text-slate-700 mb-1">Téléphone</label>
                   <input type="text" [(ngModel)]="companyInfo().telephone" 
                          placeholder="06 61 51 11 91"

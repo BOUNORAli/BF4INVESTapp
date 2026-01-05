@@ -58,6 +58,7 @@ export interface CompanyInfo {
   ville: string;
   ice: string;
   capital: string;
+  capitalActuel?: number;
   telephone: string;
   rc: string;
   ifFiscal: string;

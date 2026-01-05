@@ -7,6 +7,8 @@ public enum TypeOperation {
     TVA,    // TVA
     CNSS,   // Cotisations sociales
     FB,     // Frais bancaires
-    LOY     // Loyer
+    LOY,    // Loyer
+    IT,     // Impôts et Taxes
+    S       // Salaire
 }
 

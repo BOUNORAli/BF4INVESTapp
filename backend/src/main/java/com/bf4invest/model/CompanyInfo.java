@@ -35,6 +35,9 @@ public class CompanyInfo {
     /** Capital social affiché (format texte pour garder la mise en forme) */
     private String capital;
 
+    /** Capital actuel de l'entreprise (valeur numérique pour les calculs) */
+    private Double capitalActuel;
+
     /** Téléphone principal */
     private String telephone;
 
