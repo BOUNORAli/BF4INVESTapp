@@ -1,4 +1,4 @@
-import { Component, inject, signal, computed, OnInit } from '@angular/core';
+import { Component, inject, signal, computed, OnInit, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { StoreService, Invoice, Supplier } from '../../services/store.service';
 import { OrdreVirement, FactureMontant } from '../../models/types';
@@ -405,6 +405,7 @@ export class OrdresVirementComponent implements OnInit {
   facturesMontants = signal<Map<string, number>>(new Map());
   editingOV = signal<OrdreVirement | null>(null);
   beneficiaryType = signal<'SUPPLIER' | 'OTHER'>('SUPPLIER'); // Type de bénéficiaire
+  selectedSupplierId = signal<string>(''); // Signal pour suivre le fournisseur sélectionné
 
   form: FormGroup;
 
@@ -433,6 +434,11 @@ export class OrdresVirementComponent implements OnInit {
     this.store.loadOrdresVirement();
     this.store.loadInvoices();
     this.store.loadSuppliers();
+    
+    // Mettre à jour le signal selectedSupplierId quand le formulaire change
+    this.form.get('beneficiaireId')?.valueChanges.subscribe(value => {
+      this.selectedSupplierId.set(value || '');
+    });
   }
 
   // Computed
@@ -476,7 +482,25 @@ export class OrdresVirementComponent implements OnInit {
   });
 
   availableFactures = computed(() => {
-    return this.store.invoices().filter(inv => inv.type === 'purchase' && inv.status !== 'paid');
+    // Si le type de bénéficiaire est "OTHER", ne pas afficher de factures
+    if (this.beneficiaryType() === 'OTHER') {
+      return [];
+    }
+    
+    // Filtrer les factures d'achat non payées
+    let factures = this.store.invoices().filter(inv => inv.type === 'purchase' && inv.status !== 'paid');
+    
+    // Si un fournisseur est sélectionné, filtrer par fournisseur
+    const beneficiaireId = this.selectedSupplierId();
+    if (beneficiaireId && beneficiaireId.trim() !== '') {
+      factures = factures.filter(inv => inv.partnerId === beneficiaireId);
+    } else {
+      // Si aucun fournisseur n'est sélectionné, ne pas afficher de factures
+      // (pour éviter d'afficher toutes les factures avant la sélection)
+      factures = [];
+    }
+    
+    return factures;
   });
 
   // Signal pour suivre le montant manuel
@@ -524,6 +548,7 @@ export class OrdresVirementComponent implements OnInit {
     this.facturesMontants.set(new Map());
     this.montantManuel.set(0);
     this.beneficiaryType.set('SUPPLIER');
+    this.selectedSupplierId.set('');
     this.form.reset({ 
       statut: 'EN_ATTENTE', 
       type: 'NORMAL',
@@ -538,6 +563,7 @@ export class OrdresVirementComponent implements OnInit {
     this.editingOV.set(null);
     this.selectedFactures.set([]);
     this.facturesMontants.set(new Map());
+    this.selectedSupplierId.set('');
     this.form.reset();
   }
 
@@ -550,8 +576,10 @@ export class OrdresVirementComponent implements OnInit {
     // Déterminer le type de bénéficiaire
     if (ov.beneficiaireId) {
       this.beneficiaryType.set('SUPPLIER');
+      this.selectedSupplierId.set(ov.beneficiaireId);
     } else {
       this.beneficiaryType.set('OTHER');
+      this.selectedSupplierId.set('');
     }
     
     // Récupérer les montants partiels
@@ -585,6 +613,11 @@ export class OrdresVirementComponent implements OnInit {
 
   onBeneficiaryTypeChange() {
     this.updateBeneficiaryTypeValidation();
+    
+    // Réinitialiser la sélection de factures quand on change de type de bénéficiaire
+    // Surtout important quand on passe de "SUPPLIER" à "OTHER" car on ne peut pas associer de factures à une personne physique
+    this.selectedFactures.set([]);
+    this.facturesMontants.set(new Map());
     
     // Réinitialiser les champs selon le type
     if (this.beneficiaryType() === 'SUPPLIER') {
@@ -635,6 +668,15 @@ export class OrdresVirementComponent implements OnInit {
 
   onBeneficiaireChange() {
     const beneficiaireId = this.form.get('beneficiaireId')?.value;
+    
+    // Mettre à jour le signal (sera aussi mis à jour via valueChanges, mais on le fait ici aussi pour être sûr)
+    this.selectedSupplierId.set(beneficiaireId || '');
+    
+    // Réinitialiser la sélection de factures quand on change de fournisseur
+    // pour éviter d'avoir des factures d'un autre fournisseur sélectionnées
+    this.selectedFactures.set([]);
+    this.facturesMontants.set(new Map());
+    
     if (beneficiaireId) {
       const supplier = this.store.suppliers().find(s => s.id === beneficiaireId);
       if (supplier) {
