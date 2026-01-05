@@ -512,34 +512,76 @@ public class BandeCommandeService {
     }
     
     /**
-     * Met à jour le stock des produits à partir des lignes d'achat du BC
+     * Met à jour le stock des produits à partir des lignes d'achat du BC.
+     * 
+     * LOGIQUE : Ajoute uniquement le SURPLUS au stock.
+     * - Surplus = Quantité achetée - Quantité vendue totale (somme sur tous les clients)
+     * - Si pas de ventes ou BC sans clients : ajoute toute la quantité achetée
+     * - Si achat > vente : ajoute uniquement le surplus
+     * - Si achat = vente : n'ajoute rien au stock
+     * 
+     * Exemple : Achat 100, Vente Client1=40, Vente Client2=30 → Ajoute 30 au stock (surplus)
      */
     private void updateStockFromBC(BandeCommande bc) {
         if (bc.getLignesAchat() == null || bc.getLignesAchat().isEmpty()) {
             return;
         }
         
+        // Vérifier s'il y a des clients avec des ventes
+        boolean hasClientVentes = bc.getClientsVente() != null && !bc.getClientsVente().isEmpty();
+        
+        // Calculer les quantités vendues totales par produit (somme sur tous les clients)
+        Map<String, Double> quantiteVendueTotaleParProduit = new HashMap<>();
+        if (hasClientVentes) {
+            for (ClientVente clientVente : bc.getClientsVente()) {
+                if (clientVente.getLignesVente() != null) {
+                    for (LigneVente ligneVente : clientVente.getLignesVente()) {
+                        if (ligneVente.getProduitRef() != null && !ligneVente.getProduitRef().isEmpty()) {
+                            Double quantiteVendue = ligneVente.getQuantiteVendue();
+                            if (quantiteVendue != null && quantiteVendue > 0) {
+                                quantiteVendueTotaleParProduit.merge(
+                                    ligneVente.getProduitRef(), 
+                                    quantiteVendue, 
+                                    Double::sum
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Traiter chaque ligne d'achat
         for (LigneAchat ligne : bc.getLignesAchat()) {
             if (ligne.getProduitRef() == null || ligne.getProduitRef().isEmpty()) {
                 continue;
             }
             
-            Double quantiteDouble = ligne.getQuantiteAchetee();
-            if (quantiteDouble == null || quantiteDouble <= 0) {
+            Double quantiteAchetee = ligne.getQuantiteAchetee();
+            if (quantiteAchetee == null || quantiteAchetee <= 0) {
                 continue;
             }
             
-            Integer quantite = quantiteDouble.intValue();
+            // Calculer le surplus : quantité achetée - quantité vendue totale
+            // Si pas de clients ou pas de ventes pour ce produit, quantiteVendueTotale sera 0.0,
+            // donc surplus = quantiteAchetee (tout va au stock)
+            Double quantiteVendueTotale = quantiteVendueTotaleParProduit.getOrDefault(ligne.getProduitRef(), 0.0);
+            Double surplus = quantiteAchetee - quantiteVendueTotale;
             
-            try {
-                Product updated = productService.updateStockByRef(ligne.getProduitRef(), quantite);
-                if (updated != null) {
-                    // Log réussi (peut être ajouté si nécessaire)
-                } else {
-                    // Produit non trouvé - ne pas bloquer
+            // Ajouter au stock uniquement si surplus > 0
+            if (surplus > 0) {
+                Integer quantiteStock = surplus.intValue(); // Arrondir à l'entier inférieur
+                
+                try {
+                    Product updated = productService.updateStockByRef(ligne.getProduitRef(), quantiteStock);
+                    if (updated != null) {
+                        // Log réussi (peut être ajouté si nécessaire)
+                    } else {
+                        // Produit non trouvé - ne pas bloquer
+                    }
+                } catch (Exception e) {
+                    // Ne pas bloquer la création du BC en cas d'erreur
                 }
-            } catch (Exception e) {
-                // Ne pas bloquer la création du BC en cas d'erreur
             }
         }
     }
