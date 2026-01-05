@@ -864,23 +864,22 @@ public class ExcelImportService {
             return;
         }
         
-        // Normaliser les valeurs
-        if (produitRef != null) produitRef = produitRef.trim();
-        if (designation != null) designation = designation.trim();
-        if (unite == null || unite.trim().isEmpty()) unite = "U";
-        else unite = unite.trim();
+        // Normaliser les valeurs et créer des copies finales pour les lambdas
+        final String finalProduitRef = produitRef != null ? produitRef.trim() : null;
+        final String finalDesignation = designation != null ? designation.trim() : null;
+        final String finalUnite = (unite == null || unite.trim().isEmpty()) ? "U" : unite.trim();
         
         // Créer la clé produit unique : refArticle + "|" + designation + "|" + unite
-        String produitKey = (produitRef != null ? produitRef : "") + "|" + 
-                           (designation != null ? designation : "") + "|" + unite;
+        String produitKey = (finalProduitRef != null ? finalProduitRef : "") + "|" + 
+                           (finalDesignation != null ? finalDesignation : "") + "|" + finalUnite;
         
         // Récupérer ou créer l'agrégat pour ce produit dans cette BC
         Map<String, ProductAggregate> productsForBC = bcProductsMap.computeIfAbsent(finalNumeroBC, k -> new HashMap<>());
         ProductAggregate productAgg = productsForBC.computeIfAbsent(produitKey, k -> {
             ProductAggregate agg = new ProductAggregate();
-            agg.produitRef = produitRef;
-            agg.designation = designation;
-            agg.unite = unite;
+            agg.produitRef = finalProduitRef;
+            agg.designation = finalDesignation;
+            agg.unite = finalUnite;
             return agg;
         });
         
