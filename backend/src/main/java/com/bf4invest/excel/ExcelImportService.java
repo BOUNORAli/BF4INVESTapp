@@ -925,13 +925,6 @@ public class ExcelImportService {
             }
         }
         
-        // Ajouter les données de vente à l'agrégat (si facture vente présente)
-        String numeroFV = getCellValue(row, columnMap, "numero_facture_vente");
-        if (numeroFV != null && !numeroFV.trim().isEmpty() && 
-            qteLivree != null && qteLivree > 0 && prixVenteHT != null && prixVenteHT > 0) {
-            productAgg.addVente(finalClientId, numeroFV.trim(), qteLivree, prixVenteHT);
-        }
-        
         // Créer aussi une LineItem pour la rétrocompatibilité (sera convertie plus tard)
         LineItem ligne = createLineItem(row, columnMap, result);
         bc.getLignes().add(ligne);
@@ -1034,6 +1027,13 @@ public class ExcelImportService {
         
         // 7. NOUVELLE LOGIQUE : Créer ou récupérer la facture vente (plusieurs FV possibles par client/BC)
         String numeroFV = getCellValue(row, columnMap, "numero_facture_vente");
+        
+        // Ajouter les données de vente à l'agrégat (si facture vente présente)
+        if (numeroFV != null && !numeroFV.trim().isEmpty() && 
+            qteLivree != null && qteLivree > 0 && prixVenteHT != null && prixVenteHT > 0) {
+            productAgg.addVente(finalClientId, numeroFV.trim(), qteLivree, prixVenteHT);
+        }
+        
         if (numeroFV != null && !numeroFV.trim().isEmpty()) {
             numeroFV = numeroFV.trim();
             final String finalNumeroFV = numeroFV;

@@ -521,8 +521,10 @@ public class BandeCommandeService {
      * - Si achat = vente : n'ajoute rien au stock
      * 
      * Exemple : Achat 100, Vente Client1=40, Vente Client2=30 → Ajoute 30 au stock (surplus)
+     * 
+     * Méthode publique pour permettre l'appel depuis ExcelImportService.
      */
-    private void updateStockFromBC(BandeCommande bc) {
+    public void updateStockFromBC(BandeCommande bc) {
         if (bc.getLignesAchat() == null || bc.getLignesAchat().isEmpty()) {
             return;
         }
