@@ -1216,8 +1216,8 @@ export class PurchaseInvoicesComponent implements OnInit {
     });
   }
 
-  // Raw List
-  allPurchaseInvoices = computed(() => this.store.invoices().filter(i => i.type === 'purchase'));
+  // Raw List - Utiliser directement invoiceStore pour de meilleures performances
+  allPurchaseInvoices = computed(() => this.invoiceStore.purchaseInvoices());
 
   ngOnInit() {
     // Lire les query params pour bcId
@@ -1226,6 +1226,14 @@ export class PurchaseInvoicesComponent implements OnInit {
         this.bcIdFilter.set(params['bcId']);
       }
     });
+
+    // Charger les factures achat si le store est vide
+    // Le cache est vérifié automatiquement dans loadPurchaseInvoices()
+    if (this.invoiceStore.purchaseInvoices().length === 0) {
+      this.invoiceStore.loadPurchaseInvoices().catch(err => {
+        console.error('Error loading purchase invoices on init:', err);
+      });
+    }
   }
 
   // Filtered List
@@ -1632,8 +1640,8 @@ export class PurchaseInvoicesComponent implements OnInit {
       if (updatedInvoice) {
         this.selectedInvoiceForPayments.set({ ...updatedInvoice });
       }
-      // Recharger les factures en arrière-plan (non bloquant) pour synchroniser le store
-      this.store.loadInvoices().catch(err => {
+      // Recharger les factures achat en arrière-plan (non bloquant) pour synchroniser le store
+      this.invoiceStore.loadPurchaseInvoices().catch(err => {
         console.error('Erreur lors du rechargement des factures:', err);
       });
     } catch (error) {

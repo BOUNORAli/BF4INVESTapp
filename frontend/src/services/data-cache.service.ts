@@ -10,6 +10,8 @@ export type CacheKey =
   | 'products'
   | 'bcs'
   | 'invoices'
+  | 'invoices-purchase'
+  | 'invoices-sales'
   | 'clients'
   | 'suppliers'
   | 'dashboard'
@@ -29,7 +31,9 @@ export class DataCacheService {
   private ttlConfig: Record<CacheKey, number> = {
     products: 5 * 60 * 1000,      // 5 minutes
     bcs: 2 * 60 * 1000,           // 2 minutes
-    invoices: 2 * 60 * 1000,       // 2 minutes
+    invoices: 2 * 60 * 1000,       // 2 minutes (pour compatibilité)
+    'invoices-purchase': 2 * 60 * 1000,  // 2 minutes
+    'invoices-sales': 2 * 60 * 1000,     // 2 minutes
     clients: 10 * 60 * 1000,       // 10 minutes (rarement modifiés)
     suppliers: 10 * 60 * 1000,     // 10 minutes (rarement modifiés)
     dashboard: 1 * 60 * 1000,     // 1 minute (données critiques)

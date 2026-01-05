@@ -18,6 +18,22 @@ export class InvoiceService {
     ];
   }
 
+  /**
+   * Charge uniquement les factures achat
+   */
+  async getPurchaseInvoices(): Promise<Invoice[]> {
+    const purchaseInvoices = await this.api.get<any[]>('/factures-achats').toPromise() || [];
+    return purchaseInvoices.map(inv => this.mapInvoice(inv, 'purchase'));
+  }
+
+  /**
+   * Charge uniquement les factures ventes
+   */
+  async getSalesInvoices(): Promise<Invoice[]> {
+    const salesInvoices = await this.api.get<any[]>('/factures-ventes').toPromise() || [];
+    return salesInvoices.map(inv => this.mapInvoice(inv, 'sale'));
+  }
+
   async addInvoice(inv: Invoice): Promise<Invoice> {
     // S'assurer que les montants sont des nombres
     const amountHT = inv.amountHT != null && inv.amountHT !== undefined ? Number(inv.amountHT) : 0;

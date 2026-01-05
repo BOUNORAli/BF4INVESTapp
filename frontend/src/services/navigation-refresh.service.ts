@@ -88,8 +88,8 @@ export class NavigationRefreshService {
       return; // Aucun store à rafraîchir pour cette route
     }
 
-    // Rafraîchir en arrière-plan (ne bloque pas l'UI)
-    this.refreshStores(storesToRefresh, false);
+    // Rafraîchir en arrière-plan (ne bloque pas l'UI) en passant la route pour le chargement sélectif
+    this.refreshStores(storesToRefresh, false, basePath);
   }
 
   /**
@@ -132,7 +132,7 @@ export class NavigationRefreshService {
   /**
    * Rafraîchit une liste de stores
    */
-  async refreshStores(stores: StoreName[], force: boolean = false): Promise<void> {
+  async refreshStores(stores: StoreName[], force: boolean = false, currentRoute?: string): Promise<void> {
     if (stores.length === 0) {
       return;
     }
@@ -144,8 +144,25 @@ export class NavigationRefreshService {
       const storesToRefresh = force 
         ? stores 
         : stores.filter(store => {
-            const cacheKey = this.storeCacheMap[store];
-            return !this.cache.has(cacheKey) || this.cache.isExpired(cacheKey);
+            // Pour invoiceStore, vérifier le cache approprié selon la route
+            if (store === 'invoiceStore' && currentRoute) {
+              const purchaseCacheKey = 'invoices-purchase';
+              const salesCacheKey = 'invoices-sales';
+              
+              if (currentRoute.includes('/invoices/purchase')) {
+                return !this.cache.has(purchaseCacheKey) || this.cache.isExpired(purchaseCacheKey);
+              } else if (currentRoute.includes('/invoices/sales')) {
+                return !this.cache.has(salesCacheKey) || this.cache.isExpired(salesCacheKey);
+              } else {
+                // Pour les autres routes, vérifier les deux caches
+                const purchaseExpired = !this.cache.has(purchaseCacheKey) || this.cache.isExpired(purchaseCacheKey);
+                const salesExpired = !this.cache.has(salesCacheKey) || this.cache.isExpired(salesCacheKey);
+                return purchaseExpired || salesExpired;
+              }
+            } else {
+              const cacheKey = this.storeCacheMap[store];
+              return !this.cache.has(cacheKey) || this.cache.isExpired(cacheKey);
+            }
           });
 
       if (storesToRefresh.length === 0) {
@@ -155,7 +172,7 @@ export class NavigationRefreshService {
       }
 
       // Exécuter les rafraîchissements en parallèle
-      const refreshPromises = storesToRefresh.map(store => this.refreshStore(store));
+      const refreshPromises = storesToRefresh.map(store => this.refreshStore(store, currentRoute));
       await Promise.all(refreshPromises);
 
       this.lastRefreshTime.set(new Date());
@@ -169,7 +186,7 @@ export class NavigationRefreshService {
   /**
    * Rafraîchit un store spécifique
    */
-  private async refreshStore(storeName: StoreName): Promise<void> {
+  private async refreshStore(storeName: StoreName, currentRoute?: string): Promise<void> {
     const cacheKey = this.storeCacheMap[storeName];
 
     try {
@@ -185,8 +202,22 @@ export class NavigationRefreshService {
           break;
 
         case 'invoiceStore':
-          await this.invoiceStore.loadInvoices();
-          this.cache.set(cacheKey, this.invoiceStore.invoices());
+          // Charger sélectivement selon la route
+          if (currentRoute?.includes('/invoices/purchase')) {
+            // Charger uniquement les factures achat
+            await this.invoiceStore.loadPurchaseInvoices();
+            const purchaseInvoices = this.invoiceStore.purchaseInvoices();
+            this.cache.set('invoices-purchase', purchaseInvoices);
+          } else if (currentRoute?.includes('/invoices/sales')) {
+            // Charger uniquement les factures ventes
+            await this.invoiceStore.loadSalesInvoices();
+            const salesInvoices = this.invoiceStore.salesInvoices();
+            this.cache.set('invoices-sales', salesInvoices);
+          } else {
+            // Pour les autres routes, charger toutes les factures
+            await this.invoiceStore.loadInvoices();
+            this.cache.set(cacheKey, this.invoiceStore.invoices());
+          }
           break;
 
         case 'partnerStore':
