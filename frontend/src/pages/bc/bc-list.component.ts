@@ -79,6 +79,14 @@ import { SkeletonTableComponent } from '../../components/skeleton/skeleton-table
           <input type="date" [(ngModel)]="dateMax" class="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none text-slate-600">
         </div>
 
+        <div class="md:col-span-2 space-y-1">
+          <label class="text-xs font-semibold text-slate-500 uppercase">Tri par Date</label>
+          <select [(ngModel)]="sortOrder" class="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all appearance-none cursor-pointer outline-none">
+            <option value="desc">Date ↓ (Récent)</option>
+            <option value="asc">Date ↑ (Ancien)</option>
+          </select>
+        </div>
+
         <div class="md:col-span-1">
           <button (click)="resetFilters()" class="w-full py-2.5 bg-slate-100 text-slate-600 border border-slate-200 rounded-lg text-sm font-medium hover:bg-slate-200 transition flex items-center justify-center" title="Réinitialiser">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
@@ -284,6 +292,7 @@ export class BcListComponent implements OnInit {
   filterClient = signal('');
   dateMin = signal('');
   dateMax = signal('');
+  sortOrder = signal<'asc' | 'desc'>('desc'); // Tri par date
 
   // Pagination State
   currentPage = signal(1);
@@ -298,8 +307,9 @@ export class BcListComponent implements OnInit {
     const cliId = this.filterClient();
     const dMin = this.dateMin();
     const dMax = this.dateMax();
+    const sort = this.sortOrder();
 
-    return this.bcStore.bcs().filter(bc => {
+    let filtered = this.bcStore.bcs().filter(bc => {
       // Recherche dans le numéro BC et les noms des clients
       const clientIds = this.getClientIds(bc);
       const clientNames = clientIds.map(id => this.store.getClientName(id).toLowerCase());
@@ -317,6 +327,15 @@ export class BcListComponent implements OnInit {
       
       return matchesSearch && matchesSup && matchesCli && matchesMin && matchesMax;
     });
+    
+    // Trier par date selon sortOrder
+    filtered.sort((a, b) => {
+      const dateA = new Date(a.date).getTime();
+      const dateB = new Date(b.date).getTime();
+      return sort === 'desc' ? dateB - dateA : dateA - dateB;
+    });
+    
+    return filtered;
   });
 
   totalPages = computed(() => {
@@ -356,6 +375,7 @@ export class BcListComponent implements OnInit {
     this.filterClient.set('');
     this.dateMin.set('');
     this.dateMax.set('');
+    this.sortOrder.set('desc'); // Réinitialiser le tri à décroissant
     // Page will be reset automatically by the effect
   }
 

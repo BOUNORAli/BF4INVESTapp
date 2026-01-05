@@ -88,11 +88,17 @@ import type { EcritureComptable } from '../../models/types';
              <button (click)="setFilter('overdue')" [class.bg-red-600]="filterStatus() === 'overdue'" [class.text-white]="filterStatus() === 'overdue'" [class.border-red-600]="filterStatus() === 'overdue'" class="px-3 py-1.5 rounded-full text-xs font-semibold bg-white text-slate-600 border border-slate-200 hover:bg-slate-100 shrink-0 transition-colors">Retard</button>
            </div>
            
-           <div class="relative w-full md:w-64">
-              <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-              </span>
-              <input type="text" [(ngModel)]="searchTerm" placeholder="Rechercher facture..." class="w-full pl-9 pr-3 py-1.5 rounded-full border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all">
+           <div class="flex gap-2 items-center w-full md:w-auto">
+             <div class="relative w-full md:w-64">
+                <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                </span>
+                <input type="text" [(ngModel)]="searchTerm" placeholder="Rechercher facture..." class="w-full pl-9 pr-3 py-1.5 rounded-full border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all">
+             </div>
+             <select [(ngModel)]="sortOrder" class="px-3 py-1.5 rounded-full border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all appearance-none cursor-pointer">
+               <option value="desc">Date ↓ (Récent)</option>
+               <option value="asc">Date ↑ (Ancien)</option>
+             </select>
            </div>
            @if (bcIdFilter()) {
              <div class="px-4 py-2 bg-indigo-50 border border-indigo-200 rounded-lg text-sm text-indigo-700 flex items-center gap-2">
@@ -973,6 +979,7 @@ export class SalesInvoicesComponent implements OnInit {
   filterStatus = signal<'all' | 'paid' | 'pending' | 'overdue'>('all');
   searchTerm = signal('');
   bcIdFilter = signal<string | null>(null);
+  sortOrder = signal<'asc' | 'desc'>('desc'); // Tri par date
 
   // Pagination
   currentPage = signal(1);
@@ -1098,8 +1105,13 @@ export class SalesInvoicesComponent implements OnInit {
       );
     }
     
-    // Sort by date desc
-    return list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    // Sort by date according to sortOrder
+    const sort = this.sortOrder();
+    return list.sort((a, b) => {
+      const dateA = new Date(a.date).getTime();
+      const dateB = new Date(b.date).getTime();
+      return sort === 'desc' ? dateB - dateA : dateA - dateB;
+    });
   });
 
   // Paginated List
