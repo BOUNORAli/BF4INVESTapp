@@ -4041,17 +4041,25 @@ public class ExcelImportService {
         }
         
         /**
-         * Calcule le prix d'achat pondéré
+         * Calcule le prix d'achat pondéré (arrondi à 2 décimales)
          */
         Double getPrixAchatPondere() {
-            return quantiteAcheteeTotale > 0 ? sommePrixAchatPondere / quantiteAcheteeTotale : null;
+            if (quantiteAcheteeTotale <= 0) return null;
+            Double prix = sommePrixAchatPondere / quantiteAcheteeTotale;
+            return BigDecimal.valueOf(prix)
+                .setScale(2, RoundingMode.HALF_UP)
+                .doubleValue();
         }
         
         /**
-         * Calcule le prix de vente pondéré
+         * Calcule le prix de vente pondéré (arrondi à 2 décimales)
          */
         Double getPrixVentePondere() {
-            return quantiteVendueTotale > 0 ? sommePrixVentePondere / quantiteVendueTotale : null;
+            if (quantiteVendueTotale <= 0) return null;
+            Double prix = sommePrixVentePondere / quantiteVendueTotale;
+            return BigDecimal.valueOf(prix)
+                .setScale(2, RoundingMode.HALF_UP)
+                .doubleValue();
         }
     }
     

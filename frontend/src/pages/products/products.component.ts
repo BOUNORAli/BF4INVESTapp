@@ -62,11 +62,11 @@ import { matchesFlexibleSearch } from '../../utils/product-search.util';
               <div class="space-y-3 pt-3 border-t border-slate-100">
                 <div class="flex justify-between items-center text-sm">
                   <span class="text-slate-500">Prix Achat</span>
-                  <span class="font-medium text-slate-700">{{ prod.priceBuyHT }} MAD</span>
+                  <span class="font-medium text-slate-700">{{ prod.priceBuyHT | number:'1.2-2' }} MAD</span>
                 </div>
                 <div class="flex justify-between items-center text-sm">
                   <span class="text-slate-500">Prix Vente</span>
-                  <span class="font-bold text-blue-600">{{ prod.priceSellHT }} MAD</span>
+                  <span class="font-bold text-blue-600">{{ prod.priceSellHT | number:'1.2-2' }} MAD</span>
                 </div>
                 <div class="flex justify-between items-center text-sm pt-2 border-t border-slate-100">
                   <span class="text-slate-500">Stock</span>

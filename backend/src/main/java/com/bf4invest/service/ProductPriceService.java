@@ -10,6 +10,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -105,13 +107,21 @@ public class ProductPriceService {
             }
         }
         
-        // Calculer les prix pondérés globaux
-        Double prixAchatPondere = quantiteAcheteeTotale > 0 
-            ? sommePrixAchatPondere / quantiteAcheteeTotale 
-            : null;
-        Double prixVentePondere = quantiteVendueTotale > 0
-            ? sommePrixVentePondere / quantiteVendueTotale
-            : null;
+        // Calculer les prix pondérés globaux (arrondis à 2 décimales)
+        Double prixAchatPondere = null;
+        if (quantiteAcheteeTotale > 0) {
+            double prix = sommePrixAchatPondere / quantiteAcheteeTotale;
+            prixAchatPondere = BigDecimal.valueOf(prix)
+                .setScale(2, RoundingMode.HALF_UP)
+                .doubleValue();
+        }
+        Double prixVentePondere = null;
+        if (quantiteVendueTotale > 0) {
+            double prix = sommePrixVentePondere / quantiteVendueTotale;
+            prixVentePondere = BigDecimal.valueOf(prix)
+                .setScale(2, RoundingMode.HALF_UP)
+                .doubleValue();
+        }
         
         // Mettre à jour le produit
         product.setPrixAchatPondereHT(prixAchatPondere);
