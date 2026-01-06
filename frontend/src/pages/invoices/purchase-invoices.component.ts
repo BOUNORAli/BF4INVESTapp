@@ -1,4 +1,4 @@
-import { Component, inject, signal, computed, OnInit, HostListener, NgZone, ChangeDetectorRef } from '@angular/core';
+import { Component, inject, signal, computed, OnInit, HostListener, NgZone, ChangeDetectorRef, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { StoreService, Invoice, BC, PrevisionPaiement } from '../../services/store.service';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, FormsModule } from '@angular/forms';
@@ -1216,6 +1216,22 @@ export class PurchaseInvoicesComponent implements OnInit {
         this.form.patchValue({ dueDate: d.toISOString().split('T')[0] }, { emitEvent: false });
       }
     });
+
+    // Effet pour charger automatiquement les paiements quand les factures changent
+    effect(() => {
+      const invoices = this.allPurchaseInvoices();
+      if (invoices.length > 0) {
+        // Charger les paiements pour toutes les factures en arrière-plan
+        invoices.forEach(inv => {
+          // Vérifier si les paiements ne sont pas déjà chargés
+          if (!this.store.payments().has(inv.id)) {
+            this.store.loadPaymentsForInvoice(inv.id, 'purchase').catch(() => {
+              // Ignorer les erreurs silencieusement
+            });
+          }
+        });
+      }
+    });
   }
 
   // Raw List - Utiliser directement invoiceStore pour de meilleures performances
@@ -1262,26 +1278,10 @@ export class PurchaseInvoicesComponent implements OnInit {
 
     // Charger les factures achat si le store est vide
     // Le cache est vérifié automatiquement dans loadPurchaseInvoices()
+    // Les paiements seront chargés automatiquement par l'effet réactif dans le constructor
     if (this.invoiceStore.purchaseInvoices().length === 0) {
-      this.invoiceStore.loadPurchaseInvoices().then(() => {
-        // Charger les paiements en arrière-plan pour toutes les factures pour avoir le statut correct
-        const invoices = this.invoiceStore.purchaseInvoices();
-        invoices.forEach(inv => {
-          this.store.loadPaymentsForInvoice(inv.id, 'purchase').catch(err => {
-            // Ignorer les erreurs silencieusement, les paiements seront chargés à la demande si nécessaire
-            console.debug('Could not load payments for invoice:', inv.id);
-          });
-        });
-      }).catch(err => {
+      this.invoiceStore.loadPurchaseInvoices().catch(err => {
         console.error('Error loading purchase invoices on init:', err);
-      });
-    } else {
-      // Si les factures sont déjà chargées, charger les paiements en arrière-plan
-      const invoices = this.invoiceStore.purchaseInvoices();
-      invoices.forEach(inv => {
-        this.store.loadPaymentsForInvoice(inv.id, 'purchase').catch(err => {
-          console.debug('Could not load payments for invoice:', inv.id);
-        });
       });
     }
   }

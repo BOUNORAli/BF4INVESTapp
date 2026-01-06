@@ -1,4 +1,4 @@
-import { Component, inject, computed, signal, OnInit, HostListener } from '@angular/core';
+import { Component, inject, computed, signal, OnInit, HostListener, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { StoreService, Invoice, BC, PrevisionPaiement } from '../../services/store.service';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, FormsModule } from '@angular/forms';
@@ -1077,14 +1077,61 @@ export class SalesInvoicesComponent implements OnInit {
         this.form.patchValue({ dueDate: d.toISOString().split('T')[0] }, { emitEvent: false });
       }
     });
+
+    // Effet pour charger automatiquement les paiements quand les factures changent
+    effect(() => {
+      const invoices = this.allSalesInvoices();
+      if (invoices.length > 0) {
+        // Charger les paiements pour toutes les factures en arrière-plan
+        invoices.forEach(inv => {
+          // Vérifier si les paiements ne sont pas déjà chargés
+          if (!this.store.payments().has(inv.id)) {
+            this.store.loadPaymentsForInvoice(inv.id, 'sale').catch(() => {
+              // Ignorer les erreurs silencieusement
+            });
+          }
+        });
+      }
+    });
   }
 
   // Raw list
   allSalesInvoices = computed(() => this.store.invoices().filter(i => i.type === 'sale'));
 
+  // Computed pour recalculer le statut basé sur les paiements réels
+  invoicesWithCorrectStatus = computed(() => {
+    return this.allSalesInvoices().map(inv => {
+      const paiements = this.store.payments().get(inv.id) || [];
+      const montantPaye = paiements.reduce((sum, p) => sum + (p.montant || 0), 0);
+      const montantTotal = inv.amountTTC || 0;
+      const today = new Date().toISOString().split('T')[0];
+      const dueDate = inv.dueDate || today;
+      const tolerance = 0.01; // Tolérance pour les arrondis
+      
+      // Si payé à 100% (avec tolérance), statut = 'paid'
+      if (montantPaye >= (montantTotal - tolerance) && montantTotal > 0) {
+        return { ...inv, status: 'paid' as const };
+      }
+      // Si pas payé et date dépassée, statut = 'overdue'
+      else if (montantPaye < (montantTotal - tolerance) && dueDate < today) {
+        return { ...inv, status: 'overdue' as const };
+      }
+      // Si partiellement payé et date dépassée, statut = 'overdue'
+      else if (montantPaye > 0 && montantPaye < (montantTotal - tolerance) && dueDate < today) {
+        return { ...inv, status: 'overdue' as const };
+      }
+      // Si partiellement payé et date non dépassée, statut = 'pending'
+      else if (montantPaye > 0 && montantPaye < (montantTotal - tolerance) && dueDate >= today) {
+        return { ...inv, status: 'pending' as const };
+      }
+      // Sinon, garder le statut existant
+      return inv;
+    });
+  });
+
   // Filtered List
   filteredInvoices = computed(() => {
-    let list = this.allSalesInvoices();
+    let list = this.invoicesWithCorrectStatus();
     
     // BC Filter
     const bcId = this.bcIdFilter();
