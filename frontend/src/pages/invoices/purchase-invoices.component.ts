@@ -100,7 +100,7 @@ import type { EcritureComptable } from '../../models/types';
               <th class="px-4 md:px-6 py-4 font-semibold hidden md:table-cell">Date Facture</th>
               <th class="px-4 md:px-6 py-4 font-semibold">Échéance</th>
               <th class="px-4 md:px-6 py-4 font-semibold text-right">Montant TTC</th>
-              <th class="px-4 md:px-6 py-4 font-semibold text-center hidden md:table-cell">Mode Paiement</th>
+              <th class="px-4 md:px-6 py-4 font-semibold text-center hidden md:table-cell">Montant Restant</th>
               <th class="px-4 md:px-6 py-4 font-semibold text-center">Statut</th>
               <th class="px-4 md:px-6 py-4"></th>
             </tr>
@@ -126,13 +126,15 @@ import type { EcritureComptable } from '../../models/types';
                   </div>
                 </td>
                 <td class="px-4 md:px-6 py-4 text-right font-medium text-slate-800 text-sm md:text-base">{{ inv.amountTTC | number:'1.2-2' }} MAD</td>
-                <td class="px-4 md:px-6 py-4 text-center hidden md:table-cell">
-                  @if (inv.paymentMode) {
-                    <span class="inline-flex items-center bg-blue-50 text-blue-700 text-xs px-2.5 py-1 rounded-full font-medium border border-blue-200">
-                      {{ inv.paymentMode }}
+                <td class="px-4 md:px-6 py-4 text-right hidden md:table-cell">
+                  @if (getRemainingAmount(inv) === 0) {
+                    <span class="inline-flex items-center bg-emerald-50 text-emerald-700 text-xs px-2.5 py-1 rounded-full font-medium border border-emerald-200">
+                      {{ getRemainingAmount(inv) | number:'1.2-2' }} MAD
                     </span>
                   } @else {
-                    <span class="text-xs text-slate-400 italic">Non défini</span>
+                    <span class="inline-flex items-center bg-amber-50 text-amber-700 text-xs px-2.5 py-1 rounded-full font-medium border border-amber-200 font-bold">
+                      {{ getRemainingAmount(inv) | number:'1.2-2' }} MAD
+                    </span>
                   }
                 </td>
                 <td class="px-4 md:px-6 py-4 text-center">
@@ -1344,6 +1346,13 @@ export class PurchaseInvoicesComponent implements OnInit {
     if (this.currentPage() > 1) {
       this.currentPage.update(p => p - 1);
     }
+  }
+
+  getRemainingAmount(inv: Invoice): number {
+    const paiements = this.store.payments().get(inv.id) || [];
+    const montantPaye = paiements.reduce((sum, p) => sum + (p.montant || 0), 0);
+    const montantTotal = inv.amountTTC || 0;
+    return Math.max(0, montantTotal - montantPaye); // Ne pas afficher de valeurs négatives
   }
 
   getDueDateClass(dateStr: string): string {
