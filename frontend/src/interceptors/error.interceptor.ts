@@ -112,15 +112,13 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
         }
       }
       
-      // Logger seulement les erreurs non-réseau ou les erreurs critiques
+      // Logger seulement les erreurs non-réseau
+      // Les erreurs réseau (status: 0) sont gérées silencieusement avec fallback sur le cache
       if (!isNetworkError) {
         // Erreur non-réseau : toujours logger
         console.error('API Error (Interceptor):', error);
-      } else if (error.status === 401 || error.status === 403) {
-        // Erreurs critiques même si réseau : logger
-        console.error('API Error (Interceptor):', error);
       } else {
-        // Erreur réseau non-critique : logger en mode debug seulement
+        // Erreur réseau : logger en mode debug seulement (le cache interceptor gère le fallback)
         console.debug('Network error (will use cache if available):', req.url);
       }
       
