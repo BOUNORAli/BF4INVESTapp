@@ -7,6 +7,8 @@ import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { AuthService } from './services/auth.service';
 import { StoreService, BC, Invoice, Product, Client, Supplier } from './services/store.service';
 import { NavigationRefreshService } from './services/navigation-refresh.service';
+import { SearchIndexService } from './services/search-index.service';
+import { RoutePrefetchService } from './services/route-prefetch.service';
 import { filter } from 'rxjs/operators';
 
 interface SearchResult {
@@ -30,6 +32,8 @@ export class AppComponent implements OnInit, OnDestroy {
   router = inject(Router);
   sanitizer = inject(DomSanitizer);
   navigationRefresh = inject(NavigationRefreshService); // Initialise le service de rafraîchissement
+  searchIndex = inject(SearchIndexService); // Service d'indexation pour recherche optimisée
+  routePrefetch = inject(RoutePrefetchService); // Service de prefetching des routes
 
   // État du menu mobile
   isMobileMenuOpen = signal(false);
@@ -117,6 +121,64 @@ export class AppComponent implements OnInit, OnDestroy {
     this.reminderCheckInterval = setInterval(() => {
       this.store.checkPaymentReminders();
     }, 3600000); // 1 heure = 3600000 ms
+
+    // Initialiser l'index de recherche
+    this.initializeSearchIndex();
+    
+    // Mettre à jour l'index quand les données changent
+    this.setupSearchIndexUpdates();
+  }
+
+  private initializeSearchIndex() {
+    // Indexer toutes les données disponibles
+    this.searchIndex.indexBCs(
+      this.store.bcs(),
+      (id) => this.store.getClientName(id),
+      (id) => this.store.getSupplierName(id)
+    );
+    
+    this.searchIndex.indexInvoices(
+      this.store.invoices(),
+      (id) => this.store.getClientName(id),
+      (id) => this.store.getSupplierName(id)
+    );
+    
+    this.searchIndex.indexProducts(this.store.products());
+    this.searchIndex.indexClients(this.store.clients());
+    this.searchIndex.indexSuppliers(this.store.suppliers());
+  }
+
+  private setupSearchIndexUpdates() {
+    // Mettre à jour l'index quand les données changent
+    effect(() => {
+      const bcs = this.store.bcs();
+      this.searchIndex.indexBCs(
+        bcs,
+        (id) => this.store.getClientName(id),
+        (id) => this.store.getSupplierName(id)
+      );
+    });
+
+    effect(() => {
+      const invoices = this.store.invoices();
+      this.searchIndex.indexInvoices(
+        invoices,
+        (id) => this.store.getClientName(id),
+        (id) => this.store.getSupplierName(id)
+      );
+    });
+
+    effect(() => {
+      this.searchIndex.indexProducts(this.store.products());
+    });
+
+    effect(() => {
+      this.searchIndex.indexClients(this.store.clients());
+    });
+
+    effect(() => {
+      this.searchIndex.indexSuppliers(this.store.suppliers());
+    });
   }
 
   ngOnDestroy() {
@@ -131,7 +193,7 @@ export class AppComponent implements OnInit, OnDestroy {
     const query = input.value.trim();
     this.globalSearchTerm.set(query);
 
-    // Debounce la recherche (300ms)
+    // Debounce optimisé (150ms au lieu de 300ms)
     if (this.searchDebounceTimer) {
       clearTimeout(this.searchDebounceTimer);
     }
@@ -144,119 +206,38 @@ export class AppComponent implements OnInit, OnDestroy {
 
     this.searchDebounceTimer = setTimeout(() => {
       this.performGlobalSearch(query);
-    }, 300);
+    }, 150);
   }
 
   performGlobalSearch(query: string) {
-    const results: SearchResult[] = [];
-    const lowerQuery = query.toLowerCase();
+    // Utiliser le service d'indexation optimisé
+    const indexResults = this.searchIndex.search(query, 50, 10);
+    
+    // Convertir les résultats de l'index en SearchResult
+    const results: SearchResult[] = indexResults.map(entry => ({
+      id: entry.id,
+      type: entry.type,
+      title: entry.title,
+      subtitle: entry.subtitle,
+      route: entry.route,
+      icon: this.getIconForType(entry.type)
+    }));
 
-    // Recherche dans les BCs
-    this.store.bcs().forEach(bc => {
-      const clientName = this.store.getClientName(bc.clientId).toLowerCase();
-      const supplierName = this.store.getSupplierName(bc.supplierId).toLowerCase();
-      if (bc.number.toLowerCase().includes(lowerQuery) ||
-          clientName.includes(lowerQuery) ||
-          supplierName.includes(lowerQuery)) {
-        results.push({
-          id: bc.id,
-          type: 'bc',
-          title: bc.number,
-          subtitle: `${this.store.getClientName(bc.clientId)} / ${this.store.getSupplierName(bc.supplierId)}`,
-          route: `/bc/edit/${bc.id}`,
-          icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z'
-        });
-      }
-    });
-
-    // Recherche dans les Factures Vente
-    this.store.invoices()
-      .filter(inv => inv.type === 'sale')
-      .forEach(inv => {
-        const clientName = this.store.getClientName(inv.partnerId || '').toLowerCase();
-        if (inv.number.toLowerCase().includes(lowerQuery) ||
-            clientName.includes(lowerQuery)) {
-          results.push({
-            id: inv.id,
-            type: 'invoice-sale',
-            title: inv.number,
-            subtitle: `Client: ${this.store.getClientName(inv.partnerId || '')} - ${inv.amountTTC.toLocaleString('fr-FR')} MAD`,
-            route: `/invoices/sales`,
-            icon: 'M5 10l7-7m0 0l7 7m-7-7v18'
-          });
-        }
-      });
-
-    // Recherche dans les Factures Achat
-    this.store.invoices()
-      .filter(inv => inv.type === 'purchase')
-      .forEach(inv => {
-        const supplierName = this.store.getSupplierName(inv.partnerId || '').toLowerCase();
-        if (inv.number.toLowerCase().includes(lowerQuery) ||
-            supplierName.includes(lowerQuery)) {
-          results.push({
-            id: inv.id,
-            type: 'invoice-purchase',
-            title: inv.number,
-            subtitle: `Fournisseur: ${this.store.getSupplierName(inv.partnerId || '')} - ${inv.amountTTC.toLocaleString('fr-FR')} MAD`,
-            route: `/invoices/purchase`,
-            icon: 'M19 14l-7 7m0 0l-7-7m7 7V3'
-          });
-        }
-      });
-
-    // Recherche dans les Produits
-    this.store.products().forEach(product => {
-      if (product.name.toLowerCase().includes(lowerQuery) ||
-          product.ref.toLowerCase().includes(lowerQuery)) {
-        results.push({
-          id: product.id,
-          type: 'product',
-          title: product.name,
-          subtitle: `Ref: ${product.ref} - ${product.priceSellHT.toLocaleString('fr-FR')} MAD HT`,
-          route: `/products`,
-          icon: 'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4'
-        });
-      }
-    });
-
-    // Recherche dans les Clients
-    this.store.clients().forEach(client => {
-      if (client.name.toLowerCase().includes(lowerQuery) ||
-          client.ice.toLowerCase().includes(lowerQuery) ||
-          (client.email && client.email.toLowerCase().includes(lowerQuery))) {
-        results.push({
-          id: client.id,
-          type: 'client',
-          title: client.name,
-          subtitle: `ICE: ${client.ice}${client.email ? ` - ${client.email}` : ''}`,
-          route: `/clients`,
-          icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z'
-        });
-      }
-    });
-
-    // Recherche dans les Fournisseurs
-    this.store.suppliers().forEach(supplier => {
-      if (supplier.name.toLowerCase().includes(lowerQuery) ||
-          supplier.ice.toLowerCase().includes(lowerQuery) ||
-          (supplier.email && supplier.email.toLowerCase().includes(lowerQuery))) {
-        results.push({
-          id: supplier.id,
-          type: 'supplier',
-          title: supplier.name,
-          subtitle: `ICE: ${supplier.ice}${supplier.email ? ` - ${supplier.email}` : ''}`,
-          route: `/clients`,
-          icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z'
-        });
-      }
-    });
-
-    // Limiter à 50 résultats maximum, groupés par type
-    const limitedResults = this.limitResultsByCategory(results, 10);
-    this.searchResults.set(limitedResults);
-    this.isSearchOpen.set(limitedResults.length > 0);
+    this.searchResults.set(results);
+    this.isSearchOpen.set(results.length > 0);
     this.selectedResultIndex.set(-1);
+  }
+
+  private getIconForType(type: string): string {
+    const icons: Record<string, string> = {
+      'bc': 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z',
+      'invoice-sale': 'M5 10l7-7m0 0l7 7m-7-7v18',
+      'invoice-purchase': 'M19 14l-7 7m0 0l-7-7m7 7V3',
+      'product': 'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4',
+      'client': 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z',
+      'supplier': 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z'
+    };
+    return icons[type] || '';
   }
 
   private limitResultsByCategory(results: SearchResult[], maxPerCategory: number): SearchResult[] {
