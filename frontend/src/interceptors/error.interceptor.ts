@@ -90,19 +90,36 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
         }
       }
 
-      // Afficher le toast (sauf si 401 géré par refresh qui a échoué - déjà affiché)
-      // Si c'est une 401 sur login, on affiche.
-      // Si c'est une 401 sur refresh, on affiche.
-      // Si c'est une 401 sur api classique et refresh a fail, le catchError du refresh l'a affiché.
-      // Donc ici on affiche si ce n'est PAS une requête qui a tenté le refresh (login ou refresh endpoint)
-      if ((req.url.includes('/auth/login') || req.url.includes('/auth/refresh')) || error.status !== 401) {
-         // Avoid duplicate toasts if possible, but better safe than sorry for login errors
-         if (!req.url.includes('/auth/refresh')) { 
-            toastService.showToast(errorMessage, 'error');
-         }
+      // Ne pas afficher de toast pour les erreurs réseau (status: 0) - ce sont souvent des problèmes temporaires
+      // Le cache interceptor gère déjà le fallback sur le cache
+      const isNetworkError = error.status === 0;
+      const isBackgroundRequest = req.url.includes('/dashboard/kpis') && 
+                                  (req.headers.get('X-Background-Request') === 'true' || 
+                                   req.headers.get('X-Silent-Request') === 'true');
+      
+      // Afficher le toast seulement pour les erreurs importantes (pas les erreurs réseau ou les requêtes en arrière-plan)
+      if (!isNetworkError && !isBackgroundRequest) {
+        // Afficher le toast (sauf si 401 géré par refresh qui a échoué - déjà affiché)
+        // Si c'est une 401 sur login, on affiche.
+        // Si c'est une 401 sur refresh, on affiche.
+        // Si c'est une 401 sur api classique et refresh a fail, le catchError du refresh l'a affiché.
+        // Donc ici on affiche si ce n'est PAS une requête qui a tenté le refresh (login ou refresh endpoint)
+        if ((req.url.includes('/auth/login') || req.url.includes('/auth/refresh')) || error.status !== 401) {
+           // Avoid duplicate toasts if possible, but better safe than sorry for login errors
+           if (!req.url.includes('/auth/refresh')) { 
+              toastService.showToast(errorMessage, 'error');
+           }
+        }
       }
       
-      console.error('API Error (Interceptor):', error);
+      // Logger seulement les erreurs non-réseau ou les erreurs critiques
+      if (!isNetworkError || error.status === 401 || error.status === 403) {
+        console.error('API Error (Interceptor):', error);
+      } else {
+        // Logger en mode debug seulement pour les erreurs réseau
+        console.debug('Network error (will use cache if available):', req.url);
+      }
+      
       return throwError(() => error);
     })
   );

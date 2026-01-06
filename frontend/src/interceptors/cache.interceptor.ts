@@ -1,5 +1,5 @@
-import { HttpInterceptorFn, HttpRequest, HttpResponse } from '@angular/common/http';
-import { of, tap } from 'rxjs';
+import { HttpInterceptorFn, HttpRequest, HttpResponse, HttpErrorResponse } from '@angular/common/http';
+import { of, tap, catchError, throwError } from 'rxjs';
 
 interface CacheEntry {
   response: HttpResponse<any>;
@@ -37,6 +37,11 @@ const noCacheEndpoints = [
   '/import/',
   '/settings/data/delete',
   '/admin/migration/',
+  '/pdf/', // Tous les endpoints de génération de PDF
+  '/factures-achats/pdf',
+  '/factures-ventes/pdf',
+  '/dashboard/report/pdf',
+  '/bandes-commandes/export', // Export Excel
 ];
 
 // Vérifier si une requête doit être mise en cache
@@ -131,6 +136,15 @@ export const cacheInterceptor: HttpInterceptorFn = (req, next) => {
             ttl: config.ttl
           });
         }
+      }),
+      catchError((error: HttpErrorResponse) => {
+        // En cas d'erreur réseau, retourner le cache stale si disponible
+        if (cachedEntry && error.status === 0) {
+          console.warn('Network error, returning stale cache for:', req.url);
+          return of(cachedEntry.response.clone());
+        }
+        // Sinon, propager l'erreur
+        return throwError(() => error);
       })
     );
   }
@@ -146,6 +160,15 @@ export const cacheInterceptor: HttpInterceptorFn = (req, next) => {
             ttl: config.ttl
           });
         }
+      }),
+      catchError((error: HttpErrorResponse) => {
+        // En cas d'erreur réseau, essayer de retourner le cache si disponible
+        if (cachedEntry && error.status === 0) {
+          console.warn('Network error, falling back to cache for:', req.url);
+          return of(cachedEntry.response.clone());
+        }
+        // Sinon, propager l'erreur
+        return throwError(() => error);
       })
     );
   }
@@ -154,6 +177,23 @@ export const cacheInterceptor: HttpInterceptorFn = (req, next) => {
   if (config.strategy === 'stale-while-revalidate') {
     // Si on a un cache valide, retourner immédiatement
     if (cachedEntry && isCacheValid(cachedEntry, config)) {
+      // Rafraîchir en arrière-plan sans bloquer
+      next(req).pipe(
+        tap(event => {
+          if (event instanceof HttpResponse) {
+            cache.set(cacheKey, {
+              response: event.clone(),
+              timestamp: Date.now(),
+              ttl: config.ttl
+            });
+          }
+        }),
+        catchError(() => {
+          // Ignorer les erreurs en arrière-plan
+          return of(null);
+        })
+      ).subscribe();
+      
       return of(cachedEntry.response.clone());
     }
 
@@ -169,6 +209,10 @@ export const cacheInterceptor: HttpInterceptorFn = (req, next) => {
               ttl: config.ttl
             });
           }
+        }),
+        catchError(() => {
+          // Ignorer les erreurs en arrière-plan
+          return of(null);
         })
       ).subscribe();
 
@@ -186,6 +230,15 @@ export const cacheInterceptor: HttpInterceptorFn = (req, next) => {
             ttl: config.ttl
           });
         }
+      }),
+      catchError((error: HttpErrorResponse) => {
+        // En cas d'erreur réseau, essayer de retourner le cache stale si disponible
+        if (cachedEntry && error.status === 0) {
+          console.warn('Network error, falling back to stale cache for:', req.url);
+          return of(cachedEntry.response.clone());
+        }
+        // Sinon, propager l'erreur
+        return throwError(() => error);
       })
     );
   }

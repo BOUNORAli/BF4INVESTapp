@@ -171,9 +171,17 @@ export class NavigationRefreshService {
         return;
       }
 
-      // Exécuter les rafraîchissements en parallèle
-      const refreshPromises = storesToRefresh.map(store => this.refreshStore(store, currentRoute));
-      await Promise.all(refreshPromises);
+      // Exécuter les rafraîchissements en parallèle avec gestion d'erreur silencieuse
+      const refreshPromises = storesToRefresh.map(store => 
+        this.refreshStore(store, currentRoute).catch((error: any) => {
+          // Logger seulement les erreurs non-réseau
+          if (error?.status !== 0 && error?.status !== undefined) {
+            console.error(`Error refreshing ${store}:`, error);
+          }
+          // Ne pas propager l'erreur pour ne pas bloquer les autres stores
+        })
+      );
+      await Promise.allSettled(refreshPromises);
 
       this.lastRefreshTime.set(new Date());
     } catch (error) {
@@ -228,8 +236,14 @@ export class NavigationRefreshService {
           break;
 
         case 'dashboardStore':
-          await this.dashboardStore.refresh();
-          this.cache.set(cacheKey, this.dashboardStore.dashboardKPIs());
+          // Utiliser refresh qui gère déjà les erreurs silencieusement
+          await this.dashboardStore.refresh().catch(() => {
+            // Ignorer les erreurs - le cache sera utilisé si disponible
+          });
+          const kpis = this.dashboardStore.dashboardKPIs();
+          if (kpis) {
+            this.cache.set(cacheKey, kpis);
+          }
           break;
       }
     } catch (error) {

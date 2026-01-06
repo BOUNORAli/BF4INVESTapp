@@ -103,9 +103,11 @@ export class DashboardStore {
   /**
    * Charge les KPIs du dashboard
    */
-  async loadDashboardKPIs(from?: string, to?: string): Promise<void> {
+  async loadDashboardKPIs(from?: string, to?: string, silent: boolean = false): Promise<void> {
     try {
-      this.dashboardLoading.set(true);
+      if (!silent) {
+        this.dashboardLoading.set(true);
+      }
       const params: Record<string, any> = {};
       if (from) params.from = from;
       if (to) params.to = to;
@@ -113,12 +115,22 @@ export class DashboardStore {
       const kpis = await this.api.get<DashboardKpiResponse>('/dashboard/kpis', params).toPromise();
       if (kpis) {
         this.dashboardKPIs.set(kpis);
+        this.lastUpdated.set(new Date());
       }
-    } catch (error) {
-      console.error('Error loading dashboard KPIs:', error);
-      throw error;
+    } catch (error: any) {
+      // Ne pas logger les erreurs réseau (status: 0) en mode silencieux
+      // Le cache interceptor gère déjà le fallback
+      if (!silent || (error?.status !== 0 && error?.status !== undefined)) {
+        console.error('Error loading dashboard KPIs:', error);
+      }
+      // Ne pas throw l'erreur en mode silencieux pour ne pas bloquer l'UI
+      if (!silent) {
+        throw error;
+      }
     } finally {
-      this.dashboardLoading.set(false);
+      if (!silent) {
+        this.dashboardLoading.set(false);
+      }
     }
   }
 
@@ -205,14 +217,21 @@ export class DashboardStore {
   async refresh(): Promise<void> {
     try {
       this.refreshing.set(true);
-      await Promise.all([
-        this.loadDashboardKPIs(),
-        this.loadSoldeGlobal()
+      // Utiliser le mode silencieux pour ne pas spammer les logs en cas d'erreur réseau
+      await Promise.allSettled([
+        this.loadDashboardKPIs(undefined, undefined, true).catch(() => {
+          // Ignorer les erreurs silencieusement - le cache sera utilisé
+        }),
+        this.loadSoldeGlobal().catch(() => {
+          // Ignorer les erreurs silencieusement
+        })
       ]);
       this.lastUpdated.set(new Date());
     } catch (error) {
-      console.error('Error refreshing dashboard:', error);
-      throw error;
+      // Logger seulement les erreurs critiques
+      if (error && typeof error === 'object' && 'status' in error && (error as any).status !== 0) {
+        console.error('Error refreshing dashboard:', error);
+      }
     } finally {
       this.refreshing.set(false);
     }
