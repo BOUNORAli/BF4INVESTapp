@@ -113,10 +113,14 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
       }
       
       // Logger seulement les erreurs non-réseau ou les erreurs critiques
-      if (!isNetworkError || error.status === 401 || error.status === 403) {
+      if (!isNetworkError) {
+        // Erreur non-réseau : toujours logger
+        console.error('API Error (Interceptor):', error);
+      } else if (error.status === 401 || error.status === 403) {
+        // Erreurs critiques même si réseau : logger
         console.error('API Error (Interceptor):', error);
       } else {
-        // Logger en mode debug seulement pour les erreurs réseau
+        // Erreur réseau non-critique : logger en mode debug seulement
         console.debug('Network error (will use cache if available):', req.url);
       }
       
