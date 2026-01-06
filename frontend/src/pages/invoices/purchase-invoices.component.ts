@@ -1207,6 +1207,10 @@ export class PurchaseInvoicesComponent implements OnInit {
     ajouterAuStock: [false] // Option pour ajouter au stock
   });
 
+  // Set pour tracker les factures pour lesquelles on a déjà tenté de charger les paiements
+  private paymentLoadAttempted = new Set<string>();
+  private paymentLoadTimeoutId: any = null;
+
   constructor() {
     // Auto calculate due date when date changes
     this.form.get('date')?.valueChanges.subscribe(dateVal => {
@@ -1218,18 +1222,28 @@ export class PurchaseInvoicesComponent implements OnInit {
     });
 
     // Effet pour charger automatiquement les paiements quand les factures changent
+    // Utiliser un debounce pour éviter les appels multiples
     effect(() => {
       const invoices = this.allPurchaseInvoices();
       if (invoices.length > 0) {
-        // Charger les paiements pour toutes les factures en arrière-plan
-        invoices.forEach(inv => {
-          // Vérifier si les paiements ne sont pas déjà chargés
-          if (!this.store.payments().has(inv.id)) {
-            this.store.loadPaymentsForInvoice(inv.id, 'purchase').catch(() => {
-              // Ignorer les erreurs silencieusement
-            });
-          }
-        });
+        // Clear previous timeout
+        if (this.paymentLoadTimeoutId) {
+          clearTimeout(this.paymentLoadTimeoutId);
+        }
+        // Debounce pour éviter les appels multiples
+        this.paymentLoadTimeoutId = setTimeout(() => {
+          // Charger les paiements pour toutes les factures en arrière-plan
+          invoices.forEach(inv => {
+            // Vérifier si les paiements ne sont pas déjà chargés ET qu'on n'a pas déjà tenté
+            if (!this.store.payments().has(inv.id) && !this.paymentLoadAttempted.has(inv.id)) {
+              this.paymentLoadAttempted.add(inv.id);
+              this.store.loadPaymentsForInvoice(inv.id, 'purchase').catch(() => {
+                // En cas d'erreur, retirer de la liste pour permettre un nouvel essai plus tard
+                this.paymentLoadAttempted.delete(inv.id);
+              });
+            }
+          });
+        }, 300); // Debounce de 300ms pour éviter les appels trop fréquents
       }
     });
   }
