@@ -1219,6 +1219,37 @@ export class PurchaseInvoicesComponent implements OnInit {
   // Raw List - Utiliser directement invoiceStore pour de meilleures performances
   allPurchaseInvoices = computed(() => this.invoiceStore.purchaseInvoices());
 
+  // Computed pour recalculer le statut basé sur les paiements réels
+  invoicesWithCorrectStatus = computed(() => {
+    return this.allPurchaseInvoices().map(inv => {
+      const paiements = this.store.payments().get(inv.id) || [];
+      const montantPaye = paiements.reduce((sum, p) => sum + (p.montant || 0), 0);
+      const montantTotal = inv.amountTTC || 0;
+      const today = new Date().toISOString().split('T')[0];
+      const dueDate = inv.dueDate || today;
+      const tolerance = 0.01; // Tolérance pour les arrondis
+      
+      // Si payé à 100% (avec tolérance), statut = 'paid'
+      if (montantPaye >= (montantTotal - tolerance) && montantTotal > 0) {
+        return { ...inv, status: 'paid' as const };
+      }
+      // Si pas payé et date dépassée, statut = 'overdue'
+      else if (montantPaye < (montantTotal - tolerance) && dueDate < today) {
+        return { ...inv, status: 'overdue' as const };
+      }
+      // Si partiellement payé et date dépassée, statut = 'overdue'
+      else if (montantPaye > 0 && montantPaye < (montantTotal - tolerance) && dueDate < today) {
+        return { ...inv, status: 'overdue' as const };
+      }
+      // Si partiellement payé et date non dépassée, statut = 'pending'
+      else if (montantPaye > 0 && montantPaye < (montantTotal - tolerance) && dueDate >= today) {
+        return { ...inv, status: 'pending' as const };
+      }
+      // Sinon, garder le statut existant
+      return inv;
+    });
+  });
+
   ngOnInit() {
     // Lire les query params pour bcId
     this.route.queryParams.subscribe(params => {
@@ -1230,15 +1261,32 @@ export class PurchaseInvoicesComponent implements OnInit {
     // Charger les factures achat si le store est vide
     // Le cache est vérifié automatiquement dans loadPurchaseInvoices()
     if (this.invoiceStore.purchaseInvoices().length === 0) {
-      this.invoiceStore.loadPurchaseInvoices().catch(err => {
+      this.invoiceStore.loadPurchaseInvoices().then(() => {
+        // Charger les paiements en arrière-plan pour toutes les factures pour avoir le statut correct
+        const invoices = this.invoiceStore.purchaseInvoices();
+        invoices.forEach(inv => {
+          this.store.loadPaymentsForInvoice(inv.id, 'purchase').catch(err => {
+            // Ignorer les erreurs silencieusement, les paiements seront chargés à la demande si nécessaire
+            console.debug('Could not load payments for invoice:', inv.id);
+          });
+        });
+      }).catch(err => {
         console.error('Error loading purchase invoices on init:', err);
+      });
+    } else {
+      // Si les factures sont déjà chargées, charger les paiements en arrière-plan
+      const invoices = this.invoiceStore.purchaseInvoices();
+      invoices.forEach(inv => {
+        this.store.loadPaymentsForInvoice(inv.id, 'purchase').catch(err => {
+          console.debug('Could not load payments for invoice:', inv.id);
+        });
       });
     }
   }
 
   // Filtered List
   filteredInvoices = computed(() => {
-    let list = this.allPurchaseInvoices();
+    let list = this.invoicesWithCorrectStatus();
 
     // BC Filter
     const bcId = this.bcIdFilter();

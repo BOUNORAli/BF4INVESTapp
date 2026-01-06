@@ -12,6 +12,7 @@ import com.bf4invest.service.FactureVenteService;
 import com.bf4invest.service.OrdreVirementService;
 import com.bf4invest.service.TVAService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -20,6 +21,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
 
+@Slf4j
 @RestController
 @RequestMapping("/pdf")
 @RequiredArgsConstructor
@@ -37,18 +39,42 @@ public class PdfController {
     public ResponseEntity<byte[]> generateBCPdf(@PathVariable String id) {
         try {
             BandeCommande bc = bcService.findById(id)
-                    .orElseThrow(() -> new RuntimeException("BC not found"));
+                    .orElseThrow(() -> new RuntimeException("BC not found with id: " + id));
+            
+            log.debug("Found BC: id={}, numeroBC={}, hasLignesAchat={}, hasLignes={}", 
+                id, bc.getNumeroBC(), 
+                bc.getLignesAchat() != null && !bc.getLignesAchat().isEmpty(),
+                bc.getLignes() != null && !bc.getLignes().isEmpty());
+            
+            // Validation: vérifier que le BC a au moins des lignes
+            if ((bc.getLignesAchat() == null || bc.getLignesAchat().isEmpty()) && 
+                (bc.getLignes() == null || bc.getLignes().isEmpty())) {
+                log.warn("BC {} has no product lines (lignesAchat={}, lignes={}), cannot generate PDF", 
+                    id, bc.getLignesAchat(), bc.getLignes());
+                return ResponseEntity.badRequest().build();
+            }
             
             byte[] pdfBytes = pdfService.generateBC(bc);
             
+            if (pdfBytes == null || pdfBytes.length == 0) {
+                log.error("PDF generation returned empty bytes for BC {}", id);
+                return ResponseEntity.internalServerError().build();
+            }
+            
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_PDF);
-            headers.setContentDispositionFormData("attachment", "BC-" + bc.getNumeroBC() + ".pdf");
+            String fileName = bc.getNumeroBC() != null ? "BC-" + bc.getNumeroBC() + ".pdf" : "BC-" + id + ".pdf";
+            headers.setContentDispositionFormData("attachment", fileName);
             
+            log.debug("Successfully generated PDF for BC {}: {} bytes", id, pdfBytes.length);
             return ResponseEntity.ok()
                     .headers(headers)
                     .body(pdfBytes);
+        } catch (RuntimeException e) {
+            log.error("Error generating BC PDF for id {}: {}", id, e.getMessage(), e);
+            return ResponseEntity.status(404).build();
         } catch (Exception e) {
+            log.error("Unexpected error generating BC PDF for id {}: {}", id, e.getMessage(), e);
             return ResponseEntity.internalServerError().build();
         }
     }

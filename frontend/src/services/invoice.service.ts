@@ -196,20 +196,9 @@ export class InvoiceService {
     };
   }
 
-  private mapInvoice(inv: any, type: 'purchase' | 'sale'): Invoice {
+  private mapInvoice(inv: any, type: 'purchase' | 'sale', montantPaye?: number): Invoice {
     const today = new Date().toISOString().split('T')[0];
     const dueDate = inv.dateEcheance || inv.dueDate || today;
-    
-    let status: 'paid' | 'pending' | 'overdue' = 'pending';
-    if (inv.etatPaiement === 'regle') {
-      status = 'paid';
-    } else if (inv.etatPaiement === 'partiellement_regle') {
-      status = dueDate < today ? 'overdue' : 'pending';
-    } else if (inv.etatPaiement === 'non_regle') {
-      status = dueDate < today ? 'overdue' : 'pending';
-    } else {
-      status = dueDate < today ? 'overdue' : 'pending';
-    }
     
     const amountHT = (inv.totalHT != null && inv.totalHT !== undefined) ? Number(inv.totalHT) : 
                      (inv.amountHT != null && inv.amountHT !== undefined) ? Number(inv.amountHT) : 
@@ -219,6 +208,34 @@ export class InvoiceService {
                       (inv.amountTTC != null && inv.amountTTC !== undefined) ? Number(inv.amountTTC) : 
                       (inv.montantTTC != null && inv.montantTTC !== undefined) ? Number(inv.montantTTC) : 
                       amountHT;
+    
+    let status: 'paid' | 'pending' | 'overdue' = 'pending';
+    
+    // PRIORITÉ 1: Si le montant payé est >= montant total (avec tolérance de 0.01 MAD), la facture est payée
+    if (montantPaye !== undefined && amountTTC > 0) {
+      const tolerance = 0.01; // Tolérance pour les arrondis
+      if (montantPaye >= (amountTTC - tolerance)) {
+        status = 'paid';
+      } else if (inv.etatPaiement === 'regle') {
+        status = 'paid';
+      } else if (inv.etatPaiement === 'partiellement_regle') {
+        status = dueDate < today ? 'overdue' : 'pending';
+      } else if (inv.etatPaiement === 'non_regle') {
+        status = dueDate < today ? 'overdue' : 'pending';
+      } else {
+        status = dueDate < today ? 'overdue' : 'pending';
+      }
+    }
+    // PRIORITÉ 2: Sinon, utiliser la logique existante basée sur etatPaiement
+    else if (inv.etatPaiement === 'regle') {
+      status = 'paid';
+    } else if (inv.etatPaiement === 'partiellement_regle') {
+      status = dueDate < today ? 'overdue' : 'pending';
+    } else if (inv.etatPaiement === 'non_regle') {
+      status = dueDate < today ? 'overdue' : 'pending';
+    } else {
+      status = dueDate < today ? 'overdue' : 'pending';
+    }
     
     return {
       id: inv.id,

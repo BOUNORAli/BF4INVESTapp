@@ -36,6 +36,12 @@ public class BandeCommandePdfGenerator {
      * Génère le PDF d'une bande de commande
      */
     public byte[] generate(BandeCommande bc) throws DocumentException, IOException {
+        if (bc == null) {
+            throw new IllegalArgumentException("BandeCommande cannot be null");
+        }
+        
+        log.debug("Generating PDF for BC: id={}, numeroBC={}", bc.getId(), bc.getNumeroBC());
+        
         Document document = PdfDocumentHelper.createA4Document();
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         PdfWriter writer = PdfWriter.getInstance(document, baos);
@@ -43,17 +49,27 @@ public class BandeCommandePdfGenerator {
         writer.setPageEvent(new BCFooterPageEvent());
         document.open();
         
-        // Récupérer les informations client et fournisseur
-        Client client = getClient(bc);
-        Supplier supplier = getSupplier(bc);
+        try {
+            // Récupérer les informations client et fournisseur
+            Client client = getClient(bc);
+            Supplier supplier = getSupplier(bc);
+            
+            if (supplier == null) {
+                log.warn("No supplier found for BC {} (fournisseurId: {})", bc.getId(), bc.getFournisseurId());
+            }
+            
+            // Construire le document
+            addHeader(document, bc, writer);
+            addDestinataire(document, bc, supplier);
+            addProductTable(document, bc);
+            addDeliveryInfo(document, bc, client);
+        } catch (Exception e) {
+            log.error("Error generating PDF content for BC {}: {}", bc.getId(), e.getMessage(), e);
+            throw e;
+        } finally {
+            document.close();
+        }
         
-        // Construire le document
-        addHeader(document, bc, writer);
-        addDestinataire(document, bc, supplier);
-        addProductTable(document, bc);
-        addDeliveryInfo(document, bc, client);
-        
-        document.close();
         return baos.toByteArray();
     }
     
@@ -123,7 +139,8 @@ public class BandeCommandePdfGenerator {
         nameCell.setBorder(Rectangle.BOX);
         nameCell.setBorderColor(Color.WHITE);
         nameCell.setPadding(8);
-        String supplierName = supplier != null ? supplier.getNom() : "";
+        String supplierName = (supplier != null && supplier.getNom() != null) ? supplier.getNom() : 
+            (bc.getFournisseurId() != null ? "Fournisseur ID: " + bc.getFournisseurId() : "Non spécifié");
         Font nameFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 12, Font.UNDERLINE, PdfColorHelper.RED);
         nameCell.addElement(new Phrase(supplierName, nameFont));
         destTable.addCell(nameCell);
@@ -165,11 +182,18 @@ public class BandeCommandePdfGenerator {
         
         double totalHT = 0.0;
         double tauxTVA = 20.0;
+        boolean hasLines = false;
         
         // Nouvelle structure: lignesAchat
         if (bc.getLignesAchat() != null && !bc.getLignesAchat().isEmpty()) {
+            hasLines = true;
             int lineNum = 1;
             for (var ligne : bc.getLignesAchat()) {
+                if (ligne == null) {
+                    log.warn("Null ligne found in lignesAchat for BC {}", bc.getId());
+                    continue;
+                }
+                
                 PdfDocumentHelper.addTableCell(table, String.valueOf(lineNum++), Element.ALIGN_CENTER);
                 PdfDocumentHelper.addTableCell(table, ligne.getDesignation() != null ? ligne.getDesignation() : "", 
                     Element.ALIGN_LEFT);
@@ -192,8 +216,14 @@ public class BandeCommandePdfGenerator {
         }
         // Rétrocompatibilité: ancienne structure lignes
         else if (bc.getLignes() != null && !bc.getLignes().isEmpty()) {
+            hasLines = true;
             int lineNum = 1;
             for (var ligne : bc.getLignes()) {
+                if (ligne == null) {
+                    log.warn("Null ligne found in lignes for BC {}", bc.getId());
+                    continue;
+                }
+                
                 PdfDocumentHelper.addTableCell(table, String.valueOf(lineNum++), Element.ALIGN_CENTER);
                 PdfDocumentHelper.addTableCell(table, ligne.getDesignation() != null ? ligne.getDesignation() : "", 
                     Element.ALIGN_LEFT);
@@ -214,6 +244,14 @@ public class BandeCommandePdfGenerator {
                 if (ligne.getTva() != null && ligne.getTva() > 0) {
                     tauxTVA = ligne.getTva();
                 }
+            }
+        }
+        
+        // Si aucune ligne trouvée, utiliser les totaux pré-calculés si disponibles
+        if (!hasLines) {
+            log.warn("No product lines found for BC {}, using pre-calculated totals if available", bc.getId());
+            if (bc.getTotalAchatHT() != null) {
+                totalHT = bc.getTotalAchatHT();
             }
         }
         
