@@ -916,7 +916,7 @@ public class ExcelImportService {
             result.getWarnings().add("Avoir achat ignoré: numéro BC manquant");
             return;
         }
-        numeroBC = numeroBC.trim();
+        final String finalNumeroBC = numeroBC.trim();
         
         String numeroFactureFournisseur = detection.numeroFacture;
         if (numeroFactureFournisseur == null || numeroFactureFournisseur.isEmpty()) {
@@ -935,7 +935,7 @@ public class ExcelImportService {
             newAvoir.setNumeroFactureAchat(finalNumeroFactureFournisseur);
             newAvoir.setEstAvoir(true);
             newAvoir.setTypeFacture("AVOIR");
-            newAvoir.setBcReference(numeroBC);
+            newAvoir.setBcReference(finalNumeroBC);
             
             // Date facture
             LocalDate dateFacture = null;
@@ -994,9 +994,9 @@ public class ExcelImportService {
             ligne.setPrixAchatUnitaireHT(-ligne.getPrixAchatUnitaireHT());
         }
         
-        // Utiliser numeroBC comme clé pour grouper les lignes
-        faLignesMap.computeIfAbsent(numeroBC, k -> new ArrayList<>()).add(ligne);
-        faToBcNumMap.put(finalNumeroFactureFournisseur, numeroBC);
+        // Utiliser finalNumeroBC comme clé pour grouper les lignes
+        faLignesMap.computeIfAbsent(finalNumeroBC, k -> new ArrayList<>()).add(ligne);
+        faToBcNumMap.put(finalNumeroFactureFournisseur, finalNumeroBC);
         
         result.getWarnings().add("Avoir achat détecté et traité: " + finalNumeroFactureFournisseur);
     }
@@ -1016,7 +1016,7 @@ public class ExcelImportService {
             result.getWarnings().add("Avoir vente ignoré: numéro BC manquant");
             return;
         }
-        numeroBC = numeroBC.trim();
+        final String finalNumeroBC = numeroBC.trim();
         
         String numeroFactureVente = detection.numeroFacture;
         if (numeroFactureVente == null || numeroFactureVente.isEmpty()) {
@@ -1034,7 +1034,7 @@ public class ExcelImportService {
             newAvoir.setNumeroFactureVente(finalNumeroFactureVente);
             newAvoir.setEstAvoir(true);
             newAvoir.setTypeFacture("AVOIR");
-            newAvoir.setBcReference(numeroBC);
+            newAvoir.setBcReference(finalNumeroBC);
             
             // Date facture
             LocalDate dateFacture = null;
@@ -1092,7 +1092,7 @@ public class ExcelImportService {
         }
         
         fvLignesMap.computeIfAbsent(finalNumeroFactureVente, k -> new ArrayList<>()).add(ligne);
-        fvToBcNumMap.put(finalNumeroFactureVente, numeroBC);
+        fvToBcNumMap.put(finalNumeroFactureVente, finalNumeroBC);
         
         result.getWarnings().add("Avoir vente détecté et traité: " + finalNumeroFactureVente);
     }
