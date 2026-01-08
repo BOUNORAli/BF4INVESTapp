@@ -1674,8 +1674,8 @@ export class StoreService {
   ): Promise<any> {
     try {
       const endpoint = type === 'CLIENT' 
-        ? `/partner-situation/client/${partnerId}`
-        : `/partner-situation/supplier/${partnerId}`;
+        ? `/api/partner-situation/client/${partnerId}`
+        : `/api/partner-situation/supplier/${partnerId}`;
       
       const params: any = {};
       if (from) params.from = from;
@@ -1696,8 +1696,8 @@ export class StoreService {
   ): Promise<void> {
     try {
       const endpoint = type === 'CLIENT'
-        ? `/partner-situation/client/${partnerId}/export/pdf`
-        : `/partner-situation/supplier/${partnerId}/export/pdf`;
+        ? `/api/partner-situation/client/${partnerId}/export/pdf`
+        : `/api/partner-situation/supplier/${partnerId}/export/pdf`;
       
       const params: any = {};
       if (from) params.from = from;
@@ -1733,8 +1733,8 @@ export class StoreService {
   ): Promise<void> {
     try {
       const endpoint = type === 'CLIENT'
-        ? `/partner-situation/client/${partnerId}/export/excel`
-        : `/partner-situation/supplier/${partnerId}/export/excel`;
+        ? `/api/partner-situation/client/${partnerId}/export/excel`
+        : `/api/partner-situation/supplier/${partnerId}/export/excel`;
       
       const params: any = {};
       if (from) params.from = from;
