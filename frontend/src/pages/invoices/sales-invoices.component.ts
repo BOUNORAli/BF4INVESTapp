@@ -1124,7 +1124,7 @@ export class SalesInvoicesComponent implements OnInit {
     if (!partnerId) return [];
     
     // Retourner les factures de vente normales (non avoirs) du même client
-    return this.store.salesInvoices().filter(f => 
+    return this.store.invoices().filter(f => 
       f.partnerId === partnerId && 
       !f.estAvoir &&
       f.type === 'sale'

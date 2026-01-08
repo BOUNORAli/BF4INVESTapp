@@ -1206,7 +1206,7 @@ export class PurchaseInvoicesComponent implements OnInit {
     if (!partnerId) return [];
     
     // Retourner les factures d'achat normales (non avoirs) du même fournisseur
-    return this.store.purchaseInvoices().filter(f => 
+    return this.invoiceStore.purchaseInvoices().filter(f => 
       f.partnerId === partnerId && 
       !f.estAvoir &&
       f.type === 'purchase'
