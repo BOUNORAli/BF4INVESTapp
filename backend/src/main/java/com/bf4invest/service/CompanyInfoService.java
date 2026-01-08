@@ -20,9 +20,10 @@ public class CompanyInfoService {
      * Récupère les informations société.
      * Si aucune entrée n'existe, crée un document avec les valeurs actuelles codées en dur
      * pour conserver le comportement existant.
+     * Met à jour automatiquement l'ancienne raison sociale "BF4 INVEST SARL" vers "STE BF4 INVEST".
      */
     public CompanyInfo getCompanyInfo() {
-        return repository.findFirstByOrderByUpdatedAtDesc()
+        CompanyInfo info = repository.findFirstByOrderByUpdatedAtDesc()
                 .orElseGet(() -> {
                     CompanyInfo defaults = CompanyInfo.builder()
                             .raisonSociale("STE BF4 INVEST")
@@ -38,6 +39,15 @@ public class CompanyInfoService {
                             .build();
                     return repository.save(defaults);
                 });
+        
+        // Migration automatique : remplacer l'ancienne raison sociale si elle existe
+        if (info.getRaisonSociale() != null && "BF4 INVEST SARL".equals(info.getRaisonSociale())) {
+            info.setRaisonSociale("STE BF4 INVEST");
+            info.setUpdatedAt(LocalDateTime.now());
+            info = repository.save(info);
+        }
+        
+        return info;
     }
 
     /**

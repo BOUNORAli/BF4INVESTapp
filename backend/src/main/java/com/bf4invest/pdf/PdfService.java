@@ -2414,6 +2414,10 @@ public class PdfService {
         
         // "NOM DU DONNEUR D'ORDRE : STE BF4 INVEST"
         String raisonSociale = companyInfo.getRaisonSociale() != null ? companyInfo.getRaisonSociale() : "STE BF4 INVEST";
+        // Remplacer l'ancienne valeur si elle existe encore dans la base
+        if ("BF4 INVEST SARL".equals(raisonSociale)) {
+            raisonSociale = "STE BF4 INVEST";
+        }
         Paragraph donorLine = new Paragraph();
         donorLine.add(new Chunk("NOM DU DONNEUR D'ORDRE : ", labelFont));
         donorLine.add(new Chunk(raisonSociale, blueBoldFont));

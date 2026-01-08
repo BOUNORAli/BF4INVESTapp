@@ -80,16 +80,17 @@ import type { EcritureComptable } from '../../models/types';
       <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
         
         <!-- Filter Bar inside Table Card -->
-        <div class="p-4 border-b border-slate-100 flex flex-col md:flex-row gap-3 bg-slate-50/50 justify-between items-center">
-           <div class="flex gap-2 overflow-x-auto w-full md:w-auto pb-2 md:pb-0">
-             <button (click)="setFilter('all')" [class.bg-slate-800]="filterStatus() === 'all'" [class.text-white]="filterStatus() === 'all'" class="px-3 py-1.5 rounded-full text-xs font-semibold bg-white text-slate-600 border border-slate-200 hover:bg-slate-100 shrink-0 transition-colors">Tout voir</button>
-             <button (click)="setFilter('paid')" [class.bg-emerald-600]="filterStatus() === 'paid'" [class.text-white]="filterStatus() === 'paid'" [class.border-emerald-600]="filterStatus() === 'paid'" class="px-3 py-1.5 rounded-full text-xs font-semibold bg-white text-slate-600 border border-slate-200 hover:bg-slate-100 shrink-0 transition-colors">Payées</button>
-             <button (click)="setFilter('pending')" [class.bg-amber-500]="filterStatus() === 'pending'" [class.text-white]="filterStatus() === 'pending'" [class.border-amber-500]="filterStatus() === 'pending'" class="px-3 py-1.5 rounded-full text-xs font-semibold bg-white text-slate-600 border border-slate-200 hover:bg-slate-100 shrink-0 transition-colors">En attente</button>
-             <button (click)="setFilter('overdue')" [class.bg-red-600]="filterStatus() === 'overdue'" [class.text-white]="filterStatus() === 'overdue'" [class.border-red-600]="filterStatus() === 'overdue'" class="px-3 py-1.5 rounded-full text-xs font-semibold bg-white text-slate-600 border border-slate-200 hover:bg-slate-100 shrink-0 transition-colors">Retard</button>
-             <button (click)="setFilter('avoir')" [class.bg-purple-600]="filterStatus() === 'avoir'" [class.text-white]="filterStatus() === 'avoir'" [class.border-purple-600]="filterStatus() === 'avoir'" class="px-3 py-1.5 rounded-full text-xs font-semibold bg-white text-slate-600 border border-slate-200 hover:bg-slate-100 shrink-0 transition-colors">Avoirs</button>
-           </div>
-           
-           <div class="flex gap-2 items-center w-full md:w-auto">
+        <div class="p-4 border-b border-slate-100 flex flex-col gap-3 bg-slate-50/50">
+           <div class="flex flex-col md:flex-row gap-3 justify-between items-center">
+             <div class="flex gap-2 overflow-x-auto w-full md:w-auto pb-2 md:pb-0">
+               <button (click)="setFilter('all')" [class.bg-slate-800]="filterStatus() === 'all'" [class.text-white]="filterStatus() === 'all'" class="px-3 py-1.5 rounded-full text-xs font-semibold bg-white text-slate-600 border border-slate-200 hover:bg-slate-100 shrink-0 transition-colors">Tout voir</button>
+               <button (click)="setFilter('paid')" [class.bg-emerald-600]="filterStatus() === 'paid'" [class.text-white]="filterStatus() === 'paid'" [class.border-emerald-600]="filterStatus() === 'paid'" class="px-3 py-1.5 rounded-full text-xs font-semibold bg-white text-slate-600 border border-slate-200 hover:bg-slate-100 shrink-0 transition-colors">Payées</button>
+               <button (click)="setFilter('pending')" [class.bg-amber-500]="filterStatus() === 'pending'" [class.text-white]="filterStatus() === 'pending'" [class.border-amber-500]="filterStatus() === 'pending'" class="px-3 py-1.5 rounded-full text-xs font-semibold bg-white text-slate-600 border border-slate-200 hover:bg-slate-100 shrink-0 transition-colors">En attente</button>
+               <button (click)="setFilter('overdue')" [class.bg-red-600]="filterStatus() === 'overdue'" [class.text-white]="filterStatus() === 'overdue'" [class.border-red-600]="filterStatus() === 'overdue'" class="px-3 py-1.5 rounded-full text-xs font-semibold bg-white text-slate-600 border border-slate-200 hover:bg-slate-100 shrink-0 transition-colors">Retard</button>
+               <button (click)="setFilter('avoir')" [class.bg-purple-600]="filterStatus() === 'avoir'" [class.text-white]="filterStatus() === 'avoir'" [class.border-purple-600]="filterStatus() === 'avoir'" class="px-3 py-1.5 rounded-full text-xs font-semibold bg-white text-slate-600 border border-slate-200 hover:bg-slate-100 shrink-0 transition-colors">Avoirs</button>
+             </div>
+             
+             <div class="flex gap-2 items-center w-full md:w-auto">
              <div class="relative w-full md:w-64">
                 <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
@@ -101,6 +102,28 @@ import type { EcritureComptable } from '../../models/types';
                <option value="asc">Date ↑ (Ancien)</option>
              </select>
            </div>
+           </div>
+           
+           <!-- Totaux Globaux -->
+           <div class="flex flex-wrap gap-3 items-center pt-2 border-t border-slate-200">
+             <div class="flex items-center gap-2 px-3 py-1.5 bg-slate-100 rounded-lg border border-slate-200">
+               <span class="text-xs font-semibold text-slate-600 uppercase">Total Global:</span>
+               <span class="text-sm font-bold text-slate-800">{{ totalGlobal() | number:'1.2-2' }} MAD</span>
+             </div>
+             <div class="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 rounded-lg border border-emerald-200">
+               <span class="text-xs font-semibold text-emerald-700 uppercase">Total Payé:</span>
+               <span class="text-sm font-bold text-emerald-700">{{ totalPaye() | number:'1.2-2' }} MAD</span>
+             </div>
+             <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg border" 
+                  [class.bg-amber-50]="solde() >= 0" 
+                  [class.border-amber-200]="solde() >= 0"
+                  [class.bg-red-50]="solde() < 0"
+                  [class.border-red-200]="solde() < 0">
+               <span class="text-xs font-semibold uppercase" [class.text-amber-700]="solde() >= 0" [class.text-red-700]="solde() < 0">Solde:</span>
+               <span class="text-sm font-bold" [class.text-amber-700]="solde() >= 0" [class.text-red-700]="solde() < 0">{{ solde() | number:'1.2-2' }} MAD</span>
+             </div>
+           </div>
+           
            @if (bcIdFilter()) {
              <div class="px-4 py-2 bg-indigo-50 border border-indigo-200 rounded-lg text-sm text-indigo-700 flex items-center gap-2">
                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
@@ -1260,6 +1283,31 @@ export class SalesInvoicesComponent implements OnInit {
   });
 
   totalPages = computed(() => Math.ceil(this.filteredInvoices().length / this.pageSize()));
+
+  // Totaux globaux basés sur les factures filtrées
+  totalGlobal = computed(() => {
+    const invoices = this.filteredInvoices();
+    return invoices.reduce((acc, inv) => {
+      const amount = inv.amountTTC || 0;
+      // Pour les avoirs, soustraire au lieu d'ajouter
+      return acc + (inv.estAvoir ? -amount : amount);
+    }, 0);
+  });
+
+  totalPaye = computed(() => {
+    const invoices = this.filteredInvoices();
+    return invoices.reduce((acc, inv) => {
+      const remaining = this.getRemainingAmount(inv);
+      const amountTTC = inv.amountTTC || 0;
+      const montantPaye = amountTTC - remaining;
+      // Pour les avoirs, soustraire au lieu d'ajouter
+      return acc + (inv.estAvoir ? -montantPaye : montantPaye);
+    }, 0);
+  });
+
+  solde = computed(() => {
+    return this.totalGlobal() - this.totalPaye();
+  });
 
   totalSales = computed(() => {
     const invoices = this.allSalesInvoices();

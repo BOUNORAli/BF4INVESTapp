@@ -94,6 +94,26 @@ import { SkeletonTableComponent } from '../../components/skeleton/skeleton-table
         </div>
       </div>
 
+      <!-- Totaux Globaux -->
+      <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex flex-wrap gap-3 items-center">
+        <div class="flex items-center gap-2 px-3 py-1.5 bg-blue-50 rounded-lg border border-blue-200">
+          <span class="text-xs font-semibold text-blue-700 uppercase">Total Vente HT:</span>
+          <span class="text-sm font-bold text-blue-800">{{ totalGlobal() | number:'1.2-2' }} MAD</span>
+        </div>
+        <div class="flex items-center gap-2 px-3 py-1.5 bg-orange-50 rounded-lg border border-orange-200">
+          <span class="text-xs font-semibold text-orange-700 uppercase">Total Achat HT:</span>
+          <span class="text-sm font-bold text-orange-800">{{ totalAchat() | number:'1.2-2' }} MAD</span>
+        </div>
+        <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg border" 
+             [class.bg-emerald-50]="solde() >= 0" 
+             [class.border-emerald-200]="solde() >= 0"
+             [class.bg-red-50]="solde() < 0"
+             [class.border-red-200]="solde() < 0">
+          <span class="text-xs font-semibold uppercase" [class.text-emerald-700]="solde() >= 0" [class.text-red-700]="solde() < 0">Marge:</span>
+          <span class="text-sm font-bold" [class.text-emerald-700]="solde() >= 0" [class.text-red-700]="solde() < 0">{{ solde() | number:'1.2-2' }} MAD</span>
+        </div>
+      </div>
+
       <!-- Data Table -->
       <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         @if (bcStore.loading()) {
@@ -344,6 +364,21 @@ export class BcListComponent implements OnInit {
 
   totalPages = computed(() => {
     return Math.ceil(this.filteredBcs().length / this.pageSize());
+  });
+
+  // Totaux globaux basés sur les BC filtrés
+  totalGlobal = computed(() => {
+    const bcs = this.filteredBcs();
+    return bcs.reduce((acc, bc) => acc + this.getSellTotal(bc), 0);
+  });
+
+  totalAchat = computed(() => {
+    const bcs = this.filteredBcs();
+    return bcs.reduce((acc, bc) => acc + this.getBuyTotal(bc), 0);
+  });
+
+  solde = computed(() => {
+    return this.totalGlobal() - this.totalAchat();
   });
 
   paginatedBcs = computed(() => {
