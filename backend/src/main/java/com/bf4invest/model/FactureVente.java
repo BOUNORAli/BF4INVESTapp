@@ -73,6 +73,25 @@ public class FactureVente {
     
     private Double montantRestant; // Calculé: totalTTC - somme paiements
     
+    // ========== GESTION DES AVOIRS ==========
+    
+    // Type de facture : "NORMALE" ou "AVOIR"
+    private String typeFacture; // Défaut: "NORMALE"
+    
+    // Flag pour indiquer si c'est un avoir
+    private Boolean estAvoir; // Défaut: false
+    
+    // Référence à la facture d'origine si c'est un avoir
+    private String factureOrigineId; // ID de la facture vente annulée
+    
+    // Numéro de la facture d'origine (pour référence rapide sans jointure)
+    private String numeroFactureOrigine;
+    
+    // Liste des IDs des factures liées à cet avoir (si avoir partiel sur plusieurs factures)
+    private List<String> facturesLieesIds;
+    
+    // ==========================================
+    
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

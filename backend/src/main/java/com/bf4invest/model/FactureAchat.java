@@ -76,6 +76,25 @@ public class FactureAchat {
     
     private Double montantRestant; // Calculé: totalTTC - somme paiements
     
+    // ========== GESTION DES AVOIRS ==========
+    
+    // Type de facture : "NORMALE" ou "AVOIR"
+    private String typeFacture; // Défaut: "NORMALE"
+    
+    // Flag pour indiquer si c'est un avoir
+    private Boolean estAvoir; // Défaut: false
+    
+    // Référence à la facture d'origine si c'est un avoir
+    private String factureOrigineId; // ID de la facture achat annulée
+    
+    // Numéro de la facture d'origine (pour référence rapide sans jointure)
+    private String numeroFactureOrigine;
+    
+    // Liste des IDs des factures liées à cet avoir (si avoir partiel sur plusieurs factures)
+    private List<String> facturesLieesIds;
+    
+    // ==========================================
+    
     // Référence au fichier de facture fournisseur (image ou PDF)
     private String fichierFactureId;      // ID GridFS du fichier facture
     private String fichierFactureNom;     // Nom original du fichier

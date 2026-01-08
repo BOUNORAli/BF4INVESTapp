@@ -86,6 +86,7 @@ import type { EcritureComptable } from '../../models/types';
              <button (click)="setFilter('paid')" [class.bg-emerald-600]="filterStatus() === 'paid'" [class.text-white]="filterStatus() === 'paid'" [class.border-emerald-600]="filterStatus() === 'paid'" class="px-3 py-1.5 rounded-full text-xs font-semibold bg-white text-slate-600 border border-slate-200 hover:bg-slate-100 shrink-0 transition-colors">Payées</button>
              <button (click)="setFilter('pending')" [class.bg-amber-500]="filterStatus() === 'pending'" [class.text-white]="filterStatus() === 'pending'" [class.border-amber-500]="filterStatus() === 'pending'" class="px-3 py-1.5 rounded-full text-xs font-semibold bg-white text-slate-600 border border-slate-200 hover:bg-slate-100 shrink-0 transition-colors">En attente</button>
              <button (click)="setFilter('overdue')" [class.bg-red-600]="filterStatus() === 'overdue'" [class.text-white]="filterStatus() === 'overdue'" [class.border-red-600]="filterStatus() === 'overdue'" class="px-3 py-1.5 rounded-full text-xs font-semibold bg-white text-slate-600 border border-slate-200 hover:bg-slate-100 shrink-0 transition-colors">Retard</button>
+             <button (click)="setFilter('avoir')" [class.bg-purple-600]="filterStatus() === 'avoir'" [class.text-white]="filterStatus() === 'avoir'" [class.border-purple-600]="filterStatus() === 'avoir'" class="px-3 py-1.5 rounded-full text-xs font-semibold bg-white text-slate-600 border border-slate-200 hover:bg-slate-100 shrink-0 transition-colors">Avoirs</button>
            </div>
            
            <div class="flex gap-2 items-center w-full md:w-auto">
@@ -125,19 +126,31 @@ import type { EcritureComptable } from '../../models/types';
             </thead>
             <tbody class="divide-y divide-slate-100">
               @for (inv of paginatedInvoices(); track inv.id) {
-                <tr class="bg-white hover:bg-slate-50 transition-colors group" [attr.data-item-id]="inv.id">
+                <tr class="bg-white hover:bg-slate-50 transition-colors group" [class.bg-red-50/30]="inv.estAvoir" [attr.data-item-id]="inv.id">
                   <td class="px-4 md:px-6 py-4">
-                    <div class="font-bold text-slate-800 text-sm md:text-base mb-0.5">{{ inv.number }}</div>
+                    <div class="flex items-center gap-2 mb-0.5">
+                      <div class="font-bold text-slate-800 text-sm md:text-base">{{ inv.number }}</div>
+                      @if (inv.estAvoir) {
+                        <span class="px-2 py-0.5 bg-red-100 text-red-700 rounded text-xs font-bold border border-red-200">
+                          AVOIR
+                        </span>
+                      }
+                    </div>
                     <span class="text-xs text-slate-400 hidden md:inline">Ref interne</span>
                   </td>
                   <td class="px-4 md:px-6 py-4">
-                    <div class="flex flex-col">
+                    <div class="flex flex-col gap-1">
                        <span class="font-medium text-slate-700 flex items-center gap-1.5 text-sm">
                          <div class="w-1.5 h-1.5 rounded-full bg-indigo-500"></div>
                          {{ store.getClientName(inv.partnerId || '') }}
                        </span>
                        @if (inv.bcId) {
-                         <a [routerLink]="['/bc/edit', inv.bcId]" class="text-xs text-blue-500 hover:underline mt-0.5 pl-3">BC: {{ store.getBCNumber(inv.bcId) }}</a>
+                         <a [routerLink]="['/bc/edit', inv.bcId]" class="text-xs text-blue-500 hover:underline pl-3">BC: {{ store.getBCNumber(inv.bcId) }}</a>
+                       }
+                       @if (inv.estAvoir && inv.numeroFactureOrigine) {
+                         <span class="text-xs text-purple-600 bg-purple-50 w-fit px-1.5 py-0.5 rounded border border-purple-200 ml-3">
+                           Annule: {{ inv.numeroFactureOrigine }}
+                         </span>
                        }
                     </div>
                   </td>
@@ -145,7 +158,7 @@ import type { EcritureComptable } from '../../models/types';
                   <td class="px-4 md:px-6 py-4">
                     <span class="text-slate-600 font-medium text-sm">{{ inv.dueDate }}</span>
                   </td>
-                  <td class="px-4 md:px-6 py-4 text-right font-bold text-slate-800 text-sm md:text-base">
+                  <td class="px-4 md:px-6 py-4 text-right font-bold text-sm md:text-base" [class.text-red-600]="inv.estAvoir" [class.text-slate-800]="!inv.estAvoir">
                     {{ inv.amountTTC | number:'1.2-2' }} MAD
                   </td>
                   <td class="px-4 md:px-6 py-4 text-right hidden md:table-cell">
@@ -278,6 +291,32 @@ import type { EcritureComptable } from '../../models/types';
                   
                   <!-- Section Link -->
                   <div class="bg-indigo-50 p-4 rounded-xl border border-indigo-100 space-y-4">
+                     <!-- Option Avoir -->
+                     <div class="bg-red-50 p-4 rounded-xl border border-red-100">
+                        <label class="flex items-center gap-3 cursor-pointer">
+                           <input type="checkbox" formControlName="estAvoir" 
+                                  class="w-5 h-5 text-red-600 border-red-300 rounded focus:ring-red-500 focus:ring-2">
+                           <div>
+                              <span class="text-sm font-semibold text-red-800">Facture d'Avoir</span>
+                              <p class="text-xs text-red-600 mt-0.5">Cochez si c'est un avoir annulant une autre facture</p>
+                           </div>
+                        </label>
+                        
+                        @if (form.get('estAvoir')?.value) {
+                          <div class="mt-3">
+                            <label class="block text-xs font-bold text-red-700 uppercase mb-1">Facture d'origine à annuler</label>
+                            <select formControlName="factureOrigineId" class="w-full p-2 border border-red-200 rounded-lg bg-white focus:ring-2 focus:ring-red-500/20 outline-none">
+                              <option value="">Sélectionner...</option>
+                              @for (facture of availableFacturesForAvoir(); track facture.id) {
+                                <option [value]="facture.id">
+                                  {{ facture.number }} - {{ facture.amountTTC | number:'1.2-2' }} MAD - {{ facture.date }}
+                                </option>
+                              }
+                            </select>
+                          </div>
+                        }
+                     </div>
+                     
                      <div>
                         <label class="block text-xs font-bold text-indigo-700 uppercase mb-1">Client <span class="text-red-500">*</span></label>
                         <select formControlName="partnerId" (change)="onPartnerChange()" 
@@ -978,7 +1017,7 @@ export class SalesInvoicesComponent implements OnInit {
   });
 
   // Filters
-  filterStatus = signal<'all' | 'paid' | 'pending' | 'overdue'>('all');
+  filterStatus = signal<'all' | 'paid' | 'pending' | 'overdue' | 'avoir'>('all');
   searchTerm = signal('');
   bcIdFilter = signal<string | null>(null);
   sortOrder = signal<'asc' | 'desc'>('desc'); // Tri par date
@@ -1056,7 +1095,23 @@ export class SalesInvoicesComponent implements OnInit {
     amountHT: [0, [Validators.required, Validators.min(0)]],
     amountTTC: [0, [Validators.required, Validators.min(0)]],
     status: ['pending', Validators.required],
-    paymentMode: ['']
+    paymentMode: [''],
+    // Champs pour avoirs
+    estAvoir: [false],
+    factureOrigineId: ['']
+  });
+  
+  // Factures disponibles pour liaison avec avoir
+  availableFacturesForAvoir = computed(() => {
+    const partnerId = this.form.get('partnerId')?.value;
+    if (!partnerId) return [];
+    
+    // Retourner les factures de vente normales (non avoirs) du même client
+    return this.store.salesInvoices().filter(f => 
+      f.partnerId === partnerId && 
+      !f.estAvoir &&
+      f.type === 'sale'
+    );
   });
 
   ngOnInit() {
@@ -1155,8 +1210,10 @@ export class SalesInvoicesComponent implements OnInit {
     
     // Status Filter
     const status = this.filterStatus();
-    if (status !== 'all') {
-      list = list.filter(i => i.status === status);
+    if (status === 'avoir') {
+      list = list.filter(i => i.estAvoir === true);
+    } else if (status !== 'all') {
+      list = list.filter(i => i.status === status && !i.estAvoir);
     }
 
     // Search Filter
@@ -1279,7 +1336,7 @@ export class SalesInvoicesComponent implements OnInit {
     }).format(value);
   }
 
-  setFilter(status: 'all' | 'paid' | 'pending' | 'overdue') {
+  setFilter(status: 'all' | 'paid' | 'pending' | 'overdue' | 'avoir') {
     this.filterStatus.set(status);
     this.currentPage.set(1); // Reset page on filter change
   }
@@ -1301,7 +1358,13 @@ export class SalesInvoicesComponent implements OnInit {
     const paiements = this.store.payments().get(inv.id) || [];
     const montantPaye = paiements.reduce((sum, p) => sum + (p.montant || 0), 0);
     const montantTotal = inv.amountTTC || 0;
-    return Math.max(0, montantTotal - montantPaye); // Ne pas afficher de valeurs négatives
+    
+    // Pour les avoirs, permettre les montants négatifs
+    if (inv.estAvoir) {
+      return montantTotal - montantPaye; // Peut être négatif pour avoir
+    }
+    
+    return Math.max(0, montantTotal - montantPaye); // Pour factures normales, ne pas afficher de valeurs négatives
   }
 
   getStatusClass(status: string): string {
@@ -1347,7 +1410,9 @@ export class SalesInvoicesComponent implements OnInit {
       date: new Date().toISOString().split('T')[0],
       status: 'pending',
       amountHT: 0,
-      amountTTC: 0
+      amountTTC: 0,
+      estAvoir: false,
+      factureOrigineId: ''
     });
     
     // Set default due date
@@ -1449,10 +1514,12 @@ export class SalesInvoicesComponent implements OnInit {
       bcId: inv.bcId || '',
       date: inv.date || '',
       dueDate: inv.dueDate || '',
-      amountHT: inv.amountHT != null && inv.amountHT !== undefined ? Number(inv.amountHT) : 0,
-      amountTTC: inv.amountTTC != null && inv.amountTTC !== undefined ? Number(inv.amountTTC) : 0,
+      amountHT: inv.amountHT != null && inv.amountHT !== undefined ? Math.abs(Number(inv.amountHT)) : 0, // Valeur absolue pour affichage
+      amountTTC: inv.amountTTC != null && inv.amountTTC !== undefined ? Math.abs(Number(inv.amountTTC)) : 0, // Valeur absolue pour affichage
       status: inv.status || 'pending',
-      paymentMode: inv.paymentMode || ''
+      paymentMode: inv.paymentMode || '',
+      estAvoir: inv.estAvoir || false,
+      factureOrigineId: inv.factureOrigineId || ''
     };
     this.form.patchValue(formValues);
     
@@ -1747,10 +1814,15 @@ export class SalesInvoicesComponent implements OnInit {
       bcId: val.bcId || undefined,
       date: val.date,
       dueDate: val.dueDate,
-      amountHT: amountHT,
-      amountTTC: amountTTC,
+      amountHT: val.estAvoir && amountHT > 0 ? -amountHT : amountHT, // Inverser si avoir
+      amountTTC: val.estAvoir && amountTTC > 0 ? -amountTTC : amountTTC, // Inverser si avoir
       status: val.status || 'pending',
-      paymentMode: val.paymentMode || undefined
+      paymentMode: val.paymentMode || undefined,
+      // Champs pour avoirs
+      estAvoir: val.estAvoir || false,
+      typeFacture: val.estAvoir ? 'AVOIR' : 'NORMALE',
+      factureOrigineId: val.factureOrigineId || undefined,
+      numeroFactureOrigine: val.factureOrigineId ? undefined : undefined // Sera rempli par le backend
     };
     
     try {

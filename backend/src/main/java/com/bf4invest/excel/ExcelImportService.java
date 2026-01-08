@@ -658,6 +658,10 @@ public class ExcelImportService {
                 "numero fac fournisseur", "numero facture fournisseur", "facture fournisseur", "fac frs",
                 "n° fac fr", "n fac fournisseur", "numero fac frs"));
         
+        // FACTURE ORIGINE (pour avoirs)
+        aliases.put("facture_origine", Arrays.asList("facture origine", "facture origine", "facture annulee",
+                "avoir facture", "facture reference", "ref facture", "facture ref"));
+        
         // FRS (fournisseur - doit être après numero_facture_fournisseur)
         aliases.put("fournisseur", Arrays.asList("frs", "fr", "fournisseur", "fourni", "supplier", "frs "));
         
@@ -773,6 +777,326 @@ public class ExcelImportService {
         return true;
     }
     
+    /**
+     * Classe interne pour stocker les résultats de la détection d'avoir
+     */
+    private static class AvoirDetectionResult {
+        boolean estAvoir = false;
+        boolean estAchat = false; // true = avoir achat, false = avoir vente
+        String numeroFactureOrigine = null;
+        String numeroFacture = null; // Numéro de l'avoir lui-même
+    }
+    
+    /**
+     * Détecte si une ligne Excel représente un avoir
+     * Stratégies de détection :
+     * 1. Mot-clé "AVOIR" dans designation, numero_facture, ou prix
+     * 2. Montants négatifs (totalTTC < 0 ou totalHT < 0)
+     * 3. Préfixes spéciaux : "AV-", "AVOIR-", "CREDIT-"
+     */
+    private AvoirDetectionResult detecterAvoir(Row row, Map<String, Integer> columnMap) {
+        AvoirDetectionResult result = new AvoirDetectionResult();
+        
+        // 1. Détection par mot-clé "AVOIR" dans plusieurs colonnes
+        String designation = getCellValue(row, columnMap, "designation");
+        String numeroFactureAchat = getCellValue(row, columnMap, "numero_facture_fournisseur");
+        String numeroFactureVente = getCellValue(row, columnMap, "numero_facture_vente");
+        String prixVenteTTCStr = getCellValue(row, columnMap, "prix_vente_unitaire_ttc");
+        String prixAchatTTCStr = getCellValue(row, columnMap, "prix_achat_unitaire_ttc");
+        
+        // Vérifier dans designation
+        if (designation != null && designation.trim().toUpperCase().contains("AVOIR")) {
+            result.estAvoir = true;
+        }
+        
+        // Vérifier dans numéro facture achat
+        if (numeroFactureAchat != null) {
+            String numUpper = numeroFactureAchat.trim().toUpperCase();
+            if (numUpper.contains("AVOIR") || numUpper.startsWith("AV-") || 
+                numUpper.startsWith("AVOIR-") || numUpper.startsWith("CREDIT-")) {
+                result.estAvoir = true;
+                result.estAchat = true;
+                result.numeroFacture = numeroFactureAchat.trim();
+            }
+        }
+        
+        // Vérifier dans numéro facture vente
+        if (numeroFactureVente != null) {
+            String numUpper = numeroFactureVente.trim().toUpperCase();
+            if (numUpper.contains("AVOIR") || numUpper.startsWith("AV-") || 
+                numUpper.startsWith("AVOIR-") || numUpper.startsWith("CREDIT-")) {
+                result.estAvoir = true;
+                result.estAchat = false;
+                result.numeroFacture = numeroFactureVente.trim();
+            }
+        }
+        
+        // Vérifier dans prix
+        if (prixVenteTTCStr != null && prixVenteTTCStr.trim().equalsIgnoreCase("AVOIR")) {
+            result.estAvoir = true;
+            result.estAchat = false;
+        }
+        if (prixAchatTTCStr != null && prixAchatTTCStr.trim().equalsIgnoreCase("AVOIR")) {
+            result.estAvoir = true;
+            result.estAchat = true;
+        }
+        
+        // 2. Détection par montants négatifs
+        Double totalHT = getDoubleValue(row, columnMap, "facture_achat_ttc");
+        if (totalHT == null) {
+            totalHT = getDoubleValue(row, columnMap, "facture_vente_ttc");
+        }
+        if (totalHT != null && totalHT < 0) {
+            result.estAvoir = true;
+            // Si on a un numéro facture achat, c'est un avoir achat, sinon avoir vente
+            if (numeroFactureAchat != null && !numeroFactureAchat.trim().isEmpty()) {
+                result.estAchat = true;
+                result.numeroFacture = numeroFactureAchat.trim();
+            } else if (numeroFactureVente != null && !numeroFactureVente.trim().isEmpty()) {
+                result.estAchat = false;
+                result.numeroFacture = numeroFactureVente.trim();
+            }
+        }
+        
+        // 3. Chercher le numéro de facture d'origine (colonne spéciale ou déduction)
+        // Chercher dans les colonnes possibles : "facture_origine", "facture_annulee", etc.
+        String factureOrigine = getCellValue(row, columnMap, "facture_origine");
+        if (factureOrigine == null) {
+            factureOrigine = getCellValue(row, columnMap, "facture_annulee");
+        }
+        if (factureOrigine == null) {
+            factureOrigine = getCellValue(row, columnMap, "avoir_facture");
+        }
+        result.numeroFactureOrigine = factureOrigine != null ? factureOrigine.trim() : null;
+        
+        return result;
+    }
+    
+    /**
+     * Traite un avoir détecté dans l'import Excel
+     */
+    private void traiterAvoir(Row row, Map<String, Integer> columnMap,
+                             Map<String, BandeCommande> bcMap,
+                             Map<String, FactureAchat> faMap,
+                             Map<String, FactureVente> fvMap,
+                             Map<String, List<LineItem>> faLignesMap,
+                             Map<String, List<LineItem>> fvLignesMap,
+                             Map<String, String> faToBcNumMap,
+                             Map<String, String> fvToBcNumMap,
+                             ImportResult result,
+                             AvoirDetectionResult detection) {
+        
+        try {
+            if (detection.estAchat) {
+                // Traiter avoir achat
+                traiterAvoirAchat(row, columnMap, faMap, faLignesMap, faToBcNumMap, result, detection);
+            } else {
+                // Traiter avoir vente
+                traiterAvoirVente(row, columnMap, fvMap, fvLignesMap, fvToBcNumMap, result, detection);
+            }
+        } catch (Exception e) {
+            log.error("Erreur lors du traitement de l'avoir: {}", e.getMessage(), e);
+            result.getErrors().add("Erreur traitement avoir: " + e.getMessage());
+            result.getWarnings().add("Avoir ignoré à cause d'une erreur: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Traite un avoir achat
+     */
+    private void traiterAvoirAchat(Row row, Map<String, Integer> columnMap,
+                                  Map<String, FactureAchat> faMap,
+                                  Map<String, List<LineItem>> faLignesMap,
+                                  Map<String, String> faToBcNumMap,
+                                  ImportResult result,
+                                  AvoirDetectionResult detection) {
+        
+        String numeroBC = getCellValue(row, columnMap, "numero_bc");
+        if (numeroBC == null || numeroBC.trim().isEmpty()) {
+            result.getWarnings().add("Avoir achat ignoré: numéro BC manquant");
+            return;
+        }
+        numeroBC = numeroBC.trim();
+        
+        String numeroFactureFournisseur = detection.numeroFacture;
+        if (numeroFactureFournisseur == null || numeroFactureFournisseur.isEmpty()) {
+            numeroFactureFournisseur = getCellValue(row, columnMap, "numero_facture_fournisseur");
+        }
+        if (numeroFactureFournisseur == null || numeroFactureFournisseur.isEmpty()) {
+            numeroFactureFournisseur = "AVOIR-" + System.currentTimeMillis();
+            result.getWarnings().add("Avoir achat sans numéro: numéro auto-généré " + numeroFactureFournisseur);
+        }
+        final String finalNumeroFactureFournisseur = numeroFactureFournisseur.trim();
+        
+        // Créer ou récupérer la facture avoir
+        FactureAchat avoir = faMap.computeIfAbsent(finalNumeroFactureFournisseur, k -> {
+            FactureAchat newAvoir = new FactureAchat();
+            newAvoir.setNumeroFactureFournisseur(finalNumeroFactureFournisseur);
+            newAvoir.setNumeroFactureAchat(finalNumeroFactureFournisseur);
+            newAvoir.setEstAvoir(true);
+            newAvoir.setTypeFacture("AVOIR");
+            newAvoir.setBcReference(numeroBC);
+            
+            // Date facture
+            LocalDate dateFacture = null;
+            Integer dateCol = columnMap.get("date_facture_achat");
+            if (dateCol == null) {
+                dateCol = columnMap.get("date_facture_vente"); // Fallback
+            }
+            if (dateCol != null) {
+                Cell dateCell = row.getCell(dateCol);
+                dateFacture = parseDateFromCell(dateCell);
+            }
+            if (dateFacture == null) {
+                dateFacture = LocalDate.now(); // Par défaut aujourd'hui
+            }
+            newAvoir.setDateFacture(dateFacture);
+            newAvoir.setDateEcheance(dateFacture.plusMonths(2));
+            
+            // Fournisseur
+            String fournisseurNom = getCellValue(row, columnMap, "fournisseur");
+            if (fournisseurNom != null && !fournisseurNom.trim().isEmpty()) {
+                String fournisseurId = findOrCreateFournisseur(fournisseurNom, result);
+                newAvoir.setFournisseurId(fournisseurId);
+            }
+            
+            newAvoir.setEtatPaiement("non_regle");
+            newAvoir.setLignes(new ArrayList<>());
+            newAvoir.setPaiements(new ArrayList<>());
+            
+            return newAvoir;
+        });
+        
+        // Lier à la facture d'origine si trouvée
+        if (detection.numeroFactureOrigine != null) {
+            Optional<FactureAchat> factureOrigine = factureAchatRepository
+                .findByNumeroFactureFournisseur(detection.numeroFactureOrigine);
+            
+            if (factureOrigine.isPresent()) {
+                avoir.setFactureOrigineId(factureOrigine.get().getId());
+                avoir.setNumeroFactureOrigine(detection.numeroFactureOrigine);
+            } else {
+                result.getWarnings().add("Facture d'origine non trouvée pour avoir: " + detection.numeroFactureOrigine);
+            }
+        }
+        
+        // Créer la ligne d'avoir (avec montants négatifs)
+        LineItem ligne = createLineItemForFacture(row, columnMap, result);
+        
+        // S'assurer que les montants sont négatifs pour un avoir
+        if (ligne.getTotalHT() != null && ligne.getTotalHT() > 0) {
+            ligne.setTotalHT(-ligne.getTotalHT());
+        }
+        if (ligne.getTotalTTC() != null && ligne.getTotalTTC() > 0) {
+            ligne.setTotalTTC(-ligne.getTotalTTC());
+        }
+        if (ligne.getPrixAchatUnitaireHT() != null && ligne.getPrixAchatUnitaireHT() > 0) {
+            ligne.setPrixAchatUnitaireHT(-ligne.getPrixAchatUnitaireHT());
+        }
+        
+        // Utiliser numeroBC comme clé pour grouper les lignes
+        faLignesMap.computeIfAbsent(numeroBC, k -> new ArrayList<>()).add(ligne);
+        faToBcNumMap.put(finalNumeroFactureFournisseur, numeroBC);
+        
+        result.getWarnings().add("Avoir achat détecté et traité: " + finalNumeroFactureFournisseur);
+    }
+    
+    /**
+     * Traite un avoir vente
+     */
+    private void traiterAvoirVente(Row row, Map<String, Integer> columnMap,
+                                  Map<String, FactureVente> fvMap,
+                                  Map<String, List<LineItem>> fvLignesMap,
+                                  Map<String, String> fvToBcNumMap,
+                                  ImportResult result,
+                                  AvoirDetectionResult detection) {
+        
+        String numeroBC = getCellValue(row, columnMap, "numero_bc");
+        if (numeroBC == null || numeroBC.trim().isEmpty()) {
+            result.getWarnings().add("Avoir vente ignoré: numéro BC manquant");
+            return;
+        }
+        numeroBC = numeroBC.trim();
+        
+        String numeroFactureVente = detection.numeroFacture;
+        if (numeroFactureVente == null || numeroFactureVente.isEmpty()) {
+            numeroFactureVente = getCellValue(row, columnMap, "numero_facture_vente");
+        }
+        if (numeroFactureVente == null || numeroFactureVente.isEmpty()) {
+            numeroFactureVente = "AVOIR-V-" + System.currentTimeMillis();
+            result.getWarnings().add("Avoir vente sans numéro: numéro auto-généré " + numeroFactureVente);
+        }
+        final String finalNumeroFactureVente = numeroFactureVente.trim();
+        
+        // Créer ou récupérer la facture avoir
+        FactureVente avoir = fvMap.computeIfAbsent(finalNumeroFactureVente, k -> {
+            FactureVente newAvoir = new FactureVente();
+            newAvoir.setNumeroFactureVente(finalNumeroFactureVente);
+            newAvoir.setEstAvoir(true);
+            newAvoir.setTypeFacture("AVOIR");
+            newAvoir.setBcReference(numeroBC);
+            
+            // Date facture
+            LocalDate dateFacture = null;
+            Integer dateCol = columnMap.get("date_facture_vente");
+            if (dateCol != null) {
+                Cell dateCell = row.getCell(dateCol);
+                dateFacture = parseDateFromCell(dateCell);
+            }
+            if (dateFacture == null) {
+                dateFacture = LocalDate.now(); // Par défaut aujourd'hui
+            }
+            newAvoir.setDateFacture(dateFacture);
+            newAvoir.setDateEcheance(dateFacture.plusDays(30));
+            
+            // Client
+            String clientIce = getCellValue(row, columnMap, "ice");
+            String clientNom = getCellValue(row, columnMap, "client");
+            if (clientNom != null && !clientNom.trim().isEmpty()) {
+                String clientId = findOrCreateClient(clientIce, clientNom, result);
+                newAvoir.setClientId(clientId);
+            }
+            
+            newAvoir.setEtatPaiement("non_regle");
+            newAvoir.setLignes(new ArrayList<>());
+            newAvoir.setPaiements(new ArrayList<>());
+            
+            return newAvoir;
+        });
+        
+        // Lier à la facture d'origine si trouvée
+        if (detection.numeroFactureOrigine != null) {
+            Optional<FactureVente> factureOrigine = factureVenteRepository
+                .findByNumeroFactureVente(detection.numeroFactureOrigine);
+            
+            if (factureOrigine.isPresent()) {
+                avoir.setFactureOrigineId(factureOrigine.get().getId());
+                avoir.setNumeroFactureOrigine(detection.numeroFactureOrigine);
+            } else {
+                result.getWarnings().add("Facture d'origine non trouvée pour avoir: " + detection.numeroFactureOrigine);
+            }
+        }
+        
+        // Créer la ligne d'avoir (avec montants négatifs)
+        LineItem ligne = createLineItemForFactureVente(row, columnMap, result);
+        
+        // S'assurer que les montants sont négatifs pour un avoir
+        if (ligne.getTotalHT() != null && ligne.getTotalHT() > 0) {
+            ligne.setTotalHT(-ligne.getTotalHT());
+        }
+        if (ligne.getTotalTTC() != null && ligne.getTotalTTC() > 0) {
+            ligne.setTotalTTC(-ligne.getTotalTTC());
+        }
+        if (ligne.getPrixVenteUnitaireHT() != null && ligne.getPrixVenteUnitaireHT() > 0) {
+            ligne.setPrixVenteUnitaireHT(-ligne.getPrixVenteUnitaireHT());
+        }
+        
+        fvLignesMap.computeIfAbsent(finalNumeroFactureVente, k -> new ArrayList<>()).add(ligne);
+        fvToBcNumMap.put(finalNumeroFactureVente, numeroBC);
+        
+        result.getWarnings().add("Avoir vente détecté et traité: " + finalNumeroFactureVente);
+    }
+    
     private void processRow(Row row, Map<String, Integer> columnMap,
                            Map<String, BandeCommande> bcMap,
                            Map<String, FactureAchat> faMap,
@@ -785,11 +1109,13 @@ public class ExcelImportService {
                            Map<String, List<FactureVente>> fvByBcAndClientMap, // NOUVEAU: Plusieurs FV par client/BC
                            ImportResult result) {
         
-        // Vérifier si c'est une ligne d'avoir (colonne "prix_vente_unitaire_ttc" contient "AVOIR")
-        String prixVenteTTCStr = getCellValue(row, columnMap, "prix_vente_unitaire_ttc");
-        if (prixVenteTTCStr != null && prixVenteTTCStr.trim().equalsIgnoreCase("AVOIR")) {
-            // Ignorer cette ligne car c'est un avoir, pas une vente normale
-            result.getWarnings().add("Ligne ignorée: avoir détecté dans prix de vente");
+        // ========== DÉTECTION DES AVOIRS ==========
+        AvoirDetectionResult avoirDetection = detecterAvoir(row, columnMap);
+        
+        // Si c'est un avoir, le traiter séparément
+        if (avoirDetection.estAvoir) {
+            traiterAvoir(row, columnMap, bcMap, faMap, fvMap, faLignesMap, fvLignesMap, 
+                        faToBcNumMap, fvToBcNumMap, result, avoirDetection);
             return;
         }
         
@@ -942,6 +1268,9 @@ public class ExcelImportService {
         
         FactureAchat fa = faMap.computeIfAbsent(finalNumeroBC, k -> {
             FactureAchat newFa = new FactureAchat();
+            // Initialiser les champs avoir par défaut (rétrocompatibilité)
+            newFa.setEstAvoir(false);
+            newFa.setTypeFacture("NORMALE");
             
             // Utiliser "N FAC FRS" comme numéro de facture achat (notre référence interne)
             if (finalNumeroFactureFournisseur != null && !finalNumeroFactureFournisseur.isEmpty()) {
@@ -1053,6 +1382,9 @@ public class ExcelImportService {
             if (fv == null) {
                 fv = new FactureVente();
                 fv.setNumeroFactureVente(finalNumeroFV);
+                // Initialiser les champs avoir par défaut (rétrocompatibilité)
+                fv.setEstAvoir(false);
+                fv.setTypeFacture("NORMALE");
                 
                 // Date facture vente
                 LocalDate dateFacture = null;
@@ -1394,18 +1726,33 @@ public class ExcelImportService {
         
         for (LineItem ligne : fa.getLignes()) {
             if (ligne.getTotalHT() != null) {
-                totalHT += ligne.getTotalHT();
+                totalHT += ligne.getTotalHT(); // Peut être négatif pour avoir
             }
             if (ligne.getTotalTTC() != null && ligne.getTotalHT() != null) {
                 totalTVA += ligne.getTotalTTC() - ligne.getTotalHT();
-                totalTTC += ligne.getTotalTTC();
+                totalTTC += ligne.getTotalTTC(); // Peut être négatif pour avoir
             }
         }
         
         fa.setTotalHT(totalHT);
         fa.setTotalTVA(totalTVA);
         fa.setTotalTTC(totalTTC);
-        fa.setMontantRestant(totalTTC); // Pas encore payé
+        
+        // Pour les avoirs, le montant restant est aussi négatif (ou positif si partiellement utilisé)
+        fa.setMontantRestant(totalTTC); // Peut être négatif pour avoir
+        
+        // S'assurer que si c'est un avoir, les montants sont bien négatifs
+        if (Boolean.TRUE.equals(fa.getEstAvoir())) {
+            if (fa.getTotalHT() != null && fa.getTotalHT() > 0) {
+                fa.setTotalHT(-fa.getTotalHT());
+                log.warn("Avoir achat {}: montant HT positif, inversion appliquée", fa.getNumeroFactureAchat());
+            }
+            if (fa.getTotalTTC() != null && fa.getTotalTTC() > 0) {
+                fa.setTotalTTC(-fa.getTotalTTC());
+                fa.setMontantRestant(fa.getTotalTTC());
+                log.warn("Avoir achat {}: montant TTC positif, inversion appliquée", fa.getNumeroFactureAchat());
+            }
+        }
     }
     
     private void calculateFactureVenteTotals(FactureVente fv) {
@@ -1419,13 +1766,25 @@ public class ExcelImportService {
         
         for (LineItem ligne : fv.getLignes()) {
             // Pour facture vente, utiliser quantite vendue et prix vente
+            // Pour avoir, prix et quantités peuvent être négatifs
             if (ligne.getPrixVenteUnitaireHT() != null && ligne.getQuantiteVendue() != null) {
                 double ht = ligne.getPrixVenteUnitaireHT() * ligne.getQuantiteVendue();
-                totalHT += ht;
+                totalHT += ht; // Peut être négatif pour avoir
                 if (ligne.getTva() != null) {
                     double ttc = ht * (1 + (ligne.getTva() / 100));
                     totalTVA += ttc - ht;
-                    totalTTC += ttc;
+                    totalTTC += ttc; // Peut être négatif pour avoir
+                }
+            }
+            
+            // Si les totaux sont déjà calculés (ligne d'avoir importée), les utiliser
+            if (ligne.getTotalHT() != null) {
+                totalHT = ligne.getTotalHT();
+            }
+            if (ligne.getTotalTTC() != null) {
+                totalTTC = ligne.getTotalTTC();
+                if (ligne.getTotalHT() != null) {
+                    totalTVA = totalTTC - totalHT;
                 }
             }
         }
@@ -1433,7 +1792,22 @@ public class ExcelImportService {
         fv.setTotalHT(totalHT);
         fv.setTotalTVA(totalTVA);
         fv.setTotalTTC(totalTTC);
-        fv.setMontantRestant(totalTTC); // Pas encore payé
+        
+        // Pour les avoirs, le montant restant est aussi négatif
+        fv.setMontantRestant(totalTTC); // Peut être négatif pour avoir
+        
+        // S'assurer que si c'est un avoir, les montants sont bien négatifs
+        if (Boolean.TRUE.equals(fv.getEstAvoir())) {
+            if (fv.getTotalHT() != null && fv.getTotalHT() > 0) {
+                fv.setTotalHT(-fv.getTotalHT());
+                log.warn("Avoir vente {}: montant HT positif, inversion appliquée", fv.getNumeroFactureVente());
+            }
+            if (fv.getTotalTTC() != null && fv.getTotalTTC() > 0) {
+                fv.setTotalTTC(-fv.getTotalTTC());
+                fv.setMontantRestant(fv.getTotalTTC());
+                log.warn("Avoir vente {}: montant TTC positif, inversion appliquée", fv.getNumeroFactureVente());
+            }
+        }
     }
     
     private String findOrCreateClient(String ice, String nom, ImportResult result) {

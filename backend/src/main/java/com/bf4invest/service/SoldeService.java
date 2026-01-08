@@ -173,11 +173,19 @@ public class SoldeService {
                 // Facture vente : le client nous doit de l'argent, mais ça n'augmente pas la trésorerie immédiatement
                 // Le solde global ne change pas jusqu'au paiement
                 return soldeAvant;
+            case "AVOIR_VENTE":
+                // Avoir vente : même logique que facture vente (montant déjà négatif)
+                // Le solde global ne change pas jusqu'au paiement
+                return soldeAvant;
             case "PAIEMENT_CLIENT":
                 // Paiement client : entrée d'argent, augmente la trésorerie
                 return soldeAvant + montant;
             case "FACTURE_ACHAT":
                 // Facture achat : nous devons au fournisseur, mais ça ne diminue pas la trésorerie immédiatement
+                // Le solde global ne change pas jusqu'au paiement
+                return soldeAvant;
+            case "AVOIR_ACHAT":
+                // Avoir achat : même logique que facture achat (montant déjà négatif)
                 // Le solde global ne change pas jusqu'au paiement
                 return soldeAvant;
             case "PAIEMENT_FOURNISSEUR":
@@ -199,11 +207,19 @@ public class SoldeService {
             case "FACTURE_VENTE":
                 // Facture vente : le client nous doit de l'argent (solde client augmente)
                 return (soldeAvant != null ? soldeAvant : 0.0) + montant;
+            case "AVOIR_VENTE":
+                // Avoir vente : réduit ce que le client nous doit (solde client diminue)
+                // montant est déjà négatif, donc l'addition réduit le solde
+                return (soldeAvant != null ? soldeAvant : 0.0) + montant;
             case "PAIEMENT_CLIENT":
                 // Paiement client : le client rembourse (solde client diminue)
                 return (soldeAvant != null ? soldeAvant : 0.0) - montant;
             case "FACTURE_ACHAT":
                 // Facture achat : nous devons au fournisseur (solde fournisseur augmente)
+                return (soldeAvant != null ? soldeAvant : 0.0) + montant;
+            case "AVOIR_ACHAT":
+                // Avoir achat : réduit ce que nous devons au fournisseur (solde fournisseur diminue)
+                // montant est déjà négatif, donc l'addition réduit le solde
                 return (soldeAvant != null ? soldeAvant : 0.0) + montant;
             case "PAIEMENT_FOURNISSEUR":
                 // Paiement fournisseur : nous remboursons (solde fournisseur diminue)

@@ -488,6 +488,180 @@ public class ComptabiliteService {
     }
 
     /**
+     * Génère une écriture comptable pour un avoir vente
+     * Les avoirs inversent les écritures : Crédit Client / Débit Ventes / Débit TVA collectée
+     * Les montants sont déjà négatifs dans la facture, on utilise leur valeur absolue
+     */
+    @Transactional
+    public EcritureComptable genererEcritureAvoirVente(FactureVente avoir) {
+        // Vérifier si l'écriture existe déjà
+        List<EcritureComptable> existing = ecritureRepository.findByPieceJustificativeTypeAndPieceJustificativeId(
+                "AVOIR_VENTE", avoir.getId());
+        if (!existing.isEmpty()) {
+            log.debug("Écriture déjà existante pour avoir vente {}", avoir.getId());
+            return existing.get(0);
+        }
+
+        ExerciceComptable exercice = getExerciceForDate(avoir.getDateFacture());
+        if (exercice == null) {
+            log.warn("Aucun exercice trouvé pour la date {}", avoir.getDateFacture());
+            return null;
+        }
+
+        Optional<CompteComptable> compteClient = compteRepository.findByCode("41111");
+        Optional<CompteComptable> compteVentes = compteRepository.findByCode("7121");
+        Optional<CompteComptable> compteTVACollectee = compteRepository.findByCode("4457");
+
+        if (compteClient.isEmpty() || compteVentes.isEmpty() || compteTVACollectee.isEmpty()) {
+            log.error("Comptes comptables manquants pour générer l'écriture d'avoir vente");
+            return null;
+        }
+
+        // Utiliser la valeur absolue des montants (déjà négatifs dans l'avoir)
+        Double montantHT = avoir.getTotalHT() != null ? Math.abs(avoir.getTotalHT()) : 0.0;
+        Double montantTVA = avoir.getTotalTVA() != null ? Math.abs(avoir.getTotalTVA()) : 0.0;
+        Double montantTTC = avoir.getTotalTTC() != null ? Math.abs(avoir.getTotalTTC()) : montantHT + montantTVA;
+
+        List<LigneEcriture> lignes = new ArrayList<>();
+        
+        // Crédit client (inversé par rapport à facture normale)
+        lignes.add(LigneEcriture.builder()
+                .compteCode(compteClient.get().getCode())
+                .compteLibelle(compteClient.get().getLibelle())
+                .debit(null)
+                .credit(montantTTC)
+                .libelle("Avoir " + avoir.getNumeroFactureVente())
+                .build());
+
+        // Débit ventes HT (inversé)
+        lignes.add(LigneEcriture.builder()
+                .compteCode(compteVentes.get().getCode())
+                .compteLibelle(compteVentes.get().getLibelle())
+                .debit(montantHT)
+                .credit(null)
+                .libelle("Avoir vente " + avoir.getNumeroFactureVente())
+                .build());
+
+        // Débit TVA collectée (inversé)
+        if (montantTVA > 0) {
+            lignes.add(LigneEcriture.builder()
+                    .compteCode(compteTVACollectee.get().getCode())
+                    .compteLibelle(compteTVACollectee.get().getLibelle())
+                    .debit(montantTVA)
+                    .credit(null)
+                    .libelle("TVA collectée avoir " + avoir.getNumeroFactureVente())
+                    .build());
+        }
+
+        EcritureComptable ecriture = EcritureComptable.builder()
+                .dateEcriture(avoir.getDateFacture())
+                .journal("VT")
+                .numeroPiece("AV-" + avoir.getNumeroFactureVente())
+                .libelle("Avoir vente " + avoir.getNumeroFactureVente())
+                .lignes(lignes)
+                .pieceJustificativeType("AVOIR_VENTE")
+                .pieceJustificativeId(avoir.getId())
+                .exerciceId(exercice.getId())
+                .lettree(false)
+                .pointage(false)
+                .createdAt(LocalDateTime.now())
+                .updatedAt(LocalDateTime.now())
+                .build();
+
+        EcritureComptable saved = ecritureRepository.save(ecriture);
+        updateComptesSoldes(lignes);
+        log.info("Écriture générée pour avoir vente {}", avoir.getNumeroFactureVente());
+        return saved;
+    }
+
+    /**
+     * Génère une écriture comptable pour un avoir achat
+     * Les avoirs inversent les écritures : Crédit Achats / Crédit TVA déductible / Débit Fournisseur
+     * Les montants sont déjà négatifs dans la facture, on utilise leur valeur absolue
+     */
+    @Transactional
+    public EcritureComptable genererEcritureAvoirAchat(FactureAchat avoir) {
+        // Vérifier si l'écriture existe déjà
+        List<EcritureComptable> existing = ecritureRepository.findByPieceJustificativeTypeAndPieceJustificativeId(
+                "AVOIR_ACHAT", avoir.getId());
+        if (!existing.isEmpty()) {
+            log.debug("Écriture déjà existante pour avoir achat {}", avoir.getId());
+            return existing.get(0);
+        }
+
+        ExerciceComptable exercice = getExerciceForDate(avoir.getDateFacture());
+        if (exercice == null) {
+            log.warn("Aucun exercice trouvé pour la date {}", avoir.getDateFacture());
+            return null;
+        }
+
+        Optional<CompteComptable> compteAchats = compteRepository.findByCode("6114");
+        Optional<CompteComptable> compteTVADeductible = compteRepository.findByCode("4456");
+        Optional<CompteComptable> compteFournisseur = compteRepository.findByCode("44111");
+
+        if (compteAchats.isEmpty() || compteTVADeductible.isEmpty() || compteFournisseur.isEmpty()) {
+            log.error("Comptes comptables manquants pour générer l'écriture d'avoir achat");
+            return null;
+        }
+
+        // Utiliser la valeur absolue des montants (déjà négatifs dans l'avoir)
+        Double montantHT = avoir.getTotalHT() != null ? Math.abs(avoir.getTotalHT()) : 0.0;
+        Double montantTVA = avoir.getTotalTVA() != null ? Math.abs(avoir.getTotalTVA()) : 0.0;
+        Double montantTTC = avoir.getTotalTTC() != null ? Math.abs(avoir.getTotalTTC()) : montantHT + montantTVA;
+
+        List<LigneEcriture> lignes = new ArrayList<>();
+        
+        // Crédit achats HT (inversé par rapport à facture normale)
+        lignes.add(LigneEcriture.builder()
+                .compteCode(compteAchats.get().getCode())
+                .compteLibelle(compteAchats.get().getLibelle())
+                .debit(null)
+                .credit(montantHT)
+                .libelle("Avoir achat " + avoir.getNumeroFactureAchat())
+                .build());
+
+        // Crédit TVA déductible (inversé)
+        if (montantTVA > 0) {
+            lignes.add(LigneEcriture.builder()
+                    .compteCode(compteTVADeductible.get().getCode())
+                    .compteLibelle(compteTVADeductible.get().getLibelle())
+                    .debit(null)
+                    .credit(montantTVA)
+                    .libelle("TVA déductible avoir " + avoir.getNumeroFactureAchat())
+                    .build());
+        }
+
+        // Débit fournisseur (inversé)
+        lignes.add(LigneEcriture.builder()
+                .compteCode(compteFournisseur.get().getCode())
+                .compteLibelle(compteFournisseur.get().getLibelle())
+                .debit(montantTTC)
+                .credit(null)
+                .libelle("Avoir " + avoir.getNumeroFactureAchat())
+                .build());
+
+        EcritureComptable ecriture = EcritureComptable.builder()
+                .dateEcriture(avoir.getDateFacture())
+                .journal("AC")
+                .numeroPiece("AV-" + avoir.getNumeroFactureAchat())
+                .libelle("Avoir achat " + avoir.getNumeroFactureAchat())
+                .lignes(lignes)
+                .pieceJustificativeType("AVOIR_ACHAT")
+                .pieceJustificativeId(avoir.getId())
+                .exerciceId(exercice.getId())
+                .lettree(false)
+                .pointage(false)
+                .createdAt(LocalDateTime.now())
+                .updatedAt(LocalDateTime.now())
+                .build();
+
+        EcritureComptable saved = ecritureRepository.save(ecriture);
+        updateComptesSoldes(lignes);
+        log.info("Écriture générée pour avoir achat {}", avoir.getNumeroFactureAchat());
+        return saved;
+    }
+
+    /**
      * Génère une écriture comptable pour un paiement
      * Pour paiement client: Débit 5141 (Banques) / Crédit 41111 (Clients)
      * Pour paiement fournisseur: Débit 44111 (Fournisseurs) / Crédit 5141 (Banques)

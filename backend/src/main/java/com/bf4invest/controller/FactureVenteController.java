@@ -88,6 +88,43 @@ public class FactureVenteController {
         factureService.delete(id);
         return ResponseEntity.noContent().build();
     }
+    
+    // ========== ENDPOINTS POUR GESTION DES AVOIRS ==========
+    
+    /**
+     * Récupère tous les avoirs de vente
+     */
+    @GetMapping("/avoir")
+    public ResponseEntity<List<FactureVente>> getAllAvoirs() {
+        List<FactureVente> avoirs = factureService.getAllAvoirs();
+        return ResponseEntity.ok(avoirs);
+    }
+    
+    /**
+     * Récupère les avoirs liés à une facture d'origine
+     */
+    @GetMapping("/{factureId}/avoir")
+    public ResponseEntity<List<FactureVente>> getAvoirsByFacture(@PathVariable String factureId) {
+        List<FactureVente> avoirs = factureService.getAvoirsByFacture(factureId);
+        return ResponseEntity.ok(avoirs);
+    }
+    
+    /**
+     * Lie un avoir à une facture d'origine
+     */
+    @PostMapping("/{avoirId}/lier-a-facture/{factureOrigineId}")
+    public ResponseEntity<Void> linkAvoirToFacture(
+            @PathVariable String avoirId,
+            @PathVariable String factureOrigineId) {
+        try {
+            factureService.linkAvoirToFacture(avoirId, factureOrigineId);
+            return ResponseEntity.ok().build();
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().build();
+        } catch (RuntimeException e) {
+            return ResponseEntity.notFound().build();
+        }
+    }
 }
 
 

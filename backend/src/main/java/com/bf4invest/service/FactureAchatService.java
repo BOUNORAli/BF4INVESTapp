@@ -62,9 +62,55 @@ public class FactureAchatService {
     }
     
     public FactureAchat create(FactureAchat facture) {
+        // ========== VALIDATION ET GESTION DES AVOIRS ==========
+        if (Boolean.TRUE.equals(facture.getEstAvoir())) {
+            // Initialiser les champs avoir si nécessaire
+            if (facture.getTypeFacture() == null || facture.getTypeFacture().isEmpty()) {
+                facture.setTypeFacture("AVOIR");
+            }
+            
+            // Validation : si c'est un avoir, s'assurer que les montants sont négatifs
+            if (facture.getTotalHT() != null && facture.getTotalHT() > 0) {
+                log.warn("Avoir achat avec montant HT positif, inversion appliquée");
+                facture.setTotalHT(-facture.getTotalHT());
+            }
+            if (facture.getTotalTTC() != null && facture.getTotalTTC() > 0) {
+                log.warn("Avoir achat avec montant TTC positif, inversion appliquée");
+                facture.setTotalTTC(-facture.getTotalTTC());
+            }
+            
+            // Valider la liaison avec la facture d'origine si fournie
+            if (facture.getFactureOrigineId() != null && !facture.getFactureOrigineId().isEmpty()) {
+                Optional<FactureAchat> factureOrigine = factureRepository.findById(facture.getFactureOrigineId());
+                if (factureOrigine.isPresent()) {
+                    // Empêcher qu'un avoir annule un autre avoir
+                    if (Boolean.TRUE.equals(factureOrigine.get().getEstAvoir())) {
+                        throw new IllegalArgumentException("Un avoir ne peut pas annuler un autre avoir");
+                    }
+                    facture.setNumeroFactureOrigine(factureOrigine.get().getNumeroFactureAchat());
+                } else {
+                    log.warn("Facture d'origine non trouvée pour avoir: " + facture.getFactureOrigineId());
+                }
+            }
+        } else {
+            // Si ce n'est pas un avoir, s'assurer que les flags sont corrects
+            if (facture.getTypeFacture() == null || facture.getTypeFacture().isEmpty()) {
+                facture.setTypeFacture("NORMALE");
+            }
+            if (facture.getEstAvoir() == null) {
+                facture.setEstAvoir(false);
+            }
+        }
+        // ========================================================
+        
         // Générer le numéro si non fourni
         if (facture.getNumeroFactureAchat() == null || facture.getNumeroFactureAchat().isEmpty()) {
-            facture.setNumeroFactureAchat(generateFactureNumber(facture.getDateFacture()));
+            if (Boolean.TRUE.equals(facture.getEstAvoir())) {
+                // Préfixe spécial pour avoirs
+                facture.setNumeroFactureAchat("AVOIR-" + generateFactureNumber(facture.getDateFacture()));
+            } else {
+                facture.setNumeroFactureAchat(generateFactureNumber(facture.getDateFacture()));
+            }
         }
         
         // Calculer la date d'échéance (dateFacture + 2 mois)
@@ -75,6 +121,19 @@ public class FactureAchatService {
         
         // Calculer les totaux
         calculateTotals(facture);
+        
+        // Pour les avoirs, s'assurer que les totaux calculés sont négatifs
+        if (Boolean.TRUE.equals(facture.getEstAvoir())) {
+            if (facture.getTotalHT() != null && facture.getTotalHT() > 0) {
+                facture.setTotalHT(-facture.getTotalHT());
+            }
+            if (facture.getTotalTTC() != null && facture.getTotalTTC() > 0) {
+                facture.setTotalTTC(-facture.getTotalTTC());
+            }
+            if (facture.getTotalTVA() != null && facture.getTotalTVA() > 0) {
+                facture.setTotalTVA(-facture.getTotalTVA());
+            }
+        }
         
         // Calculer les champs comptables selon les formules Excel
         calculComptableService.calculerFactureAchat(facture);
@@ -95,22 +154,31 @@ public class FactureAchatService {
         }
         
         // Journaliser la création
+        String libelleAudit = Boolean.TRUE.equals(saved.getEstAvoir()) ? 
+            "Avoir Achat " + saved.getNumeroFactureAchat() + " créé" : 
+            "Facture Achat " + saved.getNumeroFactureAchat() + " créée";
         auditService.logCreate("FactureAchat", saved.getId(), 
-            "Facture Achat " + saved.getNumeroFactureAchat() + " créée - Montant: " + saved.getTotalTTC() + " MAD");
+            libelleAudit + " - Montant: " + saved.getTotalTTC() + " MAD");
         
         // Enregistrer la transaction dans le solde
         if (saved.getFournisseurId() != null && saved.getTotalTTC() != null) {
             try {
                 supplierService.findById(saved.getFournisseurId()).ifPresent(supplier -> {
+                    String typeTransaction = Boolean.TRUE.equals(saved.getEstAvoir()) ? 
+                        "AVOIR_ACHAT" : "FACTURE_ACHAT";
+                    String libelle = Boolean.TRUE.equals(saved.getEstAvoir()) ? 
+                        "Avoir achat " + saved.getNumeroFactureAchat() : 
+                        "Facture achat " + saved.getNumeroFactureAchat();
+                    
                     soldeService.enregistrerTransaction(
-                            "FACTURE_ACHAT",
-                            saved.getTotalTTC(),
+                            typeTransaction,
+                            saved.getTotalTTC(), // Déjà négatif pour avoir
                             saved.getFournisseurId(),
                             "FOURNISSEUR",
                             supplier.getNom(),
                             saved.getId(),
                             saved.getNumeroFactureAchat(),
-                            "Facture achat " + saved.getNumeroFactureAchat()
+                            libelle
                     );
                 });
             } catch (Exception e) {
@@ -120,12 +188,59 @@ public class FactureAchatService {
         
         // Générer l'écriture comptable
         try {
-            comptabiliteService.genererEcritureFactureAchat(saved);
+            if (Boolean.TRUE.equals(saved.getEstAvoir())) {
+                comptabiliteService.genererEcritureAvoirAchat(saved);
+            } else {
+                comptabiliteService.genererEcritureFactureAchat(saved);
+            }
         } catch (Exception e) {
             log.warn("Erreur lors de la génération de l'écriture comptable pour facture achat {}: {}", saved.getId(), e.getMessage());
         }
         
         return saved;
+    }
+    
+    /**
+     * Lie un avoir à une facture d'origine
+     */
+    public void linkAvoirToFacture(String avoirId, String factureOrigineId) {
+        FactureAchat avoir = factureRepository.findById(avoirId)
+            .orElseThrow(() -> new RuntimeException("Avoir non trouvé avec id: " + avoirId));
+        
+        if (!Boolean.TRUE.equals(avoir.getEstAvoir())) {
+            throw new IllegalArgumentException("La facture avec id " + avoirId + " n'est pas un avoir");
+        }
+        
+        FactureAchat origine = factureRepository.findById(factureOrigineId)
+            .orElseThrow(() -> new RuntimeException("Facture d'origine non trouvée avec id: " + factureOrigineId));
+        
+        // Empêcher qu'un avoir annule un autre avoir
+        if (Boolean.TRUE.equals(origine.getEstAvoir())) {
+            throw new IllegalArgumentException("Un avoir ne peut pas annuler un autre avoir");
+        }
+        
+        avoir.setFactureOrigineId(factureOrigineId);
+        avoir.setNumeroFactureOrigine(origine.getNumeroFactureAchat());
+        avoir.setUpdatedAt(LocalDateTime.now());
+        
+        factureRepository.save(avoir);
+        
+        auditService.logUpdate("FactureAchat", avoirId, null,
+            "Avoir " + avoir.getNumeroFactureAchat() + " lié à la facture " + origine.getNumeroFactureAchat());
+    }
+    
+    /**
+     * Récupère tous les avoirs liés à une facture
+     */
+    public List<FactureAchat> getAvoirsByFacture(String factureId) {
+        return factureRepository.findByFactureOrigineId(factureId);
+    }
+    
+    /**
+     * Récupère tous les avoirs
+     */
+    public List<FactureAchat> getAllAvoirs() {
+        return factureRepository.findByEstAvoirTrue();
     }
     
     public FactureAchat update(String id, FactureAchat facture) {

@@ -19,6 +19,23 @@ public interface FactureAchatRepository extends MongoRepository<FactureAchat, St
     List<FactureAchat> findByBandeCommandeId(String bandeCommandeId);
     List<FactureAchat> findByDateFactureBetween(LocalDate dateDebut, LocalDate dateFin);
     List<FactureAchat> findByBcReference(String bcReference);
+    
+    // ========== MÉTHODES POUR GESTION DES AVOIRS ==========
+    
+    // Rechercher tous les avoirs
+    List<FactureAchat> findByEstAvoirTrue();
+    
+    // Rechercher les avoirs d'une facture d'origine
+    List<FactureAchat> findByFactureOrigineId(String factureOrigineId);
+    
+    // Rechercher par numéro de facture d'origine
+    List<FactureAchat> findByNumeroFactureOrigine(String numeroFactureOrigine);
+    
+    // Rechercher les avoirs d'un fournisseur
+    List<FactureAchat> findByFournisseurIdAndEstAvoirTrue(String fournisseurId);
+    
+    // Rechercher par type de facture
+    List<FactureAchat> findByTypeFacture(String typeFacture);
 }
 
 

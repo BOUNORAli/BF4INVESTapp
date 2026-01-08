@@ -170,6 +170,14 @@ export interface Invoice {
   type: 'purchase' | 'sale';
   paymentMode?: string;
   
+  // ========== GESTION DES AVOIRS ==========
+  typeFacture?: string; // "NORMALE" ou "AVOIR"
+  estAvoir?: boolean; // true si c'est un avoir
+  factureOrigineId?: string; // ID de la facture d'origine si c'est un avoir
+  numeroFactureOrigine?: string; // Numéro de la facture d'origine (pour affichage rapide)
+  facturesLieesIds?: string[]; // Liste des IDs des factures liées (si avoir partiel)
+  // ==========================================
+  
   // Champs pour les calculs comptables
   typeMouvement?: string; // "C" = Client, "F" = Fournisseur, "IB", "FB", "CTP", "CTD", etc.
   nature?: string; // "facture", "paiement", "loy", etc.

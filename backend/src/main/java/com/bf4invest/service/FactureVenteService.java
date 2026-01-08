@@ -65,24 +65,70 @@ public class FactureVenteService {
     }
     
     public FactureVente create(FactureVente facture) {
-        // Si la facture est liée à un BC, définir la date d'émission au dernier jour du mois du BC
-        if (facture.getBandeCommandeId() != null && !facture.getBandeCommandeId().isEmpty()) {
-            Optional<BandeCommande> bcOpt = bandeCommandeRepository.findById(facture.getBandeCommandeId());
-            if (bcOpt.isPresent()) {
-                BandeCommande bc = bcOpt.get();
-                if (bc.getDateBC() != null) {
-                    // Calculer le dernier jour du mois du BC
-                    LocalDate bcDate = bc.getDateBC();
-                    LocalDate lastDayOfMonth = bcDate.withDayOfMonth(bcDate.lengthOfMonth());
-                    facture.setDateFacture(lastDayOfMonth);
-                    log.info("Date d'émission de la facture vente définie au dernier jour du mois du BC ({}): {}", bc.getNumeroBC(), lastDayOfMonth);
+        // ========== VALIDATION ET GESTION DES AVOIRS ==========
+        if (Boolean.TRUE.equals(facture.getEstAvoir())) {
+            // Initialiser les champs avoir si nécessaire
+            if (facture.getTypeFacture() == null || facture.getTypeFacture().isEmpty()) {
+                facture.setTypeFacture("AVOIR");
+            }
+            
+            // Validation : si c'est un avoir, s'assurer que les montants sont négatifs
+            if (facture.getTotalHT() != null && facture.getTotalHT() > 0) {
+                log.warn("Avoir vente avec montant HT positif, inversion appliquée");
+                facture.setTotalHT(-facture.getTotalHT());
+            }
+            if (facture.getTotalTTC() != null && facture.getTotalTTC() > 0) {
+                log.warn("Avoir vente avec montant TTC positif, inversion appliquée");
+                facture.setTotalTTC(-facture.getTotalTTC());
+            }
+            
+            // Valider la liaison avec la facture d'origine si fournie
+            if (facture.getFactureOrigineId() != null && !facture.getFactureOrigineId().isEmpty()) {
+                Optional<FactureVente> factureOrigine = factureRepository.findById(facture.getFactureOrigineId());
+                if (factureOrigine.isPresent()) {
+                    // Empêcher qu'un avoir annule un autre avoir
+                    if (Boolean.TRUE.equals(factureOrigine.get().getEstAvoir())) {
+                        throw new IllegalArgumentException("Un avoir ne peut pas annuler un autre avoir");
+                    }
+                    facture.setNumeroFactureOrigine(factureOrigine.get().getNumeroFactureVente());
+                } else {
+                    log.warn("Facture d'origine non trouvée pour avoir: " + facture.getFactureOrigineId());
+                }
+            }
+        } else {
+            // Si ce n'est pas un avoir, s'assurer que les flags sont corrects
+            if (facture.getTypeFacture() == null || facture.getTypeFacture().isEmpty()) {
+                facture.setTypeFacture("NORMALE");
+            }
+            if (facture.getEstAvoir() == null) {
+                facture.setEstAvoir(false);
+            }
+            
+            // Si la facture est liée à un BC, définir la date d'émission au dernier jour du mois du BC
+            if (facture.getBandeCommandeId() != null && !facture.getBandeCommandeId().isEmpty()) {
+                Optional<BandeCommande> bcOpt = bandeCommandeRepository.findById(facture.getBandeCommandeId());
+                if (bcOpt.isPresent()) {
+                    BandeCommande bc = bcOpt.get();
+                    if (bc.getDateBC() != null) {
+                        // Calculer le dernier jour du mois du BC
+                        LocalDate bcDate = bc.getDateBC();
+                        LocalDate lastDayOfMonth = bcDate.withDayOfMonth(bcDate.lengthOfMonth());
+                        facture.setDateFacture(lastDayOfMonth);
+                        log.info("Date d'émission de la facture vente définie au dernier jour du mois du BC ({}): {}", bc.getNumeroBC(), lastDayOfMonth);
+                    }
                 }
             }
         }
+        // ========================================================
         
         // Générer le numéro si non fourni
         if (facture.getNumeroFactureVente() == null || facture.getNumeroFactureVente().isEmpty()) {
-            facture.setNumeroFactureVente(generateFactureNumber(facture.getDateFacture()));
+            if (Boolean.TRUE.equals(facture.getEstAvoir())) {
+                // Préfixe spécial pour avoirs
+                facture.setNumeroFactureVente("AVOIR-" + generateFactureNumber(facture.getDateFacture()));
+            } else {
+                facture.setNumeroFactureVente(generateFactureNumber(facture.getDateFacture()));
+            }
         }
         
         // Calculer la date d'échéance (dateFacture + délai paramétrable, défaut 30j)
@@ -94,6 +140,19 @@ public class FactureVenteService {
         
         // Calculer les totaux
         calculateTotals(facture);
+        
+        // Pour les avoirs, s'assurer que les totaux calculés sont négatifs
+        if (Boolean.TRUE.equals(facture.getEstAvoir())) {
+            if (facture.getTotalHT() != null && facture.getTotalHT() > 0) {
+                facture.setTotalHT(-facture.getTotalHT());
+            }
+            if (facture.getTotalTTC() != null && facture.getTotalTTC() > 0) {
+                facture.setTotalTTC(-facture.getTotalTTC());
+            }
+            if (facture.getTotalTVA() != null && facture.getTotalTVA() > 0) {
+                facture.setTotalTVA(-facture.getTotalTVA());
+            }
+        }
         
         // Calculer les champs comptables selon les formules Excel
         calculComptableService.calculerFactureVente(facture);
@@ -114,22 +173,31 @@ public class FactureVenteService {
         }
         
         // Journaliser la création
+        String libelleAudit = Boolean.TRUE.equals(saved.getEstAvoir()) ? 
+            "Avoir Vente " + saved.getNumeroFactureVente() + " créé" : 
+            "Facture Vente " + saved.getNumeroFactureVente() + " créée";
         auditService.logCreate("FactureVente", saved.getId(), 
-            "Facture Vente " + saved.getNumeroFactureVente() + " créée - Montant: " + saved.getTotalTTC() + " MAD");
+            libelleAudit + " - Montant: " + saved.getTotalTTC() + " MAD");
         
         // Enregistrer la transaction dans le solde
         if (saved.getClientId() != null && saved.getTotalTTC() != null) {
             try {
                 clientService.findById(saved.getClientId()).ifPresent(client -> {
+                    String typeTransaction = Boolean.TRUE.equals(saved.getEstAvoir()) ? 
+                        "AVOIR_VENTE" : "FACTURE_VENTE";
+                    String libelle = Boolean.TRUE.equals(saved.getEstAvoir()) ? 
+                        "Avoir vente " + saved.getNumeroFactureVente() : 
+                        "Facture vente " + saved.getNumeroFactureVente();
+                    
                     soldeService.enregistrerTransaction(
-                            "FACTURE_VENTE",
-                            saved.getTotalTTC(),
+                            typeTransaction,
+                            saved.getTotalTTC(), // Déjà négatif pour avoir
                             saved.getClientId(),
                             "CLIENT",
                             client.getNom(),
                             saved.getId(),
                             saved.getNumeroFactureVente(),
-                            "Facture vente " + saved.getNumeroFactureVente()
+                            libelle
                     );
                 });
             } catch (Exception e) {
@@ -139,12 +207,59 @@ public class FactureVenteService {
         
         // Générer l'écriture comptable
         try {
-            comptabiliteService.genererEcritureFactureVente(saved);
+            if (Boolean.TRUE.equals(saved.getEstAvoir())) {
+                comptabiliteService.genererEcritureAvoirVente(saved);
+            } else {
+                comptabiliteService.genererEcritureFactureVente(saved);
+            }
         } catch (Exception e) {
             log.warn("Erreur lors de la génération de l'écriture comptable pour facture vente {}: {}", saved.getId(), e.getMessage());
         }
         
         return saved;
+    }
+    
+    /**
+     * Lie un avoir à une facture d'origine
+     */
+    public void linkAvoirToFacture(String avoirId, String factureOrigineId) {
+        FactureVente avoir = factureRepository.findById(avoirId)
+            .orElseThrow(() -> new RuntimeException("Avoir non trouvé avec id: " + avoirId));
+        
+        if (!Boolean.TRUE.equals(avoir.getEstAvoir())) {
+            throw new IllegalArgumentException("La facture avec id " + avoirId + " n'est pas un avoir");
+        }
+        
+        FactureVente origine = factureRepository.findById(factureOrigineId)
+            .orElseThrow(() -> new RuntimeException("Facture d'origine non trouvée avec id: " + factureOrigineId));
+        
+        // Empêcher qu'un avoir annule un autre avoir
+        if (Boolean.TRUE.equals(origine.getEstAvoir())) {
+            throw new IllegalArgumentException("Un avoir ne peut pas annuler un autre avoir");
+        }
+        
+        avoir.setFactureOrigineId(factureOrigineId);
+        avoir.setNumeroFactureOrigine(origine.getNumeroFactureVente());
+        avoir.setUpdatedAt(LocalDateTime.now());
+        
+        factureRepository.save(avoir);
+        
+        auditService.logUpdate("FactureVente", avoirId, null,
+            "Avoir " + avoir.getNumeroFactureVente() + " lié à la facture " + origine.getNumeroFactureVente());
+    }
+    
+    /**
+     * Récupère tous les avoirs liés à une facture
+     */
+    public List<FactureVente> getAvoirsByFacture(String factureId) {
+        return factureRepository.findByFactureOrigineId(factureId);
+    }
+    
+    /**
+     * Récupère tous les avoirs
+     */
+    public List<FactureVente> getAllAvoirs() {
+        return factureRepository.findByEstAvoirTrue();
     }
     
     public FactureVente update(String id, FactureVente facture) {

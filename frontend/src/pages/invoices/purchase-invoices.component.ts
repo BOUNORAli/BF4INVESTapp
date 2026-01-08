@@ -50,11 +50,12 @@ import type { EcritureComptable } from '../../models/types';
         
         <!-- Filter Bar -->
         <div class="p-4 border-b border-slate-100 flex flex-col md:flex-row gap-3 bg-slate-50/50 justify-between items-center">
-           <div class="flex gap-2 overflow-x-auto w-full md:w-auto pb-2 md:pb-0">
+             <div class="flex gap-2 overflow-x-auto w-full md:w-auto pb-2 md:pb-0">
              <button (click)="setFilter('all')" [class.bg-slate-800]="filterStatus() === 'all'" [class.text-white]="filterStatus() === 'all'" class="px-3 py-1.5 rounded-full text-xs font-semibold bg-white text-slate-600 border border-slate-200 hover:bg-slate-100 shrink-0 transition-colors">Tout voir</button>
              <button (click)="setFilter('paid')" [class.bg-emerald-600]="filterStatus() === 'paid'" [class.text-white]="filterStatus() === 'paid'" [class.border-emerald-600]="filterStatus() === 'paid'" class="px-3 py-1.5 rounded-full text-xs font-semibold bg-white text-slate-600 border border-slate-200 hover:bg-slate-100 shrink-0 transition-colors">Payées</button>
              <button (click)="setFilter('pending')" [class.bg-amber-500]="filterStatus() === 'pending'" [class.text-white]="filterStatus() === 'pending'" [class.border-amber-500]="filterStatus() === 'pending'" class="px-3 py-1.5 rounded-full text-xs font-semibold bg-white text-slate-600 border border-slate-200 hover:bg-slate-100 shrink-0 transition-colors">En attente</button>
              <button (click)="setFilter('overdue')" [class.bg-red-600]="filterStatus() === 'overdue'" [class.text-white]="filterStatus() === 'overdue'" [class.border-red-600]="filterStatus() === 'overdue'" class="px-3 py-1.5 rounded-full text-xs font-semibold bg-white text-slate-600 border border-slate-200 hover:bg-slate-100 shrink-0 transition-colors">Retard</button>
+             <button (click)="setFilter('avoir')" [class.bg-purple-600]="filterStatus() === 'avoir'" [class.text-white]="filterStatus() === 'avoir'" [class.border-purple-600]="filterStatus() === 'avoir'" class="px-3 py-1.5 rounded-full text-xs font-semibold bg-white text-slate-600 border border-slate-200 hover:bg-slate-100 shrink-0 transition-colors">Avoirs</button>
            </div>
            
            <div class="flex gap-2 items-center w-full md:w-auto">
@@ -107,13 +108,27 @@ import type { EcritureComptable } from '../../models/types';
           </thead>
           <tbody class="divide-y divide-slate-100">
             @for (inv of paginatedInvoices(); track inv.id) {
-              <tr class="bg-white hover:bg-slate-50 transition-colors group" [attr.data-item-id]="inv.id">
-                <td class="px-4 md:px-6 py-4 font-medium text-slate-900 text-sm md:text-base">{{ inv.number }}</td>
+              <tr class="bg-white hover:bg-slate-50 transition-colors group" [class.bg-red-50/30]="inv.estAvoir" [attr.data-item-id]="inv.id">
+                <td class="px-4 md:px-6 py-4 font-medium text-slate-900 text-sm md:text-base">
+                  <div class="flex items-center gap-2">
+                    {{ inv.number }}
+                    @if (inv.estAvoir) {
+                      <span class="px-2 py-0.5 bg-red-100 text-red-700 rounded text-xs font-bold border border-red-200">
+                        AVOIR
+                      </span>
+                    }
+                  </div>
+                </td>
                 <td class="px-4 md:px-6 py-4">
-                   <div class="flex flex-col">
+                   <div class="flex flex-col gap-1">
                      <span class="font-medium text-slate-700 text-sm">{{ store.getSupplierName(inv.partnerId || '') }}</span>
                      @if (inv.bcId) {
-                       <span class="text-xs text-blue-500 bg-blue-50 w-fit px-1.5 py-0.5 rounded mt-0.5">{{ store.getBCNumber(inv.bcId) }}</span>
+                       <span class="text-xs text-blue-500 bg-blue-50 w-fit px-1.5 py-0.5 rounded">{{ store.getBCNumber(inv.bcId) }}</span>
+                     }
+                     @if (inv.estAvoir && inv.numeroFactureOrigine) {
+                       <span class="text-xs text-purple-600 bg-purple-50 w-fit px-1.5 py-0.5 rounded border border-purple-200">
+                         Annule: {{ inv.numeroFactureOrigine }}
+                       </span>
                      }
                    </div>
                 </td>
@@ -125,7 +140,9 @@ import type { EcritureComptable } from '../../models/types';
                     </span>
                   </div>
                 </td>
-                <td class="px-4 md:px-6 py-4 text-right font-medium text-slate-800 text-sm md:text-base">{{ inv.amountTTC | number:'1.2-2' }} MAD</td>
+                <td class="px-4 md:px-6 py-4 text-right font-medium text-sm md:text-base" [class.text-red-600]="inv.estAvoir" [class.text-slate-800]="!inv.estAvoir">
+                  {{ inv.amountTTC | number:'1.2-2' }} MAD
+                </td>
                 <td class="px-4 md:px-6 py-4 text-right hidden md:table-cell">
                   @if (getRemainingAmount(inv) === 0) {
                     <span class="inline-flex items-center bg-emerald-50 text-emerald-700 text-xs px-2.5 py-1 rounded-full font-medium border border-emerald-200">
@@ -264,7 +281,33 @@ import type { EcritureComptable } from '../../models/types';
                <form [formGroup]="form" (ngSubmit)="onSubmit()" class="flex-1 overflow-y-auto p-4 md:p-6 space-y-6">
                   
                   <!-- Section Link -->
-                  <div class="bg-blue-50 p-4 rounded-xl border border-blue-100 space-y-4">
+                     <div class="bg-blue-50 p-4 rounded-xl border border-blue-100 space-y-4">
+                     <!-- Option Avoir -->
+                     <div class="bg-red-50 p-4 rounded-xl border border-red-100">
+                        <label class="flex items-center gap-3 cursor-pointer">
+                           <input type="checkbox" formControlName="estAvoir" 
+                                  class="w-5 h-5 text-red-600 border-red-300 rounded focus:ring-red-500 focus:ring-2">
+                           <div>
+                              <span class="text-sm font-semibold text-red-800">Facture d'Avoir</span>
+                              <p class="text-xs text-red-600 mt-0.5">Cochez si c'est un avoir annulant une autre facture</p>
+                           </div>
+                        </label>
+                        
+                        @if (form.get('estAvoir')?.value) {
+                          <div class="mt-3">
+                            <label class="block text-xs font-bold text-red-700 uppercase mb-1">Facture d'origine à annuler</label>
+                            <select formControlName="factureOrigineId" class="w-full p-2 border border-red-200 rounded-lg bg-white focus:ring-2 focus:ring-red-500/20 outline-none">
+                              <option value="">Sélectionner...</option>
+                              @for (facture of availableFacturesForAvoir(); track facture.id) {
+                                <option [value]="facture.id">
+                                  {{ facture.number }} - {{ facture.amountTTC | number:'1.2-2' }} MAD - {{ facture.date }}
+                                </option>
+                              }
+                            </select>
+                          </div>
+                        }
+                     </div>
+                     
                      <div>
                         <label class="block text-xs font-bold text-blue-700 uppercase mb-1">Fournisseur <span class="text-red-500">*</span></label>
                         <select formControlName="partnerId" (change)="onPartnerChange()" 
@@ -1139,6 +1182,19 @@ export class PurchaseInvoicesComponent implements OnInit {
   isEditMode = signal(false);
   editingId: string | null = null;
   availableBCs = signal<BC[]>([]);
+  
+  // Factures disponibles pour liaison avec avoir
+  availableFacturesForAvoir = computed(() => {
+    const partnerId = this.form.get('partnerId')?.value;
+    if (!partnerId) return [];
+    
+    // Retourner les factures d'achat normales (non avoirs) du même fournisseur
+    return this.store.purchaseInvoices().filter(f => 
+      f.partnerId === partnerId && 
+      !f.estAvoir &&
+      f.type === 'purchase'
+    );
+  });
   selectedInvoiceForDetails = signal<Invoice | null>(null);
   selectedInvoiceForPayments = signal<Invoice | null>(null);
   selectedInvoiceForEcritures = signal<Invoice | null>(null);
@@ -1182,7 +1238,7 @@ export class PurchaseInvoicesComponent implements OnInit {
   });
 
   // Filters
-  filterStatus = signal<'all' | 'paid' | 'pending' | 'overdue'>('all');
+  filterStatus = signal<'all' | 'paid' | 'pending' | 'overdue' | 'avoir'>('all');
   searchTerm = signal('');
   bcIdFilter = signal<string | null>(null);
   sortOrder = signal<'asc' | 'desc'>('desc'); // Tri par date
@@ -1204,7 +1260,10 @@ export class PurchaseInvoicesComponent implements OnInit {
     amountTTC: [0, [Validators.required, Validators.min(0)]],
     status: ['pending', Validators.required],
     paymentMode: [''],
-    ajouterAuStock: [false] // Option pour ajouter au stock
+    ajouterAuStock: [false], // Option pour ajouter au stock
+    // Champs pour avoirs
+    estAvoir: [false],
+    factureOrigineId: ['']
   });
 
   // Set pour tracker les factures pour lesquelles on a déjà tenté de charger les paiements
@@ -1312,8 +1371,10 @@ export class PurchaseInvoicesComponent implements OnInit {
 
     // Status Filter
     const status = this.filterStatus();
-    if (status !== 'all') {
-      list = list.filter(i => i.status === status);
+    if (status === 'avoir') {
+      list = list.filter(i => i.estAvoir === true);
+    } else if (status !== 'all') {
+      list = list.filter(i => i.status === status && !i.estAvoir);
     }
 
     // Search Filter
@@ -1344,7 +1405,7 @@ export class PurchaseInvoicesComponent implements OnInit {
 
   totalPages = computed(() => Math.ceil(this.filteredInvoices().length / this.pageSize()));
 
-  setFilter(status: 'all' | 'paid' | 'pending' | 'overdue') {
+  setFilter(status: 'all' | 'paid' | 'pending' | 'overdue' | 'avoir') {
     this.filterStatus.set(status);
     this.currentPage.set(1); // Reset page on filter change
   }
@@ -1366,7 +1427,13 @@ export class PurchaseInvoicesComponent implements OnInit {
     const paiements = this.store.payments().get(inv.id) || [];
     const montantPaye = paiements.reduce((sum, p) => sum + (p.montant || 0), 0);
     const montantTotal = inv.amountTTC || 0;
-    return Math.max(0, montantTotal - montantPaye); // Ne pas afficher de valeurs négatives
+    
+    // Pour les avoirs, permettre les montants négatifs
+    if (inv.estAvoir) {
+      return montantTotal - montantPaye; // Peut être négatif pour avoir
+    }
+    
+    return Math.max(0, montantTotal - montantPaye); // Pour factures normales, ne pas afficher de valeurs négatives
   }
 
   getDueDateClass(dateStr: string): string {
@@ -1423,7 +1490,9 @@ export class PurchaseInvoicesComponent implements OnInit {
       status: 'pending',
       amountHT: 0,
       amountTTC: 0,
-      ajouterAuStock: false
+      ajouterAuStock: false,
+      estAvoir: false,
+      factureOrigineId: ''
     });
     // Trigger due date calc
     const today = new Date();
@@ -1507,7 +1576,9 @@ export class PurchaseInvoicesComponent implements OnInit {
       amountTTC: inv.amountTTC != null && inv.amountTTC !== undefined ? Number(inv.amountTTC) : 0,
       status: inv.status || 'pending',
       paymentMode: inv.paymentMode || '',
-      ajouterAuStock: (inv as any).ajouterAuStock || false
+      ajouterAuStock: (inv as any).ajouterAuStock || false,
+      estAvoir: inv.estAvoir || false,
+      factureOrigineId: inv.factureOrigineId || ''
     });
     // Populate BCs if supplier is set
     if (inv.partnerId) {
@@ -1834,11 +1905,16 @@ export class PurchaseInvoicesComponent implements OnInit {
       bcId: val.bcId || undefined,
       date: val.date,
       dueDate: val.dueDate,
-      amountHT: amountHT,
-      amountTTC: amountTTC,
+      amountHT: val.estAvoir && amountHT > 0 ? -amountHT : amountHT, // Inverser si avoir
+      amountTTC: val.estAvoir && amountTTC > 0 ? -amountTTC : amountTTC, // Inverser si avoir
       status: val.status || 'pending',
       paymentMode: val.paymentMode || undefined,
-      ajouterAuStock: val.ajouterAuStock || false
+      ajouterAuStock: val.ajouterAuStock || false,
+      // Champs pour avoirs
+      estAvoir: val.estAvoir || false,
+      typeFacture: val.estAvoir ? 'AVOIR' : 'NORMALE',
+      factureOrigineId: val.factureOrigineId || undefined,
+      numeroFactureOrigine: val.factureOrigineId ? undefined : undefined // Sera rempli par le backend
     };
     
     // Ajouter les informations du fichier si uploadé
