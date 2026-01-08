@@ -1427,6 +1427,29 @@ public class ExcelImportService {
     }
     
     /**
+     * Construit la référence article en combinant le numéro et la désignation.
+     * Format: "NUMERO - DESIGNATION" si les deux existent, sinon celui qui existe.
+     * 
+     * @param produitRef Le numéro de l'article (peut être null ou vide)
+     * @param designation Le nom de l'article (peut être null ou vide)
+     * @return La référence combinée
+     */
+    private String buildRefArticle(String produitRef, String designation) {
+        String ref = produitRef != null ? produitRef.trim() : "";
+        String desig = designation != null ? designation.trim() : "";
+        
+        if (!ref.isEmpty() && !desig.isEmpty()) {
+            return ref + " - " + desig;
+        } else if (!ref.isEmpty()) {
+            return ref;
+        } else if (!desig.isEmpty()) {
+            return desig;
+        } else {
+            return "";
+        }
+    }
+    
+    /**
      * Crée ou met à jour un produit à partir d'un ProductAggregate.
      * Calcule les prix pondérés et met à jour le produit dans la base de données.
      */
@@ -1436,12 +1459,26 @@ public class ExcelImportService {
             Double prixAchatPondere = agg.getPrixAchatPondere();
             Double prixVentePondere = agg.getPrixVentePondere();
             
+            // Construire la référence article combinée (numéro + nom)
+            String refArticle = buildRefArticle(agg.produitRef, agg.designation);
+            
             // Chercher produit existant par ref + designation + unite
+            // On essaie d'abord avec le nouveau format (refArticle combiné), puis avec l'ancien format (juste le numéro)
+            // pour gérer la transition des produits existants
             Optional<Product> existingOpt = productRepository.findByRefArticleAndDesignationAndUnite(
-                agg.produitRef != null ? agg.produitRef : "",
+                refArticle,
                 agg.designation != null ? agg.designation : "",
                 agg.unite != null ? agg.unite : "U"
             );
+            
+            // Si pas trouvé avec le nouveau format, essayer avec l'ancien format (juste le numéro)
+            if (!existingOpt.isPresent() && agg.produitRef != null && !agg.produitRef.trim().isEmpty()) {
+                existingOpt = productRepository.findByRefArticleAndDesignationAndUnite(
+                    agg.produitRef.trim(),
+                    agg.designation != null ? agg.designation : "",
+                    agg.unite != null ? agg.unite : "U"
+                );
+            }
             
             Product product;
             if (existingOpt.isPresent()) {
@@ -1459,6 +1496,8 @@ public class ExcelImportService {
                 }
                 
                 // Mettre à jour les autres champs si nécessaire
+                // Mettre à jour refArticle avec la nouvelle valeur combinée
+                product.setRefArticle(refArticle);
                 if (agg.designation != null && !agg.designation.isEmpty()) {
                     product.setDesignation(agg.designation);
                 }
@@ -1481,7 +1520,7 @@ public class ExcelImportService {
             } else {
                 // Créer nouveau produit
                 product = Product.builder()
-                    .refArticle(agg.produitRef)
+                    .refArticle(refArticle)
                     .designation(agg.designation)
                     .unite(agg.unite != null ? agg.unite : "U")
                     .prixAchatPondereHT(prixAchatPondere)
