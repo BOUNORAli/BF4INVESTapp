@@ -140,9 +140,26 @@ import type { EcritureComptable } from '../../models/types';
                     </span>
                   </div>
                 </td>
-                <td class="px-4 md:px-6 py-4 text-right font-medium text-sm md:text-base" [class.text-red-600]="inv.estAvoir" [class.text-slate-800]="!inv.estAvoir">
-                  {{ inv.amountTTC | number:'1.2-2' }} MAD
+                <td class="px-4 md:px-6 py-4 text-right">
+                  <div class="flex flex-col items-end gap-1">
+                    <span class="font-medium text-sm md:text-base" [class.text-red-600]="inv.estAvoir" [class.text-slate-800]="!inv.estAvoir">
+                      {{ inv.amountTTC | number:'1.2-2' }} MAD
+                    </span>
+                    <!-- Montant Restant visible sur mobile -->
+                    <div class="md:hidden">
+                      @if (getRemainingAmount(inv) === 0) {
+                        <span class="inline-flex items-center bg-emerald-50 text-emerald-700 text-xs px-2 py-0.5 rounded-full font-medium border border-emerald-200">
+                          Reste: {{ getRemainingAmount(inv) | number:'1.2-2' }} MAD
+                        </span>
+                      } @else {
+                        <span class="inline-flex items-center bg-amber-50 text-amber-700 text-xs px-2 py-0.5 rounded-full font-medium border border-amber-200 font-bold">
+                          Reste: {{ getRemainingAmount(inv) | number:'1.2-2' }} MAD
+                        </span>
+                      }
+                    </div>
+                  </div>
                 </td>
+                <!-- Montant Restant visible uniquement sur desktop -->
                 <td class="px-4 md:px-6 py-4 text-right hidden md:table-cell">
                   @if (getRemainingAmount(inv) === 0) {
                     <span class="inline-flex items-center bg-emerald-50 text-emerald-700 text-xs px-2.5 py-1 rounded-full font-medium border border-emerald-200">
