@@ -60,10 +60,19 @@ import { StoreService, Client, Supplier } from '../../services/store.service';
             <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 hover-card group relative" [attr.data-item-id]="client.id">
                
                <div class="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
-                 <button (click)="editClient(client)" class="p-1.5 text-blue-600 bg-blue-50 rounded hover:bg-blue-100">
+                 <button (click)="viewSituation('client', client.id)" class="p-1.5 text-indigo-600 bg-indigo-50 rounded hover:bg-indigo-100" title="Voir situation">
+                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+                 </button>
+                 <button (click)="exportClientPDF(client.id)" class="p-1.5 text-purple-600 bg-purple-50 rounded hover:bg-purple-100" title="Exporter PDF">
+                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                 </button>
+                 <button (click)="exportClientExcel(client.id)" class="p-1.5 text-green-600 bg-green-50 rounded hover:bg-green-100" title="Exporter Excel">
+                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                 </button>
+                 <button (click)="editClient(client)" class="p-1.5 text-blue-600 bg-blue-50 rounded hover:bg-blue-100" title="Modifier">
                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
                  </button>
-                 <button (click)="deleteClient(client.id)" class="p-1.5 text-red-600 bg-red-50 rounded hover:bg-red-100">
+                 <button (click)="deleteClient(client.id)" class="p-1.5 text-red-600 bg-red-50 rounded hover:bg-red-100" title="Supprimer">
                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                  </button>
                </div>
@@ -133,10 +142,19 @@ import { StoreService, Client, Supplier } from '../../services/store.service';
 
                <div class="p-6">
                  <div class="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
-                   <button (click)="editSupplier(sup)" class="p-1.5 text-blue-600 bg-blue-50 rounded hover:bg-blue-100">
+                   <button (click)="viewSituation('supplier', sup.id)" class="p-1.5 text-indigo-600 bg-indigo-50 rounded hover:bg-indigo-100" title="Voir situation">
+                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+                   </button>
+                   <button (click)="exportSupplierPDF(sup.id)" class="p-1.5 text-purple-600 bg-purple-50 rounded hover:bg-purple-100" title="Exporter PDF">
+                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                   </button>
+                   <button (click)="exportSupplierExcel(sup.id)" class="p-1.5 text-green-600 bg-green-50 rounded hover:bg-green-100" title="Exporter Excel">
+                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                   </button>
+                   <button (click)="editSupplier(sup)" class="p-1.5 text-blue-600 bg-blue-50 rounded hover:bg-blue-100" title="Modifier">
                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
                    </button>
-                   <button (click)="deleteSupplier(sup.id)" class="p-1.5 text-red-600 bg-red-50 rounded hover:bg-red-100">
+                   <button (click)="deleteSupplier(sup.id)" class="p-1.5 text-red-600 bg-red-50 rounded hover:bg-red-100" title="Supprimer">
                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                    </button>
                  </div>
@@ -328,6 +346,7 @@ import { StoreService, Client, Supplier } from '../../services/store.service';
 })
 export class PartnersComponent {
   store = inject(StoreService);
+  router = inject(Router);
   fb = inject(FormBuilder);
   
   activeTab = signal<'clients' | 'suppliers'>('clients');
@@ -429,6 +448,50 @@ export class PartnersComponent {
       } catch (error) {
         // Error already handled in store
       }
+    }
+  }
+
+  viewSituation(type: 'client' | 'supplier', id: string) {
+    this.router.navigate(['/partners/situation', type, id]);
+  }
+
+  async exportClientPDF(id: string) {
+    try {
+      await this.store.exportPartnerSituationPDF('CLIENT', id);
+      this.store.showToast('Export PDF téléchargé avec succès', 'success');
+    } catch (error) {
+      console.error('Erreur lors de l\'export PDF:', error);
+      this.store.showToast('Erreur lors de l\'export PDF', 'error');
+    }
+  }
+
+  async exportClientExcel(id: string) {
+    try {
+      await this.store.exportPartnerSituationExcel('CLIENT', id);
+      this.store.showToast('Export Excel téléchargé avec succès', 'success');
+    } catch (error) {
+      console.error('Erreur lors de l\'export Excel:', error);
+      this.store.showToast('Erreur lors de l\'export Excel', 'error');
+    }
+  }
+
+  async exportSupplierPDF(id: string) {
+    try {
+      await this.store.exportPartnerSituationPDF('FOURNISSEUR', id);
+      this.store.showToast('Export PDF téléchargé avec succès', 'success');
+    } catch (error) {
+      console.error('Erreur lors de l\'export PDF:', error);
+      this.store.showToast('Erreur lors de l\'export PDF', 'error');
+    }
+  }
+
+  async exportSupplierExcel(id: string) {
+    try {
+      await this.store.exportPartnerSituationExcel('FOURNISSEUR', id);
+      this.store.showToast('Export Excel téléchargé avec succès', 'success');
+    } catch (error) {
+      console.error('Erreur lors de l\'export Excel:', error);
+      this.store.showToast('Erreur lors de l\'export Excel', 'error');
     }
   }
 

@@ -57,6 +57,14 @@ export const routes: Routes = [
         loadComponent: () => import('./pages/partners/partners.component').then(m => m.PartnersComponent)
       },
       { 
+        path: 'partners/situation/:type/:id', 
+        loadComponent: () => import('./pages/partners/partner-situation.component').then(m => m.PartnerSituationComponent)
+      },
+      { 
+        path: 'partners/situation/:type', 
+        loadComponent: () => import('./pages/partners/partner-situation.component').then(m => m.PartnerSituationComponent)
+      },
+      { 
         path: 'import', 
         loadComponent: () => import('./pages/import/import.component').then(m => m.ImportComponent)
       },

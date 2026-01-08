@@ -1663,4 +1663,102 @@ export class StoreService {
     const today = new Date().toISOString().split('T')[0];
     return dateRappel === today;
   }
+
+  // === PARTNER SITUATION ===
+  
+  async getPartnerSituation(
+    type: 'CLIENT' | 'FOURNISSEUR',
+    partnerId: string,
+    from?: string,
+    to?: string
+  ): Promise<any> {
+    try {
+      const endpoint = type === 'CLIENT' 
+        ? `/partner-situation/client/${partnerId}`
+        : `/partner-situation/supplier/${partnerId}`;
+      
+      const params: any = {};
+      if (from) params.from = from;
+      if (to) params.to = to;
+      
+      return await this.apiService.get<any>(endpoint, params).toPromise();
+    } catch (error) {
+      console.error('Error fetching partner situation:', error);
+      throw error;
+    }
+  }
+
+  async exportPartnerSituationPDF(
+    type: 'CLIENT' | 'FOURNISSEUR',
+    partnerId: string,
+    from?: string,
+    to?: string
+  ): Promise<void> {
+    try {
+      const endpoint = type === 'CLIENT'
+        ? `/partner-situation/client/${partnerId}/export/pdf`
+        : `/partner-situation/supplier/${partnerId}/export/pdf`;
+      
+      const params: any = {};
+      if (from) params.from = from;
+      if (to) params.to = to;
+      
+      const blob = await this.apiService.downloadFile(endpoint, params).toPromise();
+      
+      if (blob) {
+        const today = new Date().toISOString().split('T')[0];
+        const fileName = `situation_${type.toLowerCase()}_${partnerId}_${today}.pdf`;
+        
+        const urlObj = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = urlObj;
+        link.download = fileName;
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(urlObj);
+      }
+    } catch (error) {
+      console.error('Error exporting partner situation PDF:', error);
+      throw error;
+    }
+  }
+
+  async exportPartnerSituationExcel(
+    type: 'CLIENT' | 'FOURNISSEUR',
+    partnerId: string,
+    from?: string,
+    to?: string
+  ): Promise<void> {
+    try {
+      const endpoint = type === 'CLIENT'
+        ? `/partner-situation/client/${partnerId}/export/excel`
+        : `/partner-situation/supplier/${partnerId}/export/excel`;
+      
+      const params: any = {};
+      if (from) params.from = from;
+      if (to) params.to = to;
+      
+      const blob = await this.apiService.downloadFile(endpoint, params).toPromise();
+      
+      if (blob) {
+        const today = new Date().toISOString().split('T')[0];
+        const fileName = `situation_${type.toLowerCase()}_${partnerId}_${today}.xlsx`;
+        
+        const urlObj = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = urlObj;
+        link.download = fileName;
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(urlObj);
+      }
+    } catch (error) {
+      console.error('Error exporting partner situation Excel:', error);
+      throw error;
+    }
+  }
 }
