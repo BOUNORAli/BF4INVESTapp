@@ -143,9 +143,7 @@ public class OrdreVirementService {
                     if (ov.getBanqueBeneficiaire() == null || ov.getBanqueBeneficiaire().trim().isEmpty()) {
                         throw new IllegalArgumentException("La banque bénéficiaire est requise");
                     }
-                    if (ov.getBanqueEmettrice() == null || ov.getBanqueEmettrice().trim().isEmpty()) {
-                        throw new IllegalArgumentException("La banque émettrice est requise");
-                    }
+                    // La banque émettrice est maintenant gérée par les paramètres (CompanyInfo), pas besoin de validation
                     if (ov.getMotif() == null || ov.getMotif().trim().isEmpty()) {
                         throw new IllegalArgumentException("Le motif est requis");
                     }

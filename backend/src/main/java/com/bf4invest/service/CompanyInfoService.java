@@ -25,7 +25,7 @@ public class CompanyInfoService {
         return repository.findFirstByOrderByUpdatedAtDesc()
                 .orElseGet(() -> {
                     CompanyInfo defaults = CompanyInfo.builder()
-                            .raisonSociale("BF4 INVEST SARL")
+                            .raisonSociale("STE BF4 INVEST")
                             .ville("Meknes")
                             .ice("002889872000062")
                             .capital("2.000.000,00")

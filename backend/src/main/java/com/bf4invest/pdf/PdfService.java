@@ -2413,7 +2413,7 @@ public class PdfService {
         Font blueBoldFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 12, BLUE_DARK);
         
         // "NOM DU DONNEUR D'ORDRE : STE BF4 INVEST"
-        String raisonSociale = companyInfo.getRaisonSociale() != null ? companyInfo.getRaisonSociale() : "BF4 INVEST SARL";
+        String raisonSociale = companyInfo.getRaisonSociale() != null ? companyInfo.getRaisonSociale() : "STE BF4 INVEST";
         Paragraph donorLine = new Paragraph();
         donorLine.add(new Chunk("NOM DU DONNEUR D'ORDRE : ", labelFont));
         donorLine.add(new Chunk(raisonSociale, blueBoldFont));
