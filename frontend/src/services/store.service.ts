@@ -1681,7 +1681,7 @@ export class StoreService {
       if (from) params.from = from;
       if (to) params.to = to;
       
-      return await this.apiService.get<any>(endpoint, params).toPromise();
+      return await this.api.get<any>(endpoint, params).toPromise();
     } catch (error) {
       console.error('Error fetching partner situation:', error);
       throw error;
@@ -1703,7 +1703,7 @@ export class StoreService {
       if (from) params.from = from;
       if (to) params.to = to;
       
-      const blob = await this.apiService.downloadFile(endpoint, params).toPromise();
+      const blob = await this.api.downloadFile(endpoint, params).toPromise();
       
       if (blob) {
         const today = new Date().toISOString().split('T')[0];
@@ -1740,7 +1740,7 @@ export class StoreService {
       if (from) params.from = from;
       if (to) params.to = to;
       
-      const blob = await this.apiService.downloadFile(endpoint, params).toPromise();
+      const blob = await this.api.downloadFile(endpoint, params).toPromise();
       
       if (blob) {
         const today = new Date().toISOString().split('T')[0];
