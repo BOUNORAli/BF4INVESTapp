@@ -168,12 +168,12 @@ public class PartnerSituationPdfGenerator {
         summaryTable.setSpacingAfter(15);
         
         // En-tête
-        PdfPCell headerCell = new PdfPCell(new Phrase("RÉCAPITULATIF", titleFont));
+        Font whiteTitleFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 12, Color.WHITE);
+        PdfPCell headerCell = new PdfPCell(new Phrase("RÉCAPITULATIF", whiteTitleFont));
         headerCell.setColspan(4);
         headerCell.setBackgroundColor(BLUE_DARK);
         headerCell.setPadding(8);
         headerCell.setHorizontalAlignment(Element.ALIGN_CENTER);
-        headerCell.setTextColor(Color.WHITE);
         summaryTable.addCell(headerCell);
         
         // Lignes de totaux

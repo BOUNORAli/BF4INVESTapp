@@ -319,7 +319,6 @@ public class PartnerSituationExcelExporter {
         style.setBorderTop(BorderStyle.THIN);
         style.setBorderLeft(BorderStyle.THIN);
         style.setBorderRight(BorderStyle.THIN);
-        style.setPaddingLeft((short) 5);
         return style;
     }
     
@@ -331,7 +330,6 @@ public class PartnerSituationExcelExporter {
         style.setBorderTop(BorderStyle.THIN);
         style.setBorderLeft(BorderStyle.THIN);
         style.setBorderRight(BorderStyle.THIN);
-        style.setPaddingRight((short) 5);
         return style;
     }
     
@@ -341,7 +339,6 @@ public class PartnerSituationExcelExporter {
         style.setBorderTop(BorderStyle.THIN);
         style.setBorderLeft(BorderStyle.THIN);
         style.setBorderRight(BorderStyle.THIN);
-        style.setPaddingLeft((short) 5);
         return style;
     }
     
