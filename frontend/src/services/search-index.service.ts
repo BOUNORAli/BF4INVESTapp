@@ -31,26 +31,41 @@ export class SearchIndexService {
    * Indexe un élément pour la recherche
    */
   indexEntry(entry: SearchIndexEntry): void {
-    // Supprimer l'ancienne entrée si elle existe
-    this.removeEntry(entry.id);
-
-    // Ajouter l'entrée
-    this.entries.set(entry.id, entry);
-
-    // Indexer par type
-    if (!this.entriesByType.has(entry.type)) {
-      this.entriesByType.set(entry.type, new Set());
+    if (!entry || !entry.id || !entry.type) {
+      console.warn('Tentative d\'indexation d\'une entrée invalide:', entry);
+      return;
     }
-    this.entriesByType.get(entry.type)!.add(entry.id);
+    
+    try {
+      // Supprimer l'ancienne entrée si elle existe
+      this.removeEntry(entry.id);
 
-    // Indexer tous les mots-clés
-    entry.keywords.forEach(keyword => {
-      const normalized = this.normalizeKeyword(keyword);
-      if (!this.invertedIndex.has(normalized)) {
-        this.invertedIndex.set(normalized, new Set());
+      // Ajouter l'entrée
+      this.entries.set(entry.id, entry);
+
+      // Indexer par type
+      if (!this.entriesByType.has(entry.type)) {
+        this.entriesByType.set(entry.type, new Set());
       }
-      this.invertedIndex.get(normalized)!.add(entry.id);
-    });
+      this.entriesByType.get(entry.type)!.add(entry.id);
+
+      // Indexer tous les mots-clés (filtrer les mots-clés vides)
+      if (entry.keywords && entry.keywords.length > 0) {
+        entry.keywords.forEach(keyword => {
+          if (keyword && keyword.trim().length > 0) {
+            const normalized = this.normalizeKeyword(keyword);
+            if (normalized.length > 0) {
+              if (!this.invertedIndex.has(normalized)) {
+                this.invertedIndex.set(normalized, new Set());
+              }
+              this.invertedIndex.get(normalized)!.add(entry.id);
+            }
+          }
+        });
+      }
+    } catch (error) {
+      console.warn('Erreur lors de l\'indexation d\'une entrée:', entry.id, error);
+    }
   }
 
   /**
@@ -178,25 +193,31 @@ export class SearchIndexService {
    * Indexe tous les BCs
    */
   indexBCs(bcs: BC[], getClientName: (id: string) => string, getSupplierName: (id: string) => string): void {
+    if (!bcs || bcs.length === 0) return;
+    
     bcs.forEach(bc => {
-      const clientName = getClientName(bc.clientId);
-      const supplierName = getSupplierName(bc.supplierId);
-      
-      this.indexEntry({
-        id: bc.id,
-        type: 'bc',
-        title: bc.number,
-        subtitle: `${clientName} / ${supplierName}`,
-        route: `/bc/edit/${bc.id}`,
-        keywords: [
-          bc.number,
-          clientName,
-          supplierName,
-          bc.date,
-          ...(bc.lieuLivraison ? [bc.lieuLivraison] : []),
-          ...(bc.conditionLivraison ? [bc.conditionLivraison] : [])
-        ]
-      });
+      try {
+        const clientName = bc.clientId ? getClientName(bc.clientId) : 'Inconnu';
+        const supplierName = bc.supplierId ? getSupplierName(bc.supplierId) : 'Inconnu';
+        
+        this.indexEntry({
+          id: bc.id,
+          type: 'bc',
+          title: bc.number || 'BC',
+          subtitle: `${clientName} / ${supplierName}`,
+          route: `/bc/edit/${bc.id}`,
+          keywords: [
+            bc.number || '',
+            clientName,
+            supplierName,
+            bc.date || '',
+            ...(bc.lieuLivraison ? [bc.lieuLivraison] : []),
+            ...(bc.conditionLivraison ? [bc.conditionLivraison] : [])
+          ].filter(k => k && k.length > 0)
+        });
+      } catch (error) {
+        console.warn('Erreur lors de l\'indexation d\'un BC:', bc.id, error);
+      }
     });
   }
 
@@ -208,30 +229,36 @@ export class SearchIndexService {
     getClientName: (id: string) => string,
     getSupplierName: (id: string) => string
   ): void {
+    if (!invoices || invoices.length === 0) return;
+    
     invoices.forEach(inv => {
-      const partnerName = inv.type === 'sale' 
-        ? getClientName(inv.partnerId || '')
-        : getSupplierName(inv.partnerId || '');
-      
-      this.indexEntry({
-        id: inv.id,
-        type: inv.type === 'sale' ? 'invoice-sale' : 'invoice-purchase',
-        title: inv.number,
-        subtitle: inv.type === 'sale'
-          ? `Client: ${partnerName} - ${inv.amountTTC.toLocaleString('fr-FR')} MAD`
-          : `Fournisseur: ${partnerName} - ${inv.amountTTC.toLocaleString('fr-FR')} MAD`,
-        route: inv.type === 'sale' ? '/invoices/sales' : '/invoices/purchase',
-        keywords: [
-          inv.number,
-          partnerName,
-          inv.date,
-          inv.dueDate,
-          inv.amountTTC.toString(),
-          inv.amountHT.toString(),
-          ...(inv.bcReference ? [inv.bcReference] : []),
-          ...(inv.paymentMode ? [inv.paymentMode] : [])
-        ]
-      });
+      try {
+        const partnerName = inv.type === 'sale' 
+          ? (inv.partnerId ? getClientName(inv.partnerId) : 'Inconnu')
+          : (inv.partnerId ? getSupplierName(inv.partnerId) : 'Inconnu');
+        
+        this.indexEntry({
+          id: inv.id,
+          type: inv.type === 'sale' ? 'invoice-sale' : 'invoice-purchase',
+          title: inv.number || 'Facture',
+          subtitle: inv.type === 'sale'
+            ? `Client: ${partnerName} - ${(inv.amountTTC || 0).toLocaleString('fr-FR')} MAD`
+            : `Fournisseur: ${partnerName} - ${(inv.amountTTC || 0).toLocaleString('fr-FR')} MAD`,
+          route: inv.type === 'sale' ? '/invoices/sales' : '/invoices/purchase',
+          keywords: [
+            inv.number || '',
+            partnerName,
+            inv.date || '',
+            inv.dueDate || '',
+            (inv.amountTTC || 0).toString(),
+            (inv.amountHT || 0).toString(),
+            ...(inv.bcReference ? [inv.bcReference] : []),
+            ...(inv.paymentMode ? [inv.paymentMode] : [])
+          ].filter(k => k && k.length > 0)
+        });
+      } catch (error) {
+        console.warn('Erreur lors de l\'indexation d\'une facture:', inv.id, error);
+      }
     });
   }
 
@@ -239,22 +266,28 @@ export class SearchIndexService {
    * Indexe tous les produits
    */
   indexProducts(products: Product[]): void {
+    if (!products || products.length === 0) return;
+    
     products.forEach(product => {
-      this.indexEntry({
-        id: product.id,
-        type: 'product',
-        title: product.name,
-        subtitle: `Ref: ${product.ref} - ${product.priceSellHT.toLocaleString('fr-FR')} MAD HT`,
-        route: '/products',
-        keywords: [
-          product.name,
-          product.ref,
-          product.unit,
-          product.priceSellHT.toString(),
-          product.priceBuyHT.toString(),
-          ...(product.stock !== undefined ? [product.stock.toString()] : [])
-        ]
-      });
+      try {
+        this.indexEntry({
+          id: product.id,
+          type: 'product',
+          title: product.name || 'Produit',
+          subtitle: `Ref: ${product.ref || 'N/A'} - ${(product.priceSellHT || 0).toLocaleString('fr-FR')} MAD HT`,
+          route: '/products',
+          keywords: [
+            product.name || '',
+            product.ref || '',
+            product.unit || '',
+            (product.priceSellHT || 0).toString(),
+            (product.priceBuyHT || 0).toString(),
+            ...(product.stock !== undefined ? [product.stock.toString()] : [])
+          ].filter(k => k && k.length > 0)
+        });
+      } catch (error) {
+        console.warn('Erreur lors de l\'indexation d\'un produit:', product.id, error);
+      }
     });
   }
 
@@ -262,22 +295,28 @@ export class SearchIndexService {
    * Indexe tous les clients
    */
   indexClients(clients: Client[]): void {
+    if (!clients || clients.length === 0) return;
+    
     clients.forEach(client => {
-      this.indexEntry({
-        id: client.id,
-        type: 'client',
-        title: client.name,
-        subtitle: `ICE: ${client.ice}${client.email ? ` - ${client.email}` : ''}`,
-        route: '/clients',
-        keywords: [
-          client.name,
-          client.ice,
-          ...(client.email ? [client.email] : []),
-          ...(client.phone ? [client.phone] : []),
-          ...(client.address ? [client.address] : []),
-          ...(client.referenceClient ? [client.referenceClient] : [])
-        ]
-      });
+      try {
+        this.indexEntry({
+          id: client.id,
+          type: 'client',
+          title: client.name || 'Client',
+          subtitle: `ICE: ${client.ice || 'N/A'}${client.email ? ` - ${client.email}` : ''}`,
+          route: '/clients',
+          keywords: [
+            client.name || '',
+            client.ice || '',
+            ...(client.email ? [client.email] : []),
+            ...(client.phone ? [client.phone] : []),
+            ...(client.address ? [client.address] : []),
+            ...(client.referenceClient ? [client.referenceClient] : [])
+          ].filter(k => k && k.length > 0)
+        });
+      } catch (error) {
+        console.warn('Erreur lors de l\'indexation d\'un client:', client.id, error);
+      }
     });
   }
 
@@ -285,22 +324,28 @@ export class SearchIndexService {
    * Indexe tous les fournisseurs
    */
   indexSuppliers(suppliers: Supplier[]): void {
+    if (!suppliers || suppliers.length === 0) return;
+    
     suppliers.forEach(supplier => {
-      this.indexEntry({
-        id: supplier.id,
-        type: 'supplier',
-        title: supplier.name,
-        subtitle: `ICE: ${supplier.ice}${supplier.email ? ` - ${supplier.email}` : ''}`,
-        route: '/clients',
-        keywords: [
-          supplier.name,
-          supplier.ice,
-          ...(supplier.email ? [supplier.email] : []),
-          ...(supplier.phone ? [supplier.phone] : []),
-          ...(supplier.address ? [supplier.address] : []),
-          ...(supplier.referenceFournisseur ? [supplier.referenceFournisseur] : [])
-        ]
-      });
+      try {
+        this.indexEntry({
+          id: supplier.id,
+          type: 'supplier',
+          title: supplier.name || 'Fournisseur',
+          subtitle: `ICE: ${supplier.ice || 'N/A'}${supplier.email ? ` - ${supplier.email}` : ''}`,
+          route: '/clients', // Route vers la page partenaires (clients et fournisseurs)
+          keywords: [
+            supplier.name || '',
+            supplier.ice || '',
+            ...(supplier.email ? [supplier.email] : []),
+            ...(supplier.phone ? [supplier.phone] : []),
+            ...(supplier.address ? [supplier.address] : []),
+            ...(supplier.referenceFournisseur ? [supplier.referenceFournisseur] : [])
+          ].filter(k => k && k.length > 0)
+        });
+      } catch (error) {
+        console.warn('Erreur lors de l\'indexation d\'un fournisseur:', supplier.id, error);
+      }
     });
   }
 

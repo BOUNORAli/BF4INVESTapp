@@ -1,5 +1,5 @@
 
-import { Component, inject, signal, effect, OnInit, OnDestroy, HostListener, ViewChild, ElementRef, AfterViewChecked } from '@angular/core';
+import { Component, inject, signal, effect, OnInit, OnDestroy, HostListener, ViewChild, ElementRef, AfterViewChecked, afterNextRender, untracked } from '@angular/core';
 import { RouterOutlet, RouterLink, RouterLinkActive, Router, NavigationEnd } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -122,62 +122,184 @@ export class AppComponent implements OnInit, OnDestroy {
       this.store.checkPaymentReminders();
     }, 3600000); // 1 heure = 3600000 ms
 
-    // Initialiser l'index de recherche
-    this.initializeSearchIndex();
-    
-    // Mettre à jour l'index quand les données changent
-    this.setupSearchIndexUpdates();
+    // Attendre que le rendu soit terminé avant d'initialiser l'index
+    // Cela évite l'erreur NG0203 qui se produit quand les effets s'exécutent pendant l'initialisation
+    afterNextRender(() => {
+      try {
+        // Initialiser l'index de recherche
+        this.initializeSearchIndex();
+        
+        // Mettre à jour l'index quand les données changent
+        this.setupSearchIndexUpdates();
+      } catch (error) {
+        console.warn('Erreur lors de l\'initialisation de l\'index de recherche:', error);
+      }
+    });
   }
 
   private initializeSearchIndex() {
-    // Indexer toutes les données disponibles
-    this.searchIndex.indexBCs(
-      this.store.bcs(),
-      (id) => this.store.getClientName(id),
-      (id) => this.store.getSupplierName(id)
-    );
-    
-    this.searchIndex.indexInvoices(
-      this.store.invoices(),
-      (id) => this.store.getClientName(id),
-      (id) => this.store.getSupplierName(id)
-    );
-    
-    this.searchIndex.indexProducts(this.store.products());
-    this.searchIndex.indexClients(this.store.clients());
-    this.searchIndex.indexSuppliers(this.store.suppliers());
+    // Indexer toutes les données disponibles avec gestion d'erreurs
+    try {
+      const bcs = this.store.bcs();
+      if (bcs && bcs.length > 0) {
+        this.searchIndex.indexBCs(
+          bcs,
+          (id) => {
+            try {
+              return this.store.getClientName(id) || 'Inconnu';
+            } catch (e) {
+              return 'Inconnu';
+            }
+          },
+          (id) => {
+            try {
+              return this.store.getSupplierName(id) || 'Inconnu';
+            } catch (e) {
+              return 'Inconnu';
+            }
+          }
+        );
+      }
+      
+      const invoices = this.store.invoices();
+      if (invoices && invoices.length > 0) {
+        this.searchIndex.indexInvoices(
+          invoices,
+          (id) => {
+            try {
+              return this.store.getClientName(id) || 'Inconnu';
+            } catch (e) {
+              return 'Inconnu';
+            }
+          },
+          (id) => {
+            try {
+              return this.store.getSupplierName(id) || 'Inconnu';
+            } catch (e) {
+              return 'Inconnu';
+            }
+          }
+        );
+      }
+      
+      const products = this.store.products();
+      if (products && products.length > 0) {
+        this.searchIndex.indexProducts(products);
+      }
+      
+      const clients = this.store.clients();
+      if (clients && clients.length > 0) {
+        this.searchIndex.indexClients(clients);
+      }
+      
+      const suppliers = this.store.suppliers();
+      if (suppliers && suppliers.length > 0) {
+        this.searchIndex.indexSuppliers(suppliers);
+      }
+    } catch (error) {
+      console.warn('Erreur lors de l\'initialisation de l\'index de recherche:', error);
+    }
   }
 
   private setupSearchIndexUpdates() {
     // Mettre à jour l'index quand les données changent
+    // Utiliser untracked pour éviter les cycles de détection de changements
+    // et vérifier que les données existent avant d'indexer
     effect(() => {
-      const bcs = this.store.bcs();
-      this.searchIndex.indexBCs(
-        bcs,
-        (id) => this.store.getClientName(id),
-        (id) => this.store.getSupplierName(id)
-      );
+      try {
+        const bcs = untracked(() => this.store.bcs());
+        if (bcs && Array.isArray(bcs) && bcs.length > 0) {
+          untracked(() => {
+            this.searchIndex.indexBCs(
+              bcs,
+              (id) => {
+                try {
+                  return this.store.getClientName(id) || 'Inconnu';
+                } catch (e) {
+                  return 'Inconnu';
+                }
+              },
+              (id) => {
+                try {
+                  return this.store.getSupplierName(id) || 'Inconnu';
+                } catch (e) {
+                  return 'Inconnu';
+                }
+              }
+            );
+          });
+        }
+      } catch (error) {
+        console.warn('Erreur lors de l\'indexation des BCs:', error);
+      }
     });
 
     effect(() => {
-      const invoices = this.store.invoices();
-      this.searchIndex.indexInvoices(
-        invoices,
-        (id) => this.store.getClientName(id),
-        (id) => this.store.getSupplierName(id)
-      );
+      try {
+        const invoices = untracked(() => this.store.invoices());
+        if (invoices && Array.isArray(invoices) && invoices.length > 0) {
+          untracked(() => {
+            this.searchIndex.indexInvoices(
+              invoices,
+              (id) => {
+                try {
+                  return this.store.getClientName(id) || 'Inconnu';
+                } catch (e) {
+                  return 'Inconnu';
+                }
+              },
+              (id) => {
+                try {
+                  return this.store.getSupplierName(id) || 'Inconnu';
+                } catch (e) {
+                  return 'Inconnu';
+                }
+              }
+            );
+          });
+        }
+      } catch (error) {
+        console.warn('Erreur lors de l\'indexation des factures:', error);
+      }
     });
 
     effect(() => {
-      this.searchIndex.indexProducts(this.store.products());
+      try {
+        const products = untracked(() => this.store.products());
+        if (products && Array.isArray(products) && products.length > 0) {
+          untracked(() => {
+            this.searchIndex.indexProducts(products);
+          });
+        }
+      } catch (error) {
+        console.warn('Erreur lors de l\'indexation des produits:', error);
+      }
     });
 
     effect(() => {
-      this.searchIndex.indexClients(this.store.clients());
+      try {
+        const clients = untracked(() => this.store.clients());
+        if (clients && Array.isArray(clients) && clients.length > 0) {
+          untracked(() => {
+            this.searchIndex.indexClients(clients);
+          });
+        }
+      } catch (error) {
+        console.warn('Erreur lors de l\'indexation des clients:', error);
+      }
     });
 
     effect(() => {
-      this.searchIndex.indexSuppliers(this.store.suppliers());
+      try {
+        const suppliers = untracked(() => this.store.suppliers());
+        if (suppliers && Array.isArray(suppliers) && suppliers.length > 0) {
+          untracked(() => {
+            this.searchIndex.indexSuppliers(suppliers);
+          });
+        }
+      } catch (error) {
+        console.warn('Erreur lors de l\'indexation des fournisseurs:', error);
+      }
     });
   }
 
@@ -290,7 +412,21 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   navigateToResult(result: SearchResult) {
-    this.router.navigate([result.route]).then(() => {
+    if (!result || !result.route) {
+      console.warn('Tentative de navigation vers une route invalide:', result);
+      return;
+    }
+    
+    // Vérifier que la route est valide avant de naviguer
+    const route = result.route.startsWith('/') ? result.route : '/' + result.route;
+    
+    this.router.navigate([route]).then((success) => {
+      if (!success) {
+        console.warn('Navigation échouée vers:', route);
+        // Ne pas rediriger vers une autre page si la navigation échoue
+        return;
+      }
+      
       this.isSearchOpen.set(false);
       this.globalSearchTerm.set('');
       this.searchResults.set([]);
@@ -307,6 +443,9 @@ export class AppComponent implements OnInit, OnDestroy {
           }, 2000);
         }
       }, 300);
+    }).catch((error) => {
+      console.error('Erreur lors de la navigation vers:', route, error);
+      // Ne pas rediriger vers une autre page en cas d'erreur
     });
   }
 

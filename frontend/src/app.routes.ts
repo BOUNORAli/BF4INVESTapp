@@ -115,8 +115,8 @@ export const routes: Routes = [
       { 
         path: 'releve-bancaire', 
         loadComponent: () => import('./pages/releve-bancaire/releve-bancaire.component').then(m => m.ReleveBancaireComponent)
-      },
+      }
     ]
   },
-  { path: '**', redirectTo: 'dashboard' }
+  { path: '**', redirectTo: '/dashboard', pathMatch: 'full' }
 ];
