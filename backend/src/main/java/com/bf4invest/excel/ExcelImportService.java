@@ -1428,26 +1428,51 @@ public class ExcelImportService {
     }
     
     /**
-     * Construit la référence article en combinant le numéro et la désignation.
-     * Format: "NUMERO - DESIGNATION" si les deux existent, sinon celui qui existe.
+     * Construit la référence article en utilisant uniquement la désignation.
+     * Ignore le produitRef s'il ressemble à un numéro de ligne de BC (simple nombre).
      * 
-     * @param produitRef Le numéro de l'article (peut être null ou vide)
+     * @param produitRef Le numéro de l'article (peut être null ou vide, peut être un numéro de ligne)
      * @param designation Le nom de l'article (peut être null ou vide)
-     * @return La référence combinée
+     * @return La référence (uniquement la designation, ou produitRef si c'est une vraie référence)
      */
     private String buildRefArticle(String produitRef, String designation) {
-        String ref = produitRef != null ? produitRef.trim() : "";
         String desig = designation != null ? designation.trim() : "";
         
-        if (!ref.isEmpty() && !desig.isEmpty()) {
-            return ref + " - " + desig;
-        } else if (!ref.isEmpty()) {
-            return ref;
-        } else if (!desig.isEmpty()) {
-            return desig;
-        } else {
+        // Si produitRef existe et n'est PAS un simple numéro (numéro de ligne), l'utiliser
+        // Sinon, utiliser uniquement la designation
+        if (produitRef != null && !produitRef.trim().isEmpty()) {
+            String ref = produitRef.trim();
+            // Vérifier si c'est un simple numéro (numéro de ligne de BC)
+            // Un numéro de ligne est généralement un nombre seul (ex: "2", "11", "123")
+            if (!ref.matches("^\\d+$")) {
+                // Ce n'est pas un numéro de ligne, c'est une vraie référence produit
+                if (!desig.isEmpty()) {
+                    return ref + " - " + desig;
+                } else {
+                    return ref;
+                }
+            }
+        }
+        
+        // Utiliser uniquement la designation comme référence
+        return desig.isEmpty() ? "" : desig;
+    }
+    
+    /**
+     * Nettoie la référence produit en supprimant les préfixes numériques (numéros de ligne BC)
+     * @param ref La référence à nettoyer
+     * @return La référence nettoyée
+     */
+    private String cleanProductRef(String ref) {
+        if (ref == null || ref.trim().isEmpty()) {
             return "";
         }
+        String cleaned = ref.trim();
+        // Supprimer les préfixes numériques suivis de " - " ou " -"
+        // Ex: "2 - CABLE 1.5" -> "CABLE 1.5"
+        // Ex: "11 - CABLE 1.5" -> "CABLE 1.5"
+        cleaned = cleaned.replaceFirst("^\\d+\\s*-\\s*", "");
+        return cleaned;
     }
     
     /**
@@ -2575,6 +2600,21 @@ public class ExcelImportService {
                         continue;
                     }
                     
+                    // Nettoyer la référence pour supprimer les préfixes numériques (numéros de ligne BC)
+                    // Ex: "2 - CABLE 1.5 INGELEC NOIR" -> "CABLE 1.5 INGELEC NOIR"
+                    refArticle = cleanProductRef(refArticle);
+                    if (refArticle.isEmpty()) {
+                        errorCount++;
+                        errorMessage = "Référence article invalide après nettoyage";
+                        result.getErrors().add(String.format("Ligne %d: %s", i + 1, errorMessage));
+                        result.getErrorRows().add(ImportResult.ErrorRow.builder()
+                                .rowNumber(i + 1)
+                                .rowData(rowData)
+                                .errorMessage(errorMessage)
+                                .build());
+                        continue;
+                    }
+                    
                     String designation = getCellValue(row, columnMap, "designation");
                     if (designation == null || designation.trim().isEmpty()) {
                         errorCount++;
@@ -2644,13 +2684,20 @@ public class ExcelImportService {
                         quantiteStock = 0;
                     }
                     
+                    // Utiliser la designation comme référence si elle est disponible et différente
+                    // Sinon utiliser refArticle nettoyée
+                    String finalRefArticle = (designation != null && !designation.trim().isEmpty()) 
+                        ? designation.trim() 
+                        : refArticle.trim();
+                    
                     // Vérifier si le produit existe déjà
-                    Product existingProduct = productRepository.findByRefArticle(refArticle.trim())
+                    Product existingProduct = productRepository.findByRefArticle(finalRefArticle)
                         .orElse(null);
                     
                     Product product;
                     if (existingProduct != null) {
                         // Mettre à jour le produit existant
+                        existingProduct.setRefArticle(finalRefArticle);
                         existingProduct.setDesignation(designation.trim());
                         existingProduct.setUnite(unite.trim());
                         existingProduct.setPrixAchatUnitaireHT(prixAchat);
@@ -2663,7 +2710,7 @@ public class ExcelImportService {
                     } else {
                         // Créer un nouveau produit
                         product = Product.builder()
-                            .refArticle(refArticle.trim())
+                            .refArticle(finalRefArticle)
                             .designation(designation.trim())
                             .unite(unite.trim())
                             .prixAchatUnitaireHT(prixAchat)
