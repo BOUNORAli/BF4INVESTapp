@@ -429,6 +429,15 @@ public class SoldeService {
 
         String type = Boolean.TRUE.equals(imposable) ? "CHARGE_IMPOSABLE" : "CHARGE_NON_IMPOSABLE";
 
+        // Utiliser la date de paiement réelle de la charge au lieu de la date actuelle
+        LocalDateTime dateHistorique;
+        if (datePaiement != null) {
+            dateHistorique = datePaiement.atStartOfDay();
+        } else {
+            // Fallback: utiliser la date actuelle si datePaiement est null
+            dateHistorique = LocalDateTime.now();
+        }
+
         HistoriqueSolde historique = HistoriqueSolde.builder()
                 .type(type)
                 .montant(montant)
@@ -442,7 +451,7 @@ public class SoldeService {
                 .referenceId(chargeId)
                 .referenceNumero(libelle.trim())
                 .description(libelle.trim())
-                .date(LocalDateTime.now())
+                .date(dateHistorique)
                 .build();
 
         HistoriqueSolde saved = historiqueSoldeRepository.save(historique);

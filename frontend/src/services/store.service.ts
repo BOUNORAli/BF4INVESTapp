@@ -1,4 +1,4 @@
-﻿import { Injectable, signal, computed, inject, effect } from '@angular/core';
+import { Injectable, signal, computed, inject, effect } from '@angular/core';
 import { ApiService } from './api.service';
 import { ToastService, Toast } from './toast.service';
 import { ProductService } from './product.service';
@@ -306,6 +306,7 @@ export interface Charge {
   statut: 'PREVUE' | 'PAYEE';
   datePaiement?: string; // ISO YYYY-MM-DD
   imposable: boolean; // Déductible fiscalement
+  tauxImposition?: number; // Taux d'imposition en pourcentage (ex: 0.10 pour 10%, 0.20 pour 20%)
   notes?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -1282,6 +1283,7 @@ export class StoreService {
       statut: (c.statut || 'PREVUE') as 'PREVUE' | 'PAYEE',
       datePaiement: c.datePaiement,
       imposable: c.imposable !== false,
+      tauxImposition: c.tauxImposition != null ? Number(c.tauxImposition) : undefined,
       notes: c.notes,
       createdAt: c.createdAt,
       updatedAt: c.updatedAt

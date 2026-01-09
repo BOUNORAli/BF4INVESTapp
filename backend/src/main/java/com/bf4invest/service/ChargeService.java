@@ -99,6 +99,14 @@ public class ChargeService {
         if (charge.getImposable() == null) {
             charge.setImposable(Boolean.TRUE);
         }
+        // Si imposable est true mais tauxImposition n'est pas défini, définir une valeur par défaut (20%)
+        if (Boolean.TRUE.equals(charge.getImposable()) && charge.getTauxImposition() == null) {
+            charge.setTauxImposition(0.20); // 20% par défaut
+        }
+        // Si imposable est false, s'assurer que tauxImposition est null
+        if (Boolean.FALSE.equals(charge.getImposable())) {
+            charge.setTauxImposition(null);
+        }
         charge.setDatePaiement(null);
         charge.setCreatedAt(LocalDateTime.now());
         charge.setUpdatedAt(LocalDateTime.now());
@@ -139,6 +147,19 @@ public class ChargeService {
         if (updated.getMontant() != null) existing.setMontant(updated.getMontant());
         if (updated.getDateEcheance() != null) existing.setDateEcheance(updated.getDateEcheance());
         if (updated.getImposable() != null) existing.setImposable(updated.getImposable());
+        // Gérer tauxImposition : si imposable devient false, mettre tauxImposition à null
+        // Si imposable devient true et tauxImposition n'est pas défini, mettre 20% par défaut
+        if (updated.getImposable() != null) {
+            if (Boolean.FALSE.equals(updated.getImposable())) {
+                existing.setTauxImposition(null);
+            } else if (Boolean.TRUE.equals(updated.getImposable()) && updated.getTauxImposition() == null && existing.getTauxImposition() == null) {
+                existing.setTauxImposition(0.20); // 20% par défaut
+            } else if (updated.getTauxImposition() != null) {
+                existing.setTauxImposition(updated.getTauxImposition());
+            }
+        } else if (updated.getTauxImposition() != null) {
+            existing.setTauxImposition(updated.getTauxImposition());
+        }
         // Ne pas permettre de forcer PAYEE via update: utiliser l'endpoint /payer pour créer l'historique de trésorerie
         existing.setNotes(updated.getNotes());
 

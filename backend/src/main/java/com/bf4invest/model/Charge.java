@@ -35,6 +35,12 @@ public class Charge {
      */
     private Boolean imposable;
 
+    /**
+     * Taux d'imposition en pourcentage (ex: 0.10 pour 10%, 0.20 pour 20%)
+     * Utilisé uniquement si imposable = true
+     */
+    private Double tauxImposition;
+
     private String notes;
 
     private LocalDateTime createdAt;

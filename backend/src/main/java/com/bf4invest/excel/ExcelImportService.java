@@ -3252,6 +3252,7 @@ public class ExcelImportService {
                                 .dateEcheance(dateOperation != null ? dateOperation : LocalDate.now())
                                 .statut("PREVUE")
                                 .imposable(imposable)
+                                .tauxImposition(imposable && tauxTva != null ? tauxTva : null)
                                 .notes(commentaire)
                                 .build();
                         
