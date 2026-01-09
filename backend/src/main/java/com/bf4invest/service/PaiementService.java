@@ -8,6 +8,7 @@ import com.bf4invest.model.Supplier;
 import com.bf4invest.repository.FactureAchatRepository;
 import com.bf4invest.repository.FactureVenteRepository;
 import com.bf4invest.repository.PaiementRepository;
+import com.bf4invest.util.NumberUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -163,11 +164,11 @@ public class PaiementService {
                     .ifPresent(facture -> {
                         // Récupérer tous les paiements pour cette facture
                         List<Paiement> paiements = paiementRepository.findByFactureAchatId(facture.getId());
-                        double totalPaiements = paiements.stream()
+                        double totalPaiements = NumberUtils.roundTo2Decimals(paiements.stream()
                                 .mapToDouble(p -> p.getMontant() != null ? p.getMontant() : 0.0)
-                                .sum();
+                                .sum());
                         
-                        double montantRestant = facture.getTotalTTC() - totalPaiements;
+                        double montantRestant = NumberUtils.roundTo2Decimals(facture.getTotalTTC() - totalPaiements);
                         
                         if (montantRestant <= 0) {
                             facture.setEtatPaiement("regle");
@@ -192,11 +193,11 @@ public class PaiementService {
             factureVenteRepository.findById(paiement.getFactureVenteId())
                     .ifPresent(facture -> {
                         List<Paiement> paiements = paiementRepository.findByFactureVenteId(facture.getId());
-                        double totalPaiements = paiements.stream()
+                        double totalPaiements = NumberUtils.roundTo2Decimals(paiements.stream()
                                 .mapToDouble(p -> p.getMontant() != null ? p.getMontant() : 0.0)
-                                .sum();
+                                .sum());
                         
-                        double montantRestant = facture.getTotalTTC() - totalPaiements;
+                        double montantRestant = NumberUtils.roundTo2Decimals(facture.getTotalTTC() - totalPaiements);
                         
                         if (montantRestant <= 0) {
                             facture.setEtatPaiement("regle");
@@ -282,14 +283,14 @@ public class PaiementService {
             
             if (montantRestant >= montantRestantPrevision) {
                 // Le paiement couvre entièrement cette prévision
-                prevision.setMontantPaye(prevision.getMontantPaye() + montantRestantPrevision);
+                prevision.setMontantPaye(NumberUtils.roundTo2Decimals(prevision.getMontantPaye() + montantRestantPrevision));
                 prevision.setMontantRestant(0.0);
                 prevision.setStatut("PAYEE");
-                montantRestant -= montantRestantPrevision;
+                montantRestant = NumberUtils.roundTo2Decimals(montantRestant - montantRestantPrevision);
             } else {
                 // Le paiement couvre partiellement cette prévision
-                prevision.setMontantPaye(prevision.getMontantPaye() + montantRestant);
-                prevision.setMontantRestant(montantRestantPrevision - montantRestant);
+                prevision.setMontantPaye(NumberUtils.roundTo2Decimals(prevision.getMontantPaye() + montantRestant));
+                prevision.setMontantRestant(NumberUtils.roundTo2Decimals(montantRestantPrevision - montantRestant));
                 prevision.setStatut("PARTIELLE");
                 montantRestant = 0.0;
             }

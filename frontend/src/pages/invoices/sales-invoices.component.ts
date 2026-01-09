@@ -1393,12 +1393,14 @@ export class SalesInvoicesComponent implements OnInit {
   }
 
   formatLargeNumber(value: number): string {
-    if (!value && value !== 0) return '0';
+    if (!value && value !== 0) return '0,00';
+    // Arrondir à 2 décimales de manière scientifique
+    const rounded = Math.round(value * 100) / 100;
     // Formater avec séparateurs de milliers (espace en français)
     return new Intl.NumberFormat('fr-MA', {
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
-    }).format(value);
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(rounded);
   }
 
   setFilter(status: 'all' | 'paid' | 'pending' | 'overdue' | 'avoir') {

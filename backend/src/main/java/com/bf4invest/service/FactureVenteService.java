@@ -8,6 +8,7 @@ import com.bf4invest.model.PrevisionPaiement;
 import com.bf4invest.model.Product;
 import com.bf4invest.repository.BandeCommandeRepository;
 import com.bf4invest.repository.FactureVenteRepository;
+import com.bf4invest.util.NumberUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -311,21 +312,21 @@ public class FactureVenteService {
                         if (totalHTProvided) {
                             log.info("🔵 FactureVenteService.update - Mise à jour totalHT: {} -> {}", 
                                 existing.getTotalHT(), facture.getTotalHT());
-                            existing.setTotalHT(facture.getTotalHT());
+                            existing.setTotalHT(NumberUtils.roundTo2Decimals(facture.getTotalHT()));
                         }
                         if (totalTTCProvided) {
                             log.info("🔵 FactureVenteService.update - Mise à jour totalTTC: {} -> {}", 
                                 existing.getTotalTTC(), facture.getTotalTTC());
-                            existing.setTotalTTC(facture.getTotalTTC());
+                            existing.setTotalTTC(NumberUtils.roundTo2Decimals(facture.getTotalTTC()));
                             // Recalculer la TVA si nécessaire
                             if (totalHTProvided) {
-                                double tva = facture.getTotalTTC() - facture.getTotalHT();
+                                double tva = NumberUtils.roundTo2Decimals(facture.getTotalTTC() - facture.getTotalHT());
                                 log.info("🔵 FactureVenteService.update - Calcul TVA: {} - {} = {}", 
                                     facture.getTotalTTC(), facture.getTotalHT(), tva);
                                 existing.setTotalTVA(tva);
                             } else if (existing.getTotalHT() != null) {
                                 // Si totalHT n'est pas fourni mais totalTTC oui, calculer à partir du totalHT existant
-                                double tva = facture.getTotalTTC() - existing.getTotalHT();
+                                double tva = NumberUtils.roundTo2Decimals(facture.getTotalTTC() - existing.getTotalHT());
                                 log.info("🔵 FactureVenteService.update - Calcul TVA avec totalHT existant: {} - {} = {}", 
                                     facture.getTotalTTC(), existing.getTotalHT(), tva);
                                 existing.setTotalTVA(tva);
@@ -438,33 +439,41 @@ public class FactureVenteService {
                 double prixHT = ligne.getPrixVenteUnitaireHT() != null ? ligne.getPrixVenteUnitaireHT() : 0;
                 double tvaRate = ligne.getTva() != null ? ligne.getTva() / 100.0 : 0.0;
                 
-                double ht = qte * prixHT;
-                double tva = ht * tvaRate;
+                double ht = NumberUtils.roundTo2Decimals(qte * prixHT);
+                double tva = NumberUtils.roundTo2Decimals(ht * tvaRate);
+                double ttc = NumberUtils.roundTo2Decimals(ht + tva);
                 
                 ligne.setTotalHT(ht);
-                ligne.setTotalTTC(ht + tva);
+                ligne.setTotalTTC(ttc);
                 
                 totalHT += ht;
                 totalTVA += tva;
             }
             
-            facture.setTotalHT(totalHT);
-            facture.setTotalTVA(totalTVA);
-            facture.setTotalTTC(totalHT + totalTVA);
+            facture.setTotalHT(NumberUtils.roundTo2Decimals(totalHT));
+            facture.setTotalTVA(NumberUtils.roundTo2Decimals(totalTVA));
+            facture.setTotalTTC(NumberUtils.roundTo2Decimals(totalHT + totalTVA));
         } else if (totalsProvided) {
             // Pas de lignes mais totaux fournis explicitement, les préserver et calculer TVA si nécessaire
             if (facture.getTotalHT() == null || facture.getTotalHT() == 0.0) {
                 // Seul TTC fourni, estimer HT (TVA 20% par défaut)
-                double estimatedHT = facture.getTotalTTC() / 1.2;
+                double estimatedHT = NumberUtils.roundTo2Decimals(facture.getTotalTTC() / 1.2);
                 facture.setTotalHT(estimatedHT);
-                facture.setTotalTVA(facture.getTotalTTC() - estimatedHT);
+                facture.setTotalTVA(NumberUtils.roundTo2Decimals(facture.getTotalTTC() - estimatedHT));
             } else if (facture.getTotalTTC() == null || facture.getTotalTTC() == 0.0) {
                 // Seul HT fourni, calculer TTC (TVA 20% par défaut)
-                facture.setTotalTVA(facture.getTotalHT() * 0.2);
-                facture.setTotalTTC(facture.getTotalHT() + facture.getTotalTVA());
+                facture.setTotalTVA(NumberUtils.roundTo2Decimals(facture.getTotalHT() * 0.2));
+                facture.setTotalTTC(NumberUtils.roundTo2Decimals(facture.getTotalHT() + facture.getTotalTVA()));
             } else {
                 // Les deux fournis, calculer TVA
-                facture.setTotalTVA(facture.getTotalTTC() - facture.getTotalHT());
+                facture.setTotalTVA(NumberUtils.roundTo2Decimals(facture.getTotalTTC() - facture.getTotalHT()));
+            }
+            // Arrondir les totaux fournis
+            if (facture.getTotalHT() != null) {
+                facture.setTotalHT(NumberUtils.roundTo2Decimals(facture.getTotalHT()));
+            }
+            if (facture.getTotalTTC() != null) {
+                facture.setTotalTTC(NumberUtils.roundTo2Decimals(facture.getTotalTTC()));
             }
         } else {
             // Aucune ligne ni total fourni, mettre à 0
@@ -488,7 +497,7 @@ public class FactureVenteService {
                     .sum();
         }
         
-        double montantRestant = facture.getTotalTTC() - totalPaiements;
+        double montantRestant = NumberUtils.roundTo2Decimals(facture.getTotalTTC() - totalPaiements);
         facture.setMontantRestant(montantRestant);
         
         // Mettre à jour l'état de paiement seulement si demandé

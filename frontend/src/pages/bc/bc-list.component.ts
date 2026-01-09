@@ -462,8 +462,10 @@ export class BcListComponent implements OnInit {
   }
 
   formatCurrency(val: number | null | undefined) {
-    if (val === null || val === undefined) return '0 MAD';
-    return new Intl.NumberFormat('fr-MA', { style: 'currency', currency: 'MAD', maximumFractionDigits: 0 }).format(val);
+    if (val === null || val === undefined) return '0,00 MAD';
+    // Arrondir à 2 décimales de manière scientifique
+    const rounded = Math.round(val * 100) / 100;
+    return new Intl.NumberFormat('fr-MA', { style: 'currency', currency: 'MAD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(rounded);
   }
 
   /**

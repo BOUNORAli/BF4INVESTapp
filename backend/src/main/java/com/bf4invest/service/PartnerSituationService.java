@@ -4,6 +4,7 @@ import com.bf4invest.dto.MultiPartnerSituationResponse;
 import com.bf4invest.dto.PartnerSituationResponse;
 import com.bf4invest.model.*;
 import com.bf4invest.repository.*;
+import com.bf4invest.util.NumberUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -70,18 +71,18 @@ public class PartnerSituationService {
         for (FactureVente facture : factures) {
             // Récupérer les paiements pour cette facture
             List<Paiement> paiements = paiementRepository.findByFactureVenteId(facture.getId());
-            double montantPaye = paiements.stream()
+            double montantPaye = NumberUtils.roundTo2Decimals(paiements.stream()
                     .mapToDouble(p -> p.getMontant() != null ? p.getMontant() : 0.0)
-                    .sum();
+                    .sum());
             
-            double montantTTC = facture.getTotalTTC() != null ? facture.getTotalTTC() : 0.0;
+            double montantTTC = NumberUtils.roundTo2Decimals(facture.getTotalTTC() != null ? facture.getTotalTTC() : 0.0);
             // Pour les avoirs, le montant est négatif
             if (Boolean.TRUE.equals(facture.getEstAvoir())) {
                 montantTTC = -Math.abs(montantTTC);
                 montantPaye = -Math.abs(montantPaye);
             }
             
-            double montantRestant = montantTTC - montantPaye;
+            double montantRestant = NumberUtils.roundTo2Decimals(montantTTC - montantPaye);
             
             // Déterminer le statut
             String statut = determinerStatutFacture(facture, montantPaye, montantTTC, aujourdhui);
@@ -100,15 +101,15 @@ public class PartnerSituationService {
             totalTVA += (facture.getTotalTVA() != null ? facture.getTotalTVA() : 0.0) * (Boolean.TRUE.equals(facture.getEstAvoir()) ? -1 : 1);
             totalPaye += montantPaye;
             
-            // Créer le détail de facture
+            // Créer le détail de facture (arrondir les montants)
             PartnerSituationResponse.FactureDetail factureDetail = PartnerSituationResponse.FactureDetail.builder()
                     .id(facture.getId())
                     .numeroFacture(facture.getNumeroFactureVente())
                     .dateFacture(facture.getDateFacture())
                     .dateEcheance(facture.getDateEcheance())
                     .montantTTC(montantTTC)
-                    .montantHT(facture.getTotalHT() != null ? facture.getTotalHT() : 0.0)
-                    .montantTVA(facture.getTotalTVA() != null ? facture.getTotalTVA() : 0.0)
+                    .montantHT(NumberUtils.roundTo2Decimals(facture.getTotalHT() != null ? facture.getTotalHT() : 0.0))
+                    .montantTVA(NumberUtils.roundTo2Decimals(facture.getTotalTVA() != null ? facture.getTotalTVA() : 0.0))
                     .montantPaye(montantPaye)
                     .montantRestant(montantRestant)
                     .statut(statut)
@@ -131,9 +132,9 @@ public class PartnerSituationService {
                         nombrePrevisionsEnRetard++;
                     }
                     
-                    double montantPrevu = prevision.getMontantPrevu() != null ? prevision.getMontantPrevu() : 0.0;
-                    double montantPayePrevision = prevision.getMontantPaye() != null ? prevision.getMontantPaye() : 0.0;
-                    double montantRestantPrevision = prevision.getMontantRestant() != null ? prevision.getMontantRestant() : (montantPrevu - montantPayePrevision);
+                    double montantPrevu = NumberUtils.roundTo2Decimals(prevision.getMontantPrevu() != null ? prevision.getMontantPrevu() : 0.0);
+                    double montantPayePrevision = NumberUtils.roundTo2Decimals(prevision.getMontantPaye() != null ? prevision.getMontantPaye() : 0.0);
+                    double montantRestantPrevision = NumberUtils.roundTo2Decimals(prevision.getMontantRestant() != null ? prevision.getMontantRestant() : (montantPrevu - montantPayePrevision));
                     
                     PartnerSituationResponse.PrevisionDetail previsionDetail = PartnerSituationResponse.PrevisionDetail.builder()
                             .id(prevision.getId())
@@ -173,15 +174,15 @@ public class PartnerSituationService {
                 .type("CLIENT")
                 .build();
         
-        // Construire les totaux
-        double totalRestant = totalFactureTTC - totalPaye;
-        double solde = client.getSoldeClient() != null ? client.getSoldeClient() : totalRestant;
+        // Construire les totaux (arrondis)
+        double totalRestant = NumberUtils.roundTo2Decimals(totalFactureTTC - totalPaye);
+        double solde = NumberUtils.roundTo2Decimals(client.getSoldeClient() != null ? client.getSoldeClient() : totalRestant);
         
         PartnerSituationResponse.Totaux totaux = PartnerSituationResponse.Totaux.builder()
-                .totalFactureTTC(totalFactureTTC)
-                .totalFactureHT(totalFactureHT)
-                .totalTVA(totalTVA)
-                .totalPaye(totalPaye)
+                .totalFactureTTC(NumberUtils.roundTo2Decimals(totalFactureTTC))
+                .totalFactureHT(NumberUtils.roundTo2Decimals(totalFactureHT))
+                .totalTVA(NumberUtils.roundTo2Decimals(totalTVA))
+                .totalPaye(NumberUtils.roundTo2Decimals(totalPaye))
                 .totalRestant(totalRestant)
                 .solde(solde)
                 .nombreFactures(factures.size())
@@ -509,18 +510,18 @@ public class PartnerSituationService {
         // Trier les prévisions par date (chronologique)
         sortPrevisionsByDate(previsionsConsolidees);
         
-        // Calculer le solde global
-        double totalRestantGlobal = totalFactureTTCGlobal - totalPayeGlobal;
-        double soldeGlobal = situationsParPartenaire.stream()
+        // Calculer le solde global (arrondi)
+        double totalRestantGlobal = NumberUtils.roundTo2Decimals(totalFactureTTCGlobal - totalPayeGlobal);
+        double soldeGlobal = NumberUtils.roundTo2Decimals(situationsParPartenaire.stream()
             .mapToDouble(s -> s.getTotaux() != null && s.getTotaux().getSolde() != null ? s.getTotaux().getSolde() : 0.0)
-            .sum();
+            .sum());
         
-        // Construire les totaux globaux
+        // Construire les totaux globaux (arrondis)
         MultiPartnerSituationResponse.TotauxGlobaux totauxGlobaux = MultiPartnerSituationResponse.TotauxGlobaux.builder()
-            .totalFactureTTC(totalFactureTTCGlobal)
-            .totalFactureHT(totalFactureHTGlobal)
-            .totalTVA(totalTVAGlobal)
-            .totalPaye(totalPayeGlobal)
+            .totalFactureTTC(NumberUtils.roundTo2Decimals(totalFactureTTCGlobal))
+            .totalFactureHT(NumberUtils.roundTo2Decimals(totalFactureHTGlobal))
+            .totalTVA(NumberUtils.roundTo2Decimals(totalTVAGlobal))
+            .totalPaye(NumberUtils.roundTo2Decimals(totalPayeGlobal))
             .totalRestant(totalRestantGlobal)
             .soldeGlobal(soldeGlobal)
             .nombreFactures(nombreFacturesGlobal)
@@ -630,18 +631,18 @@ public class PartnerSituationService {
         // Trier les prévisions par date (chronologique)
         sortPrevisionsByDate(previsionsConsolidees);
         
-        // Calculer le solde global
-        double totalRestantGlobal = totalFactureTTCGlobal - totalPayeGlobal;
-        double soldeGlobal = situationsParPartenaire.stream()
+        // Calculer le solde global (arrondi)
+        double totalRestantGlobal = NumberUtils.roundTo2Decimals(totalFactureTTCGlobal - totalPayeGlobal);
+        double soldeGlobal = NumberUtils.roundTo2Decimals(situationsParPartenaire.stream()
             .mapToDouble(s -> s.getTotaux() != null && s.getTotaux().getSolde() != null ? s.getTotaux().getSolde() : 0.0)
-            .sum();
+            .sum());
         
-        // Construire les totaux globaux
+        // Construire les totaux globaux (arrondis)
         MultiPartnerSituationResponse.TotauxGlobaux totauxGlobaux = MultiPartnerSituationResponse.TotauxGlobaux.builder()
-            .totalFactureTTC(totalFactureTTCGlobal)
-            .totalFactureHT(totalFactureHTGlobal)
-            .totalTVA(totalTVAGlobal)
-            .totalPaye(totalPayeGlobal)
+            .totalFactureTTC(NumberUtils.roundTo2Decimals(totalFactureTTCGlobal))
+            .totalFactureHT(NumberUtils.roundTo2Decimals(totalFactureHTGlobal))
+            .totalTVA(NumberUtils.roundTo2Decimals(totalTVAGlobal))
+            .totalPaye(NumberUtils.roundTo2Decimals(totalPayeGlobal))
             .totalRestant(totalRestantGlobal)
             .soldeGlobal(soldeGlobal)
             .nombreFactures(nombreFacturesGlobal)

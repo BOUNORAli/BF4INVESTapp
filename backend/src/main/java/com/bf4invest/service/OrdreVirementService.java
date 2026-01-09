@@ -6,6 +6,7 @@ import com.bf4invest.model.Paiement;
 import com.bf4invest.model.Supplier;
 import com.bf4invest.repository.FactureAchatRepository;
 import com.bf4invest.repository.OrdreVirementRepository;
+import com.bf4invest.util.NumberUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -58,12 +59,15 @@ public class OrdreVirementService {
             }
         }
         
-        // Calculer le montant total si facturesMontants est fourni
+        // Calculer le montant total si facturesMontants est fourni (arrondi)
         if (ov.getFacturesMontants() != null && !ov.getFacturesMontants().isEmpty()) {
-            double total = ov.getFacturesMontants().stream()
+            double total = NumberUtils.roundTo2Decimals(ov.getFacturesMontants().stream()
                     .mapToDouble(OrdreVirement.FactureMontant::getMontant)
-                    .sum();
+                    .sum());
             ov.setMontant(total);
+        } else if (ov.getMontant() != null) {
+            // Arrondir le montant fourni directement
+            ov.setMontant(NumberUtils.roundTo2Decimals(ov.getMontant()));
         }
         
         // Récupérer et dénormaliser le nom du bénéficiaire et le RIB
@@ -153,7 +157,7 @@ public class OrdreVirementService {
                         ? ov.getBeneficiaireId().trim() : null;
                     
                     existing.setDateOV(ov.getDateOV());
-                    existing.setMontant(ov.getMontant());
+                    existing.setMontant(NumberUtils.roundTo2Decimals(ov.getMontant()));
                     existing.setBeneficiaireId(beneficiaireIdNormalise);
                     existing.setRibBeneficiaire(ov.getRibBeneficiaire());
                     existing.setBanqueBeneficiaire(ov.getBanqueBeneficiaire());

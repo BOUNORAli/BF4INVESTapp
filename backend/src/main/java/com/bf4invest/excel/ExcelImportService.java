@@ -3,6 +3,7 @@ package com.bf4invest.excel;
 import com.bf4invest.dto.ImportResult;
 import com.bf4invest.model.*;
 import com.bf4invest.repository.*;
+import com.bf4invest.util.NumberUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.*;
@@ -206,11 +207,11 @@ public class ExcelImportService {
                         .tva(agg.tva)
                         .build();
                     
-                    // Calculer les totaux
+                    // Calculer les totaux (arrondis)
                     if (ligneAchat.getQuantiteAchetee() != null && ligneAchat.getPrixAchatUnitaireHT() != null) {
-                        ligneAchat.setTotalHT(ligneAchat.getQuantiteAchetee() * ligneAchat.getPrixAchatUnitaireHT());
+                        ligneAchat.setTotalHT(NumberUtils.roundTo2Decimals(ligneAchat.getQuantiteAchetee() * ligneAchat.getPrixAchatUnitaireHT()));
                         if (ligneAchat.getTva() != null) {
-                            ligneAchat.setTotalTTC(ligneAchat.getTotalHT() * (1 + (ligneAchat.getTva() / 100.0)));
+                            ligneAchat.setTotalTTC(NumberUtils.roundTo2Decimals(ligneAchat.getTotalHT() * (1 + (ligneAchat.getTva() / 100.0))));
                         }
                     }
                     
@@ -254,11 +255,11 @@ public class ExcelImportService {
                             .tva(agg.tva)
                             .build();
                         
-                        // Calculer les totaux
+                        // Calculer les totaux (arrondis)
                         if (ligneVente.getQuantiteVendue() != null && ligneVente.getPrixVenteUnitaireHT() != null) {
-                            ligneVente.setTotalHT(ligneVente.getQuantiteVendue() * ligneVente.getPrixVenteUnitaireHT());
+                            ligneVente.setTotalHT(NumberUtils.roundTo2Decimals(ligneVente.getQuantiteVendue() * ligneVente.getPrixVenteUnitaireHT()));
                             if (ligneVente.getTva() != null) {
-                                ligneVente.setTotalTTC(ligneVente.getTotalHT() * (1 + (ligneVente.getTva() / 100.0)));
+                                ligneVente.setTotalTTC(NumberUtils.roundTo2Decimals(ligneVente.getTotalHT() * (1 + (ligneVente.getTva() / 100.0))));
                             }
                         }
                         
@@ -290,11 +291,11 @@ public class ExcelImportService {
                             for (LigneAchat la : lignesAchat) {
                                 if (la.getProduitRef() != null && la.getProduitRef().equals(lv.getProduitRef())) {
                                     if (la.getPrixAchatUnitaireHT() != null) {
-                                        double margeUnitaire = lv.getPrixVenteUnitaireHT() - la.getPrixAchatUnitaireHT();
+                                        double margeUnitaire = NumberUtils.roundTo2Decimals(lv.getPrixVenteUnitaireHT() - la.getPrixAchatUnitaireHT());
                                         margeTotale += margeUnitaire * lv.getQuantiteVendue();
                                         lv.setMargeUnitaire(margeUnitaire);
                                         if (la.getPrixAchatUnitaireHT() > 0) {
-                                            lv.setMargePourcentage((margeUnitaire / la.getPrixAchatUnitaireHT()) * 100);
+                                            lv.setMargePourcentage(NumberUtils.roundTo2Decimals((margeUnitaire / la.getPrixAchatUnitaireHT()) * 100));
                                         }
                                     }
                                     break;
@@ -303,12 +304,12 @@ public class ExcelImportService {
                         }
                     }
                     
-                    cv.setTotalVenteHT(totalHT);
-                    cv.setTotalVenteTTC(totalTTC);
-                    cv.setTotalTVA(totalTVA);
-                    cv.setMargeTotale(margeTotale);
+                    cv.setTotalVenteHT(NumberUtils.roundTo2Decimals(totalHT));
+                    cv.setTotalVenteTTC(NumberUtils.roundTo2Decimals(totalTTC));
+                    cv.setTotalTVA(NumberUtils.roundTo2Decimals(totalTVA));
+                    cv.setMargeTotale(NumberUtils.roundTo2Decimals(margeTotale));
                     if (totalHT > 0) {
-                        cv.setMargePourcentage((margeTotale / totalHT) * 100);
+                        cv.setMargePourcentage(NumberUtils.roundTo2Decimals((margeTotale / totalHT) * 100));
                     }
                 }
                 
@@ -1642,20 +1643,20 @@ public class ExcelImportService {
     }
     
     private void calculateLineItemTotals(LineItem ligne) {
-        // Total HT achat
+        // Total HT achat (arrondi)
         if (ligne.getQuantiteAchetee() != null && ligne.getPrixAchatUnitaireHT() != null) {
-            ligne.setTotalHT(ligne.getQuantiteAchetee() * ligne.getPrixAchatUnitaireHT());
+            ligne.setTotalHT(NumberUtils.roundTo2Decimals(ligne.getQuantiteAchetee() * ligne.getPrixAchatUnitaireHT()));
         }
         
-        // Total TTC achat
+        // Total TTC achat (arrondi)
         if (ligne.getTotalHT() != null && ligne.getTva() != null) {
-            ligne.setTotalTTC(ligne.getTotalHT() * (1 + (ligne.getTva() / 100)));
+            ligne.setTotalTTC(NumberUtils.roundTo2Decimals(ligne.getTotalHT() * (1 + (ligne.getTva() / 100))));
         }
         
-        // Marge unitaire
+        // Marge unitaire (arrondie)
         if (ligne.getPrixVenteUnitaireHT() != null && ligne.getPrixAchatUnitaireHT() != null && ligne.getPrixAchatUnitaireHT() > 0) {
-            ligne.setMargeUnitaire(ligne.getPrixVenteUnitaireHT() - ligne.getPrixAchatUnitaireHT());
-            ligne.setMargePourcentage((ligne.getMargeUnitaire() / ligne.getPrixAchatUnitaireHT()) * 100);
+            ligne.setMargeUnitaire(NumberUtils.roundTo2Decimals(ligne.getPrixVenteUnitaireHT() - ligne.getPrixAchatUnitaireHT()));
+            ligne.setMargePourcentage(NumberUtils.roundTo2Decimals((ligne.getMargeUnitaire() / ligne.getPrixAchatUnitaireHT()) * 100));
         }
     }
     
@@ -1687,11 +1688,11 @@ public class ExcelImportService {
                     .tva(ligne.getTva())
                     .build();
             
-            // Calculer les totaux pour cette ligne
+            // Calculer les totaux pour cette ligne (arrondis)
             if (ligneAchat.getQuantiteAchetee() != null && ligneAchat.getPrixAchatUnitaireHT() != null) {
-                ligneAchat.setTotalHT(ligneAchat.getQuantiteAchetee() * ligneAchat.getPrixAchatUnitaireHT());
+                ligneAchat.setTotalHT(NumberUtils.roundTo2Decimals(ligneAchat.getQuantiteAchetee() * ligneAchat.getPrixAchatUnitaireHT()));
                 if (ligneAchat.getTva() != null) {
-                    ligneAchat.setTotalTTC(ligneAchat.getTotalHT() * (1 + (ligneAchat.getTva() / 100.0)));
+                    ligneAchat.setTotalTTC(NumberUtils.roundTo2Decimals(ligneAchat.getTotalHT() * (1 + (ligneAchat.getTva() / 100.0))));
                 }
             }
             
@@ -1734,14 +1735,14 @@ public class ExcelImportService {
             }
         }
         
-        bc.setTotalAchatHT(totalAchatHT);
-        bc.setTotalAchatTTC(totalAchatTTC);
-        bc.setTotalVenteHT(totalVenteHT);
-        bc.setTotalVenteTTC(totalVenteTTC);
-        bc.setMargeTotale(totalVenteHT - totalAchatHT);
+        bc.setTotalAchatHT(NumberUtils.roundTo2Decimals(totalAchatHT));
+        bc.setTotalAchatTTC(NumberUtils.roundTo2Decimals(totalAchatTTC));
+        bc.setTotalVenteHT(NumberUtils.roundTo2Decimals(totalVenteHT));
+        bc.setTotalVenteTTC(NumberUtils.roundTo2Decimals(totalVenteTTC));
+        bc.setMargeTotale(NumberUtils.roundTo2Decimals(totalVenteHT - totalAchatHT));
         
         if (totalAchatHT > 0) {
-            bc.setMargePourcentage(((totalVenteHT - totalAchatHT) / totalAchatHT) * 100);
+            bc.setMargePourcentage(NumberUtils.roundTo2Decimals(((totalVenteHT - totalAchatHT) / totalAchatHT) * 100));
         }
         
         // Log pour debug si totaux à 0
@@ -1768,17 +1769,17 @@ public class ExcelImportService {
                 totalHT += ligne.getTotalHT(); // Peut être négatif pour avoir
             }
             if (ligne.getTotalTTC() != null && ligne.getTotalHT() != null) {
-                totalTVA += ligne.getTotalTTC() - ligne.getTotalHT();
+                totalTVA += NumberUtils.roundTo2Decimals(ligne.getTotalTTC() - ligne.getTotalHT());
                 totalTTC += ligne.getTotalTTC(); // Peut être négatif pour avoir
             }
         }
         
-        fa.setTotalHT(totalHT);
-        fa.setTotalTVA(totalTVA);
-        fa.setTotalTTC(totalTTC);
+        fa.setTotalHT(NumberUtils.roundTo2Decimals(totalHT));
+        fa.setTotalTVA(NumberUtils.roundTo2Decimals(totalTVA));
+        fa.setTotalTTC(NumberUtils.roundTo2Decimals(totalTTC));
         
         // Pour les avoirs, le montant restant est aussi négatif (ou positif si partiellement utilisé)
-        fa.setMontantRestant(totalTTC); // Peut être négatif pour avoir
+        fa.setMontantRestant(NumberUtils.roundTo2Decimals(totalTTC)); // Peut être négatif pour avoir
         
         // S'assurer que si c'est un avoir, les montants sont bien négatifs
         if (Boolean.TRUE.equals(fa.getEstAvoir())) {
@@ -1807,11 +1808,11 @@ public class ExcelImportService {
             // Pour facture vente, utiliser quantite vendue et prix vente
             // Pour avoir, prix et quantités peuvent être négatifs
             if (ligne.getPrixVenteUnitaireHT() != null && ligne.getQuantiteVendue() != null) {
-                double ht = ligne.getPrixVenteUnitaireHT() * ligne.getQuantiteVendue();
+                double ht = NumberUtils.roundTo2Decimals(ligne.getPrixVenteUnitaireHT() * ligne.getQuantiteVendue());
                 totalHT += ht; // Peut être négatif pour avoir
                 if (ligne.getTva() != null) {
-                    double ttc = ht * (1 + (ligne.getTva() / 100));
-                    totalTVA += ttc - ht;
+                    double ttc = NumberUtils.roundTo2Decimals(ht * (1 + (ligne.getTva() / 100)));
+                    totalTVA += NumberUtils.roundTo2Decimals(ttc - ht);
                     totalTTC += ttc; // Peut être négatif pour avoir
                 }
             }
@@ -1823,17 +1824,17 @@ public class ExcelImportService {
             if (ligne.getTotalTTC() != null) {
                 totalTTC = ligne.getTotalTTC();
                 if (ligne.getTotalHT() != null) {
-                    totalTVA = totalTTC - totalHT;
+                    totalTVA = NumberUtils.roundTo2Decimals(totalTTC - totalHT);
                 }
             }
         }
         
-        fv.setTotalHT(totalHT);
-        fv.setTotalTVA(totalTVA);
-        fv.setTotalTTC(totalTTC);
+        fv.setTotalHT(NumberUtils.roundTo2Decimals(totalHT));
+        fv.setTotalTVA(NumberUtils.roundTo2Decimals(totalTVA));
+        fv.setTotalTTC(NumberUtils.roundTo2Decimals(totalTTC));
         
         // Pour les avoirs, le montant restant est aussi négatif
-        fv.setMontantRestant(totalTTC); // Peut être négatif pour avoir
+        fv.setMontantRestant(NumberUtils.roundTo2Decimals(totalTTC)); // Peut être négatif pour avoir
         
         // S'assurer que si c'est un avoir, les montants sont bien négatifs
         if (Boolean.TRUE.equals(fv.getEstAvoir())) {

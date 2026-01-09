@@ -13,6 +13,7 @@ import com.bf4invest.repository.FactureVenteRepository;
 import com.bf4invest.repository.HistoriqueSoldeRepository;
 import com.bf4invest.repository.SoldeGlobalRepository;
 import com.bf4invest.repository.SupplierRepository;
+import com.bf4invest.util.NumberUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -43,11 +44,13 @@ public class SoldeService {
         List<SoldeGlobal> existing = soldeGlobalRepository.findAll();
         SoldeGlobal soldeGlobal;
         
+        Double montantArrondi = NumberUtils.roundTo2Decimals(montant);
+        
         if (existing.isEmpty()) {
             // Créer un nouveau solde global
             soldeGlobal = SoldeGlobal.builder()
-                    .soldeInitial(montant)
-                    .soldeActuel(montant)
+                    .soldeInitial(montantArrondi)
+                    .soldeActuel(montantArrondi)
                     .dateDebut(dateDebut != null ? dateDebut : LocalDate.now())
                     .createdAt(LocalDateTime.now())
                     .updatedAt(LocalDateTime.now())
@@ -55,8 +58,8 @@ public class SoldeService {
         } else {
             // Mettre à jour le solde existant
             soldeGlobal = existing.get(0);
-            soldeGlobal.setSoldeInitial(montant);
-            soldeGlobal.setSoldeActuel(montant);
+            soldeGlobal.setSoldeInitial(montantArrondi);
+            soldeGlobal.setSoldeActuel(montantArrondi);
             if (dateDebut != null) {
                 soldeGlobal.setDateDebut(dateDebut);
             }
@@ -129,9 +132,12 @@ public class SoldeService {
         Double soldeGlobalAvant = getSoldeGlobalActuel();
         Double soldePartenaireAvant = getSoldePartenaire(partenaireId, partenaireType);
         
+        // Arrondir le montant
+        Double montantArrondi = NumberUtils.roundTo2Decimals(montant);
+        
         // Calculer les nouveaux soldes selon le type de transaction
-        Double soldeGlobalApres = calculerSoldeGlobal(type, soldeGlobalAvant, montant);
-        Double soldePartenaireApres = calculerSoldePartenaire(type, soldePartenaireAvant, montant);
+        Double soldeGlobalApres = NumberUtils.roundTo2Decimals(calculerSoldeGlobal(type, soldeGlobalAvant, montantArrondi));
+        Double soldePartenaireApres = NumberUtils.roundTo2Decimals(calculerSoldePartenaire(type, soldePartenaireAvant, montantArrondi));
         
         // Mettre à jour le solde global
         mettreAJourSoldeGlobal(soldeGlobalApres);
@@ -144,13 +150,13 @@ public class SoldeService {
                 ? dateTransaction.atStartOfDay() 
                 : LocalDateTime.now();
         
-        // Créer l'historique
+        // Créer l'historique (arrondir les valeurs)
         HistoriqueSolde historique = HistoriqueSolde.builder()
                 .type(type)
-                .montant(montant)
-                .soldeGlobalAvant(soldeGlobalAvant)
+                .montant(NumberUtils.roundTo2Decimals(montant))
+                .soldeGlobalAvant(NumberUtils.roundTo2Decimals(soldeGlobalAvant))
                 .soldeGlobalApres(soldeGlobalApres)
-                .soldePartenaireAvant(soldePartenaireAvant)
+                .soldePartenaireAvant(NumberUtils.roundTo2Decimals(soldePartenaireAvant))
                 .soldePartenaireApres(soldePartenaireApres)
                 .partenaireId(partenaireId)
                 .partenaireType(partenaireType)
@@ -179,7 +185,7 @@ public class SoldeService {
                 return soldeAvant;
             case "PAIEMENT_CLIENT":
                 // Paiement client : entrée d'argent, augmente la trésorerie
-                return soldeAvant + montant;
+                return NumberUtils.roundTo2Decimals(soldeAvant + montant);
             case "FACTURE_ACHAT":
                 // Facture achat : nous devons au fournisseur, mais ça ne diminue pas la trésorerie immédiatement
                 // Le solde global ne change pas jusqu'au paiement
@@ -190,10 +196,10 @@ public class SoldeService {
                 return soldeAvant;
             case "PAIEMENT_FOURNISSEUR":
                 // Paiement fournisseur : sortie d'argent, diminue la trésorerie
-                return soldeAvant - montant;
+                return NumberUtils.roundTo2Decimals(soldeAvant - montant);
             case "APPORT_EXTERNE":
                 // Apport externe : entrée d'argent depuis l'extérieur, augmente la trésorerie
-                return soldeAvant + montant;
+                return NumberUtils.roundTo2Decimals(soldeAvant + montant);
             default:
                 return soldeAvant;
         }
@@ -206,24 +212,24 @@ public class SoldeService {
         switch (type) {
             case "FACTURE_VENTE":
                 // Facture vente : le client nous doit de l'argent (solde client augmente)
-                return (soldeAvant != null ? soldeAvant : 0.0) + montant;
+                return NumberUtils.roundTo2Decimals((soldeAvant != null ? soldeAvant : 0.0) + montant);
             case "AVOIR_VENTE":
                 // Avoir vente : réduit ce que le client nous doit (solde client diminue)
                 // montant est déjà négatif, donc l'addition réduit le solde
-                return (soldeAvant != null ? soldeAvant : 0.0) + montant;
+                return NumberUtils.roundTo2Decimals((soldeAvant != null ? soldeAvant : 0.0) + montant);
             case "PAIEMENT_CLIENT":
                 // Paiement client : le client rembourse (solde client diminue)
-                return (soldeAvant != null ? soldeAvant : 0.0) - montant;
+                return NumberUtils.roundTo2Decimals((soldeAvant != null ? soldeAvant : 0.0) - montant);
             case "FACTURE_ACHAT":
                 // Facture achat : nous devons au fournisseur (solde fournisseur augmente)
-                return (soldeAvant != null ? soldeAvant : 0.0) + montant;
+                return NumberUtils.roundTo2Decimals((soldeAvant != null ? soldeAvant : 0.0) + montant);
             case "AVOIR_ACHAT":
                 // Avoir achat : réduit ce que nous devons au fournisseur (solde fournisseur diminue)
                 // montant est déjà négatif, donc l'addition réduit le solde
-                return (soldeAvant != null ? soldeAvant : 0.0) + montant;
+                return NumberUtils.roundTo2Decimals((soldeAvant != null ? soldeAvant : 0.0) + montant);
             case "PAIEMENT_FOURNISSEUR":
                 // Paiement fournisseur : nous remboursons (solde fournisseur diminue)
-                return (soldeAvant != null ? soldeAvant : 0.0) - montant;
+                return NumberUtils.roundTo2Decimals((soldeAvant != null ? soldeAvant : 0.0) - montant);
             default:
                 return soldeAvant != null ? soldeAvant : 0.0;
         }
@@ -236,17 +242,19 @@ public class SoldeService {
         List<SoldeGlobal> existing = soldeGlobalRepository.findAll();
         SoldeGlobal soldeGlobal;
         
+        Double soldeArrondi = NumberUtils.roundTo2Decimals(nouveauSolde);
+        
         if (existing.isEmpty()) {
             soldeGlobal = SoldeGlobal.builder()
                     .soldeInitial(0.0)
-                    .soldeActuel(nouveauSolde)
+                    .soldeActuel(soldeArrondi)
                     .dateDebut(LocalDate.now())
                     .createdAt(LocalDateTime.now())
                     .updatedAt(LocalDateTime.now())
                     .build();
         } else {
             soldeGlobal = existing.get(0);
-            soldeGlobal.setSoldeActuel(nouveauSolde);
+            soldeGlobal.setSoldeActuel(soldeArrondi);
             soldeGlobal.setUpdatedAt(LocalDateTime.now());
         }
         
@@ -257,15 +265,17 @@ public class SoldeService {
      * Met à jour le solde d'un partenaire
      */
     private void mettreAJourSoldePartenaire(String partenaireId, String partenaireType, Double nouveauSolde) {
+        Double soldeArrondi = NumberUtils.roundTo2Decimals(nouveauSolde);
+        
         if ("CLIENT".equals(partenaireType)) {
             clientRepository.findById(partenaireId).ifPresent(client -> {
-                client.setSoldeClient(nouveauSolde);
+                client.setSoldeClient(soldeArrondi);
                 client.setUpdatedAt(LocalDateTime.now());
                 clientRepository.save(client);
             });
         } else if ("FOURNISSEUR".equals(partenaireType)) {
             supplierRepository.findById(partenaireId).ifPresent(supplier -> {
-                supplier.setSoldeFournisseur(nouveauSolde);
+                supplier.setSoldeFournisseur(soldeArrondi);
                 supplier.setUpdatedAt(LocalDateTime.now());
                 supplierRepository.save(supplier);
             });
@@ -380,7 +390,8 @@ public class SoldeService {
         
         // Récupérer le solde global actuel
         Double soldeGlobalAvant = getSoldeGlobalActuel();
-        Double soldeGlobalApres = soldeGlobalAvant + montant;
+        Double montantArrondi = NumberUtils.roundTo2Decimals(montant);
+        Double soldeGlobalApres = NumberUtils.roundTo2Decimals(soldeGlobalAvant + montantArrondi);
         
         // Mettre à jour le solde global
         mettreAJourSoldeGlobal(soldeGlobalApres);
@@ -388,8 +399,8 @@ public class SoldeService {
         // Créer l'historique
         HistoriqueSolde historique = HistoriqueSolde.builder()
                 .type("APPORT_EXTERNE")
-                .montant(montant)
-                .soldeGlobalAvant(soldeGlobalAvant)
+                .montant(montantArrondi)
+                .soldeGlobalAvant(NumberUtils.roundTo2Decimals(soldeGlobalAvant))
                 .soldeGlobalApres(soldeGlobalApres)
                 .soldePartenaireAvant(null)
                 .soldePartenaireApres(null)
@@ -422,7 +433,8 @@ public class SoldeService {
         }
 
         Double soldeGlobalAvant = getSoldeGlobalActuel();
-        Double soldeGlobalApres = soldeGlobalAvant - montant;
+        Double montantArrondi = NumberUtils.roundTo2Decimals(montant);
+        Double soldeGlobalApres = NumberUtils.roundTo2Decimals(soldeGlobalAvant - montantArrondi);
 
         // Mettre à jour le solde global
         mettreAJourSoldeGlobal(soldeGlobalApres);
@@ -440,8 +452,8 @@ public class SoldeService {
 
         HistoriqueSolde historique = HistoriqueSolde.builder()
                 .type(type)
-                .montant(montant)
-                .soldeGlobalAvant(soldeGlobalAvant)
+                .montant(montantArrondi)
+                .soldeGlobalAvant(NumberUtils.roundTo2Decimals(soldeGlobalAvant))
                 .soldeGlobalApres(soldeGlobalApres)
                 .soldePartenaireAvant(null)
                 .soldePartenaireApres(null)
@@ -483,8 +495,9 @@ public class SoldeService {
 
         // Récupérer le solde global actuel
         Double soldeGlobalAvant = getSoldeGlobalActuel();
+        Double montantArrondi = NumberUtils.roundTo2Decimals(montant);
         // Un virement est une sortie de trésorerie (diminue le solde)
-        Double soldeGlobalApres = soldeGlobalAvant - montant;
+        Double soldeGlobalApres = NumberUtils.roundTo2Decimals(soldeGlobalAvant - montantArrondi);
 
         // Mettre à jour le solde global
         mettreAJourSoldeGlobal(soldeGlobalApres);
@@ -501,8 +514,8 @@ public class SoldeService {
         // Créer l'historique
         HistoriqueSolde historique = HistoriqueSolde.builder()
                 .type("ORDRE_VIREMENT")
-                .montant(montant)
-                .soldeGlobalAvant(soldeGlobalAvant)
+                .montant(montantArrondi)
+                .soldeGlobalAvant(NumberUtils.roundTo2Decimals(soldeGlobalAvant))
                 .soldeGlobalApres(soldeGlobalApres)
                 .soldePartenaireAvant(null)
                 .soldePartenaireApres(null)
@@ -532,7 +545,7 @@ public class SoldeService {
         Double soldeBanque = getSoldeGlobalActuel();
         
         // Ce que les clients me doivent (factures vente non payées)
-        double creancesClients = factureVenteRepository.findAll().stream()
+        double creancesClients = NumberUtils.roundTo2Decimals(factureVenteRepository.findAll().stream()
                 .filter(fv -> !"regle".equalsIgnoreCase(fv.getEtatPaiement())) // Inclut null et insensible à la casse
                 .mapToDouble(fv -> {
                     // Utiliser montantRestant si disponible, sinon calculer
@@ -545,10 +558,10 @@ public class SoldeService {
                         fv.getPaiements().stream().mapToDouble(p -> p.getMontant() != null ? p.getMontant() : 0.0).sum() : 0.0;
                     return Math.max(0.0, totalTTC - totalPaiements);
                 })
-                .sum();
+                .sum());
         
         // Ce que je dois aux fournisseurs (factures achat non payées)
-        double dettesFournisseurs = factureAchatRepository.findAll().stream()
+        double dettesFournisseurs = NumberUtils.roundTo2Decimals(factureAchatRepository.findAll().stream()
                 .filter(fa -> !"regle".equalsIgnoreCase(fa.getEtatPaiement())) // Inclut null et insensible à la casse
                 .mapToDouble(fa -> {
                     // Utiliser montantRestant si disponible, sinon calculer
@@ -561,10 +574,10 @@ public class SoldeService {
                         fa.getPaiements().stream().mapToDouble(p -> p.getMontant() != null ? p.getMontant() : 0.0).sum() : 0.0;
                     return Math.max(0.0, totalTTC - totalPaiements);
                 })
-                .sum();
+                .sum());
         
         // Solde projeté = Banque + Créances - Dettes
-        double soldeProjete = soldeBanque + creancesClients - dettesFournisseurs;
+        double soldeProjete = NumberUtils.roundTo2Decimals(soldeBanque + creancesClients - dettesFournisseurs);
         
         log.info("Solde projeté - Banque: {}, Créances clients: {}, Dettes fournisseurs: {}, Projeté: {}", 
                 soldeBanque, creancesClients, dettesFournisseurs, soldeProjete);

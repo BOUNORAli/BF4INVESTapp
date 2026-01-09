@@ -7,6 +7,7 @@ import com.bf4invest.model.Paiement;
 import com.bf4invest.repository.FactureAchatRepository;
 import com.bf4invest.repository.FactureVenteRepository;
 import com.bf4invest.repository.PaiementRepository;
+import com.bf4invest.util.NumberUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -39,15 +40,15 @@ public class PaymentAnalysisService {
         }
         
         // Séparer encaissements (clients) et décaissements (fournisseurs)
-        double totalEncaissements = paiements.stream()
+        double totalEncaissements = NumberUtils.roundTo2Decimals(paiements.stream()
                 .filter(p -> p.getFactureVenteId() != null)
                 .mapToDouble(p -> p.getMontant() != null ? p.getMontant() : 0.0)
-                .sum();
+                .sum());
         
-        double totalDecaissements = paiements.stream()
+        double totalDecaissements = NumberUtils.roundTo2Decimals(paiements.stream()
                 .filter(p -> p.getFactureAchatId() != null)
                 .mapToDouble(p -> p.getMontant() != null ? p.getMontant() : 0.0)
-                .sum();
+                .sum());
         
         // Répartition par mode de paiement
         Map<String, Double> montantsParMode = paiements.stream()
@@ -67,12 +68,12 @@ public class PaymentAnalysisService {
                 .collect(Collectors.toList());
         
         // Délais moyens de paiement
-        double delaiMoyenPaiementClient = calculateDelaiMoyenPaiementClient(from, to);
-        double delaiMoyenPaiementFournisseur = calculateDelaiMoyenPaiementFournisseur(from, to);
+        double delaiMoyenPaiementClient = NumberUtils.roundTo2Decimals(calculateDelaiMoyenPaiementClient(from, to));
+        double delaiMoyenPaiementFournisseur = NumberUtils.roundTo2Decimals(calculateDelaiMoyenPaiementFournisseur(from, to));
         
         // DSO et DPO
-        double dso = calculateDSO(from, to);
-        double dpo = calculateDPO(from, to);
+        double dso = NumberUtils.roundTo2Decimals(calculateDSO(from, to));
+        double dpo = NumberUtils.roundTo2Decimals(calculateDPO(from, to));
         
         // Evolution mensuelle
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM");
@@ -185,21 +186,21 @@ public class PaymentAnalysisService {
                     .collect(Collectors.toList());
         }
         
-        double totalCA = factures.stream()
+        double totalCA = NumberUtils.roundTo2Decimals(factures.stream()
                 .mapToDouble(f -> f.getTotalHT() != null ? f.getTotalHT() : 0.0)
-                .sum();
+                .sum());
         
-        double comptesClients = factures.stream()
+        double comptesClients = NumberUtils.roundTo2Decimals(factures.stream()
                 .filter(f -> !"regle".equals(f.getEtatPaiement()))
                 .mapToDouble(f -> f.getMontantRestant() != null ? f.getMontantRestant() : f.getTotalTTC() != null ? f.getTotalTTC() : 0.0)
-                .sum();
+                .sum());
         
         if (totalCA == 0) return 0.0;
         
         long daysInPeriod = from != null && to != null ? 
                 java.time.temporal.ChronoUnit.DAYS.between(from, to) : 365;
         
-        return (comptesClients / totalCA) * daysInPeriod;
+        return NumberUtils.roundTo2Decimals((comptesClients / totalCA) * daysInPeriod);
     }
     
     private double calculateDPO(LocalDate from, LocalDate to) {
@@ -216,21 +217,21 @@ public class PaymentAnalysisService {
                     .collect(Collectors.toList());
         }
         
-        double totalAchats = factures.stream()
+        double totalAchats = NumberUtils.roundTo2Decimals(factures.stream()
                 .mapToDouble(f -> f.getTotalHT() != null ? f.getTotalHT() : 0.0)
-                .sum();
+                .sum());
         
-        double comptesFournisseurs = factures.stream()
+        double comptesFournisseurs = NumberUtils.roundTo2Decimals(factures.stream()
                 .filter(f -> !"regle".equals(f.getEtatPaiement()))
                 .mapToDouble(f -> f.getMontantRestant() != null ? f.getMontantRestant() : f.getTotalTTC() != null ? f.getTotalTTC() : 0.0)
-                .sum();
+                .sum());
         
         if (totalAchats == 0) return 0.0;
         
         long daysInPeriod = from != null && to != null ? 
                 java.time.temporal.ChronoUnit.DAYS.between(from, to) : 365;
         
-        return (comptesFournisseurs / totalAchats) * daysInPeriod;
+        return NumberUtils.roundTo2Decimals((comptesFournisseurs / totalAchats) * daysInPeriod);
     }
 }
 

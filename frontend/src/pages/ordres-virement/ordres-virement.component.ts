@@ -944,7 +944,9 @@ export class OrdresVirementComponent implements OnInit {
   }
 
   formatCurrency(amount: number): string {
-    return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'MAD' }).format(amount);
+    // Arrondir à 2 décimales de manière scientifique
+    const rounded = Math.round(amount * 100) / 100;
+    return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'MAD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(rounded);
   }
 
   isFieldInvalid(fieldName: string): boolean {

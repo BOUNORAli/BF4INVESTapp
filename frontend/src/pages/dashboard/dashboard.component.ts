@@ -466,24 +466,28 @@ export class DashboardComponent implements OnInit {
   }
 
   formatCurrency(value: number): string {
-    if (!value && value !== 0) return '0 MAD';
+    if (!value && value !== 0) return '0,00 MAD';
+    // Arrondir à 2 décimales de manière scientifique
+    const rounded = Math.round(value * 100) / 100;
     // Utiliser des séparateurs de milliers pour les grands nombres
     const formatted = new Intl.NumberFormat('fr-MA', { 
       style: 'currency', 
       currency: 'MAD', 
-      maximumFractionDigits: 0,
-      minimumFractionDigits: 0
-    }).format(value);
+      maximumFractionDigits: 2,
+      minimumFractionDigits: 2
+    }).format(rounded);
     return formatted;
   }
 
   formatLargeNumber(value: number): string {
     if (!value && value !== 0) return '0';
+    // Arrondir à 2 décimales de manière scientifique
+    const rounded = Math.round(value * 100) / 100;
     // Formater avec séparateurs de milliers (espace en français)
     return new Intl.NumberFormat('fr-MA', {
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
-    }).format(value) + ' MAD';
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(rounded) + ' MAD';
   }
 
   getBCTotal(bc: any): number {

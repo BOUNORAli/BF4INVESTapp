@@ -2,6 +2,7 @@ package com.bf4invest.service;
 
 import com.bf4invest.model.Charge;
 import com.bf4invest.repository.ChargeRepository;
+import com.bf4invest.util.NumberUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -144,7 +145,7 @@ public class ChargeService {
 
         if (updated.getLibelle() != null) existing.setLibelle(updated.getLibelle());
         if (updated.getCategorie() != null) existing.setCategorie(updated.getCategorie());
-        if (updated.getMontant() != null) existing.setMontant(updated.getMontant());
+        if (updated.getMontant() != null) existing.setMontant(NumberUtils.roundTo2Decimals(updated.getMontant()));
         if (updated.getDateEcheance() != null) existing.setDateEcheance(updated.getDateEcheance());
         if (updated.getImposable() != null) existing.setImposable(updated.getImposable());
         // Gérer tauxImposition : si imposable devient false, mettre tauxImposition à null

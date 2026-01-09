@@ -2,6 +2,7 @@ package com.bf4invest.service;
 
 import com.bf4invest.model.*;
 import com.bf4invest.repository.BandeCommandeRepository;
+import com.bf4invest.util.NumberUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -333,8 +334,8 @@ public class BandeCommandeService {
                 double prix = ligne.getPrixAchatUnitaireHT() != null ? ligne.getPrixAchatUnitaireHT() : 0;
                 double tvaRate = ligne.getTva() != null ? ligne.getTva() / 100.0 : 0.0;
                 
-                double ht = qte * prix;
-                double ttc = ht * (1 + tvaRate);
+                double ht = NumberUtils.roundTo2Decimals(qte * prix);
+                double ttc = NumberUtils.roundTo2Decimals(ht * (1 + tvaRate));
                 
                 ligne.setTotalHT(ht);
                 ligne.setTotalTTC(ttc);
@@ -363,9 +364,9 @@ public class BandeCommandeService {
                         double prix = ligne.getPrixVenteUnitaireHT() != null ? ligne.getPrixVenteUnitaireHT() : 0;
                         double tvaRate = ligne.getTva() != null ? ligne.getTva() / 100.0 : 0.0;
                         
-                        double ht = qte * prix;
-                        double tva = ht * tvaRate;
-                        double ttc = ht + tva;
+                        double ht = NumberUtils.roundTo2Decimals(qte * prix);
+                        double tva = NumberUtils.roundTo2Decimals(ht * tvaRate);
+                        double ttc = NumberUtils.roundTo2Decimals(ht + tva);
                         
                         ligne.setTotalHT(ht);
                         ligne.setTotalTTC(ttc);
@@ -373,8 +374,8 @@ public class BandeCommandeService {
                         // Calculer la marge par rapport au prix d'achat
                         Double prixAchat = prixAchatParProduit.get(ligne.getProduitRef());
                         if (prixAchat != null && prixAchat > 0) {
-                            double margeUnitaire = prix - prixAchat;
-                            double margePourcent = (margeUnitaire / prixAchat) * 100;
+                            double margeUnitaire = NumberUtils.roundTo2Decimals(prix - prixAchat);
+                            double margePourcent = NumberUtils.roundTo2Decimals((margeUnitaire / prixAchat) * 100);
                             ligne.setMargeUnitaire(margeUnitaire);
                             ligne.setMargePourcentage(margePourcent);
                             clientMarge += margeUnitaire * qte;
@@ -386,15 +387,15 @@ public class BandeCommandeService {
                     }
                 }
                 
-                // Mettre à jour les totaux du client
-                clientVente.setTotalVenteHT(clientVenteHT);
-                clientVente.setTotalVenteTTC(clientVenteTTC);
-                clientVente.setTotalTVA(clientTVA);
-                clientVente.setMargeTotale(clientMarge);
+                // Mettre à jour les totaux du client (arrondis)
+                clientVente.setTotalVenteHT(NumberUtils.roundTo2Decimals(clientVenteHT));
+                clientVente.setTotalVenteTTC(NumberUtils.roundTo2Decimals(clientVenteTTC));
+                clientVente.setTotalTVA(NumberUtils.roundTo2Decimals(clientTVA));
+                clientVente.setMargeTotale(NumberUtils.roundTo2Decimals(clientMarge));
                 
                 if (clientVenteHT > 0 && totalAchatHT > 0) {
                     // Marge en % pour ce client (approximative basée sur la proportion)
-                    clientVente.setMargePourcentage((clientMarge / clientVenteHT) * 100);
+                    clientVente.setMargePourcentage(NumberUtils.roundTo2Decimals((clientMarge / clientVenteHT) * 100));
                 }
                 
                 totalVenteHTGlobal += clientVenteHT;
@@ -402,15 +403,15 @@ public class BandeCommandeService {
             }
         }
         
-        // 3. Mettre à jour les totaux globaux du BC
-        bc.setTotalAchatHT(totalAchatHT);
-        bc.setTotalAchatTTC(totalAchatTTC);
-        bc.setTotalVenteHT(totalVenteHTGlobal);
-        bc.setTotalVenteTTC(totalVenteTTCGlobal);
-        bc.setMargeTotale(totalVenteHTGlobal - totalAchatHT);
+        // 3. Mettre à jour les totaux globaux du BC (arrondis)
+        bc.setTotalAchatHT(NumberUtils.roundTo2Decimals(totalAchatHT));
+        bc.setTotalAchatTTC(NumberUtils.roundTo2Decimals(totalAchatTTC));
+        bc.setTotalVenteHT(NumberUtils.roundTo2Decimals(totalVenteHTGlobal));
+        bc.setTotalVenteTTC(NumberUtils.roundTo2Decimals(totalVenteTTCGlobal));
+        bc.setMargeTotale(NumberUtils.roundTo2Decimals(totalVenteHTGlobal - totalAchatHT));
         
         if (totalAchatHT > 0) {
-            bc.setMargePourcentage(((totalVenteHTGlobal - totalAchatHT) / totalAchatHT) * 100);
+            bc.setMargePourcentage(NumberUtils.roundTo2Decimals(((totalVenteHTGlobal - totalAchatHT) / totalAchatHT) * 100));
         } else {
             bc.setMargePourcentage(0.0);
         }
@@ -442,18 +443,18 @@ public class BandeCommandeService {
             double prixVente = ligne.getPrixVenteUnitaireHT() != null ? ligne.getPrixVenteUnitaireHT() : 0;
             double tvaRate = ligne.getTva() != null ? ligne.getTva() / 100.0 : 0.0;
             
-            double htAchat = qteAchat * prixAchat;
-            double ttcAchat = htAchat * (1 + tvaRate);
+            double htAchat = NumberUtils.roundTo2Decimals(qteAchat * prixAchat);
+            double ttcAchat = NumberUtils.roundTo2Decimals(htAchat * (1 + tvaRate));
             
-            double htVente = qteVente * prixVente;
-            double ttcVente = htVente * (1 + tvaRate);
+            double htVente = NumberUtils.roundTo2Decimals(qteVente * prixVente);
+            double ttcVente = NumberUtils.roundTo2Decimals(htVente * (1 + tvaRate));
             
             ligne.setTotalHT(htVente);
             ligne.setTotalTTC(ttcVente);
             
             if (prixAchat > 0) {
-                double margeUnitaire = prixVente - prixAchat;
-                double margePourcent = (margeUnitaire / prixAchat) * 100;
+                double margeUnitaire = NumberUtils.roundTo2Decimals(prixVente - prixAchat);
+                double margePourcent = NumberUtils.roundTo2Decimals((margeUnitaire / prixAchat) * 100);
                 ligne.setMargeUnitaire(margeUnitaire);
                 ligne.setMargePourcentage(margePourcent);
             }
@@ -464,14 +465,14 @@ public class BandeCommandeService {
             totalVenteTTC += ttcVente;
         }
         
-        bc.setTotalAchatHT(totalAchatHT);
-        bc.setTotalAchatTTC(totalAchatTTC);
-        bc.setTotalVenteHT(totalVenteHT);
-        bc.setTotalVenteTTC(totalVenteTTC);
-        bc.setMargeTotale(totalVenteHT - totalAchatHT);
+        bc.setTotalAchatHT(NumberUtils.roundTo2Decimals(totalAchatHT));
+        bc.setTotalAchatTTC(NumberUtils.roundTo2Decimals(totalAchatTTC));
+        bc.setTotalVenteHT(NumberUtils.roundTo2Decimals(totalVenteHT));
+        bc.setTotalVenteTTC(NumberUtils.roundTo2Decimals(totalVenteTTC));
+        bc.setMargeTotale(NumberUtils.roundTo2Decimals(totalVenteHT - totalAchatHT));
         
         if (totalAchatHT > 0) {
-            bc.setMargePourcentage(((totalVenteHT - totalAchatHT) / totalAchatHT) * 100);
+            bc.setMargePourcentage(NumberUtils.roundTo2Decimals(((totalVenteHT - totalAchatHT) / totalAchatHT) * 100));
         } else {
             bc.setMargePourcentage(0.0);
         }

@@ -13,6 +13,7 @@ import com.bf4invest.repository.ClientRepository;
 import com.bf4invest.repository.FactureAchatRepository;
 import com.bf4invest.repository.FactureVenteRepository;
 import com.bf4invest.repository.SupplierRepository;
+import com.bf4invest.util.NumberUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -65,7 +66,7 @@ public class PrevisionTresorerieService {
                             .type("VENTE")
                             .numeroFacture(fv.getNumeroFactureVente())
                             .partenaire(clientNom)
-                            .montant(prev.getMontantPrevu())
+                            .montant(NumberUtils.roundTo2Decimals(prev.getMontantPrevu() != null ? prev.getMontantPrevu() : 0.0))
                             .statut(statut)
                             .factureId(fv.getId())
                             .build());
@@ -116,7 +117,7 @@ public class PrevisionTresorerieService {
                         .type("CHARGE")
                         .numeroFacture(charge.getLibelle() != null ? charge.getLibelle() : "Charge")
                         .partenaire(charge.getCategorie() != null ? charge.getCategorie() : "Charge")
-                        .montant(charge.getMontant() != null ? charge.getMontant() : 0.0)
+                        .montant(NumberUtils.roundTo2Decimals(charge.getMontant() != null ? charge.getMontant() : 0.0))
                         .statut(statut)
                         .factureId(charge.getId())
                         .build());
@@ -131,7 +132,7 @@ public class PrevisionTresorerieService {
             from, to, soldeActuel, echeances);
         
         return PrevisionTresorerieResponse.builder()
-            .soldeActuel(soldeActuel)
+            .soldeActuel(NumberUtils.roundTo2Decimals(soldeActuel))
             .previsions(previsions)
             .echeances(echeances)
             .build();
@@ -174,17 +175,17 @@ public class PrevisionTresorerieService {
         while (!dateCourante.isAfter(to)) {
             List<EcheanceDetail> echeancesDuJour = echeancesParDate.getOrDefault(dateCourante, new ArrayList<>());
             
-            double entrees = echeancesDuJour.stream()
+            double entrees = NumberUtils.roundTo2Decimals(echeancesDuJour.stream()
                 .filter(e -> "VENTE".equals(e.getType()))
                 .mapToDouble(e -> e.getMontant() != null ? e.getMontant() : 0.0)
-                .sum();
+                .sum());
             
-            double sorties = echeancesDuJour.stream()
+            double sorties = NumberUtils.roundTo2Decimals(echeancesDuJour.stream()
                 .filter(e -> "ACHAT".equals(e.getType()) || "CHARGE".equals(e.getType()))
                 .mapToDouble(e -> e.getMontant() != null ? e.getMontant() : 0.0)
-                .sum();
+                .sum());
             
-            soldeCourant = soldeCourant + entrees - sorties;
+            soldeCourant = NumberUtils.roundTo2Decimals(soldeCourant + entrees - sorties);
             
             previsions.add(PrevisionJournaliere.builder()
                 .date(dateCourante)

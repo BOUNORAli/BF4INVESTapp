@@ -2,6 +2,7 @@ package com.bf4invest.service;
 
 import com.bf4invest.model.*;
 import com.bf4invest.repository.BandeCommandeRepository;
+import com.bf4invest.util.NumberUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -43,8 +44,8 @@ public class CalculComptableService {
             // Calculer le taux de TVA à partir des totaux si disponibles
             if (facture.getTotalHT() != null && facture.getTotalHT() > 0 && 
                 facture.getTotalTTC() != null && facture.getTotalTTC() > 0) {
-                double tvaAmount = facture.getTotalTTC() - facture.getTotalHT();
-                facture.setTvaRate(tvaAmount / facture.getTotalHT());
+                double tvaAmount = NumberUtils.roundTo2Decimals(facture.getTotalTTC() - facture.getTotalHT());
+                facture.setTvaRate(NumberUtils.roundTo2Decimals(tvaAmount / facture.getTotalHT()));
             } else {
                 facture.setTvaRate(0.20); // 20% par défaut
             }
@@ -95,8 +96,8 @@ public class CalculComptableService {
             // Calculer le taux de TVA à partir des totaux si disponibles
             if (facture.getTotalHT() != null && facture.getTotalHT() > 0 && 
                 facture.getTotalTTC() != null && facture.getTotalTTC() > 0) {
-                double tvaAmount = facture.getTotalTTC() - facture.getTotalHT();
-                facture.setTvaRate(tvaAmount / facture.getTotalHT());
+                double tvaAmount = NumberUtils.roundTo2Decimals(facture.getTotalTTC() - facture.getTotalHT());
+                facture.setTvaRate(NumberUtils.roundTo2Decimals(tvaAmount / facture.getTotalHT()));
             } else {
                 facture.setTvaRate(0.20); // 20% par défaut
             }
@@ -248,9 +249,9 @@ public class CalculComptableService {
         
         String typeMouvement = facture.getTypeMouvement();
         if ("C".equals(typeMouvement)) {
-            return totalTTCApresRG; // Positif pour Client
+            return NumberUtils.roundTo2Decimals(totalTTCApresRG); // Positif pour Client
         }
-        return -totalTTCApresRG; // Négatif pour les autres
+        return NumberUtils.roundTo2Decimals(-totalTTCApresRG); // Négatif pour les autres
     }
     
     private Double calculerTotalTTCApresRG_SIGNE(FactureAchat facture) {
@@ -261,9 +262,9 @@ public class CalculComptableService {
         
         String typeMouvement = facture.getTypeMouvement();
         if ("C".equals(typeMouvement)) {
-            return totalTTCApresRG; // Positif pour Client
+            return NumberUtils.roundTo2Decimals(totalTTCApresRG); // Positif pour Client
         }
-        return -totalTTCApresRG; // Négatif pour les autres
+        return NumberUtils.roundTo2Decimals(-totalTTCApresRG); // Négatif pour les autres
     }
     
     /**
@@ -306,9 +307,9 @@ public class CalculComptableService {
         }
         
         if ("C".equals(typeMouvement)) {
-            return montant; // Positif pour Client
+            return NumberUtils.roundTo2Decimals(montant); // Positif pour Client
         }
-        return -montant; // Négatif pour les autres
+        return NumberUtils.roundTo2Decimals(-montant); // Négatif pour les autres
     }
     
     private Double calculerTotalPaiementTTC(FactureAchat facture) {
@@ -326,9 +327,9 @@ public class CalculComptableService {
         }
         
         if ("C".equals(typeMouvement)) {
-            return montant; // Positif pour Client
+            return NumberUtils.roundTo2Decimals(montant); // Positif pour Client
         }
-        return -montant; // Négatif pour les autres
+        return NumberUtils.roundTo2Decimals(-montant); // Négatif pour les autres
     }
     
     private Double calculerTotalPaiementTTC(Paiement paiement) {
@@ -346,9 +347,9 @@ public class CalculComptableService {
         }
         
         if ("C".equals(typeMouvement)) {
-            return montant; // Positif pour Client
+            return NumberUtils.roundTo2Decimals(montant); // Positif pour Client
         }
-        return -montant; // Négatif pour les autres
+        return NumberUtils.roundTo2Decimals(-montant); // Négatif pour les autres
     }
     
     /**
@@ -373,7 +374,7 @@ public class CalculComptableService {
         }
         
         // U7/(1-N7)*N7 = totalTTCApresRG_SIGNE / (1 - tauxRG) * tauxRG
-        return totalTTCApresRG_SIGNE / (1 - tauxRG) * tauxRG;
+        return NumberUtils.roundTo2Decimals(totalTTCApresRG_SIGNE / (1 - tauxRG) * tauxRG);
     }
     
     private Double calculerRgTTC(FactureAchat facture) {
@@ -393,7 +394,7 @@ public class CalculComptableService {
         }
         
         // U7/(1-N7)*N7 = totalTTCApresRG_SIGNE / (1 - tauxRG) * tauxRG
-        return totalTTCApresRG_SIGNE / (1 - tauxRG) * tauxRG;
+        return NumberUtils.roundTo2Decimals(totalTTCApresRG_SIGNE / (1 - tauxRG) * tauxRG);
     }
     
     /**
@@ -441,12 +442,12 @@ public class CalculComptableService {
         Double rgTTC = calculerRgTTC(facture);
         
         // U7/(1+M7) = totalTTCApresRG_SIGNE / (1 + tvaRate)
-        Double htBase = Math.abs(totalTTCApresRG_SIGNE) / (1 + tvaRate);
+        Double htBase = NumberUtils.roundTo2Decimals(Math.abs(totalTTCApresRG_SIGNE) / (1 + tvaRate));
         
         // W7/(1+M7) = rgTTC / (1 + tvaRate)
-        Double htRG = (rgTTC != null) ? Math.abs(rgTTC) / (1 + tvaRate) : 0.0;
+        Double htRG = (rgTTC != null) ? NumberUtils.roundTo2Decimals(Math.abs(rgTTC) / (1 + tvaRate)) : 0.0;
         
-        return htBase + htRG;
+        return NumberUtils.roundTo2Decimals(htBase + htRG);
     }
     
     private Double calculerFactureHT_YC_RG(FactureAchat facture) {
@@ -464,12 +465,12 @@ public class CalculComptableService {
         Double rgTTC = calculerRgTTC(facture);
         
         // U7/(1+M7) = totalTTCApresRG_SIGNE / (1 + tvaRate)
-        Double htBase = Math.abs(totalTTCApresRG_SIGNE) / (1 + tvaRate);
+        Double htBase = NumberUtils.roundTo2Decimals(Math.abs(totalTTCApresRG_SIGNE) / (1 + tvaRate));
         
         // W7/(1+M7) = rgTTC / (1 + tvaRate)
-        Double htRG = (rgTTC != null) ? Math.abs(rgTTC) / (1 + tvaRate) : 0.0;
+        Double htRG = (rgTTC != null) ? NumberUtils.roundTo2Decimals(Math.abs(rgTTC) / (1 + tvaRate)) : 0.0;
         
-        return htBase + htRG;
+        return NumberUtils.roundTo2Decimals(htBase + htRG);
     }
     
     /**
@@ -566,7 +567,7 @@ public class CalculComptableService {
         }
         
         Double tvaRate = facture.getTvaRate() != null ? facture.getTvaRate() : 0.20;
-        return factureHT_YC_RG * tvaRate;
+        return NumberUtils.roundTo2Decimals(factureHT_YC_RG * tvaRate);
     }
     
     private Double calculerTvaFactureYcRg(FactureAchat facture) {
@@ -581,7 +582,7 @@ public class CalculComptableService {
         }
         
         Double tvaRate = facture.getTvaRate() != null ? facture.getTvaRate() : 0.20;
-        return factureHT_YC_RG * tvaRate;
+        return NumberUtils.roundTo2Decimals(factureHT_YC_RG * tvaRate);
     }
     
     /**
@@ -683,7 +684,7 @@ public class CalculComptableService {
             return null;
         }
         Double tvaRate = facture.getTvaRate() != null ? facture.getTvaRate() : 0.20;
-        return -montant / (1 + tvaRate);
+        return NumberUtils.roundTo2Decimals(-montant / (1 + tvaRate));
     }
     
     private Double calculerBilan(FactureAchat facture) {
@@ -733,7 +734,7 @@ public class CalculComptableService {
             return null;
         }
         Double tvaRate = facture.getTvaRate() != null ? facture.getTvaRate() : 0.20;
-        return -montant / (1 + tvaRate);
+        return NumberUtils.roundTo2Decimals(-montant / (1 + tvaRate));
     }
 }
 

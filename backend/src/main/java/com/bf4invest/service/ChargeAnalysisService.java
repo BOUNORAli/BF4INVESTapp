@@ -3,6 +3,7 @@ package com.bf4invest.service;
 import com.bf4invest.dto.DashboardKpiResponse;
 import com.bf4invest.model.Charge;
 import com.bf4invest.repository.ChargeRepository;
+import com.bf4invest.util.NumberUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -57,8 +58,8 @@ public class ChargeAnalysisService {
                 .limit(5)
                 .map(entry -> DashboardKpiResponse.ChargeCategoryStat.builder()
                         .categorie(entry.getKey())
-                        .montant(entry.getValue())
-                        .pourcentage(totalCharges > 0 ? (entry.getValue() / totalCharges) * 100 : 0.0)
+                        .montant(NumberUtils.roundTo2Decimals(entry.getValue()))
+                        .pourcentage(NumberUtils.roundTo2Decimals(totalCharges > 0 ? (entry.getValue() / totalCharges) * 100 : 0.0))
                         .build())
                 .collect(Collectors.toList());
         
@@ -92,17 +93,17 @@ public class ChargeAnalysisService {
         List<DashboardKpiResponse.ChargeEcheance> echeances = Arrays.asList(
                 DashboardKpiResponse.ChargeEcheance.builder()
                         .periode("0-30j")
-                        .montant(echeances0_30)
+                        .montant(NumberUtils.roundTo2Decimals(echeances0_30))
                         .nombre(count0_30)
                         .build(),
                 DashboardKpiResponse.ChargeEcheance.builder()
                         .periode("31-60j")
-                        .montant(echeances31_60)
+                        .montant(NumberUtils.roundTo2Decimals(echeances31_60))
                         .nombre(count31_60)
                         .build(),
                 DashboardKpiResponse.ChargeEcheance.builder()
                         .periode("60j+")
-                        .montant(echeancesPlus60)
+                        .montant(NumberUtils.roundTo2Decimals(echeancesPlus60))
                         .nombre(countPlus60)
                         .build()
         );

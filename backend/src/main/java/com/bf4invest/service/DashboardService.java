@@ -9,6 +9,7 @@ import com.bf4invest.repository.FactureVenteRepository;
 import com.bf4invest.repository.BandeCommandeRepository;
 import com.bf4invest.repository.ClientRepository;
 import com.bf4invest.repository.SupplierRepository;
+import com.bf4invest.util.NumberUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -54,29 +55,29 @@ public class DashboardService {
                 .sum();
         
         // Utiliser la valeur la plus élevée ou celle des BCs si disponible
-        double caHT = caHTFromBCs > 0 ? caHTFromBCs : caHTFromInvoices;
+        double caHT = NumberUtils.roundTo2Decimals(caHTFromBCs > 0 ? caHTFromBCs : caHTFromInvoices);
         
-        double caTTC = facturesVente.stream()
+        double caTTC = NumberUtils.roundTo2Decimals(facturesVente.stream()
                 .mapToDouble(f -> f.getTotalTTC() != null ? f.getTotalTTC() : 0.0)
-                .sum();
+                .sum());
         
         // Achats
-        double totalAchatsHT = facturesAchat.stream()
+        double totalAchatsHT = NumberUtils.roundTo2Decimals(facturesAchat.stream()
                 .mapToDouble(f -> f.getTotalHT() != null ? f.getTotalHT() : 0.0)
-                .sum();
-        double totalAchatsTTC = facturesAchat.stream()
+                .sum());
+        double totalAchatsTTC = NumberUtils.roundTo2Decimals(facturesAchat.stream()
                 .mapToDouble(f -> f.getTotalTTC() != null ? f.getTotalTTC() : 0.0)
-                .sum();
+                .sum());
         
         // Marges - Calculer à partir des BCs pour une meilleure précision
         // Les BCs contiennent la source de vérité pour les prix d'achat et de vente
         List<BandeCommande> bcs = bcRepository.findAll();
-        double totalAchatHTFromBCs = bcs.stream()
+        double totalAchatHTFromBCs = NumberUtils.roundTo2Decimals(bcs.stream()
                 .mapToDouble(bc -> bc.getTotalAchatHT() != null ? bc.getTotalAchatHT() : 0.0)
-                .sum();
-        double totalVenteHTFromBCs = bcs.stream()
+                .sum());
+        double totalVenteHTFromBCs = NumberUtils.roundTo2Decimals(bcs.stream()
                 .mapToDouble(bc -> bc.getTotalVenteHT() != null ? bc.getTotalVenteHT() : 0.0)
-                .sum();
+                .sum());
         
         // Utiliser les BCs pour calculer la marge (plus précis)
         // Sinon utiliser les factures comme fallback
@@ -85,23 +86,23 @@ public class DashboardService {
         
         if (totalVenteHTFromBCs > 0) {
             // Utiliser les BCs comme source principale
-            margeTotale = totalVenteHTFromBCs - totalAchatHTFromBCs;
+            margeTotale = NumberUtils.roundTo2Decimals(totalVenteHTFromBCs - totalAchatHTFromBCs);
             totalAchatsHTForMargin = totalAchatHTFromBCs;
         } else {
             // Fallback sur les factures si pas de BCs
-            margeTotale = caHT - totalAchatsHT;
+            margeTotale = NumberUtils.roundTo2Decimals(caHT - totalAchatsHT);
             totalAchatsHTForMargin = totalAchatsHT;
         }
         
-        double margeMoyenne = totalAchatsHTForMargin > 0 ? (margeTotale / totalAchatsHTForMargin) * 100 : 0.0;
+        double margeMoyenne = NumberUtils.roundTo2Decimals(totalAchatsHTForMargin > 0 ? (margeTotale / totalAchatsHTForMargin) * 100 : 0.0);
         
         // TVA
-        double tvaCollectee = facturesVente.stream()
+        double tvaCollectee = NumberUtils.roundTo2Decimals(facturesVente.stream()
                 .mapToDouble(f -> f.getTotalTVA() != null ? f.getTotalTVA() : 0.0)
-                .sum();
-        double tvaDeductible = facturesAchat.stream()
+                .sum());
+        double tvaDeductible = NumberUtils.roundTo2Decimals(facturesAchat.stream()
                 .mapToDouble(f -> f.getTotalTVA() != null ? f.getTotalTVA() : 0.0)
-                .sum();
+                .sum());
         
         // Impayés
         DashboardKpiResponse.ImpayesInfo impayes = calculateImpayes(facturesAchat, facturesVente);
@@ -176,8 +177,8 @@ public class DashboardService {
         
         List<DashboardKpiResponse.CAChargeCorrelation> correlationCACharges = caMensuel.stream()
                 .map(m -> {
-                    double chargesMensuelles = totalCharges / Math.max(caMensuel.size(), 1);
-                    double ratio = m.getCaHT() > 0 ? chargesMensuelles / m.getCaHT() : 0.0;
+                    double chargesMensuelles = NumberUtils.roundTo2Decimals(totalCharges / Math.max(caMensuel.size(), 1));
+                    double ratio = NumberUtils.roundTo2Decimals(m.getCaHT() > 0 ? chargesMensuelles / m.getCaHT() : 0.0);
                     return DashboardKpiResponse.CAChargeCorrelation.builder()
                             .mois(m.getMois())
                             .ca(m.getCaHT())
@@ -197,13 +198,13 @@ public class DashboardService {
             double caMoisActuel = sorted.get(sorted.size() - 1).getCaHT();
             double caMoisPrecedent = sorted.get(sorted.size() - 2).getCaHT();
             if (caMoisPrecedent > 0) {
-                croissanceMoM = ((caMoisActuel - caMoisPrecedent) / caMoisPrecedent) * 100;
+                croissanceMoM = NumberUtils.roundTo2Decimals(((caMoisActuel - caMoisPrecedent) / caMoisPrecedent) * 100);
             }
         }
         
         DashboardKpiResponse.GrowthIndicators indicateursCroissance = DashboardKpiResponse.GrowthIndicators.builder()
                 .croissanceMoM(croissanceMoM)
-                .croissanceYoY(croissanceYoY) // Simplifié - nécessiterait données année précédente
+                .croissanceYoY(NumberUtils.roundTo2Decimals(croissanceYoY)) // Simplifié - nécessiterait données année précédente
                 .croissanceMoyenne(croissanceMoM)
                 .build();
         
@@ -215,7 +216,7 @@ public class DashboardService {
                     
                     // Score basé sur CA et marge
                     if (m.getCaHT() > 0 && m.getMarge() > 0) {
-                        score = (m.getCaHT() / 100000.0) * 50 + (m.getMarge() / 20.0) * 50;
+                        score = NumberUtils.roundTo2Decimals((m.getCaHT() / 100000.0) * 50 + (m.getMarge() / 20.0) * 50);
                         score = Math.min(score, 100.0);
                         
                         if (score >= 80) niveau = "EXCELLENT";
@@ -225,7 +226,7 @@ public class DashboardService {
                     
                     return DashboardKpiResponse.MonthlyPerformance.builder()
                             .mois(m.getMois())
-                            .score(score)
+                            .score(NumberUtils.roundTo2Decimals(score))
                             .niveau(niveau)
                             .build();
                 })
@@ -304,10 +305,10 @@ public class DashboardService {
         }
         
         return DashboardKpiResponse.ImpayesInfo.builder()
-                .totalImpayes(impayes0_30 + impayes31_60 + impayesPlus60)
-                .impayes0_30(impayes0_30)
-                .impayes31_60(impayes31_60)
-                .impayesPlus60(impayesPlus60)
+                .totalImpayes(NumberUtils.roundTo2Decimals(impayes0_30 + impayes31_60 + impayesPlus60))
+                .impayes0_30(NumberUtils.roundTo2Decimals(impayes0_30))
+                .impayes31_60(NumberUtils.roundTo2Decimals(impayes31_60))
+                .impayesPlus60(NumberUtils.roundTo2Decimals(impayesPlus60))
                 .build();
     }
     
@@ -330,7 +331,7 @@ public class DashboardService {
         caByMonth.forEach((month, ca) -> {
             result.add(DashboardKpiResponse.MonthlyData.builder()
                     .mois(month)
-                    .caHT(ca)
+                    .caHT(NumberUtils.roundTo2Decimals(ca))
                     .marge(0.0) // Simplified
                     .build());
         });
