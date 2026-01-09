@@ -1,5 +1,6 @@
 package com.bf4invest.excel;
 
+import com.bf4invest.dto.MultiPartnerSituationResponse;
 import com.bf4invest.dto.PartnerSituationResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.*;
@@ -360,6 +361,270 @@ public class PartnerSituationExcelExporter {
             case "REALISE": return "Réalisé";
             default: return statut;
         }
+    }
+    
+    public byte[] exportMulti(MultiPartnerSituationResponse situation) throws IOException {
+        try (XSSFWorkbook workbook = new XSSFWorkbook()) {
+            createMultiSummarySheet(workbook, situation);
+            createMultiFacturesSheet(workbook, situation);
+            createMultiPrevisionsSheet(workbook, situation);
+            
+            // Créer une feuille par partenaire pour le mode groupé
+            if (situation.getSituationsParPartenaire() != null) {
+                for (PartnerSituationResponse partnerSituation : situation.getSituationsParPartenaire()) {
+                    String sheetName = partnerSituation.getPartnerInfo().getNom();
+                    if (sheetName.length() > 31) {
+                        sheetName = sheetName.substring(0, 31);
+                    }
+                    createPartnerSheet(workbook, partnerSituation, sheetName);
+                }
+            }
+            
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            workbook.write(baos);
+            return baos.toByteArray();
+        }
+    }
+    
+    private void createMultiSummarySheet(XSSFWorkbook workbook, MultiPartnerSituationResponse situation) {
+        Sheet sheet = workbook.createSheet("Résumé Global");
+        
+        CellStyle headerStyle = createHeaderStyle(workbook);
+        CellStyle labelStyle = createLabelStyle(workbook);
+        CellStyle valueStyle = createValueStyle(workbook);
+        CellStyle titleStyle = createTitleStyle(workbook);
+        
+        int rowNum = 0;
+        
+        // Titre
+        Row titleRow = sheet.createRow(rowNum++);
+        Cell titleCell = titleRow.createCell(0);
+        titleCell.setCellValue("SITUATION FINANCIÈRE MULTI-PARTENAIRES");
+        titleCell.setCellStyle(titleStyle);
+        sheet.addMergedRegion(new CellRangeAddress(0, 0, 0, 3));
+        
+        rowNum++; // Ligne vide
+        
+        // Informations générales
+        addInfoRow(sheet, rowNum++, "Nombre de partenaires", 
+                String.valueOf(situation.getPartners() != null ? situation.getPartners().size() : 0), 
+                labelStyle, valueStyle);
+        
+        if (situation.getDateFrom() != null || situation.getDateTo() != null) {
+            String periode = "";
+            if (situation.getDateFrom() != null) {
+                periode += "Du " + situation.getDateFrom().format(DATE_FORMATTER);
+            }
+            if (situation.getDateTo() != null) {
+                periode += " au " + situation.getDateTo().format(DATE_FORMATTER);
+            }
+            addInfoRow(sheet, rowNum++, "Période", periode, labelStyle, valueStyle);
+        }
+        
+        rowNum++; // Ligne vide
+        
+        // En-tête totaux globaux
+        Row headerRow = sheet.createRow(rowNum++);
+        Cell headerCell = headerRow.createCell(0);
+        headerCell.setCellValue("RÉCAPITULATIF GLOBAL");
+        headerCell.setCellStyle(headerStyle);
+        sheet.addMergedRegion(new CellRangeAddress(rowNum - 1, rowNum - 1, 0, 3));
+        
+        // Totaux globaux
+        MultiPartnerSituationResponse.TotauxGlobaux totaux = situation.getTotauxGlobaux();
+        addTotalRow(sheet, rowNum++, "Total Facturé TTC", totaux.getTotalFactureTTC(), labelStyle, valueStyle);
+        addTotalRow(sheet, rowNum++, "Total Facturé HT", totaux.getTotalFactureHT(), labelStyle, valueStyle);
+        addTotalRow(sheet, rowNum++, "Total TVA", totaux.getTotalTVA(), labelStyle, valueStyle);
+        addTotalRow(sheet, rowNum++, "Total Payé", totaux.getTotalPaye(), labelStyle, valueStyle);
+        addTotalRow(sheet, rowNum++, "Total Restant", totaux.getTotalRestant(), labelStyle, valueStyle);
+        addTotalRow(sheet, rowNum++, "Solde Global", totaux.getSoldeGlobal(), labelStyle, valueStyle);
+        
+        rowNum++; // Ligne vide
+        
+        // Statistiques
+        Row statsHeaderRow = sheet.createRow(rowNum++);
+        Cell statsHeaderCell = statsHeaderRow.createCell(0);
+        statsHeaderCell.setCellValue("STATISTIQUES");
+        statsHeaderCell.setCellStyle(headerStyle);
+        sheet.addMergedRegion(new CellRangeAddress(rowNum - 1, rowNum - 1, 0, 3));
+        
+        addTotalRow(sheet, rowNum++, "Nombre Factures", (double) totaux.getNombreFactures(), labelStyle, valueStyle);
+        addTotalRow(sheet, rowNum++, "Factures Payées", (double) totaux.getNombreFacturesPayees(), labelStyle, valueStyle);
+        addTotalRow(sheet, rowNum++, "Factures En Attente", (double) totaux.getNombreFacturesEnAttente(), labelStyle, valueStyle);
+        addTotalRow(sheet, rowNum++, "Factures En Retard", (double) totaux.getNombreFacturesEnRetard(), labelStyle, valueStyle);
+        addTotalRow(sheet, rowNum++, "Nombre Prévisions", (double) totaux.getNombrePrevisions(), labelStyle, valueStyle);
+        addTotalRow(sheet, rowNum++, "Prévisions Réalisées", (double) totaux.getNombrePrevisionsRealisees(), labelStyle, valueStyle);
+        addTotalRow(sheet, rowNum++, "Prévisions En Retard", (double) totaux.getNombrePrevisionsEnRetard(), labelStyle, valueStyle);
+        
+        // Ajuster la largeur des colonnes
+        sheet.setColumnWidth(0, 5000);
+        sheet.setColumnWidth(1, 15000);
+        sheet.setColumnWidth(2, 20000);
+        sheet.setColumnWidth(3, 15000);
+    }
+    
+    private void createMultiFacturesSheet(XSSFWorkbook workbook, MultiPartnerSituationResponse situation) {
+        Sheet sheet = workbook.createSheet("Factures Consolidées");
+        
+        CellStyle headerStyle = createHeaderStyle(workbook);
+        CellStyle cellStyle = createCellStyle(workbook);
+        CellStyle numberStyle = createNumberStyle(workbook);
+        
+        int rowNum = 0;
+        
+        // En-tête
+        Row headerRow = sheet.createRow(rowNum++);
+        String[] headers = {"Partenaire", "N° Facture", "Date", "Échéance", "Montant TTC", "Montant HT", "TVA", "Payé", "Restant", "Statut", "Avoir"};
+        for (int i = 0; i < headers.length; i++) {
+            Cell cell = headerRow.createCell(i);
+            cell.setCellValue(headers[i]);
+            cell.setCellStyle(headerStyle);
+        }
+        
+        // Données
+        if (situation.getFacturesConsolidees() != null) {
+            for (MultiPartnerSituationResponse.FactureDetailWithPartner factureWithPartner : situation.getFacturesConsolidees()) {
+                PartnerSituationResponse.FactureDetail facture = factureWithPartner.getFacture();
+                Row row = sheet.createRow(rowNum++);
+                
+                row.createCell(0).setCellValue(factureWithPartner.getPartnerNom() != null ? factureWithPartner.getPartnerNom() : "");
+                row.createCell(1).setCellValue(facture.getNumeroFacture() != null ? facture.getNumeroFacture() : "");
+                row.createCell(2).setCellValue(facture.getDateFacture() != null ? facture.getDateFacture().format(DATE_FORMATTER) : "");
+                row.createCell(3).setCellValue(facture.getDateEcheance() != null ? facture.getDateEcheance().format(DATE_FORMATTER) : "");
+                
+                Cell ttcCell = row.createCell(4);
+                ttcCell.setCellValue(facture.getMontantTTC() != null ? facture.getMontantTTC() : 0.0);
+                ttcCell.setCellStyle(numberStyle);
+                
+                Cell htCell = row.createCell(5);
+                htCell.setCellValue(facture.getMontantHT() != null ? facture.getMontantHT() : 0.0);
+                htCell.setCellStyle(numberStyle);
+                
+                Cell tvaCell = row.createCell(6);
+                tvaCell.setCellValue(facture.getMontantTVA() != null ? facture.getMontantTVA() : 0.0);
+                tvaCell.setCellStyle(numberStyle);
+                
+                Cell payeCell = row.createCell(7);
+                payeCell.setCellValue(facture.getMontantPaye() != null ? facture.getMontantPaye() : 0.0);
+                payeCell.setCellStyle(numberStyle);
+                
+                Cell restantCell = row.createCell(8);
+                restantCell.setCellValue(facture.getMontantRestant() != null ? facture.getMontantRestant() : 0.0);
+                restantCell.setCellStyle(numberStyle);
+                
+                row.createCell(9).setCellValue(formatStatut(facture.getStatut()));
+                row.createCell(10).setCellValue(facture.getEstAvoir() != null && facture.getEstAvoir() ? "Oui" : "Non");
+            }
+        }
+        
+        // Ajuster la largeur des colonnes
+        for (int i = 0; i < headers.length; i++) {
+            sheet.autoSizeColumn(i);
+            sheet.setColumnWidth(i, Math.min(sheet.getColumnWidth(i) + 1000, 15000));
+        }
+    }
+    
+    private void createMultiPrevisionsSheet(XSSFWorkbook workbook, MultiPartnerSituationResponse situation) {
+        Sheet sheet = workbook.createSheet("Prévisions Consolidées");
+        
+        CellStyle headerStyle = createHeaderStyle(workbook);
+        CellStyle cellStyle = createCellStyle(workbook);
+        CellStyle numberStyle = createNumberStyle(workbook);
+        
+        int rowNum = 0;
+        
+        // En-tête
+        Row headerRow = sheet.createRow(rowNum++);
+        String[] headers = {"Partenaire", "N° Facture", "Date Prévue", "Montant Prévu", "Payé", "Restant", "Statut", "Notes"};
+        for (int i = 0; i < headers.length; i++) {
+            Cell cell = headerRow.createCell(i);
+            cell.setCellValue(headers[i]);
+            cell.setCellStyle(headerStyle);
+        }
+        
+        // Données
+        if (situation.getPrevisionsConsolidees() != null) {
+            for (MultiPartnerSituationResponse.PrevisionDetailWithPartner previsionWithPartner : situation.getPrevisionsConsolidees()) {
+                PartnerSituationResponse.PrevisionDetail prevision = previsionWithPartner.getPrevision();
+                Row row = sheet.createRow(rowNum++);
+                
+                row.createCell(0).setCellValue(previsionWithPartner.getPartnerNom() != null ? previsionWithPartner.getPartnerNom() : "");
+                row.createCell(1).setCellValue(prevision.getNumeroFacture() != null ? prevision.getNumeroFacture() : "");
+                row.createCell(2).setCellValue(prevision.getDatePrevue() != null ? prevision.getDatePrevue().format(DATE_FORMATTER) : "");
+                
+                Cell montantCell = row.createCell(3);
+                montantCell.setCellValue(prevision.getMontantPrevu() != null ? prevision.getMontantPrevu() : 0.0);
+                montantCell.setCellStyle(numberStyle);
+                
+                Cell payeCell = row.createCell(4);
+                payeCell.setCellValue(prevision.getMontantPaye() != null ? prevision.getMontantPaye() : 0.0);
+                payeCell.setCellStyle(numberStyle);
+                
+                Cell restantCell = row.createCell(5);
+                restantCell.setCellValue(prevision.getMontantRestant() != null ? prevision.getMontantRestant() : 0.0);
+                restantCell.setCellStyle(numberStyle);
+                
+                row.createCell(6).setCellValue(formatStatut(prevision.getStatut()));
+                row.createCell(7).setCellValue(prevision.getNotes() != null ? prevision.getNotes() : "");
+            }
+        }
+        
+        // Ajuster la largeur des colonnes
+        for (int i = 0; i < headers.length; i++) {
+            sheet.autoSizeColumn(i);
+            sheet.setColumnWidth(i, Math.min(sheet.getColumnWidth(i) + 1000, 15000));
+        }
+    }
+    
+    private void createPartnerSheet(XSSFWorkbook workbook, PartnerSituationResponse situation, String sheetName) {
+        Sheet sheet = workbook.createSheet(sheetName);
+        
+        CellStyle headerStyle = createHeaderStyle(workbook);
+        CellStyle labelStyle = createLabelStyle(workbook);
+        CellStyle valueStyle = createValueStyle(workbook);
+        CellStyle titleStyle = createTitleStyle(workbook);
+        
+        int rowNum = 0;
+        
+        // Titre
+        Row titleRow = sheet.createRow(rowNum++);
+        Cell titleCell = titleRow.createCell(0);
+        titleCell.setCellValue("SITUATION - " + situation.getPartnerInfo().getNom().toUpperCase());
+        titleCell.setCellStyle(titleStyle);
+        sheet.addMergedRegion(new CellRangeAddress(0, 0, 0, 3));
+        
+        rowNum++; // Ligne vide
+        
+        // Informations du partenaire
+        PartnerSituationResponse.PartnerInfo partner = situation.getPartnerInfo();
+        addInfoRow(sheet, rowNum++, "Type", partner.getType().equals("CLIENT") ? "Client" : "Fournisseur", labelStyle, valueStyle);
+        addInfoRow(sheet, rowNum++, "Nom", partner.getNom(), labelStyle, valueStyle);
+        if (partner.getIce() != null) {
+            addInfoRow(sheet, rowNum++, "ICE", partner.getIce(), labelStyle, valueStyle);
+        }
+        if (partner.getReference() != null) {
+            addInfoRow(sheet, rowNum++, "Référence", partner.getReference(), labelStyle, valueStyle);
+        }
+        
+        rowNum++; // Ligne vide
+        
+        // En-tête totaux
+        Row headerRow = sheet.createRow(rowNum++);
+        Cell headerCell = headerRow.createCell(0);
+        headerCell.setCellValue("RÉCAPITULATIF");
+        headerCell.setCellStyle(headerStyle);
+        sheet.addMergedRegion(new CellRangeAddress(rowNum - 1, rowNum - 1, 0, 3));
+        
+        // Totaux
+        PartnerSituationResponse.Totaux totaux = situation.getTotaux();
+        addTotalRow(sheet, rowNum++, "Total Facturé TTC", totaux.getTotalFactureTTC(), labelStyle, valueStyle);
+        addTotalRow(sheet, rowNum++, "Total Payé", totaux.getTotalPaye(), labelStyle, valueStyle);
+        addTotalRow(sheet, rowNum++, "Total Restant", totaux.getTotalRestant(), labelStyle, valueStyle);
+        addTotalRow(sheet, rowNum++, "Solde", totaux.getSolde(), labelStyle, valueStyle);
+        
+        // Ajuster la largeur des colonnes
+        sheet.setColumnWidth(0, 5000);
+        sheet.setColumnWidth(1, 15000);
     }
 }
 

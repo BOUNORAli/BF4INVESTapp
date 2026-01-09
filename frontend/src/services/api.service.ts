@@ -56,6 +56,21 @@ export class ApiService {
     });
   }
 
+  postBlob(endpoint: string, body: any): Observable<Blob> {
+    const token = localStorage.getItem('bf4_token');
+    let headers = new HttpHeaders({
+      'Content-Type': 'application/json'
+    });
+    if (token) {
+      headers = headers.set('Authorization', `Bearer ${token}`);
+    }
+    
+    return this.http.post(`${this.getApiUrl()}${endpoint}`, body, {
+      headers: headers,
+      responseType: 'blob'
+    });
+  }
+
   put<T>(endpoint: string, body: any): Observable<T> {
     return this.http.put<T>(`${this.getApiUrl()}${endpoint}`, body, {
       headers: this.getHeaders()

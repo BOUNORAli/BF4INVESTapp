@@ -1,5 +1,6 @@
 package com.bf4invest.pdf.generator;
 
+import com.bf4invest.dto.MultiPartnerSituationResponse;
 import com.bf4invest.dto.PartnerSituationResponse;
 import com.bf4invest.pdf.helper.PdfDocumentHelper;
 import com.bf4invest.pdf.helper.PdfLogoHelper;
@@ -329,6 +330,197 @@ public class PartnerSituationPdfGenerator {
             case "REALISE": return "Réalisé";
             default: return statut;
         }
+    }
+    
+    public byte[] generateMulti(MultiPartnerSituationResponse situation) throws DocumentException, IOException {
+        Document document = PdfDocumentHelper.createA4Document();
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        PdfWriter writer = PdfWriter.getInstance(document, baos);
+        
+        document.open();
+        
+        try {
+            addMultiHeader(document, writer, situation);
+            addMultiSummarySection(document, situation);
+            addMultiFacturesTable(document, situation);
+            addMultiPrevisionsTable(document, situation);
+            addFooter(document);
+        } finally {
+            document.close();
+        }
+        
+        return baos.toByteArray();
+    }
+    
+    private void addMultiHeader(Document document, PdfWriter writer, MultiPartnerSituationResponse situation) throws DocumentException, IOException {
+        PdfPTable headerTable = new PdfPTable(2);
+        headerTable.setWidthPercentage(100);
+        headerTable.setWidths(new float[]{2f, 8f});
+        headerTable.setSpacingAfter(20);
+        
+        // Logo
+        PdfPCell logoCell = PdfLogoHelper.createLogoCell(writer, 100f, 75f);
+        headerTable.addCell(logoCell);
+        
+        // Informations société
+        PdfPCell infoCell = new PdfPCell();
+        infoCell.setBorder(PdfPCell.NO_BORDER);
+        infoCell.setPaddingLeft(10);
+        
+        com.bf4invest.model.CompanyInfo companyInfo = companyInfoService.getCompanyInfo();
+        String raisonSociale = companyInfo.getRaisonSociale() != null ? companyInfo.getRaisonSociale() : "STE BF4 INVEST";
+        
+        Font titleFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 18, BLUE_DARK);
+        Font infoFont = FontFactory.getFont(FontFactory.HELVETICA, 10, Color.BLACK);
+        
+        Paragraph headerPara = new Paragraph();
+        headerPara.add(new Chunk(raisonSociale + "\n", titleFont));
+        headerPara.add(new Chunk("SITUATION FINANCIÈRE MULTI-PARTENAIRES\n\n", FontFactory.getFont(FontFactory.HELVETICA_BOLD, 14, Color.BLACK)));
+        headerPara.add(new Chunk("Date de génération: " + LocalDate.now().format(DATE_FORMATTER), infoFont));
+        headerPara.add(new Chunk("\nNombre de partenaires: " + (situation.getPartners() != null ? situation.getPartners().size() : 0), infoFont));
+        
+        if (situation.getDateFrom() != null || situation.getDateTo() != null) {
+            String periode = "\nPériode: ";
+            if (situation.getDateFrom() != null) {
+                periode += "Du " + situation.getDateFrom().format(DATE_FORMATTER);
+            }
+            if (situation.getDateTo() != null) {
+                periode += " au " + situation.getDateTo().format(DATE_FORMATTER);
+            }
+            headerPara.add(new Chunk(periode, infoFont));
+        }
+        
+        infoCell.addElement(headerPara);
+        headerTable.addCell(infoCell);
+        
+        document.add(headerTable);
+    }
+    
+    private void addMultiSummarySection(Document document, MultiPartnerSituationResponse situation) throws DocumentException {
+        MultiPartnerSituationResponse.TotauxGlobaux totaux = situation.getTotauxGlobaux();
+        
+        Font titleFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 12, BLUE_DARK);
+        Font labelFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 10, Color.BLACK);
+        Font valueFont = FontFactory.getFont(FontFactory.HELVETICA, 10, Color.BLACK);
+        
+        PdfPTable summaryTable = new PdfPTable(4);
+        summaryTable.setWidthPercentage(100);
+        summaryTable.setWidths(new float[]{2f, 2f, 2f, 2f});
+        summaryTable.setSpacingAfter(15);
+        
+        // En-tête
+        Font whiteTitleFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 12, Color.WHITE);
+        PdfPCell headerCell = new PdfPCell(new Phrase("RÉCAPITULATIF GLOBAL", whiteTitleFont));
+        headerCell.setColspan(4);
+        headerCell.setBackgroundColor(BLUE_DARK);
+        headerCell.setPadding(8);
+        headerCell.setHorizontalAlignment(Element.ALIGN_CENTER);
+        summaryTable.addCell(headerCell);
+        
+        // Lignes de totaux
+        addSummaryRow(summaryTable, "Total Facturé TTC", formatAmount(totaux.getTotalFactureTTC()), labelFont, valueFont);
+        addSummaryRow(summaryTable, "Total Payé", formatAmount(totaux.getTotalPaye()), labelFont, valueFont);
+        addSummaryRow(summaryTable, "Total Restant", formatAmount(totaux.getTotalRestant()), labelFont, valueFont);
+        addSummaryRow(summaryTable, "Solde Global", formatAmount(totaux.getSoldeGlobal()), labelFont, valueFont);
+        
+        // Statistiques
+        addSummaryRow(summaryTable, "Nombre Factures", String.valueOf(totaux.getNombreFactures()), labelFont, valueFont);
+        addSummaryRow(summaryTable, "Payées", String.valueOf(totaux.getNombreFacturesPayees()), labelFont, valueFont);
+        addSummaryRow(summaryTable, "En Attente", String.valueOf(totaux.getNombreFacturesEnAttente()), labelFont, valueFont);
+        addSummaryRow(summaryTable, "En Retard", String.valueOf(totaux.getNombreFacturesEnRetard()), labelFont, valueFont);
+        addSummaryRow(summaryTable, "Nombre Partenaires", String.valueOf(totaux.getNombrePartenaires()), labelFont, valueFont);
+        
+        document.add(summaryTable);
+    }
+    
+    private void addMultiFacturesTable(Document document, MultiPartnerSituationResponse situation) throws DocumentException {
+        if (situation.getFacturesConsolidees() == null || situation.getFacturesConsolidees().isEmpty()) {
+            return;
+        }
+        
+        Font titleFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 12, BLUE_DARK);
+        Font headerFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 9, Color.WHITE);
+        Font cellFont = FontFactory.getFont(FontFactory.HELVETICA, 8, Color.BLACK);
+        
+        Paragraph title = new Paragraph("DÉTAIL DES FACTURES (CONSOLIDÉ - TRI CHRONOLOGIQUE)", titleFont);
+        title.setSpacingBefore(10);
+        title.setSpacingAfter(5);
+        document.add(title);
+        
+        PdfPTable table = new PdfPTable(9);
+        table.setWidthPercentage(100);
+        table.setWidths(new float[]{1.5f, 1.2f, 1.2f, 1.2f, 1.2f, 1.2f, 1.2f, 0.8f, 0.8f});
+        table.setSpacingAfter(15);
+        
+        // En-tête
+        String[] headers = {"Partenaire", "N° Facture", "Date", "Échéance", "Montant TTC", "Payé", "Restant", "Statut", "Avoir"};
+        for (String header : headers) {
+            PdfPCell cell = new PdfPCell(new Phrase(header, headerFont));
+            cell.setBackgroundColor(BLUE_DARK);
+            cell.setPadding(5);
+            cell.setHorizontalAlignment(Element.ALIGN_CENTER);
+            table.addCell(cell);
+        }
+        
+        // Lignes de données
+        for (MultiPartnerSituationResponse.FactureDetailWithPartner factureWithPartner : situation.getFacturesConsolidees()) {
+            PartnerSituationResponse.FactureDetail facture = factureWithPartner.getFacture();
+            table.addCell(createCell(factureWithPartner.getPartnerNom() != null ? factureWithPartner.getPartnerNom() : "", cellFont));
+            table.addCell(createCell(facture.getNumeroFacture() != null ? facture.getNumeroFacture() : "", cellFont));
+            table.addCell(createCell(facture.getDateFacture() != null ? facture.getDateFacture().format(DATE_FORMATTER) : "", cellFont));
+            table.addCell(createCell(facture.getDateEcheance() != null ? facture.getDateEcheance().format(DATE_FORMATTER) : "", cellFont));
+            table.addCell(createCell(formatAmount(facture.getMontantTTC()), cellFont, Element.ALIGN_RIGHT));
+            table.addCell(createCell(formatAmount(facture.getMontantPaye()), cellFont, Element.ALIGN_RIGHT));
+            table.addCell(createCell(formatAmount(facture.getMontantRestant()), cellFont, Element.ALIGN_RIGHT));
+            table.addCell(createCell(formatStatut(facture.getStatut()), cellFont, Element.ALIGN_CENTER));
+            table.addCell(createCell(facture.getEstAvoir() != null && facture.getEstAvoir() ? "Oui" : "Non", cellFont, Element.ALIGN_CENTER));
+        }
+        
+        document.add(table);
+    }
+    
+    private void addMultiPrevisionsTable(Document document, MultiPartnerSituationResponse situation) throws DocumentException {
+        if (situation.getPrevisionsConsolidees() == null || situation.getPrevisionsConsolidees().isEmpty()) {
+            return;
+        }
+        
+        Font titleFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 12, BLUE_DARK);
+        Font headerFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 9, Color.WHITE);
+        Font cellFont = FontFactory.getFont(FontFactory.HELVETICA, 8, Color.BLACK);
+        
+        Paragraph title = new Paragraph("PRÉVISIONS DE PAIEMENT (CONSOLIDÉ - TRI CHRONOLOGIQUE)", titleFont);
+        title.setSpacingBefore(10);
+        title.setSpacingAfter(5);
+        document.add(title);
+        
+        PdfPTable table = new PdfPTable(7);
+        table.setWidthPercentage(100);
+        table.setWidths(new float[]{1.5f, 1.2f, 1.2f, 1.2f, 1.2f, 1.2f, 1.2f});
+        table.setSpacingAfter(15);
+        
+        // En-tête
+        String[] headers = {"Partenaire", "N° Facture", "Date Prévue", "Montant Prévu", "Payé", "Restant", "Statut"};
+        for (String header : headers) {
+            PdfPCell cell = new PdfPCell(new Phrase(header, headerFont));
+            cell.setBackgroundColor(BLUE_DARK);
+            cell.setPadding(5);
+            cell.setHorizontalAlignment(Element.ALIGN_CENTER);
+            table.addCell(cell);
+        }
+        
+        // Lignes de données
+        for (MultiPartnerSituationResponse.PrevisionDetailWithPartner previsionWithPartner : situation.getPrevisionsConsolidees()) {
+            PartnerSituationResponse.PrevisionDetail prevision = previsionWithPartner.getPrevision();
+            table.addCell(createCell(previsionWithPartner.getPartnerNom() != null ? previsionWithPartner.getPartnerNom() : "", cellFont));
+            table.addCell(createCell(prevision.getNumeroFacture() != null ? prevision.getNumeroFacture() : "", cellFont));
+            table.addCell(createCell(prevision.getDatePrevue() != null ? prevision.getDatePrevue().format(DATE_FORMATTER) : "", cellFont));
+            table.addCell(createCell(formatAmount(prevision.getMontantPrevu()), cellFont, Element.ALIGN_RIGHT));
+            table.addCell(createCell(formatAmount(prevision.getMontantPaye()), cellFont, Element.ALIGN_RIGHT));
+            table.addCell(createCell(formatAmount(prevision.getMontantRestant()), cellFont, Element.ALIGN_RIGHT));
+            table.addCell(createCell(formatStatut(prevision.getStatut()), cellFont, Element.ALIGN_CENTER));
+        }
+        
+        document.add(table);
     }
 }
 

@@ -1,5 +1,6 @@
 package com.bf4invest.service;
 
+import com.bf4invest.dto.MultiPartnerSituationResponse;
 import com.bf4invest.dto.PartnerSituationResponse;
 import com.bf4invest.model.*;
 import com.bf4invest.repository.*;
@@ -421,6 +422,272 @@ public class PartnerSituationService {
         }
         
         return "EN_ATTENTE";
+    }
+    
+    public MultiPartnerSituationResponse getMultiClientSituation(List<String> clientIds, LocalDate from, LocalDate to) {
+        List<PartnerSituationResponse.PartnerInfo> partnerInfos = new ArrayList<>();
+        List<MultiPartnerSituationResponse.FactureDetailWithPartner> facturesConsolidees = new ArrayList<>();
+        List<MultiPartnerSituationResponse.PrevisionDetailWithPartner> previsionsConsolidees = new ArrayList<>();
+        Map<String, PartnerSituationResponse.Totaux> totauxParPartenaire = new HashMap<>();
+        List<PartnerSituationResponse> situationsParPartenaire = new ArrayList<>();
+        
+        double totalFactureTTCGlobal = 0;
+        double totalFactureHTGlobal = 0;
+        double totalTVAGlobal = 0;
+        double totalPayeGlobal = 0;
+        int nombreFacturesGlobal = 0;
+        int nombreFacturesPayeesGlobal = 0;
+        int nombreFacturesEnAttenteGlobal = 0;
+        int nombreFacturesEnRetardGlobal = 0;
+        int nombrePrevisionsGlobal = 0;
+        int nombrePrevisionsRealiseesGlobal = 0;
+        int nombrePrevisionsEnRetardGlobal = 0;
+        
+        // Traiter chaque client
+        for (String clientId : clientIds) {
+            try {
+                PartnerSituationResponse situation = getClientSituation(clientId, from, to);
+                situationsParPartenaire.add(situation);
+                
+                // Ajouter les infos du partenaire
+                partnerInfos.add(situation.getPartnerInfo());
+                
+                // Ajouter les factures avec info partenaire
+                if (situation.getFactures() != null) {
+                    for (PartnerSituationResponse.FactureDetail facture : situation.getFactures()) {
+                        MultiPartnerSituationResponse.FactureDetailWithPartner factureWithPartner = 
+                            MultiPartnerSituationResponse.FactureDetailWithPartner.builder()
+                                .partnerId(situation.getPartnerInfo().getId())
+                                .partnerNom(situation.getPartnerInfo().getNom())
+                                .partnerType("CLIENT")
+                                .facture(facture)
+                                .build();
+                        facturesConsolidees.add(factureWithPartner);
+                    }
+                }
+                
+                // Ajouter les prévisions avec info partenaire
+                if (situation.getPrevisions() != null) {
+                    for (PartnerSituationResponse.PrevisionDetail prevision : situation.getPrevisions()) {
+                        MultiPartnerSituationResponse.PrevisionDetailWithPartner previsionWithPartner = 
+                            MultiPartnerSituationResponse.PrevisionDetailWithPartner.builder()
+                                .partnerId(situation.getPartnerInfo().getId())
+                                .partnerNom(situation.getPartnerInfo().getNom())
+                                .partnerType("CLIENT")
+                                .prevision(prevision)
+                                .build();
+                        previsionsConsolidees.add(previsionWithPartner);
+                    }
+                }
+                
+                // Ajouter les totaux par partenaire
+                if (situation.getTotaux() != null) {
+                    totauxParPartenaire.put(clientId, situation.getTotaux());
+                    
+                    // Accumuler les totaux globaux
+                    totalFactureTTCGlobal += situation.getTotaux().getTotalFactureTTC() != null ? situation.getTotaux().getTotalFactureTTC() : 0.0;
+                    totalFactureHTGlobal += situation.getTotaux().getTotalFactureHT() != null ? situation.getTotaux().getTotalFactureHT() : 0.0;
+                    totalTVAGlobal += situation.getTotaux().getTotalTVA() != null ? situation.getTotaux().getTotalTVA() : 0.0;
+                    totalPayeGlobal += situation.getTotaux().getTotalPaye() != null ? situation.getTotaux().getTotalPaye() : 0.0;
+                    nombreFacturesGlobal += situation.getTotaux().getNombreFactures() != null ? situation.getTotaux().getNombreFactures() : 0;
+                    nombreFacturesPayeesGlobal += situation.getTotaux().getNombreFacturesPayees() != null ? situation.getTotaux().getNombreFacturesPayees() : 0;
+                    nombreFacturesEnAttenteGlobal += situation.getTotaux().getNombreFacturesEnAttente() != null ? situation.getTotaux().getNombreFacturesEnAttente() : 0;
+                    nombreFacturesEnRetardGlobal += situation.getTotaux().getNombreFacturesEnRetard() != null ? situation.getTotaux().getNombreFacturesEnRetard() : 0;
+                    nombrePrevisionsGlobal += situation.getTotaux().getNombrePrevisions() != null ? situation.getTotaux().getNombrePrevisions() : 0;
+                    nombrePrevisionsRealiseesGlobal += situation.getTotaux().getNombrePrevisionsRealisees() != null ? situation.getTotaux().getNombrePrevisionsRealisees() : 0;
+                    nombrePrevisionsEnRetardGlobal += situation.getTotaux().getNombrePrevisionsEnRetard() != null ? situation.getTotaux().getNombrePrevisionsEnRetard() : 0;
+                }
+            } catch (Exception e) {
+                log.warn("Erreur lors de la récupération de la situation pour le client {}: {}", clientId, e.getMessage());
+                // Continuer avec les autres clients
+            }
+        }
+        
+        // Trier les factures par date (chronologique)
+        sortFacturesByDate(facturesConsolidees);
+        
+        // Trier les prévisions par date (chronologique)
+        sortPrevisionsByDate(previsionsConsolidees);
+        
+        // Calculer le solde global
+        double totalRestantGlobal = totalFactureTTCGlobal - totalPayeGlobal;
+        double soldeGlobal = situationsParPartenaire.stream()
+            .mapToDouble(s -> s.getTotaux() != null && s.getTotaux().getSolde() != null ? s.getTotaux().getSolde() : 0.0)
+            .sum();
+        
+        // Construire les totaux globaux
+        MultiPartnerSituationResponse.TotauxGlobaux totauxGlobaux = MultiPartnerSituationResponse.TotauxGlobaux.builder()
+            .totalFactureTTC(totalFactureTTCGlobal)
+            .totalFactureHT(totalFactureHTGlobal)
+            .totalTVA(totalTVAGlobal)
+            .totalPaye(totalPayeGlobal)
+            .totalRestant(totalRestantGlobal)
+            .soldeGlobal(soldeGlobal)
+            .nombreFactures(nombreFacturesGlobal)
+            .nombreFacturesPayees(nombreFacturesPayeesGlobal)
+            .nombreFacturesEnAttente(nombreFacturesEnAttenteGlobal)
+            .nombreFacturesEnRetard(nombreFacturesEnRetardGlobal)
+            .nombrePrevisions(nombrePrevisionsGlobal)
+            .nombrePrevisionsRealisees(nombrePrevisionsRealiseesGlobal)
+            .nombrePrevisionsEnRetard(nombrePrevisionsEnRetardGlobal)
+            .nombrePartenaires(clientIds.size())
+            .build();
+        
+        return MultiPartnerSituationResponse.builder()
+            .partners(partnerInfos)
+            .dateFrom(from)
+            .dateTo(to)
+            .facturesConsolidees(facturesConsolidees)
+            .previsionsConsolidees(previsionsConsolidees)
+            .totauxGlobaux(totauxGlobaux)
+            .totauxParPartenaire(totauxParPartenaire)
+            .situationsParPartenaire(situationsParPartenaire)
+            .build();
+    }
+    
+    public MultiPartnerSituationResponse getMultiSupplierSituation(List<String> supplierIds, LocalDate from, LocalDate to) {
+        List<PartnerSituationResponse.PartnerInfo> partnerInfos = new ArrayList<>();
+        List<MultiPartnerSituationResponse.FactureDetailWithPartner> facturesConsolidees = new ArrayList<>();
+        List<MultiPartnerSituationResponse.PrevisionDetailWithPartner> previsionsConsolidees = new ArrayList<>();
+        Map<String, PartnerSituationResponse.Totaux> totauxParPartenaire = new HashMap<>();
+        List<PartnerSituationResponse> situationsParPartenaire = new ArrayList<>();
+        
+        double totalFactureTTCGlobal = 0;
+        double totalFactureHTGlobal = 0;
+        double totalTVAGlobal = 0;
+        double totalPayeGlobal = 0;
+        int nombreFacturesGlobal = 0;
+        int nombreFacturesPayeesGlobal = 0;
+        int nombreFacturesEnAttenteGlobal = 0;
+        int nombreFacturesEnRetardGlobal = 0;
+        int nombrePrevisionsGlobal = 0;
+        int nombrePrevisionsRealiseesGlobal = 0;
+        int nombrePrevisionsEnRetardGlobal = 0;
+        
+        // Traiter chaque fournisseur
+        for (String supplierId : supplierIds) {
+            try {
+                PartnerSituationResponse situation = getSupplierSituation(supplierId, from, to);
+                situationsParPartenaire.add(situation);
+                
+                // Ajouter les infos du partenaire
+                partnerInfos.add(situation.getPartnerInfo());
+                
+                // Ajouter les factures avec info partenaire
+                if (situation.getFactures() != null) {
+                    for (PartnerSituationResponse.FactureDetail facture : situation.getFactures()) {
+                        MultiPartnerSituationResponse.FactureDetailWithPartner factureWithPartner = 
+                            MultiPartnerSituationResponse.FactureDetailWithPartner.builder()
+                                .partnerId(situation.getPartnerInfo().getId())
+                                .partnerNom(situation.getPartnerInfo().getNom())
+                                .partnerType("FOURNISSEUR")
+                                .facture(facture)
+                                .build();
+                        facturesConsolidees.add(factureWithPartner);
+                    }
+                }
+                
+                // Ajouter les prévisions avec info partenaire
+                if (situation.getPrevisions() != null) {
+                    for (PartnerSituationResponse.PrevisionDetail prevision : situation.getPrevisions()) {
+                        MultiPartnerSituationResponse.PrevisionDetailWithPartner previsionWithPartner = 
+                            MultiPartnerSituationResponse.PrevisionDetailWithPartner.builder()
+                                .partnerId(situation.getPartnerInfo().getId())
+                                .partnerNom(situation.getPartnerInfo().getNom())
+                                .partnerType("FOURNISSEUR")
+                                .prevision(prevision)
+                                .build();
+                        previsionsConsolidees.add(previsionWithPartner);
+                    }
+                }
+                
+                // Ajouter les totaux par partenaire
+                if (situation.getTotaux() != null) {
+                    totauxParPartenaire.put(supplierId, situation.getTotaux());
+                    
+                    // Accumuler les totaux globaux
+                    totalFactureTTCGlobal += situation.getTotaux().getTotalFactureTTC() != null ? situation.getTotaux().getTotalFactureTTC() : 0.0;
+                    totalFactureHTGlobal += situation.getTotaux().getTotalFactureHT() != null ? situation.getTotaux().getTotalFactureHT() : 0.0;
+                    totalTVAGlobal += situation.getTotaux().getTotalTVA() != null ? situation.getTotaux().getTotalTVA() : 0.0;
+                    totalPayeGlobal += situation.getTotaux().getTotalPaye() != null ? situation.getTotaux().getTotalPaye() : 0.0;
+                    nombreFacturesGlobal += situation.getTotaux().getNombreFactures() != null ? situation.getTotaux().getNombreFactures() : 0;
+                    nombreFacturesPayeesGlobal += situation.getTotaux().getNombreFacturesPayees() != null ? situation.getTotaux().getNombreFacturesPayees() : 0;
+                    nombreFacturesEnAttenteGlobal += situation.getTotaux().getNombreFacturesEnAttente() != null ? situation.getTotaux().getNombreFacturesEnAttente() : 0;
+                    nombreFacturesEnRetardGlobal += situation.getTotaux().getNombreFacturesEnRetard() != null ? situation.getTotaux().getNombreFacturesEnRetard() : 0;
+                    nombrePrevisionsGlobal += situation.getTotaux().getNombrePrevisions() != null ? situation.getTotaux().getNombrePrevisions() : 0;
+                    nombrePrevisionsRealiseesGlobal += situation.getTotaux().getNombrePrevisionsRealisees() != null ? situation.getTotaux().getNombrePrevisionsRealisees() : 0;
+                    nombrePrevisionsEnRetardGlobal += situation.getTotaux().getNombrePrevisionsEnRetard() != null ? situation.getTotaux().getNombrePrevisionsEnRetard() : 0;
+                }
+            } catch (Exception e) {
+                log.warn("Erreur lors de la récupération de la situation pour le fournisseur {}: {}", supplierId, e.getMessage());
+                // Continuer avec les autres fournisseurs
+            }
+        }
+        
+        // Trier les factures par date (chronologique)
+        sortFacturesByDate(facturesConsolidees);
+        
+        // Trier les prévisions par date (chronologique)
+        sortPrevisionsByDate(previsionsConsolidees);
+        
+        // Calculer le solde global
+        double totalRestantGlobal = totalFactureTTCGlobal - totalPayeGlobal;
+        double soldeGlobal = situationsParPartenaire.stream()
+            .mapToDouble(s -> s.getTotaux() != null && s.getTotaux().getSolde() != null ? s.getTotaux().getSolde() : 0.0)
+            .sum();
+        
+        // Construire les totaux globaux
+        MultiPartnerSituationResponse.TotauxGlobaux totauxGlobaux = MultiPartnerSituationResponse.TotauxGlobaux.builder()
+            .totalFactureTTC(totalFactureTTCGlobal)
+            .totalFactureHT(totalFactureHTGlobal)
+            .totalTVA(totalTVAGlobal)
+            .totalPaye(totalPayeGlobal)
+            .totalRestant(totalRestantGlobal)
+            .soldeGlobal(soldeGlobal)
+            .nombreFactures(nombreFacturesGlobal)
+            .nombreFacturesPayees(nombreFacturesPayeesGlobal)
+            .nombreFacturesEnAttente(nombreFacturesEnAttenteGlobal)
+            .nombreFacturesEnRetard(nombreFacturesEnRetardGlobal)
+            .nombrePrevisions(nombrePrevisionsGlobal)
+            .nombrePrevisionsRealisees(nombrePrevisionsRealiseesGlobal)
+            .nombrePrevisionsEnRetard(nombrePrevisionsEnRetardGlobal)
+            .nombrePartenaires(supplierIds.size())
+            .build();
+        
+        return MultiPartnerSituationResponse.builder()
+            .partners(partnerInfos)
+            .dateFrom(from)
+            .dateTo(to)
+            .facturesConsolidees(facturesConsolidees)
+            .previsionsConsolidees(previsionsConsolidees)
+            .totauxGlobaux(totauxGlobaux)
+            .totauxParPartenaire(totauxParPartenaire)
+            .situationsParPartenaire(situationsParPartenaire)
+            .build();
+    }
+    
+    private void sortFacturesByDate(List<MultiPartnerSituationResponse.FactureDetailWithPartner> factures) {
+        factures.sort((a, b) -> {
+            LocalDate dateA = a.getFacture() != null ? a.getFacture().getDateFacture() : null;
+            LocalDate dateB = b.getFacture() != null ? b.getFacture().getDateFacture() : null;
+            
+            if (dateA == null && dateB == null) return 0;
+            if (dateA == null) return 1;
+            if (dateB == null) return -1;
+            return dateA.compareTo(dateB); // Tri chronologique (plus anciennes en premier)
+        });
+    }
+    
+    private void sortPrevisionsByDate(List<MultiPartnerSituationResponse.PrevisionDetailWithPartner> previsions) {
+        previsions.sort((a, b) -> {
+            LocalDate dateA = a.getPrevision() != null ? a.getPrevision().getDatePrevue() : null;
+            LocalDate dateB = b.getPrevision() != null ? b.getPrevision().getDatePrevue() : null;
+            
+            if (dateA == null && dateB == null) return 0;
+            if (dateA == null) return 1;
+            if (dateB == null) return -1;
+            return dateA.compareTo(dateB); // Tri chronologique (plus anciennes en premier)
+        });
     }
 }
 

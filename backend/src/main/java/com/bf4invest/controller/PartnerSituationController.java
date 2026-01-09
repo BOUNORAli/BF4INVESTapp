@@ -1,5 +1,7 @@
 package com.bf4invest.controller;
 
+import com.bf4invest.dto.MultiPartnerSituationRequest;
+import com.bf4invest.dto.MultiPartnerSituationResponse;
 import com.bf4invest.dto.PartnerSituationResponse;
 import com.bf4invest.excel.PartnerSituationExcelExporter;
 import com.bf4invest.pdf.generator.PartnerSituationPdfGenerator;
@@ -151,6 +153,142 @@ public class PartnerSituationController {
                     .body(excelBytes);
         } catch (Exception e) {
             log.error("Erreur lors de la génération de l'Excel pour fournisseur {}", id, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+    
+    @PostMapping("/clients")
+    public ResponseEntity<MultiPartnerSituationResponse> getMultiClientSituation(
+            @RequestBody MultiPartnerSituationRequest request) {
+        try {
+            if (request.getClientIds() == null || request.getClientIds().isEmpty()) {
+                return ResponseEntity.badRequest().build();
+            }
+            MultiPartnerSituationResponse situation = partnerSituationService.getMultiClientSituation(
+                    request.getClientIds(), request.getFrom(), request.getTo());
+            return ResponseEntity.ok(situation);
+        } catch (Exception e) {
+            log.error("Erreur lors de la récupération de la situation multi-clients", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+    
+    @PostMapping("/suppliers")
+    public ResponseEntity<MultiPartnerSituationResponse> getMultiSupplierSituation(
+            @RequestBody MultiPartnerSituationRequest request) {
+        try {
+            if (request.getSupplierIds() == null || request.getSupplierIds().isEmpty()) {
+                return ResponseEntity.badRequest().build();
+            }
+            MultiPartnerSituationResponse situation = partnerSituationService.getMultiSupplierSituation(
+                    request.getSupplierIds(), request.getFrom(), request.getTo());
+            return ResponseEntity.ok(situation);
+        } catch (Exception e) {
+            log.error("Erreur lors de la récupération de la situation multi-fournisseurs", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+    
+    @PostMapping("/clients/export/pdf")
+    public ResponseEntity<byte[]> exportMultiClientSituationPdf(
+            @RequestBody MultiPartnerSituationRequest request) {
+        try {
+            if (request.getClientIds() == null || request.getClientIds().isEmpty()) {
+                return ResponseEntity.badRequest().build();
+            }
+            MultiPartnerSituationResponse situation = partnerSituationService.getMultiClientSituation(
+                    request.getClientIds(), request.getFrom(), request.getTo());
+            byte[] pdfBytes = pdfGenerator.generateMulti(situation);
+            
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_PDF);
+            String fileName = "situation_clients_" + 
+                    LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd")) + ".pdf";
+            headers.setContentDispositionFormData("attachment", fileName);
+            
+            return ResponseEntity.ok()
+                    .headers(headers)
+                    .body(pdfBytes);
+        } catch (Exception e) {
+            log.error("Erreur lors de la génération du PDF multi-clients", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+    
+    @PostMapping("/clients/export/excel")
+    public ResponseEntity<byte[]> exportMultiClientSituationExcel(
+            @RequestBody MultiPartnerSituationRequest request) {
+        try {
+            if (request.getClientIds() == null || request.getClientIds().isEmpty()) {
+                return ResponseEntity.badRequest().build();
+            }
+            MultiPartnerSituationResponse situation = partnerSituationService.getMultiClientSituation(
+                    request.getClientIds(), request.getFrom(), request.getTo());
+            byte[] excelBytes = excelExporter.exportMulti(situation);
+            
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"));
+            String fileName = "situation_clients_" + 
+                    LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd")) + ".xlsx";
+            headers.setContentDispositionFormData("attachment", fileName);
+            
+            return ResponseEntity.ok()
+                    .headers(headers)
+                    .body(excelBytes);
+        } catch (Exception e) {
+            log.error("Erreur lors de la génération de l'Excel multi-clients", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+    
+    @PostMapping("/suppliers/export/pdf")
+    public ResponseEntity<byte[]> exportMultiSupplierSituationPdf(
+            @RequestBody MultiPartnerSituationRequest request) {
+        try {
+            if (request.getSupplierIds() == null || request.getSupplierIds().isEmpty()) {
+                return ResponseEntity.badRequest().build();
+            }
+            MultiPartnerSituationResponse situation = partnerSituationService.getMultiSupplierSituation(
+                    request.getSupplierIds(), request.getFrom(), request.getTo());
+            byte[] pdfBytes = pdfGenerator.generateMulti(situation);
+            
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_PDF);
+            String fileName = "situation_fournisseurs_" + 
+                    LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd")) + ".pdf";
+            headers.setContentDispositionFormData("attachment", fileName);
+            
+            return ResponseEntity.ok()
+                    .headers(headers)
+                    .body(pdfBytes);
+        } catch (Exception e) {
+            log.error("Erreur lors de la génération du PDF multi-fournisseurs", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+    
+    @PostMapping("/suppliers/export/excel")
+    public ResponseEntity<byte[]> exportMultiSupplierSituationExcel(
+            @RequestBody MultiPartnerSituationRequest request) {
+        try {
+            if (request.getSupplierIds() == null || request.getSupplierIds().isEmpty()) {
+                return ResponseEntity.badRequest().build();
+            }
+            MultiPartnerSituationResponse situation = partnerSituationService.getMultiSupplierSituation(
+                    request.getSupplierIds(), request.getFrom(), request.getTo());
+            byte[] excelBytes = excelExporter.exportMulti(situation);
+            
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"));
+            String fileName = "situation_fournisseurs_" + 
+                    LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd")) + ".xlsx";
+            headers.setContentDispositionFormData("attachment", fileName);
+            
+            return ResponseEntity.ok()
+                    .headers(headers)
+                    .body(excelBytes);
+        } catch (Exception e) {
+            log.error("Erreur lors de la génération de l'Excel multi-fournisseurs", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }

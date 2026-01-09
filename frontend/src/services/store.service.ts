@@ -1761,4 +1761,117 @@ export class StoreService {
       throw error;
     }
   }
+
+  // === MULTI-PARTNER SITUATION ===
+  
+  async getMultiPartnerSituation(
+    type: 'CLIENT' | 'FOURNISSEUR',
+    partnerIds: string[],
+    from?: string,
+    to?: string
+  ): Promise<any> {
+    try {
+      const endpoint = type === 'CLIENT'
+        ? `/api/partner-situation/clients`
+        : `/api/partner-situation/suppliers`;
+      
+      const body: any = {};
+      if (type === 'CLIENT') {
+        body.clientIds = partnerIds;
+      } else {
+        body.supplierIds = partnerIds;
+      }
+      if (from) body.from = from;
+      if (to) body.to = to;
+      
+      return await this.api.post<any>(endpoint, body).toPromise();
+    } catch (error) {
+      console.error('Error fetching multi-partner situation:', error);
+      throw error;
+    }
+  }
+
+  async exportMultiPartnerSituationPDF(
+    type: 'CLIENT' | 'FOURNISSEUR',
+    partnerIds: string[],
+    from?: string,
+    to?: string
+  ): Promise<void> {
+    try {
+      const endpoint = type === 'CLIENT'
+        ? `/api/partner-situation/clients/export/pdf`
+        : `/api/partner-situation/suppliers/export/pdf`;
+      
+      const body: any = {};
+      if (type === 'CLIENT') {
+        body.clientIds = partnerIds;
+      } else {
+        body.supplierIds = partnerIds;
+      }
+      if (from) body.from = from;
+      if (to) body.to = to;
+      
+      const blob = await this.api.postBlob(endpoint, body).toPromise();
+      
+      if (blob) {
+        const today = new Date().toISOString().split('T')[0];
+        const fileName = `situation_${type.toLowerCase()}s_${today}.pdf`;
+        
+        const urlObj = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = urlObj;
+        link.download = fileName;
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(urlObj);
+      }
+    } catch (error) {
+      console.error('Error exporting multi-partner situation PDF:', error);
+      throw error;
+    }
+  }
+
+  async exportMultiPartnerSituationExcel(
+    type: 'CLIENT' | 'FOURNISSEUR',
+    partnerIds: string[],
+    from?: string,
+    to?: string
+  ): Promise<void> {
+    try {
+      const endpoint = type === 'CLIENT'
+        ? `/api/partner-situation/clients/export/excel`
+        : `/api/partner-situation/suppliers/export/excel`;
+      
+      const body: any = {};
+      if (type === 'CLIENT') {
+        body.clientIds = partnerIds;
+      } else {
+        body.supplierIds = partnerIds;
+      }
+      if (from) body.from = from;
+      if (to) body.to = to;
+      
+      const blob = await this.api.postBlob(endpoint, body).toPromise();
+      
+      if (blob) {
+        const today = new Date().toISOString().split('T')[0];
+        const fileName = `situation_${type.toLowerCase()}s_${today}.xlsx`;
+        
+        const urlObj = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = urlObj;
+        link.download = fileName;
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(urlObj);
+      }
+    } catch (error) {
+      console.error('Error exporting multi-partner situation Excel:', error);
+      throw error;
+    }
+  }
 }
