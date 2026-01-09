@@ -32,6 +32,12 @@ export interface DashboardKpiResponse {
     nom: string;
     montant: number;
   }>;
+  bcAnalysis?: {
+    totalBCs: number;
+    bcsNonFacturees: number;
+    montantBCsNonFacturees: number;
+    tauxConversionBCFacture: number;
+  };
 }
 
 export interface SoldeGlobal {

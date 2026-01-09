@@ -90,13 +90,14 @@ import { SkeletonTableComponent } from '../../components/skeleton/skeleton-table
             <svg class="w-24 h-24 text-blue-600" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2a10 10 0 1010 10A10 10 0 0012 2zm1 15h-2v-2h2zm0-4h-2V7h2z"/></svg>
           </div>
           <div class="flex flex-col relative z-10">
-            <p class="text-sm font-semibold text-slate-500 uppercase tracking-wide">Chiffre d'Affaires</p>
+            <p class="text-sm font-semibold text-slate-500 uppercase tracking-wide">Chiffre d'Affaires (HT)</p>
             @if (isLoadingKPIs()) {
               <div class="animate-pulse">
                 <div class="h-8 bg-slate-200 rounded w-32 mt-3"></div>
               </div>
             } @else {
               <h3 class="text-3xl font-extrabold text-slate-800 mt-3 tracking-tight break-words">{{ formatLargeNumber(store.totalSalesHT()) }}</h3>
+              <p class="text-xs text-slate-400 mt-1" title="CA calculé depuis les Bandes de Commandes (inclut les BCs non facturées)">Basé sur toutes les BCs</p>
             }
             <div class="mt-4 flex items-center gap-2">
               @if (kpis()?.margeMoyenne) {
@@ -185,6 +186,32 @@ import { SkeletonTableComponent } from '../../components/skeleton/skeleton-table
           </div>
         </div>
       </div>
+
+      <!-- Informations de cohérence -->
+      @if (kpis() && !isLoadingKPIs()) {
+        @let bcAnalysis = kpis()!.bcAnalysis;
+        @if (bcAnalysis && bcAnalysis.bcsNonFacturees > 0) {
+          <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 shadow-sm">
+            <div class="flex items-start gap-3">
+              <svg class="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+              </svg>
+              <div class="flex-1">
+                <h4 class="text-sm font-bold text-amber-800 mb-1">BCs non facturées détectées</h4>
+                <p class="text-sm text-amber-700">
+                  Il y a <strong>{{ bcAnalysis.bcsNonFacturees }} BCs</strong> non encore facturées 
+                  pour un montant total de <strong>{{ formatLargeNumber(bcAnalysis.montantBCsNonFacturees) }} MAD HT</strong>.
+                  C'est normal si ces BCs viennent d'être créées et n'ont pas encore été transformées en factures.
+                </p>
+                <p class="text-xs text-amber-600 mt-2 italic">
+                  💡 Le CA affiché dans le dashboard inclut toutes les BCs (même non facturées), alors que 
+                  la page Factures Vente affiche uniquement les factures créées. Cela explique la différence.
+                </p>
+              </div>
+            </div>
+          </div>
+        }
+      }
 
       <!-- Charts & Tables Layout -->
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -372,7 +399,16 @@ export class DashboardComponent implements OnInit {
   
   // Solde global
   readonly soldeGlobal = computed(() => this.dashboardStore.soldeGlobal());
-  readonly soldeActuel = computed(() => this.soldeGlobal()?.soldeActuel || 0);
+  // Utiliser le solde projeté si le solde actuel est 0 ou null
+  readonly soldeActuel = computed(() => {
+    const solde = this.soldeGlobal();
+    if (!solde) return 0;
+    // Si soldeActuel est 0 ou null et qu'on a un solde projeté, utiliser celui-ci
+    if ((solde.soldeActuel === 0 || solde.soldeActuel === null) && solde.soldeActuelProjete != null) {
+      return solde.soldeActuelProjete;
+    }
+    return solde.soldeActuel || 0;
+  });
   readonly soldeActuelProjete = computed(() => this.soldeGlobal()?.soldeActuelProjete ?? this.soldeActuel());
   readonly isLoadingSolde = signal(false);
   

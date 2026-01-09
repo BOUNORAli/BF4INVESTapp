@@ -76,8 +76,12 @@ import type { EcritureComptable } from '../../models/types';
            <!-- Totaux Globaux -->
            <div class="flex flex-wrap gap-3 items-center pt-2 border-t border-slate-200">
              <div class="flex items-center gap-2 px-3 py-1.5 bg-slate-100 rounded-lg border border-slate-200">
-               <span class="text-xs font-semibold text-slate-600 uppercase">Total Global:</span>
-               <span class="text-sm font-bold text-slate-800">{{ totalGlobal() | number:'1.2-2' }} MAD</span>
+               <span class="text-xs font-semibold text-slate-600 uppercase">Total Global HT:</span>
+               <span class="text-sm font-bold text-slate-800">{{ totalGlobalHT() | number:'1.2-2' }} MAD</span>
+             </div>
+             <div class="flex items-center gap-2 px-3 py-1.5 bg-orange-50 rounded-lg border border-orange-200">
+               <span class="text-xs font-semibold text-orange-700 uppercase">Total Global TTC:</span>
+               <span class="text-sm font-bold text-orange-800">{{ totalGlobalTTC() | number:'1.2-2' }} MAD</span>
              </div>
              <div class="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 rounded-lg border border-emerald-200">
                <span class="text-xs font-semibold text-emerald-700 uppercase">Total Payé:</span>
@@ -91,6 +95,12 @@ import type { EcritureComptable } from '../../models/types';
                <span class="text-xs font-semibold uppercase" [class.text-amber-700]="solde() >= 0" [class.text-red-700]="solde() < 0">Solde:</span>
                <span class="text-sm font-bold" [class.text-amber-700]="solde() >= 0" [class.text-red-700]="solde() < 0">{{ solde() | number:'1.2-2' }} MAD</span>
              </div>
+             @if (totalAvoirs() > 0) {
+               <div class="flex items-center gap-2 px-3 py-1.5 bg-purple-50 rounded-lg border border-purple-200">
+                 <span class="text-xs font-semibold text-purple-700 uppercase">Avoirs:</span>
+                 <span class="text-sm font-bold text-purple-800">-{{ totalAvoirs() | number:'1.2-2' }} MAD</span>
+               </div>
+             }
            </div>
            
            @if (bcIdFilter()) {
@@ -1446,28 +1456,55 @@ export class PurchaseInvoicesComponent implements OnInit {
   totalPages = computed(() => Math.ceil(this.filteredInvoices().length / this.pageSize()));
 
   // Totaux globaux basés sur les factures filtrées
-  totalGlobal = computed(() => {
+  // IMPORTANT: Exclure les avoirs du calcul (ils ne sont pas des achats facturés)
+  totalGlobalHT = computed(() => {
     const invoices = this.filteredInvoices();
-    return invoices.reduce((acc, inv) => {
-      const amount = inv.amountTTC || 0;
-      // Pour les avoirs, soustraire au lieu d'ajouter
-      return acc + (inv.estAvoir ? -amount : amount);
-    }, 0);
+    return invoices
+      .filter(inv => !inv.estAvoir) // Exclure les avoirs
+      .reduce((acc, inv) => {
+        const amountHT = inv.amountHT || 0;
+        return acc + Math.max(0, amountHT); // S'assurer que c'est positif
+      }, 0);
+  });
+
+  totalGlobalTTC = computed(() => {
+    const invoices = this.filteredInvoices();
+    return invoices
+      .filter(inv => !inv.estAvoir) // Exclure les avoirs
+      .reduce((acc, inv) => {
+        const amountTTC = inv.amountTTC || 0;
+        return acc + Math.max(0, amountTTC); // S'assurer que c'est positif
+      }, 0);
+  });
+
+  // Pour compatibilité avec l'affichage existant (utiliser TTC)
+  totalGlobal = computed(() => this.totalGlobalTTC());
+
+  // Total des avoirs (montants négatifs, pour information)
+  totalAvoirs = computed(() => {
+    const invoices = this.filteredInvoices();
+    return invoices
+      .filter(inv => inv.estAvoir)
+      .reduce((acc, inv) => {
+        const amountTTC = inv.amountTTC || 0;
+        return acc + Math.abs(amountTTC); // Valeur absolue car les avoirs sont déjà négatifs dans amountTTC
+      }, 0);
   });
 
   totalPaye = computed(() => {
     const invoices = this.filteredInvoices();
-    return invoices.reduce((acc, inv) => {
-      const remaining = this.getRemainingAmount(inv);
-      const amountTTC = inv.amountTTC || 0;
-      const montantPaye = amountTTC - remaining;
-      // Pour les avoirs, soustraire au lieu d'ajouter
-      return acc + (inv.estAvoir ? -montantPaye : montantPaye);
-    }, 0);
+    return invoices
+      .filter(inv => !inv.estAvoir) // Exclure les avoirs
+      .reduce((acc, inv) => {
+        const remaining = this.getRemainingAmount(inv);
+        const amountTTC = inv.amountTTC || 0;
+        const montantPaye = amountTTC - remaining;
+        return acc + Math.max(0, montantPaye); // S'assurer que c'est positif
+      }, 0);
   });
 
   solde = computed(() => {
-    return this.totalGlobal() - this.totalPaye();
+    return this.totalGlobalTTC() - this.totalPaye();
   });
 
   setFilter(status: 'all' | 'paid' | 'pending' | 'overdue' | 'avoir') {

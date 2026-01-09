@@ -11,6 +11,7 @@ import com.bf4invest.repository.ClientRepository;
 import com.bf4invest.repository.FactureAchatRepository;
 import com.bf4invest.repository.FactureVenteRepository;
 import com.bf4invest.repository.SupplierRepository;
+import com.bf4invest.util.NumberUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -102,6 +103,19 @@ public class BCAnalysisService {
         
         double tauxConversionBCFacture = totalBCs > 0 ? 
                 ((double) bcsAvecFacture.size() / totalBCs) * 100 : 0.0;
+        
+        // Compter les BCs non facturées et leur montant total
+        int bcsNonFacturees = 0;
+        double montantBCsNonFacturees = 0.0;
+        for (BandeCommande bc : bcs) {
+            if (!bcsAvecFacture.contains(bc.getId())) {
+                bcsNonFacturees++;
+                // Ajouter le montant HT de vente de cette BC (pas encore facturée)
+                if (bc.getTotalVenteHT() != null) {
+                    montantBCsNonFacturees += bc.getTotalVenteHT();
+                }
+            }
+        }
         
         // Performance par client
         Map<String, BCPerfData> perfParClient = new HashMap<>();
@@ -206,6 +220,8 @@ public class BCAnalysisService {
                 .tauxConversionBCFacture(tauxConversionBCFacture)
                 .performanceParClient(performanceParClient)
                 .performanceParFournisseur(performanceParFournisseur)
+                .bcsNonFacturees(bcsNonFacturees)
+                .montantBCsNonFacturees(NumberUtils.roundTo2Decimals(montantBCsNonFacturees))
                 .build();
     }
     

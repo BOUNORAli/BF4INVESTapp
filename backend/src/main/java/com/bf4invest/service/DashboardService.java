@@ -11,6 +11,7 @@ import com.bf4invest.repository.ClientRepository;
 import com.bf4invest.repository.SupplierRepository;
 import com.bf4invest.util.NumberUtils;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -18,6 +19,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class DashboardService {
@@ -50,24 +52,122 @@ public class DashboardService {
                 .sum();
         
         // CA depuis les factures de vente (pour compatibilité)
+        // IMPORTANT: Exclure les avoirs (montants négatifs) du calcul
         double caHTFromInvoices = facturesVente.stream()
-                .mapToDouble(f -> f.getTotalHT() != null ? f.getTotalHT() : 0.0)
+                .filter(f -> f.getEstAvoir() == null || !f.getEstAvoir()) // Exclure les avoirs
+                .mapToDouble(f -> {
+                    double totalHT = f.getTotalHT() != null ? f.getTotalHT() : 0.0;
+                    // S'assurer que les montants sont positifs (les avoirs peuvent avoir des montants négatifs)
+                    return Math.max(0.0, totalHT);
+                })
                 .sum();
+        
+        // Calculer aussi le total TTC pour comparaison
+        double caTTCFromInvoices = facturesVente.stream()
+                .filter(f -> f.getEstAvoir() == null || !f.getEstAvoir()) // Exclure les avoirs
+                .mapToDouble(f -> {
+                    double totalTTC = f.getTotalTTC() != null ? f.getTotalTTC() : 0.0;
+                    return Math.max(0.0, totalTTC);
+                })
+                .sum();
+        
+        // Identifier les BCs non facturées pour logging
+        Set<String> bcIdsAvecFactures = facturesVente.stream()
+                .filter(f -> f.getBandeCommandeId() != null && !f.getBandeCommandeId().isEmpty())
+                .map(FactureVente::getBandeCommandeId)
+                .collect(Collectors.toSet());
+        
+        long nbBCsNonFacturees = allBCs.stream()
+                .filter(bc -> !bcIdsAvecFactures.contains(bc.getId()))
+                .count();
+        
+        // Log des incohérences importantes pour diagnostic
+        if (caHTFromBCs > 0 && caHTFromInvoices > 0) {
+            double differenceAbsolue = Math.abs(caHTFromBCs - caHTFromInvoices);
+            double differencePourcentage = (differenceAbsolue / Math.max(caHTFromBCs, caHTFromInvoices)) * 100;
+            
+            if (differencePourcentage > 10) { // Alerte si différence > 10%
+                log.warn("⚠️ INCOHÉRENCE DÉTECTÉE: Différence significative entre CA BCs et Factures Vente");
+                log.warn("   - Total Vente HT depuis BCs: {} MAD", NumberUtils.roundTo2Decimals(caHTFromBCs));
+                log.warn("   - Total Vente HT depuis Factures: {} MAD", NumberUtils.roundTo2Decimals(caHTFromInvoices));
+                log.warn("   - Différence: {} MAD ({}%)", NumberUtils.roundTo2Decimals(differenceAbsolue), 
+                    String.format("%.2f", differencePourcentage));
+                log.warn("   - Nombre de BCs non facturées: {}", nbBCsNonFacturees);
+                log.warn("   - Nombre total de BCs: {}", allBCs.size());
+                log.warn("   - Nombre de factures vente (hors avoirs): {}", 
+                    facturesVente.stream().filter(f -> f.getEstAvoir() == null || !f.getEstAvoir()).count());
+                
+                // Afficher les avoirs si présents
+                long nbAvoirs = facturesVente.stream()
+                        .filter(f -> Boolean.TRUE.equals(f.getEstAvoir()))
+                        .count();
+                if (nbAvoirs > 0) {
+                    double totalAvoirs = facturesVente.stream()
+                            .filter(f -> Boolean.TRUE.equals(f.getEstAvoir()))
+                            .mapToDouble(f -> Math.abs(f.getTotalHT() != null ? f.getTotalHT() : 0.0))
+                            .sum();
+                    log.warn("   - Nombre d'avoirs vente: {} (Total: {} MAD)", nbAvoirs, 
+                        NumberUtils.roundTo2Decimals(totalAvoirs));
+                }
+            } else {
+                log.info("✓ Cohérence vérifiée: CA BCs ({}) vs Factures Vente ({}) - Différence: {}%", 
+                    NumberUtils.roundTo2Decimals(caHTFromBCs), NumberUtils.roundTo2Decimals(caHTFromInvoices),
+                    String.format("%.2f", differencePourcentage));
+            }
+        } else if (caHTFromBCs > 0 || caHTFromInvoices > 0) {
+            // Si une seule source a des données, log info
+            log.info("CA calculé depuis {} - BCs: {} MAD, Factures: {} MAD", 
+                caHTFromBCs > 0 ? "BCs" : "Factures", 
+                NumberUtils.roundTo2Decimals(caHTFromBCs), 
+                NumberUtils.roundTo2Decimals(caHTFromInvoices));
+        }
         
         // Utiliser la valeur la plus élevée ou celle des BCs si disponible
         double caHT = NumberUtils.roundTo2Decimals(caHTFromBCs > 0 ? caHTFromBCs : caHTFromInvoices);
         
+        // CA TTC depuis factures (exclure les avoirs)
         double caTTC = NumberUtils.roundTo2Decimals(facturesVente.stream()
-                .mapToDouble(f -> f.getTotalTTC() != null ? f.getTotalTTC() : 0.0)
+                .filter(f -> f.getEstAvoir() == null || !f.getEstAvoir()) // Exclure les avoirs
+                .mapToDouble(f -> {
+                    double totalTTC = f.getTotalTTC() != null ? f.getTotalTTC() : 0.0;
+                    return Math.max(0.0, totalTTC); // S'assurer que c'est positif
+                })
                 .sum());
         
-        // Achats
+        // Achats - Exclure les avoirs (montants négatifs)
         double totalAchatsHT = NumberUtils.roundTo2Decimals(facturesAchat.stream()
-                .mapToDouble(f -> f.getTotalHT() != null ? f.getTotalHT() : 0.0)
+                .filter(f -> f.getEstAvoir() == null || !f.getEstAvoir()) // Exclure les avoirs
+                .mapToDouble(f -> {
+                    double totalHT = f.getTotalHT() != null ? f.getTotalHT() : 0.0;
+                    return Math.max(0.0, totalHT); // S'assurer que c'est positif
+                })
                 .sum());
+        
         double totalAchatsTTC = NumberUtils.roundTo2Decimals(facturesAchat.stream()
-                .mapToDouble(f -> f.getTotalTTC() != null ? f.getTotalTTC() : 0.0)
+                .filter(f -> f.getEstAvoir() == null || !f.getEstAvoir()) // Exclure les avoirs
+                .mapToDouble(f -> {
+                    double totalTTC = f.getTotalTTC() != null ? f.getTotalTTC() : 0.0;
+                    return Math.max(0.0, totalTTC); // S'assurer que c'est positif
+                })
                 .sum());
+        
+        // Vérifier incohérences pour achats
+        double totalAchatHTFromBCsAll = NumberUtils.roundTo2Decimals(allBCs.stream()
+                .mapToDouble(bc -> bc.getTotalAchatHT() != null ? bc.getTotalAchatHT() : 0.0)
+                .sum());
+        
+        if (totalAchatHTFromBCsAll > 0 && totalAchatsHT > 0) {
+            double diffAchat = Math.abs(totalAchatHTFromBCsAll - totalAchatsHT);
+            double diffPctAchat = (diffAchat / Math.max(totalAchatHTFromBCsAll, totalAchatsHT)) * 100;
+            
+            if (diffPctAchat > 10) {
+                log.warn("⚠️ INCOHÉRENCE DÉTECTÉE: Différence significative entre Achats BCs et Factures Achat");
+                log.warn("   - Total Achat HT depuis BCs: {} MAD", NumberUtils.roundTo2Decimals(totalAchatHTFromBCsAll));
+                log.warn("   - Total Achat HT depuis Factures: {} MAD", NumberUtils.roundTo2Decimals(totalAchatsHT));
+                log.warn("   - Différence: {} MAD ({}%)", NumberUtils.roundTo2Decimals(diffAchat), 
+                    String.format("%.2f", diffPctAchat));
+            }
+        }
         
         // Marges - Calculer à partir des BCs pour une meilleure précision
         // Les BCs contiennent la source de vérité pour les prix d'achat et de vente
@@ -96,21 +196,31 @@ public class DashboardService {
         
         double margeMoyenne = NumberUtils.roundTo2Decimals(totalAchatsHTForMargin > 0 ? (margeTotale / totalAchatsHTForMargin) * 100 : 0.0);
         
-        // TVA
+        // TVA - Exclure les avoirs (ils réduisent la TVA, donc on les soustrait plutôt que de les exclure complètement)
+        // Pour avoirs: TVA est négative, donc l'addition la réduit automatiquement
         double tvaCollectee = NumberUtils.roundTo2Decimals(facturesVente.stream()
-                .mapToDouble(f -> f.getTotalTVA() != null ? f.getTotalTVA() : 0.0)
+                .mapToDouble(f -> {
+                    double tva = f.getTotalTVA() != null ? f.getTotalTVA() : 0.0;
+                    // Pour les avoirs, la TVA est déjà négative, donc l'addition fonctionne correctement
+                    return tva;
+                })
                 .sum());
         double tvaDeductible = NumberUtils.roundTo2Decimals(facturesAchat.stream()
-                .mapToDouble(f -> f.getTotalTVA() != null ? f.getTotalTVA() : 0.0)
+                .mapToDouble(f -> {
+                    double tva = f.getTotalTVA() != null ? f.getTotalTVA() : 0.0;
+                    // Pour les avoirs, la TVA est déjà négative, donc l'addition fonctionne correctement
+                    return tva;
+                })
                 .sum());
         
         // Impayés
         DashboardKpiResponse.ImpayesInfo impayes = calculateImpayes(facturesAchat, facturesVente);
         
-        // Factures en retard
+        // Factures en retard - Exclure les avoirs
         long facturesEnRetard = factureAchatRepository.findByDateEcheanceLessThanEqual(LocalDate.now())
                 .stream()
                 .filter(f -> !"regle".equals(f.getEtatPaiement()))
+                .filter(f -> f.getEstAvoir() == null || !f.getEstAvoir()) // Exclure les avoirs
                 .count();
         
         // CA Mensuel
@@ -272,34 +382,50 @@ public class DashboardService {
         double impayes31_60 = 0.0;
         double impayesPlus60 = 0.0;
         
-        // Factures achat impayées
+        // Factures achat impayées - Exclure les avoirs
         for (FactureAchat fa : facturesAchat) {
+            // Exclure les avoirs (ils ne peuvent pas être impayés, ce sont des crédits)
+            if (Boolean.TRUE.equals(fa.getEstAvoir())) {
+                continue;
+            }
             if (!"regle".equals(fa.getEtatPaiement()) && fa.getDateEcheance() != null) {
                 double montant = fa.getMontantRestant() != null ? fa.getMontantRestant() : fa.getTotalTTC();
-                long daysOverdue = java.time.temporal.ChronoUnit.DAYS.between(fa.getDateEcheance(), today);
-                
-                if (daysOverdue <= 30) {
-                    impayes0_30 += montant;
-                } else if (daysOverdue <= 60) {
-                    impayes31_60 += montant;
-                } else {
-                    impayesPlus60 += montant;
+                // S'assurer que le montant est positif
+                montant = Math.max(0.0, montant);
+                if (montant > 0) {
+                    long daysOverdue = java.time.temporal.ChronoUnit.DAYS.between(fa.getDateEcheance(), today);
+                    
+                    if (daysOverdue <= 30) {
+                        impayes0_30 += montant;
+                    } else if (daysOverdue <= 60) {
+                        impayes31_60 += montant;
+                    } else {
+                        impayesPlus60 += montant;
+                    }
                 }
             }
         }
         
-        // Factures vente impayées
+        // Factures vente impayées - Exclure les avoirs
         for (FactureVente fv : facturesVente) {
+            // Exclure les avoirs (ils ne peuvent pas être impayés, ce sont des crédits)
+            if (Boolean.TRUE.equals(fv.getEstAvoir())) {
+                continue;
+            }
             if (!"regle".equals(fv.getEtatPaiement()) && fv.getDateEcheance() != null) {
                 double montant = fv.getMontantRestant() != null ? fv.getMontantRestant() : fv.getTotalTTC();
-                long daysOverdue = java.time.temporal.ChronoUnit.DAYS.between(fv.getDateEcheance(), today);
-                
-                if (daysOverdue <= 30) {
-                    impayes0_30 += montant;
-                } else if (daysOverdue <= 60) {
-                    impayes31_60 += montant;
-                } else {
-                    impayesPlus60 += montant;
+                // S'assurer que le montant est positif
+                montant = Math.max(0.0, montant);
+                if (montant > 0) {
+                    long daysOverdue = java.time.temporal.ChronoUnit.DAYS.between(fv.getDateEcheance(), today);
+                    
+                    if (daysOverdue <= 30) {
+                        impayes0_30 += montant;
+                    } else if (daysOverdue <= 60) {
+                        impayes31_60 += montant;
+                    } else {
+                        impayesPlus60 += montant;
+                    }
                 }
             }
         }

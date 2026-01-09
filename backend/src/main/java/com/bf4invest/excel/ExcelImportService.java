@@ -316,8 +316,9 @@ public class ExcelImportService {
                 clientsVente.addAll(clientVenteMap.values());
                 bc.setClientsVente(clientsVente);
                 
-                // Calculer les totaux globaux de la BC
-                calculateBCTotals(bc);
+                // IMPORTANT: Utiliser le service pour calculer les totaux correctement (gère multi-clients)
+                // Ne pas utiliser calculateBCTotals() locale qui ne gère pas bien la structure multi-clients
+                // Les totaux seront recalculés par le service lors de la sauvegarde
             }
             
             // Calculer les totaux et ajouter les lignes pour les factures
@@ -335,6 +336,7 @@ public class ExcelImportService {
             }
             
             // Sauvegarder les BC d'abord pour obtenir leurs IDs
+            // IMPORTANT: Utiliser le service pour s'assurer que calculateTotals() est appelé correctement
             Map<String, String> bcNumToIdMap = new HashMap<>();
             for (BandeCommande bc : bcMap.values()) {
                 try {
@@ -344,22 +346,26 @@ public class ExcelImportService {
                     // Vérifier si BC existe déjà
                     Optional<BandeCommande> existing = bcRepository.findByNumeroBC(bc.getNumeroBC());
                     String bcId;
+                    BandeCommande saved;
                     if (existing.isPresent()) {
-                        // Mettre à jour la BC existante
+                        // Mettre à jour la BC existante via le service (appelle calculateTotals)
                         BandeCommande existingBC = existing.get();
                         existingBC.setLignes(bc.getLignes());
                         existingBC.setLignesAchat(bc.getLignesAchat()); // Mettre à jour aussi lignesAchat
+                        existingBC.setClientsVente(bc.getClientsVente()); // IMPORTANT: Mettre à jour clientsVente
                         existingBC.setDateBC(bc.getDateBC());
                         existingBC.setClientId(bc.getClientId());
                         existingBC.setFournisseurId(bc.getFournisseurId());
                         existingBC.setEtat("envoyee");
                         existingBC.setUpdatedAt(LocalDateTime.now());
-                        calculateBCTotals(existingBC);
-                        BandeCommande saved = bcRepository.save(existingBC);
+                        
+                        // Utiliser le service pour mettre à jour (appelle calculateTotals automatiquement)
+                        saved = bandeCommandeService.update(existingBC.getId(), existingBC);
                         bcId = saved.getId();
                         result.getWarnings().add("BC " + bc.getNumeroBC() + " mise à jour");
                     } else {
-                        BandeCommande saved = bcRepository.save(bc);
+                        // Créer via le service (appelle calculateTotals automatiquement)
+                        saved = bandeCommandeService.create(bc);
                         bcId = saved.getId();
                     }
                     

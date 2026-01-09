@@ -232,6 +232,9 @@ public class DashboardKpiResponse {
         private double tauxConversionBCFacture;
         private List<BCPerformance> performanceParClient;
         private List<BCPerformance> performanceParFournisseur;
+        // Informations sur les BCs non facturées pour diagnostic
+        private int bcsNonFacturees;
+        private double montantBCsNonFacturees; // Montant HT des BCs non facturées
     }
     
     @Data

@@ -96,11 +96,13 @@ import { SkeletonTableComponent } from '../../components/skeleton/skeleton-table
 
       <!-- Totaux Globaux -->
       <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex flex-wrap gap-3 items-center">
-        <div class="flex items-center gap-2 px-3 py-1.5 bg-blue-50 rounded-lg border border-blue-200">
+        <div class="flex items-center gap-2 px-3 py-1.5 bg-blue-50 rounded-lg border border-blue-200" 
+             title="Total Vente Hors Taxes de toutes les Bandes de Commandes (inclut les BCs non facturées)">
           <span class="text-xs font-semibold text-blue-700 uppercase">Total Vente HT:</span>
           <span class="text-sm font-bold text-blue-800">{{ totalGlobal() | number:'1.2-2' }} MAD</span>
         </div>
-        <div class="flex items-center gap-2 px-3 py-1.5 bg-orange-50 rounded-lg border border-orange-200">
+        <div class="flex items-center gap-2 px-3 py-1.5 bg-orange-50 rounded-lg border border-orange-200"
+             title="Total Achat Hors Taxes de toutes les Bandes de Commandes">
           <span class="text-xs font-semibold text-orange-700 uppercase">Total Achat HT:</span>
           <span class="text-sm font-bold text-orange-800">{{ totalAchat() | number:'1.2-2' }} MAD</span>
         </div>
@@ -108,9 +110,13 @@ import { SkeletonTableComponent } from '../../components/skeleton/skeleton-table
              [class.bg-emerald-50]="solde() >= 0" 
              [class.border-emerald-200]="solde() >= 0"
              [class.bg-red-50]="solde() < 0"
-             [class.border-red-200]="solde() < 0">
-          <span class="text-xs font-semibold uppercase" [class.text-emerald-700]="solde() >= 0" [class.text-red-700]="solde() < 0">Marge:</span>
+             [class.border-red-200]="solde() < 0"
+             title="Marge = Total Vente HT - Total Achat HT">
+          <span class="text-xs font-semibold uppercase" [class.text-emerald-700]="solde() >= 0" [class.text-red-700]="solde() < 0">Marge HT:</span>
           <span class="text-sm font-bold" [class.text-emerald-700]="solde() >= 0" [class.text-red-700]="solde() < 0">{{ solde() | number:'1.2-2' }} MAD</span>
+        </div>
+        <div class="text-xs text-slate-500 italic">
+          💡 Note: Les totaux ci-dessus sont en HT et incluent toutes les BCs (même non facturées)
         </div>
       </div>
 
@@ -366,15 +372,42 @@ export class BcListComponent implements OnInit {
     return Math.ceil(this.filteredBcs().length / this.pageSize());
   });
 
-  // Totaux globaux basés sur les BC filtrés
+  // Totaux globaux basés sur les BC filtrés (tous en HT)
   totalGlobal = computed(() => {
     const bcs = this.filteredBcs();
+    // getSellTotal retourne totalVenteHT (HT)
     return bcs.reduce((acc, bc) => acc + this.getSellTotal(bc), 0);
   });
 
   totalAchat = computed(() => {
     const bcs = this.filteredBcs();
+    // getBuyTotal retourne totalAchatHT (HT)
     return bcs.reduce((acc, bc) => acc + this.getBuyTotal(bc), 0);
+  });
+
+  // Totaux TTC pour comparaison (optionnel)
+  totalGlobalTTC = computed(() => {
+    const bcs = this.filteredBcs();
+    return bcs.reduce((acc, bc) => {
+      // Utiliser totalVenteTTC si disponible, sinon calculer approximativement
+      if (bc.totalVenteTTC !== undefined && bc.totalVenteTTC !== null) {
+        return acc + bc.totalVenteTTC;
+      }
+      // Fallback: estimer TTC depuis HT (approximatif, devrait utiliser le vrai TTC du BC)
+      return acc + this.getSellTotal(bc) * 1.2; // Approximation 20% TVA
+    }, 0);
+  });
+
+  totalAchatTTC = computed(() => {
+    const bcs = this.filteredBcs();
+    return bcs.reduce((acc, bc) => {
+      // Utiliser totalAchatTTC si disponible, sinon calculer approximativement
+      if (bc.totalAchatTTC !== undefined && bc.totalAchatTTC !== null) {
+        return acc + bc.totalAchatTTC;
+      }
+      // Fallback: estimer TTC depuis HT (approximatif, devrait utiliser le vrai TTC du BC)
+      return acc + this.getBuyTotal(bc) * 1.2; // Approximation 20% TVA
+    }, 0);
   });
 
   solde = computed(() => {
