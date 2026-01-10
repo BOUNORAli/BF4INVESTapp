@@ -120,8 +120,12 @@ public class ExcelImportService {
             Map<String, Double> fvTotalTTCFromExcel = new HashMap<>(); // Numéro FV -> totalTTC depuis "facture_vente_ttc"
             
             // Maps pour stocker les totaux Excel au niveau des BCs (pour aligner avec les factures)
-            Map<String, Double> bcTotalAchatTTCFromExcel = new HashMap<>(); // BC -> totalAchatTTC depuis "facture_achat_ttc"
-            Map<String, Double> bcTotalVenteTTCFromExcel = new HashMap<>(); // BC -> totalVenteTTC (somme de toutes les factures vente liées)
+            Map<String, Double> bcTotalAchatTTCFromExcel = new HashMap<>(); // BC -> totalAchatTTC depuis "facture_achat_ttc" (SOMMÉ)
+            Map<String, Double> bcTotalVenteTTCFromExcel = new HashMap<>(); // BC -> totalVenteTTC (somme de toutes les factures vente liées) (SOMMÉ)
+            
+            // Maps optionnelles pour stocker les totaux HT Excel directement (si colonnes disponibles)
+            Map<String, Double> bcTotalAchatHTFromExcel = new HashMap<>(); // BC -> totalAchatHT depuis "prix_achat_total_ht" (SOMMÉ)
+            Map<String, Double> bcTotalVenteHTFromExcel = new HashMap<>(); // BC -> totalVenteHT depuis colonnes de vente HT (SOMMÉ)
             
             // NOUVELLE STRUCTURE : Agrégation des produits par BC pour éviter les doublons
             // Map<BC_Numero, Map<ProduitKey, ProductAggregate>>
@@ -149,7 +153,7 @@ public class ExcelImportService {
                     processRow(row, columnMap, bcMap, faMap, fvMap, faLignesMap, fvLignesMap,
                               faToBcNumMap, fvToBcNumMap, bcProductsMap, fvByBcAndClientMap, 
                               faTotalTTCFromExcel, fvTotalTTCFromExcel, bcTotalAchatTTCFromExcel, 
-                              bcTotalVenteTTCFromExcel, result);
+                              bcTotalVenteTTCFromExcel, bcTotalAchatHTFromExcel, bcTotalVenteHTFromExcel, result);
                     processedRows++;
                     
                     // Log progression tous les 100 lignes
@@ -337,13 +341,15 @@ public class ExcelImportService {
                 // Utiliser bcReference comme clé pour récupérer les lignes
                 List<LineItem> lignes = faLignesMap.getOrDefault(fa.getBcReference(), new ArrayList<>());
                 fa.setLignes(lignes);
-                // Utiliser le total brut depuis Excel si disponible
+                // Utiliser le total brut depuis Excel si disponible (SOMMÉ correctement)
                 String bcRef = fa.getBcReference();
                 if (bcRef != null && faTotalTTCFromExcel.containsKey(bcRef)) {
                     Double totalTTCFromExcel = faTotalTTCFromExcel.get(bcRef);
                     fa.setTotalTTC(NumberUtils.roundTo2Decimals(totalTTCFromExcel));
                     // Calculer HT depuis TTC en utilisant le taux TVA moyen des lignes ou 20% par défaut
                     calculateFactureAchatTotalsFromExcelTotal(fa);
+                    log.debug("Facture Achat BC {} : Total TTC Excel (sommé) = {}, Total HT calculé = {}", 
+                        bcRef, totalTTCFromExcel, fa.getTotalHT());
                 } else {
                     // Calculer depuis les lignes si pas de total Excel
                     calculateFactureAchatTotals(fa);
@@ -353,13 +359,15 @@ public class ExcelImportService {
             for (FactureVente fv : fvMap.values()) {
                 List<LineItem> lignes = fvLignesMap.getOrDefault(fv.getNumeroFactureVente(), new ArrayList<>());
                 fv.setLignes(lignes);
-                // Utiliser le total brut depuis Excel si disponible
+                // Utiliser le total brut depuis Excel si disponible (SOMMÉ correctement)
                 String numeroFV = fv.getNumeroFactureVente();
                 if (numeroFV != null && fvTotalTTCFromExcel.containsKey(numeroFV)) {
                     Double totalTTCFromExcel = fvTotalTTCFromExcel.get(numeroFV);
                     fv.setTotalTTC(NumberUtils.roundTo2Decimals(totalTTCFromExcel));
                     // Calculer HT depuis TTC en utilisant le taux TVA moyen des lignes ou 20% par défaut
                     calculateFactureVenteTotalsFromExcelTotal(fv);
+                    log.debug("Facture Vente {} : Total TTC Excel (sommé) = {}, Total HT calculé = {}", 
+                        numeroFV, totalTTCFromExcel, fv.getTotalHT());
                 } else {
                     // Calculer depuis les lignes si pas de total Excel
                     calculateFactureVenteTotals(fv);
@@ -378,8 +386,57 @@ public class ExcelImportService {
                     String bcNum = bc.getNumeroBC();
                     Double totalAchatTTCExcel = bcTotalAchatTTCFromExcel.get(bcNum);
                     Double totalVenteTTCExcel = bcTotalVenteTTCFromExcel.get(bcNum);
+                    Double totalAchatHTExcel = bcTotalAchatHTFromExcel.get(bcNum); // Totaux HT directs si disponibles
+                    Double totalVenteHTExcel = bcTotalVenteHTFromExcel.get(bcNum); // Totaux HT directs si disponibles
                     
-                    if (totalAchatTTCExcel != null || totalVenteTTCExcel != null) {
+                    // Log des totaux Excel sommés pour diagnostic
+                    if (totalAchatTTCExcel != null || totalVenteTTCExcel != null || 
+                        totalAchatHTExcel != null || totalVenteHTExcel != null) {
+                        log.info("BC {} : Totaux Excel sommés - Achat TTC: {}, Achat HT: {}, Vente TTC: {}, Vente HT: {}", 
+                            bcNum, totalAchatTTCExcel, totalAchatHTExcel, totalVenteTTCExcel, totalVenteHTExcel);
+                    }
+                    
+                    // PRIORITÉ 1 : Utiliser les totaux HT Excel directs si disponibles (évite la conversion)
+                    if (totalAchatHTExcel != null && totalAchatHTExcel > 0 || totalVenteHTExcel != null && totalVenteHTExcel > 0) {
+                        // Stocker les totaux HT Excel dans la BC (arrondis à 2 décimales)
+                        if (totalAchatHTExcel != null && totalAchatHTExcel > 0) {
+                            bc.setTotalAchatHT(NumberUtils.roundTo2Decimals(totalAchatHTExcel));
+                            // Calculer TTC depuis HT si nécessaire
+                            if (totalAchatTTCExcel != null && totalAchatTTCExcel > 0) {
+                                bc.setTotalAchatTTC(NumberUtils.roundTo2Decimals(totalAchatTTCExcel));
+                            } else {
+                                // Estimer TTC depuis HT avec taux TVA moyen
+                                double ttcFromHT = totalAchatHTExcel * 1.20; // Approximation 20%
+                                bc.setTotalAchatTTC(NumberUtils.roundTo2Decimals(ttcFromHT));
+                            }
+                        }
+                        if (totalVenteHTExcel != null && totalVenteHTExcel > 0) {
+                            bc.setTotalVenteHT(NumberUtils.roundTo2Decimals(totalVenteHTExcel));
+                            // Calculer TTC depuis HT si nécessaire
+                            if (totalVenteTTCExcel != null && totalVenteTTCExcel > 0) {
+                                bc.setTotalVenteTTC(NumberUtils.roundTo2Decimals(totalVenteTTCExcel));
+                            } else {
+                                // Estimer TTC depuis HT avec taux TVA moyen
+                                double ttcFromHT = totalVenteHTExcel * 1.20; // Approximation 20%
+                                bc.setTotalVenteTTC(NumberUtils.roundTo2Decimals(ttcFromHT));
+                            }
+                        }
+                        // Stocker aussi les totaux TTC Excel si disponibles pour référence
+                        if (totalAchatTTCExcel != null) {
+                            bc.setTotalAchatTTCFromExcel(totalAchatTTCExcel);
+                        }
+                        if (totalVenteTTCExcel != null) {
+                            bc.setTotalVenteTTCFromExcel(totalVenteTTCExcel);
+                        }
+                        // Calculer la marge
+                        if (bc.getTotalVenteHT() != null && bc.getTotalAchatHT() != null) {
+                            bc.setMargeTotale(NumberUtils.roundTo2Decimals(bc.getTotalVenteHT() - bc.getTotalAchatHT()));
+                            if (bc.getTotalAchatHT() > 0) {
+                                bc.setMargePourcentage(NumberUtils.roundTo2Decimals(((bc.getTotalVenteHT() - bc.getTotalAchatHT()) / bc.getTotalAchatHT()) * 100));
+                            }
+                        }
+                    } else if (totalAchatTTCExcel != null || totalVenteTTCExcel != null) {
+                        // PRIORITÉ 2 : Utiliser les totaux TTC Excel et convertir en HT
                         // Stocker les totaux Excel dans la BC pour qu'ils soient préservés
                         bc.setTotalAchatTTCFromExcel(totalAchatTTCExcel);
                         bc.setTotalVenteTTCFromExcel(totalVenteTTCExcel);
@@ -408,7 +465,38 @@ public class ExcelImportService {
                         existingBC.setUpdatedAt(LocalDateTime.now());
                         
                         // Si on a des totaux Excel, les stocker dans la BC (seront préservés par le service)
-                        if (totalAchatTTCExcel != null || totalVenteTTCExcel != null) {
+                        Double totalAchatHTExcel = bcTotalAchatHTFromExcel.get(bcNum);
+                        Double totalVenteHTExcel = bcTotalVenteHTFromExcel.get(bcNum);
+                        
+                        // PRIORITÉ 1 : Utiliser les totaux HT Excel directs si disponibles (arrondis)
+                        if (totalAchatHTExcel != null && totalAchatHTExcel > 0 || totalVenteHTExcel != null && totalVenteHTExcel > 0) {
+                            if (totalAchatHTExcel != null && totalAchatHTExcel > 0) {
+                                existingBC.setTotalAchatHT(NumberUtils.roundTo2Decimals(totalAchatHTExcel));
+                                if (totalAchatTTCExcel != null && totalAchatTTCExcel > 0) {
+                                    existingBC.setTotalAchatTTC(NumberUtils.roundTo2Decimals(totalAchatTTCExcel));
+                                }
+                            }
+                            if (totalVenteHTExcel != null && totalVenteHTExcel > 0) {
+                                existingBC.setTotalVenteHT(NumberUtils.roundTo2Decimals(totalVenteHTExcel));
+                                if (totalVenteTTCExcel != null && totalVenteTTCExcel > 0) {
+                                    existingBC.setTotalVenteTTC(NumberUtils.roundTo2Decimals(totalVenteTTCExcel));
+                                }
+                            }
+                            if (totalAchatTTCExcel != null) {
+                                existingBC.setTotalAchatTTCFromExcel(totalAchatTTCExcel);
+                            }
+                            if (totalVenteTTCExcel != null) {
+                                existingBC.setTotalVenteTTCFromExcel(totalVenteTTCExcel);
+                            }
+                            // Calculer la marge
+                            if (existingBC.getTotalVenteHT() != null && existingBC.getTotalAchatHT() != null) {
+                                existingBC.setMargeTotale(NumberUtils.roundTo2Decimals(existingBC.getTotalVenteHT() - existingBC.getTotalAchatHT()));
+                                if (existingBC.getTotalAchatHT() > 0) {
+                                    existingBC.setMargePourcentage(NumberUtils.roundTo2Decimals(((existingBC.getTotalVenteHT() - existingBC.getTotalAchatHT()) / existingBC.getTotalAchatHT()) * 100));
+                                }
+                            }
+                        } else if (totalAchatTTCExcel != null || totalVenteTTCExcel != null) {
+                            // PRIORITÉ 2 : Utiliser les totaux TTC Excel et convertir
                             existingBC.setTotalAchatTTCFromExcel(totalAchatTTCExcel);
                             existingBC.setTotalVenteTTCFromExcel(totalVenteTTCExcel);
                         }
@@ -419,7 +507,38 @@ public class ExcelImportService {
                         result.getWarnings().add("BC " + bc.getNumeroBC() + " mise à jour");
                     } else {
                         // Si on a des totaux Excel, les stocker dans la BC
-                        if (totalAchatTTCExcel != null || totalVenteTTCExcel != null) {
+                        Double totalAchatHTExcel = bcTotalAchatHTFromExcel.get(bcNum);
+                        Double totalVenteHTExcel = bcTotalVenteHTFromExcel.get(bcNum);
+                        
+                        // PRIORITÉ 1 : Utiliser les totaux HT Excel directs si disponibles (arrondis)
+                        if (totalAchatHTExcel != null && totalAchatHTExcel > 0 || totalVenteHTExcel != null && totalVenteHTExcel > 0) {
+                            if (totalAchatHTExcel != null && totalAchatHTExcel > 0) {
+                                bc.setTotalAchatHT(NumberUtils.roundTo2Decimals(totalAchatHTExcel));
+                                if (totalAchatTTCExcel != null && totalAchatTTCExcel > 0) {
+                                    bc.setTotalAchatTTC(NumberUtils.roundTo2Decimals(totalAchatTTCExcel));
+                                }
+                            }
+                            if (totalVenteHTExcel != null && totalVenteHTExcel > 0) {
+                                bc.setTotalVenteHT(NumberUtils.roundTo2Decimals(totalVenteHTExcel));
+                                if (totalVenteTTCExcel != null && totalVenteTTCExcel > 0) {
+                                    bc.setTotalVenteTTC(NumberUtils.roundTo2Decimals(totalVenteTTCExcel));
+                                }
+                            }
+                            if (totalAchatTTCExcel != null) {
+                                bc.setTotalAchatTTCFromExcel(totalAchatTTCExcel);
+                            }
+                            if (totalVenteTTCExcel != null) {
+                                bc.setTotalVenteTTCFromExcel(totalVenteTTCExcel);
+                            }
+                            // Calculer la marge
+                            if (bc.getTotalVenteHT() != null && bc.getTotalAchatHT() != null) {
+                                bc.setMargeTotale(NumberUtils.roundTo2Decimals(bc.getTotalVenteHT() - bc.getTotalAchatHT()));
+                                if (bc.getTotalAchatHT() > 0) {
+                                    bc.setMargePourcentage(NumberUtils.roundTo2Decimals(((bc.getTotalVenteHT() - bc.getTotalAchatHT()) / bc.getTotalAchatHT()) * 100));
+                                }
+                            }
+                        } else if (totalAchatTTCExcel != null || totalVenteTTCExcel != null) {
+                            // PRIORITÉ 2 : Utiliser les totaux TTC Excel et convertir
                             bc.setTotalAchatTTCFromExcel(totalAchatTTCExcel);
                             bc.setTotalVenteTTCFromExcel(totalVenteTTCExcel);
                         }
@@ -431,6 +550,13 @@ public class ExcelImportService {
                     
                     bcNumToIdMap.put(bc.getNumeroBC(), bcId);
                     bc.setId(bcId); // Mettre à jour l'ID dans la map
+                    
+                    // Log final des totaux de la BC sauvegardée pour vérification
+                    BandeCommande savedBCForLog = bcRepository.findById(bcId).orElse(saved);
+                    if (savedBCForLog.getTotalAchatHT() != null || savedBCForLog.getTotalVenteHT() != null) {
+                        log.info("BC {} sauvegardée avec totaux - Achat HT: {}, Vente HT: {}", 
+                            bcNum, savedBCForLog.getTotalAchatHT(), savedBCForLog.getTotalVenteHT());
+                    }
                     
                     // Mettre à jour le stock automatiquement si ajouterAuStock est activé
                     // Récupérer la BC sauvegardée pour avoir toutes les données
@@ -531,8 +657,35 @@ public class ExcelImportService {
                 }
             }
             
-            log.info("Import completed: {} rows processed, {} BCs, {} FAs, {} FVs", 
+            log.info("Import completed: {} rows processed, {} BCs, {} FAs, {} FVs",
                     processedRows, bcMap.size(), faMap.size(), fvMap.size());
+            
+            // Log des totaux Excel sommés pour vérification
+            if (!bcTotalAchatTTCFromExcel.isEmpty() || !bcTotalVenteTTCFromExcel.isEmpty()) {
+                log.info("=== RÉSUMÉ DES TOTAUX EXCEL SOMMÉS ===");
+                log.info("Nombre de BCs avec totaux Excel: Achat TTC={}, Vente TTC={}, Achat HT={}, Vente HT={}",
+                    bcTotalAchatTTCFromExcel.size(), bcTotalVenteTTCFromExcel.size(), 
+                    bcTotalAchatHTFromExcel.size(), bcTotalVenteHTFromExcel.size());
+                
+                // Calculer les totaux globaux sommés
+                double totalAchatTTCGlobal = bcTotalAchatTTCFromExcel.values().stream().mapToDouble(Double::doubleValue).sum();
+                double totalVenteTTCGlobal = bcTotalVenteTTCFromExcel.values().stream().mapToDouble(Double::doubleValue).sum();
+                double totalAchatHTGlobal = bcTotalAchatHTFromExcel.values().stream().mapToDouble(Double::doubleValue).sum();
+                double totalVenteHTGlobal = bcTotalVenteHTFromExcel.values().stream().mapToDouble(Double::doubleValue).sum();
+                
+                log.info("TOTAL GLOBAL EXCEL SOMMÉ - Achat TTC: {}, Achat HT: {}, Vente TTC: {}, Vente HT: {}",
+                    NumberUtils.roundTo2Decimals(totalAchatTTCGlobal),
+                    NumberUtils.roundTo2Decimals(totalAchatHTGlobal),
+                    NumberUtils.roundTo2Decimals(totalVenteTTCGlobal),
+                    NumberUtils.roundTo2Decimals(totalVenteHTGlobal));
+                
+                // Totaux des factures Excel sommées
+                double totalFATTCGlobal = faTotalTTCFromExcel.values().stream().mapToDouble(Double::doubleValue).sum();
+                double totalFVTTCGlobal = fvTotalTTCFromExcel.values().stream().mapToDouble(Double::doubleValue).sum();
+                log.info("TOTAL FACTURES EXCEL SOMMÉES - Factures Achat TTC: {}, Factures Vente TTC: {}",
+                    NumberUtils.roundTo2Decimals(totalFATTCGlobal),
+                    NumberUtils.roundTo2Decimals(totalFVTTCGlobal));
+            }
             
         } catch (Exception e) {
             log.error("Error importing Excel file", e);
@@ -953,6 +1106,8 @@ public class ExcelImportService {
                              Map<String, Double> fvTotalTTCFromExcel,
                              Map<String, Double> bcTotalAchatTTCFromExcel,
                              Map<String, Double> bcTotalVenteTTCFromExcel,
+                             Map<String, Double> bcTotalAchatHTFromExcel,
+                             Map<String, Double> bcTotalVenteHTFromExcel,
                              ImportResult result,
                              AvoirDetectionResult detection) {
         
@@ -1191,10 +1346,12 @@ public class ExcelImportService {
                            Map<String, String> fvToBcNumMap, // Map temporaire: numeroFV -> numeroBC
                            Map<String, Map<String, ProductAggregate>> bcProductsMap, // NOUVEAU: Agrégation produits par BC
                            Map<String, List<FactureVente>> fvByBcAndClientMap, // NOUVEAU: Plusieurs FV par client/BC
-                           Map<String, Double> faTotalTTCFromExcel, // Map temporaire: BC -> totalTTC depuis "facture_achat_ttc"
-                           Map<String, Double> fvTotalTTCFromExcel, // Map temporaire: Numéro FV -> totalTTC depuis "facture_vente_ttc"
-                           Map<String, Double> bcTotalAchatTTCFromExcel, // Map temporaire: BC -> totalAchatTTC depuis "facture_achat_ttc"
-                           Map<String, Double> bcTotalVenteTTCFromExcel, // Map temporaire: BC -> totalVenteTTC (somme factures vente)
+                           Map<String, Double> faTotalTTCFromExcel, // Map temporaire: BC -> totalTTC depuis "facture_achat_ttc" (SOMMÉ)
+                           Map<String, Double> fvTotalTTCFromExcel, // Map temporaire: Numéro FV -> totalTTC depuis "facture_vente_ttc" (SOMMÉ)
+                           Map<String, Double> bcTotalAchatTTCFromExcel, // Map temporaire: BC -> totalAchatTTC depuis "facture_achat_ttc" (SOMMÉ)
+                           Map<String, Double> bcTotalVenteTTCFromExcel, // Map temporaire: BC -> totalVenteTTC (somme factures vente) (SOMMÉ)
+                           Map<String, Double> bcTotalAchatHTFromExcel, // Map temporaire: BC -> totalAchatHT depuis "prix_achat_total_ht" (SOMMÉ)
+                           Map<String, Double> bcTotalVenteHTFromExcel, // Map temporaire: BC -> totalVenteHT depuis calcul qte*prix (SOMMÉ)
                            ImportResult result) {
         
         // ========== DÉTECTION DES AVOIRS ==========
@@ -1204,7 +1361,8 @@ public class ExcelImportService {
         if (avoirDetection.estAvoir) {
             traiterAvoir(row, columnMap, bcMap, faMap, fvMap, faLignesMap, fvLignesMap, 
                         faToBcNumMap, fvToBcNumMap, faTotalTTCFromExcel, fvTotalTTCFromExcel,
-                        bcTotalAchatTTCFromExcel, bcTotalVenteTTCFromExcel, result, avoirDetection);
+                        bcTotalAchatTTCFromExcel, bcTotalVenteTTCFromExcel, bcTotalAchatHTFromExcel, 
+                        bcTotalVenteHTFromExcel, result, avoirDetection);
             return;
         }
         
@@ -1440,36 +1598,29 @@ public class ExcelImportService {
         // Stocker l'association FA -> BC (utiliser BC comme clé)
         faToBcNumMap.put(finalNumeroBC, finalNumeroBC);
         
-        // PRIORITÉ : Lire directement le total depuis la colonne "facture_achat_ttc" du fichier Excel
-        // Si présent, l'utiliser directement au lieu de calculer depuis les lignes
-        // Note: Si plusieurs lignes ont le même BC, toutes devraient avoir le même total
+        // PRIORITÉ : Lire directement le total TTC par ligne depuis la colonne "facture_achat_ttc" du fichier Excel
+        // IMPORTANT: Cette colonne contient des totaux TTC par ligne, pas un total global. Il faut SOMMER toutes les lignes.
+        // Si présent, accumuler (sommer) toutes les valeurs pour le même BC
         Double factureAchatTTCFromExcel = getDoubleValue(row, columnMap, "facture_achat_ttc");
         if (factureAchatTTCFromExcel != null && factureAchatTTCFromExcel != 0) {
             // Stocker le total brut depuis Excel (utiliser la valeur absolue car les avoirs sont gérés séparément)
             Double absValue = Math.abs(factureAchatTTCFromExcel);
-            Double existingTotal = faTotalTTCFromExcel.get(finalNumeroBC);
-            if (existingTotal == null) {
-                faTotalTTCFromExcel.put(finalNumeroBC, absValue);
-                // Stocker aussi au niveau de la BC pour aligner les totaux
-                bcTotalAchatTTCFromExcel.put(finalNumeroBC, absValue);
-            } else if (Math.abs(existingTotal - absValue) > 0.01) {
-                // Incohérence détectée : valeurs différentes pour le même BC
-                // Prendre la plus grande valeur (probablement le total global)
-                if (absValue > existingTotal) {
-                    faTotalTTCFromExcel.put(finalNumeroBC, absValue);
-                    bcTotalAchatTTCFromExcel.put(finalNumeroBC, absValue);
-                    log.warn("Incohérence dans facture_achat_ttc pour BC {}: {} vs {}, utilisation de {}", 
-                        finalNumeroBC, existingTotal, absValue, absValue);
-                } else {
-                    log.warn("Incohérence dans facture_achat_ttc pour BC {}: {} vs {}, conservation de {}", 
-                        finalNumeroBC, absValue, existingTotal, existingTotal);
-                }
-            } else {
-                // Valeurs identiques, s'assurer que bcTotalAchatTTCFromExcel est défini
-                if (!bcTotalAchatTTCFromExcel.containsKey(finalNumeroBC)) {
-                    bcTotalAchatTTCFromExcel.put(finalNumeroBC, absValue);
-                }
-            }
+            // SOMMER toutes les valeurs pour la même BC (chaque ligne a sa propre valeur TTC)
+            faTotalTTCFromExcel.merge(finalNumeroBC, absValue, Double::sum);
+            // SOMMER aussi au niveau de la BC pour aligner les totaux
+            bcTotalAchatTTCFromExcel.merge(finalNumeroBC, absValue, Double::sum);
+            log.trace("BC {} : Ajout ligne facture_achat_ttc = {}, total accumulé = {}", 
+                finalNumeroBC, absValue, bcTotalAchatTTCFromExcel.get(finalNumeroBC));
+        }
+        
+        // OPTIONNEL : Lire aussi directement le total HT depuis "prix_achat_total_ht" si disponible (évite la conversion)
+        Double prixAchatTotalHTFromExcel = getDoubleValue(row, columnMap, "prix_achat_total_ht");
+        if (prixAchatTotalHTFromExcel != null && prixAchatTotalHTFromExcel != 0) {
+            Double absValueHT = Math.abs(prixAchatTotalHTFromExcel);
+            // SOMMER les totaux HT directs pour la même BC
+            bcTotalAchatHTFromExcel.merge(finalNumeroBC, absValueHT, Double::sum);
+            log.trace("BC {} : Ajout ligne prix_achat_total_ht = {}, total HT accumulé = {}", 
+                finalNumeroBC, absValueHT, bcTotalAchatHTFromExcel.get(finalNumeroBC));
         }
         
         // Ajouter la ligne à la facture achat
@@ -1543,43 +1694,32 @@ public class ExcelImportService {
             // Stocker l'association FV -> BC
             fvToBcNumMap.put(finalNumeroFV, finalNumeroBC);
             
-            // PRIORITÉ : Lire directement le total depuis la colonne "facture_vente_ttc" du fichier Excel
-            // Si présent, l'utiliser directement au lieu de calculer depuis les lignes
-            // Note: Si plusieurs lignes ont le même numéro de facture vente, toutes devraient avoir le même total
+            // PRIORITÉ : Lire directement le total TTC par ligne depuis la colonne "facture_vente_ttc" du fichier Excel
+            // IMPORTANT: Cette colonne contient des totaux TTC par ligne, pas un total global. Il faut SOMMER toutes les lignes.
+            // Si présent, accumuler (sommer) toutes les valeurs pour la même facture vente
             Double factureVenteTTCFromExcel = getDoubleValue(row, columnMap, "facture_vente_ttc");
             if (factureVenteTTCFromExcel != null && factureVenteTTCFromExcel != 0) {
                 // Stocker le total brut depuis Excel (utiliser la valeur absolue car les avoirs sont gérés séparément)
                 Double absValue = Math.abs(factureVenteTTCFromExcel);
-                Double existingTotal = fvTotalTTCFromExcel.get(finalNumeroFV);
-                if (existingTotal == null) {
-                    fvTotalTTCFromExcel.put(finalNumeroFV, absValue);
-                    // Accumuler aussi au niveau de la BC (une BC peut avoir plusieurs factures vente)
-                    bcTotalVenteTTCFromExcel.merge(finalNumeroBC, absValue, Double::sum);
-                } else if (Math.abs(existingTotal - absValue) > 0.01) {
-                    // Incohérence détectée : valeurs différentes pour la même facture vente
-                    // Prendre la plus grande valeur (probablement le total global)
-                    if (absValue > existingTotal) {
-                        // Remplacer l'ancien total pour cette facture vente
-                        Double previousTotal = fvTotalTTCFromExcel.put(finalNumeroFV, absValue);
-                        // Ajuster le total BC : retirer l'ancien et ajouter le nouveau
-                        if (previousTotal != null) {
-                            bcTotalVenteTTCFromExcel.merge(finalNumeroBC, -previousTotal, Double::sum);
-                        }
-                        bcTotalVenteTTCFromExcel.merge(finalNumeroBC, absValue, Double::sum);
-                        log.warn("Incohérence dans facture_vente_ttc pour FV {}: {} vs {}, utilisation de {}", 
-                            finalNumeroFV, existingTotal, absValue, absValue);
-                    } else {
-                        log.warn("Incohérence dans facture_vente_ttc pour FV {}: {} vs {}, conservation de {}", 
-                            finalNumeroFV, absValue, existingTotal, existingTotal);
-                    }
-                } else {
-                    // Valeurs identiques, s'assurer que bcTotalVenteTTCFromExcel inclut cette valeur
-                    // (ne pas re-ajouter si déjà ajoutée lors d'une ligne précédente)
-                    if (!fvTotalTTCFromExcel.containsKey(finalNumeroFV)) {
-                        fvTotalTTCFromExcel.put(finalNumeroFV, absValue);
-                        bcTotalVenteTTCFromExcel.merge(finalNumeroBC, absValue, Double::sum);
-                    }
-                }
+                // SOMMER toutes les valeurs pour la même facture vente (chaque ligne a sa propre valeur TTC)
+                fvTotalTTCFromExcel.merge(finalNumeroFV, absValue, Double::sum);
+                // SOMMER aussi au niveau de la BC (une BC peut avoir plusieurs factures vente)
+                bcTotalVenteTTCFromExcel.merge(finalNumeroBC, absValue, Double::sum);
+                log.trace("BC {} FV {} : Ajout ligne facture_vente_ttc = {}, total FV accumulé = {}, total BC accumulé = {}", 
+                    finalNumeroBC, finalNumeroFV, absValue, fvTotalTTCFromExcel.get(finalNumeroFV), 
+                    bcTotalVenteTTCFromExcel.get(finalNumeroBC));
+            }
+            
+            // OPTIONNEL : Calculer aussi le total HT directement depuis quantite_livree * prix_vente_unitaire_ht (évite la conversion)
+            Double qteLivree = getDoubleValue(row, columnMap, "quantite_livree");
+            Double prixVenteUnitaireHT = getDoubleValue(row, columnMap, "prix_vente_unitaire_ht");
+            if (qteLivree != null && qteLivree > 0 && prixVenteUnitaireHT != null && prixVenteUnitaireHT > 0) {
+                Double totalHTLigne = Math.abs(qteLivree * prixVenteUnitaireHT);
+                // SOMMER les totaux HT directs pour la même BC
+                bcTotalVenteHTFromExcel.merge(finalNumeroBC, totalHTLigne, Double::sum);
+                log.trace("BC {} : Ajout ligne vente HT calculé = {} (qte={} * prix={}), total HT accumulé = {}", 
+                    finalNumeroBC, totalHTLigne, qteLivree, prixVenteUnitaireHT, 
+                    bcTotalVenteHTFromExcel.get(finalNumeroBC));
             }
             
             // Ajouter la ligne à la facture vente
