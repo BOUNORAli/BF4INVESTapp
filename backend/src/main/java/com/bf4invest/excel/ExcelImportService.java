@@ -47,6 +47,7 @@ public class ExcelImportService {
     private final com.bf4invest.service.PaiementService paiementService;
     private final com.bf4invest.service.ChargeService chargeService;
     private final com.bf4invest.service.FactureAchatService factureAchatService;
+    private final com.bf4invest.service.FactureVenteService factureVenteService;
     private final com.bf4invest.service.CompanyInfoService companyInfoService;
     private final com.bf4invest.service.BandeCommandeService bandeCommandeService;
     
@@ -438,9 +439,6 @@ public class ExcelImportService {
             // Sauvegarder les factures vente
             for (FactureVente fv : fvMap.values()) {
                 try {
-                    fv.setCreatedAt(LocalDateTime.now());
-                    fv.setUpdatedAt(LocalDateTime.now());
-                    
                     // Lier à la BC en utilisant la map temporaire
                     String bcNum = fvToBcNumMap.get(fv.getNumeroFactureVente());
                     if (bcNum != null && bcNumToIdMap.containsKey(bcNum)) {
@@ -464,7 +462,9 @@ public class ExcelImportService {
                         continue;
                     }
                     
-                    factureVenteRepository.save(fv);
+                    // Utiliser le service pour créer la facture (génère automatiquement le numéro et enregistre dans l'historique de trésorerie)
+                    // Le service va définir createdAt et updatedAt automatiquement
+                    factureVenteService.create(fv);
                 } catch (Exception e) {
                     log.error("Error saving FV {}", fv.getNumeroFactureVente(), e);
                     result.getErrors().add("Erreur sauvegarde FV " + fv.getNumeroFactureVente() + ": " + e.getMessage());

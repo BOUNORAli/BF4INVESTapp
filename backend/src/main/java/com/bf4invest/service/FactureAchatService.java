@@ -179,7 +179,8 @@ public class FactureAchatService {
                             supplier.getNom(),
                             saved.getId(),
                             saved.getNumeroFactureAchat(),
-                            libelle
+                            libelle,
+                            saved.getDateFacture() // Utiliser la date de la facture (DATE FAC VTE) au lieu de la date actuelle
                     );
                 });
             } catch (Exception e) {

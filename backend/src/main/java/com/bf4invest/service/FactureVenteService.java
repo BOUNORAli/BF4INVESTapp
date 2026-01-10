@@ -198,7 +198,8 @@ public class FactureVenteService {
                             client.getNom(),
                             saved.getId(),
                             saved.getNumeroFactureVente(),
-                            libelle
+                            libelle,
+                            saved.getDateFacture() // Utiliser la date de la facture au lieu de la date actuelle
                     );
                 });
             } catch (Exception e) {
