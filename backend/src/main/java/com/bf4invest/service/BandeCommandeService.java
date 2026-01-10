@@ -106,7 +106,15 @@ public class BandeCommandeService {
                         existing.setLignes(bc.getLignes());
                     }
                     
-                    // Recalculer les totaux
+                    // IMPORTANT: Préserver les totaux Excel si présents (pour aligner avec les factures)
+                    if (bc.getTotalAchatTTCFromExcel() != null) {
+                        existing.setTotalAchatTTCFromExcel(bc.getTotalAchatTTCFromExcel());
+                    }
+                    if (bc.getTotalVenteTTCFromExcel() != null) {
+                        existing.setTotalVenteTTCFromExcel(bc.getTotalVenteTTCFromExcel());
+                    }
+                    
+                    // Recalculer les totaux (utilisera les totaux Excel si présents)
                     calculateTotals(existing);
                     
                     existing.setUpdatedAt(LocalDateTime.now());

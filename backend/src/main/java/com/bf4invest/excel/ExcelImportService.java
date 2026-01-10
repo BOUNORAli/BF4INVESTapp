@@ -407,19 +407,14 @@ public class ExcelImportService {
                         existingBC.setEtat("envoyee");
                         existingBC.setUpdatedAt(LocalDateTime.now());
                         
-                        // Si on a des totaux Excel, les utiliser (écraser les totaux calculés par le service)
+                        // Si on a des totaux Excel, les stocker dans la BC (seront préservés par le service)
                         if (totalAchatTTCExcel != null || totalVenteTTCExcel != null) {
-                            calculateBCTotalsFromExcel(existingBC, totalAchatTTCExcel, totalVenteTTCExcel);
+                            existingBC.setTotalAchatTTCFromExcel(totalAchatTTCExcel);
+                            existingBC.setTotalVenteTTCFromExcel(totalVenteTTCExcel);
                         }
                         
-                        // Utiliser le service pour mettre à jour (appelle calculateTotals automatiquement)
-                        // Mais les totaux Excel seront préservés car on les a déjà définis
+                        // Utiliser le service pour mettre à jour (appelle calculateTotals qui utilisera les totaux Excel si présents)
                         saved = bandeCommandeService.update(existingBC.getId(), existingBC);
-                        // Réappliquer les totaux Excel après la mise à jour (le service peut les avoir recalculés)
-                        if (totalAchatTTCExcel != null || totalVenteTTCExcel != null) {
-                            calculateBCTotalsFromExcel(saved, totalAchatTTCExcel, totalVenteTTCExcel);
-                            saved = bcRepository.save(saved); // Sauvegarder avec les totaux Excel
-                        }
                         bcId = saved.getId();
                         result.getWarnings().add("BC " + bc.getNumeroBC() + " mise à jour");
                     } else {
