@@ -465,8 +465,7 @@ public class ExcelImportService {
                         existingBC.setUpdatedAt(LocalDateTime.now());
                         
                         // Si on a des totaux Excel, les stocker dans la BC (seront préservés par le service)
-                        Double totalAchatHTExcel = bcTotalAchatHTFromExcel.get(bcNum);
-                        Double totalVenteHTExcel = bcTotalVenteHTFromExcel.get(bcNum);
+                        // Réutiliser les variables déjà définies plus haut
                         
                         // PRIORITÉ 1 : Utiliser les totaux HT Excel directs si disponibles (arrondis)
                         if (totalAchatHTExcel != null && totalAchatHTExcel > 0 || totalVenteHTExcel != null && totalVenteHTExcel > 0) {
@@ -507,8 +506,7 @@ public class ExcelImportService {
                         result.getWarnings().add("BC " + bc.getNumeroBC() + " mise à jour");
                     } else {
                         // Si on a des totaux Excel, les stocker dans la BC
-                        Double totalAchatHTExcel = bcTotalAchatHTFromExcel.get(bcNum);
-                        Double totalVenteHTExcel = bcTotalVenteHTFromExcel.get(bcNum);
+                        // Réutiliser les variables déjà définies plus haut
                         
                         // PRIORITÉ 1 : Utiliser les totaux HT Excel directs si disponibles (arrondis)
                         if (totalAchatHTExcel != null && totalAchatHTExcel > 0 || totalVenteHTExcel != null && totalVenteHTExcel > 0) {
@@ -1711,14 +1709,13 @@ public class ExcelImportService {
             }
             
             // OPTIONNEL : Calculer aussi le total HT directement depuis quantite_livree * prix_vente_unitaire_ht (évite la conversion)
-            Double qteLivree = getDoubleValue(row, columnMap, "quantite_livree");
-            Double prixVenteUnitaireHT = getDoubleValue(row, columnMap, "prix_vente_unitaire_ht");
-            if (qteLivree != null && qteLivree > 0 && prixVenteUnitaireHT != null && prixVenteUnitaireHT > 0) {
-                Double totalHTLigne = Math.abs(qteLivree * prixVenteUnitaireHT);
+            // Réutiliser qteLivree et prixVenteHT déjà définis plus haut dans processRow()
+            if (qteLivree != null && qteLivree > 0 && prixVenteHT != null && prixVenteHT > 0) {
+                Double totalHTLigne = Math.abs(qteLivree * prixVenteHT);
                 // SOMMER les totaux HT directs pour la même BC
                 bcTotalVenteHTFromExcel.merge(finalNumeroBC, totalHTLigne, Double::sum);
                 log.trace("BC {} : Ajout ligne vente HT calculé = {} (qte={} * prix={}), total HT accumulé = {}", 
-                    finalNumeroBC, totalHTLigne, qteLivree, prixVenteUnitaireHT, 
+                    finalNumeroBC, totalHTLigne, qteLivree, prixVenteHT, 
                     bcTotalVenteHTFromExcel.get(finalNumeroBC));
             }
             
