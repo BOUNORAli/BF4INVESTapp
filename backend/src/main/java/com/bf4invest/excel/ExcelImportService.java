@@ -110,10 +110,14 @@ public class ExcelImportService {
             // Map pour grouper les lignes par facture
             Map<String, List<LineItem>> faLignesMap = new HashMap<>();
             Map<String, List<LineItem>> fvLignesMap = new HashMap<>();
-            
+
             // Maps temporaires pour associer factures aux BCs
             Map<String, String> faToBcNumMap = new HashMap<>(); // numeroFA -> numeroBC
             Map<String, String> fvToBcNumMap = new HashMap<>(); // numeroFV -> numeroBC
+            
+            // Maps pour stocker les totaux bruts depuis Excel (par BC pour FA, par numéro pour FV)
+            Map<String, Double> faTotalTTCFromExcel = new HashMap<>(); // BC -> totalTTC depuis "facture_achat_ttc"
+            Map<String, Double> fvTotalTTCFromExcel = new HashMap<>(); // Numéro FV -> totalTTC depuis "facture_vente_ttc"
             
             // NOUVELLE STRUCTURE : Agrégation des produits par BC pour éviter les doublons
             // Map<BC_Numero, Map<ProduitKey, ProductAggregate>>
@@ -138,8 +142,9 @@ public class ExcelImportService {
                 }
                 
                 try {
-                    processRow(row, columnMap, bcMap, faMap, fvMap, faLignesMap, fvLignesMap, 
-                              faToBcNumMap, fvToBcNumMap, bcProductsMap, fvByBcAndClientMap, result);
+                    processRow(row, columnMap, bcMap, faMap, fvMap, faLignesMap, fvLignesMap,
+                              faToBcNumMap, fvToBcNumMap, bcProductsMap, fvByBcAndClientMap, 
+                              faTotalTTCFromExcel, fvTotalTTCFromExcel, result);
                     processedRows++;
                     
                     // Log progression tous les 100 lignes
@@ -327,13 +332,33 @@ public class ExcelImportService {
                 // Utiliser bcReference comme clé pour récupérer les lignes
                 List<LineItem> lignes = faLignesMap.getOrDefault(fa.getBcReference(), new ArrayList<>());
                 fa.setLignes(lignes);
-                calculateFactureAchatTotals(fa);
+                // Utiliser le total brut depuis Excel si disponible
+                String bcRef = fa.getBcReference();
+                if (bcRef != null && faTotalTTCFromExcel.containsKey(bcRef)) {
+                    Double totalTTCFromExcel = faTotalTTCFromExcel.get(bcRef);
+                    fa.setTotalTTC(NumberUtils.roundTo2Decimals(totalTTCFromExcel));
+                    // Calculer HT depuis TTC en utilisant le taux TVA moyen des lignes ou 20% par défaut
+                    calculateFactureAchatTotalsFromExcelTotal(fa);
+                } else {
+                    // Calculer depuis les lignes si pas de total Excel
+                    calculateFactureAchatTotals(fa);
+                }
             }
-            
+
             for (FactureVente fv : fvMap.values()) {
                 List<LineItem> lignes = fvLignesMap.getOrDefault(fv.getNumeroFactureVente(), new ArrayList<>());
                 fv.setLignes(lignes);
-                calculateFactureVenteTotals(fv);
+                // Utiliser le total brut depuis Excel si disponible
+                String numeroFV = fv.getNumeroFactureVente();
+                if (numeroFV != null && fvTotalTTCFromExcel.containsKey(numeroFV)) {
+                    Double totalTTCFromExcel = fvTotalTTCFromExcel.get(numeroFV);
+                    fv.setTotalTTC(NumberUtils.roundTo2Decimals(totalTTCFromExcel));
+                    // Calculer HT depuis TTC en utilisant le taux TVA moyen des lignes ou 20% par défaut
+                    calculateFactureVenteTotalsFromExcelTotal(fv);
+                } else {
+                    // Calculer depuis les lignes si pas de total Excel
+                    calculateFactureVenteTotals(fv);
+                }
             }
             
             // Sauvegarder les BC d'abord pour obtenir leurs IDs
@@ -890,6 +915,8 @@ public class ExcelImportService {
                              Map<String, List<LineItem>> fvLignesMap,
                              Map<String, String> faToBcNumMap,
                              Map<String, String> fvToBcNumMap,
+                             Map<String, Double> faTotalTTCFromExcel,
+                             Map<String, Double> fvTotalTTCFromExcel,
                              ImportResult result,
                              AvoirDetectionResult detection) {
         
@@ -1128,6 +1155,8 @@ public class ExcelImportService {
                            Map<String, String> fvToBcNumMap, // Map temporaire: numeroFV -> numeroBC
                            Map<String, Map<String, ProductAggregate>> bcProductsMap, // NOUVEAU: Agrégation produits par BC
                            Map<String, List<FactureVente>> fvByBcAndClientMap, // NOUVEAU: Plusieurs FV par client/BC
+                           Map<String, Double> faTotalTTCFromExcel, // Map temporaire: BC -> totalTTC depuis "facture_achat_ttc"
+                           Map<String, Double> fvTotalTTCFromExcel, // Map temporaire: Numéro FV -> totalTTC depuis "facture_vente_ttc"
                            ImportResult result) {
         
         // ========== DÉTECTION DES AVOIRS ==========
@@ -1136,7 +1165,8 @@ public class ExcelImportService {
         // Si c'est un avoir, le traiter séparément
         if (avoirDetection.estAvoir) {
             traiterAvoir(row, columnMap, bcMap, faMap, fvMap, faLignesMap, fvLignesMap, 
-                        faToBcNumMap, fvToBcNumMap, result, avoirDetection);
+                        faToBcNumMap, fvToBcNumMap, faTotalTTCFromExcel, fvTotalTTCFromExcel,
+                        result, avoirDetection);
             return;
         }
         
@@ -1372,6 +1402,30 @@ public class ExcelImportService {
         // Stocker l'association FA -> BC (utiliser BC comme clé)
         faToBcNumMap.put(finalNumeroBC, finalNumeroBC);
         
+        // PRIORITÉ : Lire directement le total depuis la colonne "facture_achat_ttc" du fichier Excel
+        // Si présent, l'utiliser directement au lieu de calculer depuis les lignes
+        // Note: Si plusieurs lignes ont le même BC, toutes devraient avoir le même total
+        Double factureAchatTTCFromExcel = getDoubleValue(row, columnMap, "facture_achat_ttc");
+        if (factureAchatTTCFromExcel != null && factureAchatTTCFromExcel != 0) {
+            // Stocker le total brut depuis Excel (utiliser la valeur absolue car les avoirs sont gérés séparément)
+            Double absValue = Math.abs(factureAchatTTCFromExcel);
+            Double existingTotal = faTotalTTCFromExcel.get(finalNumeroBC);
+            if (existingTotal == null) {
+                faTotalTTCFromExcel.put(finalNumeroBC, absValue);
+            } else if (Math.abs(existingTotal - absValue) > 0.01) {
+                // Incohérence détectée : valeurs différentes pour le même BC
+                // Prendre la plus grande valeur (probablement le total global)
+                if (absValue > existingTotal) {
+                    faTotalTTCFromExcel.put(finalNumeroBC, absValue);
+                    log.warn("Incohérence dans facture_achat_ttc pour BC {}: {} vs {}, utilisation de {}", 
+                        finalNumeroBC, existingTotal, absValue, absValue);
+                } else {
+                    log.warn("Incohérence dans facture_achat_ttc pour BC {}: {} vs {}, conservation de {}", 
+                        finalNumeroBC, absValue, existingTotal, existingTotal);
+                }
+            }
+        }
+        
         // Ajouter la ligne à la facture achat
         LineItem faLigne = createLineItemForFacture(row, columnMap, result);
         faLignesMap.computeIfAbsent(finalNumeroBC, k -> new ArrayList<>()).add(faLigne);
@@ -1442,6 +1496,30 @@ public class ExcelImportService {
             
             // Stocker l'association FV -> BC
             fvToBcNumMap.put(finalNumeroFV, finalNumeroBC);
+            
+            // PRIORITÉ : Lire directement le total depuis la colonne "facture_vente_ttc" du fichier Excel
+            // Si présent, l'utiliser directement au lieu de calculer depuis les lignes
+            // Note: Si plusieurs lignes ont le même numéro de facture vente, toutes devraient avoir le même total
+            Double factureVenteTTCFromExcel = getDoubleValue(row, columnMap, "facture_vente_ttc");
+            if (factureVenteTTCFromExcel != null && factureVenteTTCFromExcel != 0) {
+                // Stocker le total brut depuis Excel (utiliser la valeur absolue car les avoirs sont gérés séparément)
+                Double absValue = Math.abs(factureVenteTTCFromExcel);
+                Double existingTotal = fvTotalTTCFromExcel.get(finalNumeroFV);
+                if (existingTotal == null) {
+                    fvTotalTTCFromExcel.put(finalNumeroFV, absValue);
+                } else if (Math.abs(existingTotal - absValue) > 0.01) {
+                    // Incohérence détectée : valeurs différentes pour la même facture vente
+                    // Prendre la plus grande valeur (probablement le total global)
+                    if (absValue > existingTotal) {
+                        fvTotalTTCFromExcel.put(finalNumeroFV, absValue);
+                        log.warn("Incohérence dans facture_vente_ttc pour FV {}: {} vs {}, utilisation de {}", 
+                            finalNumeroFV, existingTotal, absValue, absValue);
+                    } else {
+                        log.warn("Incohérence dans facture_vente_ttc pour FV {}: {} vs {}, conservation de {}", 
+                            finalNumeroFV, absValue, existingTotal, existingTotal);
+                    }
+                }
+            }
             
             // Ajouter la ligne à la facture vente
             LineItem fvLigne = createLineItemForFactureVente(row, columnMap, result);
@@ -1802,7 +1880,70 @@ public class ExcelImportService {
         }
     }
     
+    /**
+     * Calcule les totaux d'une facture achat depuis le total TTC Excel
+     * Utilise le taux TVA moyen des lignes pour convertir TTC en HT
+     */
+    private void calculateFactureAchatTotalsFromExcelTotal(FactureAchat fa) {
+        if (fa.getTotalTTC() == null || fa.getTotalTTC() == 0) {
+            return;
+        }
+        
+        // Calculer le taux TVA moyen pondéré depuis les lignes
+        double totalHTFromLines = 0.0;
+        double totalTVAFromLines = 0.0;
+        double totalWeight = 0.0;
+        
+        if (fa.getLignes() != null && !fa.getLignes().isEmpty()) {
+            for (LineItem ligne : fa.getLignes()) {
+                if (ligne.getTotalHT() != null && ligne.getTva() != null) {
+                    double weight = Math.abs(ligne.getTotalHT());
+                    totalHTFromLines += ligne.getTotalHT();
+                    totalTVAFromLines += NumberUtils.roundTo2Decimals(ligne.getTotalHT() * (ligne.getTva() / 100.0));
+                    totalWeight += weight;
+                }
+            }
+        }
+        
+        // Si on a des lignes avec TVA, utiliser le taux moyen pondéré
+        // Sinon, utiliser 20% par défaut
+        double tauxTVAMoyen = 20.0; // Défaut
+        if (totalHTFromLines != 0 && totalTVAFromLines != 0) {
+            tauxTVAMoyen = (totalTVAFromLines / Math.abs(totalHTFromLines)) * 100.0;
+        }
+        
+        // Convertir TTC en HT : HT = TTC / (1 + TVA/100)
+        double totalTTC = Math.abs(fa.getTotalTTC());
+        double totalHT = NumberUtils.roundTo2Decimals(totalTTC / (1 + (tauxTVAMoyen / 100.0)));
+        double totalTVA = NumberUtils.roundTo2Decimals(totalTTC - totalHT);
+        
+        // Appliquer le signe si c'est un avoir
+        if (Boolean.TRUE.equals(fa.getEstAvoir())) {
+            totalHT = -totalHT;
+            totalTVA = -totalTVA;
+            totalTTC = -totalTTC;
+        }
+        
+        fa.setTotalHT(NumberUtils.roundTo2Decimals(totalHT));
+        fa.setTotalTVA(NumberUtils.roundTo2Decimals(totalTVA));
+        // totalTTC est déjà défini depuis Excel
+        
+        fa.setMontantRestant(NumberUtils.roundTo2Decimals(totalTTC));
+    }
+    
+    /**
+     * Calcule les totaux d'une facture achat depuis les lignes
+     * Utilisé si pas de total brut depuis Excel
+     */
     private void calculateFactureAchatTotals(FactureAchat fa) {
+        // Si totalTTC est déjà défini depuis Excel, ne pas le recalculer
+        if (fa.getTotalTTC() != null && fa.getTotalTTC() != 0 && 
+            (fa.getLignes() == null || fa.getLignes().isEmpty())) {
+            // Total déjà défini depuis Excel, utiliser la méthode dédiée
+            calculateFactureAchatTotalsFromExcelTotal(fa);
+            return;
+        }
+        
         if (fa.getLignes() == null || fa.getLignes().isEmpty()) {
             return;
         }
@@ -1842,7 +1983,76 @@ public class ExcelImportService {
         }
     }
     
+    /**
+     * Calcule les totaux d'une facture vente depuis le total TTC Excel
+     * Utilise le taux TVA moyen des lignes pour convertir TTC en HT
+     */
+    private void calculateFactureVenteTotalsFromExcelTotal(FactureVente fv) {
+        if (fv.getTotalTTC() == null || fv.getTotalTTC() == 0) {
+            return;
+        }
+        
+        // Calculer le taux TVA moyen pondéré depuis les lignes
+        double totalHTFromLines = 0.0;
+        double totalTVAFromLines = 0.0;
+        double totalWeight = 0.0;
+        
+        if (fv.getLignes() != null && !fv.getLignes().isEmpty()) {
+            for (LineItem ligne : fv.getLignes()) {
+                if (ligne.getTotalHT() != null && ligne.getTva() != null && ligne.getPrixVenteUnitaireHT() != null) {
+                    // Utiliser les totaux de la ligne si calculés, sinon calculer
+                    double ht = ligne.getTotalHT();
+                    if (ht == 0 && ligne.getQuantiteVendue() != null) {
+                        ht = ligne.getPrixVenteUnitaireHT() * ligne.getQuantiteVendue();
+                    }
+                    double weight = Math.abs(ht);
+                    totalHTFromLines += ht;
+                    totalTVAFromLines += NumberUtils.roundTo2Decimals(ht * (ligne.getTva() / 100.0));
+                    totalWeight += weight;
+                }
+            }
+        }
+        
+        // Si on a des lignes avec TVA, utiliser le taux moyen pondéré
+        // Sinon, utiliser 20% par défaut
+        double tauxTVAMoyen = 20.0; // Défaut
+        if (totalHTFromLines != 0 && totalTVAFromLines != 0) {
+            tauxTVAMoyen = (totalTVAFromLines / Math.abs(totalHTFromLines)) * 100.0;
+        }
+        
+        // Convertir TTC en HT : HT = TTC / (1 + TVA/100)
+        double totalTTC = Math.abs(fv.getTotalTTC());
+        double totalHT = NumberUtils.roundTo2Decimals(totalTTC / (1 + (tauxTVAMoyen / 100.0)));
+        double totalTVA = NumberUtils.roundTo2Decimals(totalTTC - totalHT);
+        
+        // Appliquer le signe si c'est un avoir
+        if (Boolean.TRUE.equals(fv.getEstAvoir())) {
+            totalHT = -totalHT;
+            totalTVA = -totalTVA;
+            totalTTC = -totalTTC;
+        }
+        
+        fv.setTotalHT(NumberUtils.roundTo2Decimals(totalHT));
+        fv.setTotalTVA(NumberUtils.roundTo2Decimals(totalTVA));
+        // totalTTC est déjà défini depuis Excel
+        
+        fv.setMontantRestant(NumberUtils.roundTo2Decimals(totalTTC));
+    }
+    
+    /**
+     * Calcule les totaux d'une facture vente depuis les lignes
+     * Utilisé si pas de total brut depuis Excel
+     * CORRIGÉ : Additionne les totaux au lieu de les remplacer
+     */
     private void calculateFactureVenteTotals(FactureVente fv) {
+        // Si totalTTC est déjà défini depuis Excel, ne pas le recalculer
+        if (fv.getTotalTTC() != null && fv.getTotalTTC() != 0 && 
+            (fv.getLignes() == null || fv.getLignes().isEmpty())) {
+            // Total déjà défini depuis Excel, utiliser la méthode dédiée
+            calculateFactureVenteTotalsFromExcelTotal(fv);
+            return;
+        }
+        
         if (fv.getLignes() == null || fv.getLignes().isEmpty()) {
             return;
         }
@@ -1854,24 +2064,23 @@ public class ExcelImportService {
         for (LineItem ligne : fv.getLignes()) {
             // Pour facture vente, utiliser quantite vendue et prix vente
             // Pour avoir, prix et quantités peuvent être négatifs
-            if (ligne.getPrixVenteUnitaireHT() != null && ligne.getQuantiteVendue() != null) {
+            
+            // PRIORITÉ : Utiliser les totaux déjà calculés de la ligne si disponibles
+            if (ligne.getTotalHT() != null && ligne.getTotalTTC() != null) {
+                // Utiliser directement les totaux de la ligne (déjà calculés)
+                totalHT += ligne.getTotalHT(); // CORRIGÉ : additionner au lieu de remplacer
+                totalTTC += ligne.getTotalTTC(); // CORRIGÉ : additionner au lieu de remplacer
+                if (ligne.getTotalHT() != null) {
+                    totalTVA += NumberUtils.roundTo2Decimals(ligne.getTotalTTC() - ligne.getTotalHT());
+                }
+            } else if (ligne.getPrixVenteUnitaireHT() != null && ligne.getQuantiteVendue() != null) {
+                // Calculer depuis prix et quantité
                 double ht = NumberUtils.roundTo2Decimals(ligne.getPrixVenteUnitaireHT() * ligne.getQuantiteVendue());
                 totalHT += ht; // Peut être négatif pour avoir
                 if (ligne.getTva() != null) {
                     double ttc = NumberUtils.roundTo2Decimals(ht * (1 + (ligne.getTva() / 100)));
                     totalTVA += NumberUtils.roundTo2Decimals(ttc - ht);
                     totalTTC += ttc; // Peut être négatif pour avoir
-                }
-            }
-            
-            // Si les totaux sont déjà calculés (ligne d'avoir importée), les utiliser
-            if (ligne.getTotalHT() != null) {
-                totalHT = ligne.getTotalHT();
-            }
-            if (ligne.getTotalTTC() != null) {
-                totalTTC = ligne.getTotalTTC();
-                if (ligne.getTotalHT() != null) {
-                    totalTVA = NumberUtils.roundTo2Decimals(totalTTC - totalHT);
                 }
             }
         }
@@ -2073,31 +2282,39 @@ public class ExcelImportService {
                         !strValue.matches(".*\\d+.*")) {
                         return null;
                     }
-                    // Gérer format français avec virgule et espaces (ex: "85 750,00")
-                    // Retirer tous les espaces (séparateurs de milliers)
+                    // Gérer format français avec virgule et espaces (ex: "3 934 145,19" ou "3934145,19")
+                    // Retirer tous les espaces (séparateurs de milliers) - IMPORTANT : faire ça d'abord
                     strValue = strValue.replaceAll("\\s+", "").trim();
                     
-                    // Si la virgule est présente, c'est un format français
+                    // Si la virgule est présente, c'est un format français avec virgule comme séparateur décimal
                     if (strValue.contains(",")) {
-                        // Remplacer la virgule par un point pour le parsing
-                        strValue = strValue.replace(",", ".");
+                        // Utiliser le format français directement (virgule = séparateur décimal)
                         try {
-                            return Double.parseDouble(strValue);
-                        } catch (NumberFormatException e) {
-                            // Essayer avec le format français (virgule comme séparateur décimal)
+                            return FRENCH_NUMBER_FORMAT.parse(strValue).doubleValue();
+                        } catch (ParseException e) {
+                            // Fallback : remplacer la virgule par un point et parser
                             try {
-                                return FRENCH_NUMBER_FORMAT.parse(strValue.replace(".", ",")).doubleValue();
-                            } catch (ParseException e2) {
-                                log.warn("Cannot parse French number: {}", strValue);
+                                String normalizedValue = strValue.replace(",", ".");
+                                return Double.parseDouble(normalizedValue);
+                            } catch (NumberFormatException e2) {
+                                log.warn("Cannot parse French number with comma: {}", strValue);
                                 return null;
                             }
                         }
-                    } else {
-                        // Format standard avec point
+                    } else if (strValue.contains(".")) {
+                        // Format standard avec point comme séparateur décimal
                         try {
                             return Double.parseDouble(strValue);
                         } catch (NumberFormatException e) {
-                            log.warn("Cannot parse number: {}", strValue);
+                            log.warn("Cannot parse number with point: {}", strValue);
+                            return null;
+                        }
+                    } else {
+                        // Pas de séparateur décimal, c'est un entier
+                        try {
+                            return Double.parseDouble(strValue);
+                        } catch (NumberFormatException e) {
+                            log.warn("Cannot parse integer: {}", strValue);
                             return null;
                         }
                     }
@@ -2115,15 +2332,26 @@ public class ExcelImportService {
                                 !formulaStrValue.matches(".*\\d+.*")) {
                                 return null;
                             }
-                            // Retirer tous les espaces et gérer format français
+                            // Retirer tous les espaces (séparateurs de milliers)
                             formulaStrValue = formulaStrValue.replaceAll("\\s+", "").trim();
+                            // Gérer format français avec virgule
                             if (formulaStrValue.contains(",")) {
-                                formulaStrValue = formulaStrValue.replace(",", ".");
-                            }
-                            try {
-                                return Double.parseDouble(formulaStrValue);
-                            } catch (NumberFormatException e) {
-                                return null;
+                                try {
+                                    return FRENCH_NUMBER_FORMAT.parse(formulaStrValue).doubleValue();
+                                } catch (ParseException e) {
+                                    // Fallback : remplacer virgule par point
+                                    try {
+                                        return Double.parseDouble(formulaStrValue.replace(",", "."));
+                                    } catch (NumberFormatException e2) {
+                                        return null;
+                                    }
+                                }
+                            } else {
+                                try {
+                                    return Double.parseDouble(formulaStrValue);
+                                } catch (NumberFormatException e) {
+                                    return null;
+                                }
                             }
                         }
                         return null;
