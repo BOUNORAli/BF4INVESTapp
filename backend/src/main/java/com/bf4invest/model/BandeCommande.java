@@ -66,6 +66,10 @@ public class BandeCommande {
     private Double margeTotale;
     private Double margePourcentage;
     
+    // Totaux bruts depuis Excel (pour préserver les valeurs exactes du fichier)
+    private Double totalAchatTTCFromExcel;  // Total achat TTC depuis "facture_achat_ttc"
+    private Double totalVenteTTCFromExcel;  // Total vente TTC depuis "facture_vente_ttc" (somme des factures vente)
+    
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     

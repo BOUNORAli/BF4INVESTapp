@@ -317,8 +317,18 @@ public class BandeCommandeService {
     
     /**
      * Calcul des totaux pour la nouvelle structure multi-clients
+     * PRIORITÉ : Utilise les totaux bruts Excel si disponibles, sinon calcule depuis les lignes
      */
     private void calculateTotalsMultiClient(BandeCommande bc) {
+        // PRIORITÉ 1 : Vérifier si les totaux Excel sont disponibles
+        if (bc.getTotalAchatTTCFromExcel() != null && bc.getTotalAchatTTCFromExcel() != 0 ||
+            bc.getTotalVenteTTCFromExcel() != null && bc.getTotalVenteTTCFromExcel() != 0) {
+            // Utiliser les totaux Excel et convertir en HT
+            calculateBCTotalsFromExcelTotals(bc);
+            return;
+        }
+        
+        // PRIORITÉ 2 : Calculer depuis les lignes
         double totalAchatHT = 0.0;
         double totalAchatTTC = 0.0;
         double totalVenteHTGlobal = 0.0;
@@ -414,6 +424,132 @@ public class BandeCommandeService {
             bc.setMargePourcentage(NumberUtils.roundTo2Decimals(((totalVenteHTGlobal - totalAchatHT) / totalAchatHT) * 100));
         } else {
             bc.setMargePourcentage(0.0);
+        }
+    }
+    
+    /**
+     * Calcule les totaux d'une BC depuis les totaux TTC Excel
+     * Utilise le taux TVA moyen des lignes pour convertir TTC en HT
+     */
+    private void calculateBCTotalsFromExcelTotals(BandeCommande bc) {
+        // Calculer d'abord les totaux des lignes si nécessaire (pour obtenir le taux TVA moyen)
+        // Calculer le taux TVA moyen pondéré depuis les lignes d'achat pour les totaux achat
+        double totalHTFromAchatLines = 0.0;
+        double totalTVAFromAchatLines = 0.0;
+        
+        if (bc.getLignesAchat() != null && !bc.getLignesAchat().isEmpty()) {
+            for (LigneAchat ligne : bc.getLignesAchat()) {
+                // Calculer le total HT de la ligne si pas déjà calculé
+                if (ligne.getTotalHT() == null) {
+                    double qte = ligne.getQuantiteAchetee() != null ? ligne.getQuantiteAchetee() : 0;
+                    double prix = ligne.getPrixAchatUnitaireHT() != null ? ligne.getPrixAchatUnitaireHT() : 0;
+                    ligne.setTotalHT(NumberUtils.roundTo2Decimals(qte * prix));
+                    if (ligne.getTva() != null) {
+                        ligne.setTotalTTC(NumberUtils.roundTo2Decimals(ligne.getTotalHT() * (1 + (ligne.getTva() / 100.0))));
+                    }
+                }
+                
+                if (ligne.getTotalHT() != null && ligne.getTva() != null) {
+                    totalHTFromAchatLines += ligne.getTotalHT();
+                    totalTVAFromAchatLines += NumberUtils.roundTo2Decimals(ligne.getTotalHT() * (ligne.getTva() / 100.0));
+                }
+            }
+        }
+        
+        // Calculer le taux TVA moyen pondéré depuis les lignes de vente pour les totaux vente
+        double totalHTFromVenteLines = 0.0;
+        double totalTVAFromVenteLines = 0.0;
+        
+        if (bc.getClientsVente() != null && !bc.getClientsVente().isEmpty()) {
+            for (ClientVente cv : bc.getClientsVente()) {
+                if (cv.getLignesVente() != null) {
+                    for (LigneVente ligne : cv.getLignesVente()) {
+                        // Calculer le total HT de la ligne si pas déjà calculé
+                        if (ligne.getTotalHT() == null) {
+                            double qte = ligne.getQuantiteVendue() != null ? ligne.getQuantiteVendue() : 0;
+                            double prix = ligne.getPrixVenteUnitaireHT() != null ? ligne.getPrixVenteUnitaireHT() : 0;
+                            ligne.setTotalHT(NumberUtils.roundTo2Decimals(qte * prix));
+                            if (ligne.getTva() != null) {
+                                ligne.setTotalTTC(NumberUtils.roundTo2Decimals(ligne.getTotalHT() * (1 + (ligne.getTva() / 100.0))));
+                            }
+                        }
+                        
+                        if (ligne.getTotalHT() != null && ligne.getTva() != null) {
+                            totalHTFromVenteLines += ligne.getTotalHT();
+                            totalTVAFromVenteLines += NumberUtils.roundTo2Decimals(ligne.getTotalHT() * (ligne.getTva() / 100.0));
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Calculer les taux TVA moyens
+        double tauxTVAAchat = 20.0; // Défaut
+        if (totalHTFromAchatLines != 0 && totalTVAFromAchatLines != 0) {
+            tauxTVAAchat = (totalTVAFromAchatLines / Math.abs(totalHTFromAchatLines)) * 100.0;
+        }
+        
+        double tauxTVAVente = 20.0; // Défaut
+        if (totalHTFromVenteLines != 0 && totalTVAFromVenteLines != 0) {
+            tauxTVAVente = (totalTVAFromVenteLines / Math.abs(totalHTFromVenteLines)) * 100.0;
+        }
+        
+        // Utiliser les totaux Excel pour achat si disponible
+        if (bc.getTotalAchatTTCFromExcel() != null && bc.getTotalAchatTTCFromExcel() != 0) {
+            double totalTTC = Math.abs(bc.getTotalAchatTTCFromExcel());
+            double totalHT = NumberUtils.roundTo2Decimals(totalTTC / (1 + (tauxTVAAchat / 100.0)));
+            bc.setTotalAchatTTC(NumberUtils.roundTo2Decimals(totalTTC));
+            bc.setTotalAchatHT(NumberUtils.roundTo2Decimals(totalHT));
+        } else {
+            // Calculer depuis les lignes d'achat
+            double totalAchatHT = 0.0;
+            double totalAchatTTC = 0.0;
+            if (bc.getLignesAchat() != null) {
+                for (LigneAchat ligne : bc.getLignesAchat()) {
+                    if (ligne.getTotalHT() != null) {
+                        totalAchatHT += ligne.getTotalHT();
+                    }
+                    if (ligne.getTotalTTC() != null) {
+                        totalAchatTTC += ligne.getTotalTTC();
+                    }
+                }
+            }
+            bc.setTotalAchatHT(NumberUtils.roundTo2Decimals(totalAchatHT));
+            bc.setTotalAchatTTC(NumberUtils.roundTo2Decimals(totalAchatTTC));
+        }
+        
+        // Utiliser les totaux Excel pour vente si disponible
+        if (bc.getTotalVenteTTCFromExcel() != null && bc.getTotalVenteTTCFromExcel() != 0) {
+            double totalTTC = Math.abs(bc.getTotalVenteTTCFromExcel());
+            double totalHT = NumberUtils.roundTo2Decimals(totalTTC / (1 + (tauxTVAVente / 100.0)));
+            bc.setTotalVenteTTC(NumberUtils.roundTo2Decimals(totalTTC));
+            bc.setTotalVenteHT(NumberUtils.roundTo2Decimals(totalHT));
+        } else {
+            // Calculer depuis les lignes de vente
+            double totalVenteHT = 0.0;
+            double totalVenteTTC = 0.0;
+            if (bc.getClientsVente() != null) {
+                for (ClientVente cv : bc.getClientsVente()) {
+                    if (cv.getTotalVenteHT() != null) {
+                        totalVenteHT += cv.getTotalVenteHT();
+                    }
+                    if (cv.getTotalVenteTTC() != null) {
+                        totalVenteTTC += cv.getTotalVenteTTC();
+                    }
+                }
+            }
+            bc.setTotalVenteHT(NumberUtils.roundTo2Decimals(totalVenteHT));
+            bc.setTotalVenteTTC(NumberUtils.roundTo2Decimals(totalVenteTTC));
+        }
+        
+        // Calculer la marge
+        if (bc.getTotalVenteHT() != null && bc.getTotalAchatHT() != null) {
+            bc.setMargeTotale(NumberUtils.roundTo2Decimals(bc.getTotalVenteHT() - bc.getTotalAchatHT()));
+            if (bc.getTotalAchatHT() > 0) {
+                bc.setMargePourcentage(NumberUtils.roundTo2Decimals(((bc.getTotalVenteHT() - bc.getTotalAchatHT()) / bc.getTotalAchatHT()) * 100));
+            } else {
+                bc.setMargePourcentage(0.0);
+            }
         }
     }
     
