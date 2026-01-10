@@ -4,6 +4,7 @@ import { StoreService, Invoice, BC, PrevisionPaiement } from '../../services/sto
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, FormsModule } from '@angular/forms';
 import { RouterLink, Router, ActivatedRoute } from '@angular/router';
 import { ComptabiliteService } from '../../services/comptabilite.service';
+import { DashboardStore } from '../../stores/dashboard.store';
 import type { EcritureComptable } from '../../models/types';
 
 @Component({
@@ -1406,30 +1407,57 @@ export class SalesInvoicesComponent implements OnInit {
 
   // Calculate recovery rate (total paid / total invoiced)
   recoveryRate = computed(() => {
-    const invoices = this.allSalesInvoices();
+    // Exclure les avoirs du calcul
+    const invoices = this.allSalesInvoices().filter(i => !i.estAvoir);
     if (invoices.length === 0) return 0;
 
-    const totalInvoiced = invoices.reduce((acc, curr) => acc + curr.amountTTC, 0);
+    // Total facturé = somme des montants TTC des factures normales (exclure avoirs)
+    const totalInvoiced = invoices.reduce((acc, curr) => {
+      const amountTTC = curr.amountTTC || 0;
+      return acc + Math.max(0, amountTTC); // S'assurer que c'est positif
+    }, 0);
+    
     if (totalInvoiced === 0) return 0;
 
-    // Get total paid from payments
+    // Total payé = somme des paiements pour les factures normales uniquement
     let totalPaid = 0;
     invoices.forEach(inv => {
       const payments = this.store.getPaymentsForInvoice(inv.id);
       const paymentsTotal = payments.reduce((sum, p) => sum + (p.montant || 0), 0);
       totalPaid += paymentsTotal;
       
-      // If invoice marked as paid but no payments recorded, assume full amount paid
-      if (inv.status === 'paid' && paymentsTotal === 0) {
-        totalPaid += inv.amountTTC;
+      // Si facture marquée comme payée mais aucun paiement enregistré, 
+      // et que ce n'est PAS un avoir, assumer le montant total payé
+      if (inv.status === 'paid' && paymentsTotal === 0 && !inv.estAvoir) {
+        const amountTTC = inv.amountTTC || 0;
+        totalPaid += Math.max(0, amountTTC); // S'assurer que c'est positif
       }
     });
 
-    return (totalPaid / totalInvoiced) * 100;
+    // Taux de recouvrement = (Total Payé / Total Facturé) * 100
+    const rate = (totalPaid / totalInvoiced) * 100;
+    
+    // Log de diagnostic (mode développement uniquement)
+    if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+      console.log('[Recovery Rate]', {
+        totalInvoices: invoices.length,
+        totalInvoiced: totalInvoiced,
+        totalPaid: totalPaid,
+        rate: rate,
+        invoicesWithPayments: invoices.filter(inv => {
+          const payments = this.store.getPaymentsForInvoice(inv.id);
+          return payments.length > 0;
+        }).length
+      });
+    }
+    
+    // Limiter à 200% maximum pour éviter les valeurs aberrantes
+    return Math.min(rate, 200);
   });
 
   getRecoveryRateLabel(): string {
     const rate = this.recoveryRate();
+    if (rate > 100) return 'Attention:\nSurpaiement';
     if (rate >= 90) return 'Excellent\nniveau';
     if (rate >= 75) return 'Bon niveau';
     if (rate >= 50) return 'À améliorer';
@@ -1438,7 +1466,17 @@ export class SalesInvoicesComponent implements OnInit {
 
   getRecoveryRateWidth(): number {
     const rate = this.recoveryRate();
+    // Limiter à 100% pour la barre de progression (taux > 100% = barre pleine)
     return Math.min(Math.max(rate, 0), 100);
+  }
+
+  // Formater le taux avec indication si > 100%
+  getRecoveryRateDisplay(): string {
+    const rate = this.recoveryRate();
+    if (rate > 100) {
+      return `${rate.toFixed(0)}% (surpaiement)`;
+    }
+    return `${rate.toFixed(0)}%`;
   }
 
   formatLargeNumber(value: number): string {

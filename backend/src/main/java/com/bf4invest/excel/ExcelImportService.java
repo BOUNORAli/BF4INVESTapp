@@ -944,16 +944,30 @@ public class ExcelImportService {
             newAvoir.setTypeFacture("AVOIR");
             newAvoir.setBcReference(finalNumeroBC);
             
-            // Date facture
+            // Date facture (PRIORITÉ 1: DATE FAC VTE - colonne 5, comme pour les factures achat normales)
             LocalDate dateFacture = null;
-            Integer dateCol = columnMap.get("date_facture_achat");
-            if (dateCol == null) {
-                dateCol = columnMap.get("date_facture_vente"); // Fallback
-            }
-            if (dateCol != null) {
-                Cell dateCell = row.getCell(dateCol);
+            
+            // PRIORITÉ 1: DATE FAC VTE (colonne 5) - date principale pour les factures achat
+            Integer dateFVCol = columnMap.get("date_facture_vente");
+            if (dateFVCol != null) {
+                Cell dateCell = row.getCell(dateFVCol);
                 dateFacture = parseDateFromCell(dateCell);
+                if (dateFacture == null) {
+                    String dateFV = getCellValue(row, columnMap, "date_facture_vente");
+                    dateFacture = parseDate(dateFV);
+                }
             }
+            
+            // PRIORITÉ 2: date_facture_achat (si DATE FAC VTE n'existe pas ou est invalide)
+            if (dateFacture == null) {
+                Integer dateFACol = columnMap.get("date_facture_achat");
+                if (dateFACol != null) {
+                    Cell dateCell = row.getCell(dateFACol);
+                    dateFacture = parseDateFromCell(dateCell);
+                }
+            }
+            
+            // Dernier fallback : date actuelle
             if (dateFacture == null) {
                 dateFacture = LocalDate.now(); // Par défaut aujourd'hui
             }
@@ -1285,36 +1299,38 @@ public class ExcelImportService {
                 newFa.setNumeroFactureFournisseur(finalNumeroFactureFournisseur);
             }
             
-            // Date facture achat (utiliser date BC si pas de date spécifique dans Excel)
+            // Date facture achat (PRIORITÉ 1: DATE FAC VTE - colonne 5, comme demandé pour l'historique de trésorerie)
             LocalDate dateFacture = null;
-            Integer dateFACol = columnMap.get("date_facture_achat");
-            if (dateFACol != null) {
-                Cell dateCell = row.getCell(dateFACol);
-                dateFacture = parseDateFromCell(dateCell);
-            }
             
-            // Fallback sur DATE FAC VTE si pas de date facture achat
-            if (dateFacture == null) {
-                Integer dateFVCol = columnMap.get("date_facture_vente");
-                if (dateFVCol != null) {
-                    Cell dateCell = row.getCell(dateFVCol);
-                    dateFacture = parseDateFromCell(dateCell);
-                    if (dateFacture == null) {
-                        String dateFV = getCellValue(row, columnMap, "date_facture_vente");
-                        dateFacture = parseDate(dateFV);
-                    }
+            // PRIORITÉ 1: DATE FAC VTE (colonne 5) - date principale pour les factures achat
+            Integer dateFVCol = columnMap.get("date_facture_vente");
+            if (dateFVCol != null) {
+                Cell dateCell = row.getCell(dateFVCol);
+                dateFacture = parseDateFromCell(dateCell);
+                if (dateFacture == null) {
+                    String dateFV = getCellValue(row, columnMap, "date_facture_vente");
+                    dateFacture = parseDate(dateFV);
                 }
             }
             
-            // Fallback sur date BC si toujours pas de date
+            // PRIORITÉ 2: date_facture_achat (si DATE FAC VTE n'existe pas ou est invalide)
+            if (dateFacture == null) {
+                Integer dateFACol = columnMap.get("date_facture_achat");
+                if (dateFACol != null) {
+                    Cell dateCell = row.getCell(dateFACol);
+                    dateFacture = parseDateFromCell(dateCell);
+                }
+            }
+            
+            // PRIORITÉ 3: Fallback sur date BC si toujours pas de date
             if (dateFacture == null) {
                 Integer dateBCCol = columnMap.get("date_bc");
                 if (dateBCCol != null) {
                     Cell dateCell = row.getCell(dateBCCol);
                     dateFacture = parseDateFromCell(dateCell);
                     if (dateFacture == null) {
-                        String dateFA = getCellValue(row, columnMap, "date_bc");
-                        dateFacture = parseDate(dateFA);
+                        String dateBC = getCellValue(row, columnMap, "date_bc");
+                        dateFacture = parseDate(dateBC);
                     }
                 }
             }
