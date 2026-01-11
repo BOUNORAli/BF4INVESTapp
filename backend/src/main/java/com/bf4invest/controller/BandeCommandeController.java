@@ -139,5 +139,54 @@ public class BandeCommandeController {
             return ResponseEntity.internalServerError().build();
         }
     }
+    
+    @GetMapping("/export/import-format")
+    public ResponseEntity<ByteArrayResource> exportBCsToImportFormat(
+            @RequestParam(required = false) String clientId,
+            @RequestParam(required = false) String fournisseurId,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateMin,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateMax,
+            @RequestParam(required = false) String etat
+    ) {
+        try {
+            // Récupérer toutes les BCs
+            List<BandeCommande> bcs = bcService.findAll();
+            
+            // Appliquer les mêmes filtres que getAllBCs
+            if (clientId != null) {
+                bcs = bcs.stream().filter(bc -> bc.getClientId() != null && bc.getClientId().equals(clientId)).toList();
+            }
+            if (fournisseurId != null) {
+                bcs = bcs.stream().filter(bc -> bc.getFournisseurId() != null && bc.getFournisseurId().equals(fournisseurId)).toList();
+            }
+            if (etat != null) {
+                bcs = bcs.stream().filter(bc -> bc.getEtat() != null && bc.getEtat().equals(etat)).toList();
+            }
+            if (dateMin != null) {
+                bcs = bcs.stream().filter(bc -> bc.getDateBC() != null && !bc.getDateBC().isBefore(dateMin)).toList();
+            }
+            if (dateMax != null) {
+                bcs = bcs.stream().filter(bc -> bc.getDateBC() != null && !bc.getDateBC().isAfter(dateMax)).toList();
+            }
+            
+            // Générer le fichier Excel au format import
+            byte[] excelBytes = excelExportService.exportBCsToImportFormat(bcs);
+            
+            // Créer le nom de fichier avec la date actuelle
+            String fileName = "Export_Import_Format_" + LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd")) + ".xlsx";
+            
+            HttpHeaders headers = new HttpHeaders();
+            headers.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + fileName);
+            headers.add(HttpHeaders.CONTENT_TYPE, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+            
+            return ResponseEntity.ok()
+                    .headers(headers)
+                    .contentLength(excelBytes.length)
+                    .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                    .body(new ByteArrayResource(excelBytes));
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().build();
+        }
+    }
 }
 

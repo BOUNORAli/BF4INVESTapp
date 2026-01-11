@@ -3,9 +3,12 @@ package com.bf4invest.excel;
 import com.bf4invest.model.BandeCommande;
 import com.bf4invest.model.Client;
 import com.bf4invest.model.Charge;
+import com.bf4invest.model.ClientVente;
 import com.bf4invest.model.FactureAchat;
 import com.bf4invest.model.FactureVente;
 import com.bf4invest.model.HistoriqueSolde;
+import com.bf4invest.model.LigneAchat;
+import com.bf4invest.model.LigneVente;
 import com.bf4invest.model.Paiement;
 import com.bf4invest.model.Supplier;
 import com.bf4invest.repository.ClientRepository;
@@ -51,6 +54,36 @@ public class ExcelExportService {
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy");
     private static final NumberFormat NUMBER_FORMAT = NumberFormat.getNumberInstance(Locale.FRENCH);
     private static final DecimalFormat DECIMAL_FORMAT = new DecimalFormat("#,##0.00");
+    
+    /**
+     * Classe interne pour représenter une ligne du format import
+     */
+    private static class ImportFormatRow {
+        String numeroBC;
+        LocalDate dateBC;
+        String numeroFactureFournisseur;
+        LocalDate dateFactureAchat;
+        String numeroFactureVente;
+        LocalDate dateFactureVente;
+        String ice;
+        String fournisseur;
+        String client;
+        String numeroArticle;
+        String designation;
+        String unite;
+        Double quantiteBC;
+        Double quantiteLivree;
+        Double prixAchatUnitaireHT;
+        Double prixAchatTotalHT;
+        Double tauxTVA;
+        Double prixAchatUnitaireTTC;
+        Double prixAchatTTC;
+        Double factureAchatTTC;
+        Double prixVenteUnitaireHT;
+        Double prixVenteUnitaireTTC;
+        Double factureVenteTTC;
+        Double margeUnitaireTTC;
+    }
     
     /**
      * Classe interne pour représenter une ligne de transaction dans l'export Excel
@@ -1445,6 +1478,338 @@ public class ExcelExportService {
             workbook.write(out);
             return out.toByteArray();
         }
+    }
+    
+    /**
+     * Exporte les BCs au format import Excel (une ligne par produit × client)
+     */
+    public byte[] exportBCsToImportFormat(List<BandeCommande> bcs) throws IOException {
+        try (XSSFWorkbook workbook = new XSSFWorkbook()) {
+            Sheet sheet = workbook.createSheet("Export Import Format");
+            
+            // Créer un cache des clients et fournisseurs
+            Map<String, Client> clientsMap = clientRepository.findAll().stream()
+                    .collect(Collectors.toMap(Client::getId, c -> c));
+            Map<String, Supplier> suppliersMap = supplierRepository.findAll().stream()
+                    .collect(Collectors.toMap(Supplier::getId, s -> s));
+            
+            // Styles
+            CellStyle headerStyle = createHeaderStyle(workbook);
+            CellStyle defaultStyle = createDefaultStyle(workbook);
+            CellStyle dateStyle = createDateStyle(workbook);
+            CellStyle numberStyle = createCurrencyStyle(workbook);
+            CellStyle percentStyle = createPercentStyle(workbook);
+            
+            // Créer l'en-tête avec les colonnes dans l'ordre du format import
+            Row headerRow = sheet.createRow(0);
+            String[] headers = {
+                "N° BC",
+                "DATE BC",
+                "N° FAC FRS",
+                "DATE FAC ACHAT",
+                "N° FAC VTE",
+                "DATE FAC VTE",
+                "ICE",
+                "FRS",
+                "CLENT",
+                "N° ARTICLE",
+                "DESIGNATION",
+                "U",
+                "QT BC",
+                "QT LIVREE",
+                "PU ACHAT HT",
+                "PRIX ACHAT T HT",
+                "TX TVA",
+                "PU ACHAT TTC",
+                "PRIX ACHAT TTC",
+                "FACTURE ACHAT TTC",
+                "PU VENTE HT",
+                "PU VENTE TTC",
+                "FACTURE VENTE TTC",
+                "MARGE U TTC"
+            };
+            
+            for (int i = 0; i < headers.length; i++) {
+                Cell cell = headerRow.createCell(i);
+                cell.setCellValue(headers[i]);
+                cell.setCellStyle(headerStyle);
+            }
+            
+            // Générer les lignes d'export
+            List<ImportFormatRow> exportRows = new ArrayList<>();
+            
+            for (BandeCommande bc : bcs) {
+                // Récupérer la facture achat liée
+                FactureAchat factureAchat = null;
+                if (bc.getNumeroBC() != null) {
+                    List<FactureAchat> facturesAchat = factureAchatRepository.findByBcReference(bc.getNumeroBC());
+                    if (!facturesAchat.isEmpty()) {
+                        factureAchat = facturesAchat.get(0); // Une facture achat par BC
+                    }
+                }
+                
+                // Récupérer les factures vente liées
+                List<FactureVente> facturesVente = new ArrayList<>();
+                if (bc.getId() != null) {
+                    facturesVente.addAll(factureVenteRepository.findByBandeCommandeId(bc.getId()));
+                }
+                if (bc.getNumeroBC() != null) {
+                    List<FactureVente> fvByRef = factureVenteRepository.findByBcReference(bc.getNumeroBC());
+                    for (FactureVente fv : fvByRef) {
+                        if (facturesVente.stream().noneMatch(existing -> existing.getId().equals(fv.getId()))) {
+                            facturesVente.add(fv);
+                        }
+                    }
+                }
+                
+                // Créer une map des factures vente par clientId pour faciliter l'accès
+                Map<String, FactureVente> factureVenteByClientId = facturesVente.stream()
+                        .filter(fv -> fv.getClientId() != null)
+                        .collect(Collectors.toMap(FactureVente::getClientId, fv -> fv, (fv1, fv2) -> fv1));
+                
+                // Créer une map des lignes vente par produitKey × clientId
+                Map<String, Map<String, LigneVente>> lignesVenteByProduitAndClient = new HashMap<>();
+                if (bc.getClientsVente() != null) {
+                    for (ClientVente cv : bc.getClientsVente()) {
+                        if (cv.getLignesVente() != null) {
+                            for (LigneVente lv : cv.getLignesVente()) {
+                                String produitKey = createProduitKey(lv.getProduitRef(), lv.getDesignation(), lv.getUnite());
+                                lignesVenteByProduitAndClient
+                                    .computeIfAbsent(produitKey, k -> new HashMap<>())
+                                    .put(cv.getClientId(), lv);
+                            }
+                        }
+                    }
+                }
+                
+                // Pour chaque ligne achat, créer des lignes d'export
+                if (bc.getLignesAchat() != null) {
+                    for (LigneAchat la : bc.getLignesAchat()) {
+                        String produitKey = createProduitKey(la.getProduitRef(), la.getDesignation(), la.getUnite());
+                        Map<String, LigneVente> lignesVenteForProduit = lignesVenteByProduitAndClient.getOrDefault(produitKey, new HashMap<>());
+                        
+                        // Si ce produit est vendu à des clients, créer une ligne par client
+                        if (!lignesVenteForProduit.isEmpty()) {
+                            for (Map.Entry<String, LigneVente> entry : lignesVenteForProduit.entrySet()) {
+                                String clientId = entry.getKey();
+                                LigneVente lv = entry.getValue();
+                                FactureVente fv = factureVenteByClientId.get(clientId);
+                                
+                                ImportFormatRow row = createImportFormatRow(bc, la, factureAchat, lv, fv, 
+                                        clientsMap.get(clientId), suppliersMap.get(bc.getFournisseurId()));
+                                exportRows.add(row);
+                            }
+                        } else {
+                            // Si ce produit n'est pas vendu, créer une ligne sans info vente
+                            ImportFormatRow row = createImportFormatRow(bc, la, factureAchat, null, null, 
+                                    null, suppliersMap.get(bc.getFournisseurId()));
+                            exportRows.add(row);
+                        }
+                    }
+                }
+            }
+            
+            // Remplir les données dans Excel
+            int rowNum = 1;
+            for (ImportFormatRow row : exportRows) {
+                Row excelRow = sheet.createRow(rowNum++);
+                int colIndex = 0;
+                
+                // N° BC
+                setCellValue(excelRow, colIndex++, row.numeroBC, defaultStyle);
+                
+                // DATE BC
+                Cell dateBCCell = excelRow.createCell(colIndex++);
+                if (row.dateBC != null) {
+                    dateBCCell.setCellValue(row.dateBC.format(DATE_FORMATTER));
+                    dateBCCell.setCellStyle(dateStyle);
+                } else {
+                    dateBCCell.setCellValue("");
+                    dateBCCell.setCellStyle(defaultStyle);
+                }
+                
+                // N° FAC FRS
+                setCellValue(excelRow, colIndex++, row.numeroFactureFournisseur, defaultStyle);
+                
+                // DATE FAC ACHAT
+                Cell dateFACell = excelRow.createCell(colIndex++);
+                if (row.dateFactureAchat != null) {
+                    dateFACell.setCellValue(row.dateFactureAchat.format(DATE_FORMATTER));
+                    dateFACell.setCellStyle(dateStyle);
+                } else {
+                    dateFACell.setCellValue("");
+                    dateFACell.setCellStyle(defaultStyle);
+                }
+                
+                // N° FAC VTE
+                setCellValue(excelRow, colIndex++, row.numeroFactureVente, defaultStyle);
+                
+                // DATE FAC VTE
+                Cell dateFVCell = excelRow.createCell(colIndex++);
+                if (row.dateFactureVente != null) {
+                    dateFVCell.setCellValue(row.dateFactureVente.format(DATE_FORMATTER));
+                    dateFVCell.setCellStyle(dateStyle);
+                } else {
+                    dateFVCell.setCellValue("");
+                    dateFVCell.setCellStyle(defaultStyle);
+                }
+                
+                // ICE
+                setCellValue(excelRow, colIndex++, row.ice, defaultStyle);
+                
+                // FRS
+                setCellValue(excelRow, colIndex++, row.fournisseur, defaultStyle);
+                
+                // CLENT
+                setCellValue(excelRow, colIndex++, row.client, defaultStyle);
+                
+                // N° ARTICLE
+                setCellValue(excelRow, colIndex++, row.numeroArticle, defaultStyle);
+                
+                // DESIGNATION
+                setCellValue(excelRow, colIndex++, row.designation, defaultStyle);
+                
+                // U
+                setCellValue(excelRow, colIndex++, row.unite, defaultStyle);
+                
+                // QT BC
+                setCellValue(excelRow, colIndex++, row.quantiteBC, numberStyle);
+                
+                // QT LIVREE
+                setCellValue(excelRow, colIndex++, row.quantiteLivree, numberStyle);
+                
+                // PU ACHAT HT
+                setCellValue(excelRow, colIndex++, row.prixAchatUnitaireHT, numberStyle);
+                
+                // PRIX ACHAT T HT
+                setCellValue(excelRow, colIndex++, row.prixAchatTotalHT, numberStyle);
+                
+                // TX TVA
+                Cell tvaCell = excelRow.createCell(colIndex++);
+                if (row.tauxTVA != null) {
+                    tvaCell.setCellValue(row.tauxTVA / 100.0); // Format Excel pourcentage
+                    tvaCell.setCellStyle(percentStyle);
+                } else {
+                    tvaCell.setCellValue("");
+                    tvaCell.setCellStyle(defaultStyle);
+                }
+                
+                // PU ACHAT TTC
+                setCellValue(excelRow, colIndex++, row.prixAchatUnitaireTTC, numberStyle);
+                
+                // PRIX ACHAT TTC
+                setCellValue(excelRow, colIndex++, row.prixAchatTTC, numberStyle);
+                
+                // FACTURE ACHAT TTC
+                setCellValue(excelRow, colIndex++, row.factureAchatTTC, numberStyle);
+                
+                // PU VENTE HT
+                setCellValue(excelRow, colIndex++, row.prixVenteUnitaireHT, numberStyle);
+                
+                // PU VENTE TTC
+                setCellValue(excelRow, colIndex++, row.prixVenteUnitaireTTC, numberStyle);
+                
+                // FACTURE VENTE TTC
+                setCellValue(excelRow, colIndex++, row.factureVenteTTC, numberStyle);
+                
+                // MARGE U TTC
+                setCellValue(excelRow, colIndex++, row.margeUnitaireTTC, numberStyle);
+            }
+            
+            // Ajuster la largeur des colonnes
+            for (int i = 0; i < headers.length; i++) {
+                sheet.autoSizeColumn(i);
+                sheet.setColumnWidth(i, Math.max(sheet.getColumnWidth(i) + 1000, 3000));
+            }
+            
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            workbook.write(out);
+            return out.toByteArray();
+        }
+    }
+    
+    /**
+     * Crée une clé produit unique (utilisée pour matcher lignes achat et vente)
+     */
+    private String createProduitKey(String produitRef, String designation, String unite) {
+        return (produitRef != null ? produitRef : "") + "|" + 
+               (designation != null ? designation : "") + "|" + 
+               (unite != null ? unite : "U");
+    }
+    
+    /**
+     * Crée une ligne d'export au format import
+     */
+    private ImportFormatRow createImportFormatRow(BandeCommande bc, LigneAchat la, 
+            FactureAchat fa, LigneVente lv, FactureVente fv, Client client, Supplier supplier) {
+        ImportFormatRow row = new ImportFormatRow();
+        
+        // Informations BC
+        row.numeroBC = bc.getNumeroBC();
+        row.dateBC = bc.getDateBC();
+        
+        // Informations facture achat
+        if (fa != null) {
+            row.numeroFactureFournisseur = fa.getNumeroFactureFournisseur();
+            row.dateFactureAchat = fa.getDateFacture();
+        }
+        
+        // Informations facture vente
+        if (fv != null) {
+            row.numeroFactureVente = fv.getNumeroFactureVente();
+            row.dateFactureVente = fv.getDateFacture();
+        }
+        
+        // ICE (du client si présent, sinon du fournisseur)
+        if (client != null && client.getIce() != null) {
+            row.ice = client.getIce();
+        } else if (supplier != null && supplier.getIce() != null) {
+            row.ice = supplier.getIce();
+        }
+        
+        // Fournisseur et client
+        row.fournisseur = supplier != null ? supplier.getNom() : null;
+        row.client = client != null ? client.getNom() : null;
+        
+        // Informations produit (depuis ligne achat)
+        row.numeroArticle = la.getProduitRef();
+        row.designation = la.getDesignation();
+        row.unite = la.getUnite() != null ? la.getUnite() : "U";
+        row.quantiteBC = la.getQuantiteAchetee();
+        row.prixAchatUnitaireHT = la.getPrixAchatUnitaireHT();
+        row.prixAchatTotalHT = la.getTotalHT();
+        row.tauxTVA = la.getTva();
+        
+        // Calculer prix achat unitaire TTC et total TTC
+        if (row.prixAchatUnitaireHT != null && row.tauxTVA != null) {
+            row.prixAchatUnitaireTTC = row.prixAchatUnitaireHT * (1 + row.tauxTVA / 100.0);
+            if (row.quantiteBC != null) {
+                row.prixAchatTTC = row.prixAchatUnitaireTTC * row.quantiteBC;
+            }
+        }
+        // FACTURE ACHAT TTC : utiliser le total TTC de la ligne
+        row.factureAchatTTC = la.getTotalTTC();
+        
+        // Informations vente (si présente)
+        if (lv != null) {
+            row.quantiteLivree = lv.getQuantiteVendue();
+            row.prixVenteUnitaireHT = lv.getPrixVenteUnitaireHT();
+            
+            // Calculer prix vente unitaire TTC
+            if (row.prixVenteUnitaireHT != null && lv.getTva() != null) {
+                row.prixVenteUnitaireTTC = row.prixVenteUnitaireHT * (1 + lv.getTva() / 100.0);
+            }
+            
+            // FACTURE VENTE TTC : utiliser le total TTC de la ligne
+            row.factureVenteTTC = lv.getTotalTTC();
+            
+            // MARGE U TTC
+            if (row.prixVenteUnitaireTTC != null && row.prixAchatUnitaireTTC != null) {
+                row.margeUnitaireTTC = row.prixVenteUnitaireTTC - row.prixAchatUnitaireTTC;
+            }
+        }
+        
+        return row;
     }
     
     /**
