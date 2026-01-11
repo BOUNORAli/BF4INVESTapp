@@ -1212,7 +1212,7 @@ export class StoreService {
         
         // Extraire le nom de fichier depuis les headers ou utiliser un nom par défaut
         const today = new Date().toISOString().split('T')[0];
-        link.download = `Export_BCs_${today}.xlsx`;
+        link.download = `Export_Import_Format_${today}.xlsx`;
         
         document.body.appendChild(link);
         link.click();

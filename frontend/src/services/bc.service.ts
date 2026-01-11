@@ -166,12 +166,12 @@ export class BcService {
       return await this.api.downloadFile(`/pdf/bandes-commandes/${bcId}`).toPromise();
   }
 
-  async exportBCsToExcel(params?: { 
-    clientId?: string; 
-    supplierId?: string; 
-    dateMin?: string; 
-    dateMax?: string; 
-    status?: string 
+  async exportBCsToExcel(params?: {
+    clientId?: string;
+    supplierId?: string;
+    dateMin?: string;
+    dateMax?: string;
+    status?: string
   }): Promise<Blob> {
       const queryParams = new URLSearchParams();
       if (params?.clientId) queryParams.append('clientId', params.clientId);
@@ -186,7 +186,7 @@ export class BcService {
         queryParams.append('etat', etat);
       }
 
-      const url = `/bandes-commandes/export/excel${queryParams.toString() ? '?' + queryParams.toString() : ''}`;
+      const url = `/bandes-commandes/export/import-format${queryParams.toString() ? '?' + queryParams.toString() : ''}`;
       return await this.api.downloadFile(url).toPromise();
   }
 
