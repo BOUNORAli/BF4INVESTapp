@@ -24,6 +24,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.apache.poi.xssf.usermodel.XSSFColor;
+import org.apache.poi.xssf.usermodel.XSSFCellStyle;
 import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayOutputStream;
@@ -1524,13 +1526,34 @@ public class ExcelExportService {
                 "FACTURE VENTE T TTC"
             };
             
-            // Créer le style de header jaune/doré
-            CellStyle yellowHeaderStyle = createYellowHeaderStyle(workbook);
+            // Couleurs spécifiques pour chaque colonne (dans l'ordre des colonnes)
+            String[] headerColors = {
+                "#DAE9F8",  // 1. N° BC
+                "#FFFFCC",  // 2. FRS
+                "#FFFFCC",  // 3. N FAC FRS
+                "#FFEFFF",  // 4. N° FAC VTE
+                "#FFEFFF",  // 5. DATE FAC VTE
+                "#FFEFFF",  // 6. ICE
+                "#FFEFFF",  // 7. CLENT
+                "#DAF2D0",  // 8. N° ARTICLE
+                "#DAF2D0",  // 9. DESIGNATION
+                "#DAF2D0",  // 10. U
+                "#DAF2D0",  // 11. QT ACHAT
+                "#FFFFCC",  // 12. PRIX ACHAT U HT
+                "#FFFFCC",  // 13. PRIX ACHAT U TTC
+                "#FFFFCC",  // 14. PRIX ACHAT T HT
+                "#FFFFCC",  // 15. TX TVA
+                "#FFFFCC",  // 16. FACTURE ACHAT TTC
+                "#FFEFFF",  // 17. QT LIVREE CLT
+                "#FFEFFF",  // 18. PRIX DE VENTE U HT
+                "#FFEFFF"   // 19. FACTURE VENTE T TTC
+            };
             
             for (int i = 0; i < headers.length; i++) {
                 Cell cell = headerRow.createCell(i);
                 cell.setCellValue(headers[i]);
-                cell.setCellStyle(yellowHeaderStyle);
+                CellStyle headerStyle = createHeaderStyleWithColor(workbook, headerColors[i]);
+                cell.setCellStyle(headerStyle);
             }
             
             // Générer les lignes d'export
@@ -2008,6 +2031,50 @@ public class ExcelExportService {
         font.setFontHeightInPoints((short) 11);
         style.setFont(font);
         style.setFillForegroundColor(IndexedColors.LIGHT_YELLOW.getIndex());
+        style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        style.setAlignment(HorizontalAlignment.CENTER);
+        style.setVerticalAlignment(VerticalAlignment.CENTER);
+        style.setBorderBottom(BorderStyle.THIN);
+        style.setBorderTop(BorderStyle.THIN);
+        style.setBorderLeft(BorderStyle.THIN);
+        style.setBorderRight(BorderStyle.THIN);
+        return style;
+    }
+    
+    /**
+     * Crée un style de header avec une couleur hex personnalisée
+     * @param workbook Le workbook XSSFWorkbook
+     * @param hexColor Couleur hex (ex: "#DAE9F8")
+     * @return CellStyle avec la couleur spécifiée
+     */
+    private CellStyle createHeaderStyleWithColor(Workbook workbook, String hexColor) {
+        CellStyle style = workbook.createCellStyle();
+        Font font = workbook.createFont();
+        font.setBold(true);
+        font.setColor(IndexedColors.BLACK.getIndex());
+        font.setFontHeightInPoints((short) 11);
+        style.setFont(font);
+        
+        // Convertir hex en RGB pour XSSFColor
+        if (workbook instanceof XSSFWorkbook && hexColor != null && hexColor.startsWith("#")) {
+            try {
+                // Enlever le # et convertir en RGB
+                String hex = hexColor.substring(1);
+                int r = Integer.parseInt(hex.substring(0, 2), 16);
+                int g = Integer.parseInt(hex.substring(2, 4), 16);
+                int b = Integer.parseInt(hex.substring(4, 6), 16);
+                
+                XSSFColor color = new XSSFColor(new byte[]{(byte)r, (byte)g, (byte)b}, null);
+                XSSFCellStyle xssfStyle = (XSSFCellStyle) style;
+                xssfStyle.setFillForegroundColor(color);
+            } catch (Exception e) {
+                // En cas d'erreur, utiliser la couleur par défaut
+                style.setFillForegroundColor(IndexedColors.LIGHT_YELLOW.getIndex());
+            }
+        } else {
+            style.setFillForegroundColor(IndexedColors.LIGHT_YELLOW.getIndex());
+        }
+        
         style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
         style.setAlignment(HorizontalAlignment.CENTER);
         style.setVerticalAlignment(VerticalAlignment.CENTER);
