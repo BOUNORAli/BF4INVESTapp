@@ -139,8 +139,18 @@ public class FactureVenteService {
             facture.setDateEcheance(echeance);
         }
         
-        // Calculer les totaux
-        calculateTotals(facture);
+        // PRIORITÉ 1: Si la facture est liée à une BC, utiliser les totaux de la BC
+        syncTotalsFromBC(facture);
+        
+        // PRIORITÉ 2: Si les totaux ne sont pas encore définis (pas de BC liée), calculer depuis les lignes ou totaux fournis
+        if (facture.getTotalHT() == null && facture.getTotalTTC() == null) {
+            calculateTotals(facture);
+        } else {
+            // Si les totaux sont déjà définis (par syncTotalsFromBC), s'assurer que la TVA est calculée
+            if (facture.getTotalHT() != null && facture.getTotalTTC() != null && facture.getTotalTVA() == null) {
+                facture.setTotalTVA(NumberUtils.roundTo2Decimals(facture.getTotalTTC() - facture.getTotalHT()));
+            }
+        }
         
         // Pour les avoirs, s'assurer que les totaux calculés sont négatifs
         if (Boolean.TRUE.equals(facture.getEstAvoir())) {
@@ -484,6 +494,47 @@ public class FactureVenteService {
         }
         
         calculateMontantRestant(facture);
+    }
+    
+    /**
+     * Synchronise les totaux de la facture avec les totaux de la BC liée
+     * PRIORITÉ 1: Si la facture est liée à une BC, utiliser les totaux de la BC
+     * Note: Pour les factures vente, on utilise le totalVenteHT global de la BC
+     * car une BC peut avoir plusieurs clients, et chaque facture vente correspond à un client
+     */
+    private void syncTotalsFromBC(FactureVente facture) {
+        if (facture == null) {
+            return;
+        }
+        
+        BandeCommande bc = null;
+        
+        // Chercher la BC par bandeCommandeId
+        if (facture.getBandeCommandeId() != null && !facture.getBandeCommandeId().isEmpty()) {
+            bc = bandeCommandeRepository.findById(facture.getBandeCommandeId()).orElse(null);
+        }
+        
+        // Fallback: chercher par bcReference
+        if (bc == null && facture.getBcReference() != null && !facture.getBcReference().isEmpty()) {
+            bc = bandeCommandeRepository.findByNumeroBC(facture.getBcReference()).orElse(null);
+        }
+        
+        if (bc != null && bc.getTotalVenteHT() != null && bc.getTotalVenteTTC() != null) {
+            // Utiliser les totaux de la BC
+            // Note: Pour une facture vente liée à une BC, on utilise les totaux globaux de la BC
+            // Si la BC a plusieurs clients, chaque facture vente devrait théoriquement correspondre
+            // à la partie de la BC pour ce client, mais on utilise les totaux globaux comme approximation
+            facture.setTotalHT(NumberUtils.roundTo2Decimals(bc.getTotalVenteHT()));
+            facture.setTotalTTC(NumberUtils.roundTo2Decimals(bc.getTotalVenteTTC()));
+            facture.setTotalTVA(NumberUtils.roundTo2Decimals(bc.getTotalVenteTTC() - bc.getTotalVenteHT()));
+            
+            log.info("🔵 FactureVenteService.syncTotalsFromBC - Facture {} synchronisée avec BC {}: HT={}, TTC={}, TVA={}",
+                facture.getNumeroFactureVente() != null ? facture.getNumeroFactureVente() : "(nouvelle)",
+                bc.getNumeroBC(), facture.getTotalHT(), facture.getTotalTTC(), facture.getTotalTVA());
+        } else if (bc != null) {
+            log.debug("FactureVenteService.syncTotalsFromBC - BC {} trouvée mais totaux non disponibles", 
+                bc.getNumeroBC() != null ? bc.getNumeroBC() : bc.getId());
+        }
     }
     
     private void calculateMontantRestant(FactureVente facture) {

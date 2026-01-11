@@ -1,10 +1,12 @@
 package com.bf4invest.service;
 
 import com.bf4invest.config.AppConfig;
+import com.bf4invest.model.BandeCommande;
 import com.bf4invest.model.FactureAchat;
 import com.bf4invest.model.LineItem;
 import com.bf4invest.model.PrevisionPaiement;
 import com.bf4invest.model.Product;
+import com.bf4invest.repository.BandeCommandeRepository;
 import com.bf4invest.repository.FactureAchatRepository;
 import com.bf4invest.util.NumberUtils;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +24,7 @@ import java.util.Optional;
 public class FactureAchatService {
     
     private final FactureAchatRepository factureRepository;
+    private final BandeCommandeRepository bandeCommandeRepository;
     private final AppConfig appConfig;
     private final AuditService auditService;
     private final ProductService productService;
@@ -120,8 +123,18 @@ public class FactureAchatService {
             facture.setDateEcheance(echeance);
         }
         
-        // Calculer les totaux
-        calculateTotals(facture);
+        // PRIORITÉ 1: Si la facture est liée à une BC, utiliser les totaux de la BC
+        syncTotalsFromBC(facture);
+        
+        // PRIORITÉ 2: Si les totaux ne sont pas encore définis (pas de BC liée), calculer depuis les lignes ou totaux fournis
+        if (facture.getTotalHT() == null && facture.getTotalTTC() == null) {
+            calculateTotals(facture);
+        } else {
+            // Si les totaux sont déjà définis (par syncTotalsFromBC), s'assurer que la TVA est calculée
+            if (facture.getTotalHT() != null && facture.getTotalTTC() != null && facture.getTotalTVA() == null) {
+                facture.setTotalTVA(NumberUtils.roundTo2Decimals(facture.getTotalTTC() - facture.getTotalHT()));
+            }
+        }
         
         // Pour les avoirs, s'assurer que les totaux calculés sont négatifs
         if (Boolean.TRUE.equals(facture.getEstAvoir())) {
@@ -415,6 +428,42 @@ public class FactureAchatService {
         }
         
         calculateMontantRestant(facture);
+    }
+    
+    /**
+     * Synchronise les totaux de la facture avec les totaux de la BC liée
+     * PRIORITÉ 1: Si la facture est liée à une BC, utiliser les totaux de la BC
+     */
+    private void syncTotalsFromBC(FactureAchat facture) {
+        if (facture == null) {
+            return;
+        }
+        
+        BandeCommande bc = null;
+        
+        // Chercher la BC par bandeCommandeId
+        if (facture.getBandeCommandeId() != null && !facture.getBandeCommandeId().isEmpty()) {
+            bc = bandeCommandeRepository.findById(facture.getBandeCommandeId()).orElse(null);
+        }
+        
+        // Fallback: chercher par bcReference
+        if (bc == null && facture.getBcReference() != null && !facture.getBcReference().isEmpty()) {
+            bc = bandeCommandeRepository.findByNumeroBC(facture.getBcReference()).orElse(null);
+        }
+        
+        if (bc != null && bc.getTotalAchatHT() != null && bc.getTotalAchatTTC() != null) {
+            // Utiliser les totaux de la BC
+            facture.setTotalHT(NumberUtils.roundTo2Decimals(bc.getTotalAchatHT()));
+            facture.setTotalTTC(NumberUtils.roundTo2Decimals(bc.getTotalAchatTTC()));
+            facture.setTotalTVA(NumberUtils.roundTo2Decimals(bc.getTotalAchatTTC() - bc.getTotalAchatHT()));
+            
+            log.info("🔵 FactureAchatService.syncTotalsFromBC - Facture {} synchronisée avec BC {}: HT={}, TTC={}, TVA={}",
+                facture.getNumeroFactureAchat() != null ? facture.getNumeroFactureAchat() : "(nouvelle)",
+                bc.getNumeroBC(), facture.getTotalHT(), facture.getTotalTTC(), facture.getTotalTVA());
+        } else if (bc != null) {
+            log.debug("FactureAchatService.syncTotalsFromBC - BC {} trouvée mais totaux non disponibles", 
+                bc.getNumeroBC() != null ? bc.getNumeroBC() : bc.getId());
+        }
     }
     
     private void calculateMontantRestant(FactureAchat facture) {
