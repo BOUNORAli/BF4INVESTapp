@@ -1630,101 +1630,113 @@ public class ExcelExportService {
                 }
             }
             
-            // Créer les styles pour les lignes alternées
-            CellStyle whiteRowTextStyle = defaultStyle;
-            CellStyle whiteRowNumberStyle = frenchNumberStyle;
-            CellStyle whiteRowDateStyle = dateStyle;
-            CellStyle whiteRowPercentStyle = percentStyle;
+            // Créer les styles pour chaque colonne avec les couleurs spécifiques
+            CellStyle[] columnTextStyles = new CellStyle[headerColors.length];
+            CellStyle[] columnNumberStyles = new CellStyle[headerColors.length];
+            CellStyle[] columnDateStyles = new CellStyle[headerColors.length];
+            CellStyle[] columnPercentStyles = new CellStyle[headerColors.length];
             
-            CellStyle lightGreenRowTextStyle = createLightGreenRowStyle(workbook);
-            CellStyle lightGreenRowNumberStyle = createFrenchNumberStyleWithBackground(workbook, lightGreenRowTextStyle);
-            CellStyle lightGreenRowDateStyle = createDateStyleWithBackgroundForExport(workbook, lightGreenRowTextStyle);
-            CellStyle lightGreenRowPercentStyle = createPercentStyleWithBackground(workbook, lightGreenRowTextStyle);
+            for (int i = 0; i < headerColors.length; i++) {
+                columnTextStyles[i] = createDataStyleWithColor(workbook, headerColors[i], "text");
+                columnNumberStyles[i] = createDataStyleWithColor(workbook, headerColors[i], "number");
+                columnDateStyles[i] = createDataStyleWithColor(workbook, headerColors[i], "date");
+                columnPercentStyles[i] = createDataStyleWithColor(workbook, headerColors[i], "percent");
+            }
             
-            // Remplir les données dans Excel avec styles alternés
+            // Remplir les données dans Excel avec les couleurs par colonne
             int dataRowNum = 1;
             for (ImportFormatRow row : exportRows) {
                 Row excelRow = sheet.createRow(dataRowNum++);
                 int colIndex = 0;
                 
-                // Déterminer le style de ligne (alternance blanc/vert clair)
-                // rowNum % 2 == 0 -> blanc (default), rowNum % 2 == 1 -> vert clair
-                boolean isLightGreenRow = (dataRowNum - 1) % 2 == 1;
-                CellStyle rowTextStyle = isLightGreenRow ? lightGreenRowTextStyle : whiteRowTextStyle;
-                CellStyle rowNumberStyle = isLightGreenRow ? lightGreenRowNumberStyle : whiteRowNumberStyle;
-                CellStyle rowDateStyle = isLightGreenRow ? lightGreenRowDateStyle : whiteRowDateStyle;
-                CellStyle rowPercentStyle = isLightGreenRow ? lightGreenRowPercentStyle : whiteRowPercentStyle;
+                // N° BC (colonne 0)
+                setCellValue(excelRow, colIndex, row.numeroBC, columnTextStyles[colIndex]);
+                colIndex++;
                 
-                // N° BC
-                setCellValue(excelRow, colIndex++, row.numeroBC, rowTextStyle);
+                // FRS (colonne 1)
+                setCellValue(excelRow, colIndex, row.fournisseur, columnTextStyles[colIndex]);
+                colIndex++;
                 
-                // FRS (après N° BC, avant N° FAC FRS)
-                setCellValue(excelRow, colIndex++, row.fournisseur, rowTextStyle);
+                // N FAC FRS (colonne 2)
+                setCellValue(excelRow, colIndex, row.numeroFactureFournisseur, columnTextStyles[colIndex]);
+                colIndex++;
                 
-                // N FAC FRS
-                setCellValue(excelRow, colIndex++, row.numeroFactureFournisseur, rowTextStyle);
+                // N° FAC VTE (colonne 3)
+                setCellValue(excelRow, colIndex, row.numeroFactureVente, columnTextStyles[colIndex]);
+                colIndex++;
                 
-                // N° FAC VTE
-                setCellValue(excelRow, colIndex++, row.numeroFactureVente, rowTextStyle);
-                
-                // DATE FAC VTE
-                Cell dateFVCell = excelRow.createCell(colIndex++);
+                // DATE FAC VTE (colonne 4)
+                Cell dateFVCell = excelRow.createCell(colIndex);
                 if (row.dateFactureVente != null) {
                     dateFVCell.setCellValue(row.dateFactureVente.format(DATE_FORMATTER));
-                    dateFVCell.setCellStyle(rowDateStyle);
+                    dateFVCell.setCellStyle(columnDateStyles[colIndex]);
                 } else {
                     dateFVCell.setCellValue("");
-                    dateFVCell.setCellStyle(rowTextStyle);
+                    dateFVCell.setCellStyle(columnTextStyles[colIndex]);
                 }
+                colIndex++;
                 
-                // ICE
-                setCellValue(excelRow, colIndex++, row.ice, rowTextStyle);
+                // ICE (colonne 5)
+                setCellValue(excelRow, colIndex, row.ice, columnTextStyles[colIndex]);
+                colIndex++;
                 
-                // CLENT
-                setCellValue(excelRow, colIndex++, row.client, rowTextStyle);
+                // CLENT (colonne 6)
+                setCellValue(excelRow, colIndex, row.client, columnTextStyles[colIndex]);
+                colIndex++;
                 
-                // N° ARTICLE
-                setCellValue(excelRow, colIndex++, row.numeroArticle, rowTextStyle);
+                // N° ARTICLE (colonne 7)
+                setCellValue(excelRow, colIndex, row.numeroArticle, columnTextStyles[colIndex]);
+                colIndex++;
                 
-                // DESIGNATION
-                setCellValue(excelRow, colIndex++, row.designation, rowTextStyle);
+                // DESIGNATION (colonne 8)
+                setCellValue(excelRow, colIndex, row.designation, columnTextStyles[colIndex]);
+                colIndex++;
                 
-                // U
-                setCellValue(excelRow, colIndex++, row.unite, rowTextStyle);
+                // U (colonne 9)
+                setCellValue(excelRow, colIndex, row.unite, columnTextStyles[colIndex]);
+                colIndex++;
                 
-                // QT ACHAT (au lieu de QT BC)
-                setCellValue(excelRow, colIndex++, row.quantiteBC, rowNumberStyle);
+                // QT ACHAT (colonne 10)
+                setCellValue(excelRow, colIndex, row.quantiteBC, columnNumberStyles[colIndex]);
+                colIndex++;
                 
-                // PRIX ACHAT U HT (au lieu de PU ACHAT HT)
-                setCellValue(excelRow, colIndex++, row.prixAchatUnitaireHT, rowNumberStyle);
+                // PRIX ACHAT U HT (colonne 11)
+                setCellValue(excelRow, colIndex, row.prixAchatUnitaireHT, columnNumberStyles[colIndex]);
+                colIndex++;
                 
-                // PRIX ACHAT U TTC (nouvelle colonne)
-                setCellValue(excelRow, colIndex++, row.prixAchatUnitaireTTC, rowNumberStyle);
+                // PRIX ACHAT U TTC (colonne 12)
+                setCellValue(excelRow, colIndex, row.prixAchatUnitaireTTC, columnNumberStyles[colIndex]);
+                colIndex++;
                 
-                // PRIX ACHAT T HT
-                setCellValue(excelRow, colIndex++, row.prixAchatTotalHT, rowNumberStyle);
+                // PRIX ACHAT T HT (colonne 13)
+                setCellValue(excelRow, colIndex, row.prixAchatTotalHT, columnNumberStyles[colIndex]);
+                colIndex++;
                 
-                // TX TVA
-                Cell tvaCell = excelRow.createCell(colIndex++);
+                // TX TVA (colonne 14)
+                Cell tvaCell = excelRow.createCell(colIndex);
                 if (row.tauxTVA != null) {
                     tvaCell.setCellValue(row.tauxTVA / 100.0); // Format Excel pourcentage
-                    tvaCell.setCellStyle(rowPercentStyle);
+                    tvaCell.setCellStyle(columnPercentStyles[colIndex]);
                 } else {
                     tvaCell.setCellValue("");
-                    tvaCell.setCellStyle(rowTextStyle);
+                    tvaCell.setCellStyle(columnTextStyles[colIndex]);
                 }
+                colIndex++;
                 
-                // FACTURE ACHAT TTC
-                setCellValue(excelRow, colIndex++, row.factureAchatTTC, rowNumberStyle);
+                // FACTURE ACHAT TTC (colonne 15)
+                setCellValue(excelRow, colIndex, row.factureAchatTTC, columnNumberStyles[colIndex]);
+                colIndex++;
                 
-                // QT LIVREE CLT (au lieu de QT LIVREE)
-                setCellValue(excelRow, colIndex++, row.quantiteLivree, rowNumberStyle);
+                // QT LIVREE CLT (colonne 16)
+                setCellValue(excelRow, colIndex, row.quantiteLivree, columnNumberStyles[colIndex]);
+                colIndex++;
                 
-                // PRIX DE VENTE U HT (au lieu de PU VENTE HT)
-                setCellValue(excelRow, colIndex++, row.prixVenteUnitaireHT, rowNumberStyle);
+                // PRIX DE VENTE U HT (colonne 17)
+                setCellValue(excelRow, colIndex, row.prixVenteUnitaireHT, columnNumberStyles[colIndex]);
+                colIndex++;
                 
-                // FACTURE VENTE T TTC (au lieu de FACTURE VENTE TTC, sans PU VENTE TTC ni MARGE U TTC)
-                setCellValue(excelRow, colIndex++, row.factureVenteTTC, rowNumberStyle);
+                // FACTURE VENTE T TTC (colonne 18)
+                setCellValue(excelRow, colIndex, row.factureVenteTTC, columnNumberStyles[colIndex]);
             }
             
             // Ajuster la largeur des colonnes
@@ -2082,6 +2094,64 @@ public class ExcelExportService {
         style.setBorderTop(BorderStyle.THIN);
         style.setBorderLeft(BorderStyle.THIN);
         style.setBorderRight(BorderStyle.THIN);
+        return style;
+    }
+    
+    /**
+     * Crée un style de données avec une couleur hex personnalisée
+     * @param workbook Le workbook XSSFWorkbook
+     * @param hexColor Couleur hex (ex: "#DAE9F8")
+     * @param type Type de style: "text", "number", "date", "percent"
+     * @return CellStyle avec la couleur spécifiée
+     */
+    private CellStyle createDataStyleWithColor(Workbook workbook, String hexColor, String type) {
+        CellStyle style = workbook.createCellStyle();
+        Font font = workbook.createFont();
+        font.setColor(IndexedColors.BLACK.getIndex());
+        font.setFontHeightInPoints((short) 11);
+        style.setFont(font);
+        
+        // Convertir hex en RGB pour XSSFColor
+        if (workbook instanceof XSSFWorkbook && hexColor != null && hexColor.startsWith("#")) {
+            try {
+                // Enlever le # et convertir en RGB
+                String hex = hexColor.substring(1);
+                int r = Integer.parseInt(hex.substring(0, 2), 16);
+                int g = Integer.parseInt(hex.substring(2, 4), 16);
+                int b = Integer.parseInt(hex.substring(4, 6), 16);
+                
+                XSSFColor color = new XSSFColor(new byte[]{(byte)r, (byte)g, (byte)b}, null);
+                XSSFCellStyle xssfStyle = (XSSFCellStyle) style;
+                xssfStyle.setFillForegroundColor(color);
+            } catch (Exception e) {
+                // En cas d'erreur, pas de couleur de fond
+            }
+        }
+        
+        style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        
+        // Appliquer le format selon le type
+        DataFormat format = workbook.createDataFormat();
+        switch (type) {
+            case "number":
+                style.setDataFormat(format.getFormat("#,##0.00"));
+                style.setAlignment(HorizontalAlignment.RIGHT);
+                break;
+            case "date":
+                style.setDataFormat(format.getFormat("dd/mm/yyyy"));
+                style.setAlignment(HorizontalAlignment.CENTER);
+                break;
+            case "percent":
+                style.setDataFormat(format.getFormat("0.00%"));
+                style.setAlignment(HorizontalAlignment.RIGHT);
+                break;
+            case "text":
+            default:
+                style.setAlignment(HorizontalAlignment.LEFT);
+                break;
+        }
+        
+        style.setVerticalAlignment(VerticalAlignment.CENTER);
         return style;
     }
     
