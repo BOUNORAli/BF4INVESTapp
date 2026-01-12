@@ -23,13 +23,20 @@ public class BandeCommande {
     private String numeroBC; // Format: BF4-BC-YYYY-NNNN
     private LocalDate dateBC;
     
-    // Fournisseur unique
-    private String fournisseurId;
+    // ===== NOUVEAU: Structure multi-fournisseurs =====
+    
+    // Fournisseurs avec leurs lignes d'achat respectives
+    private List<FournisseurAchat> fournisseursAchat;
+    
+    // ===== COMPATIBILITE ANCIENNE STRUCTURE FOURNISSEUR =====
+    
+    @Deprecated
+    private String fournisseurId; // Ancien champ - sera migré vers fournisseursAchat
+    
+    @Deprecated
+    private List<LigneAchat> lignesAchat; // Ancien champ - sera migré vers fournisseursAchat
     
     // ===== NOUVEAU: Structure multi-clients =====
-    
-    // Lignes d'achat communes (auprès du fournisseur)
-    private List<LigneAchat> lignesAchat;
     
     // Clients avec leurs lignes de vente respectives
     private List<ClientVente> clientsVente;
@@ -72,6 +79,24 @@ public class BandeCommande {
     
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    
+    /**
+     * Vérifie si le BC utilise la nouvelle structure multi-fournisseurs
+     */
+    public boolean isMultiFournisseur() {
+        return fournisseursAchat != null && !fournisseursAchat.isEmpty();
+    }
+    
+    /**
+     * Retourne le nombre de fournisseurs dans ce BC
+     */
+    public int getNombreFournisseurs() {
+        if (fournisseursAchat != null && !fournisseursAchat.isEmpty()) {
+            return fournisseursAchat.size();
+        }
+        // Compatibilité: ancien format avec un seul fournisseur
+        return fournisseurId != null ? 1 : 0;
+    }
     
     /**
      * Vérifie si le BC utilise la nouvelle structure multi-clients

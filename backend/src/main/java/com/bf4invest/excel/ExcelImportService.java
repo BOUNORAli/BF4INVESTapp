@@ -204,47 +204,102 @@ public class ExcelImportService {
                     processedRows, bcMap.size(), faMap.size(), fvMap.size());
             
             // NOUVELLE LOGIQUE : Convertir les ProductAggregate en LigneAchat et créer/mettre à jour les produits
+            // Grouper par BC puis par fournisseur
             for (Map.Entry<String, BandeCommande> bcEntry : bcMap.entrySet()) {
                 String bcNumero = bcEntry.getKey();
                 BandeCommande bc = bcEntry.getValue();
                 
-                // Récupérer les agrégats de produits pour cette BC
-                Map<String, ProductAggregate> productsMap = bcProductsMap.getOrDefault(bcNumero, new HashMap<>());
+                // Grouper les ProductAggregate par fournisseur pour cette BC
+                Map<String, Map<String, ProductAggregate>> productsByFournisseur = new HashMap<>();
+                for (Map.Entry<String, Map<String, ProductAggregate>> entry : bcProductsMap.entrySet()) {
+                    String bcFournisseurKey = entry.getKey();
+                    if (bcFournisseurKey.startsWith(bcNumero + "|")) {
+                        String fournisseurId = bcFournisseurKey.substring(bcNumero.length() + 1);
+                        productsByFournisseur.put(fournisseurId, entry.getValue());
+                    }
+                }
                 
-                // Convertir ProductAggregate en LigneAchat (une seule ligne par produit)
-                List<LigneAchat> lignesAchat = new ArrayList<>();
-                for (ProductAggregate agg : productsMap.values()) {
-                    // Créer/mettre à jour le produit avec prix pondérés
-                    createOrUpdateProductFromAggregate(agg, bc.getFournisseurId(), result);
+                // Créer les FournisseurAchat pour chaque fournisseur
+                List<FournisseurAchat> fournisseursAchat = new ArrayList<>();
+                for (Map.Entry<String, Map<String, ProductAggregate>> fournisseurEntry : productsByFournisseur.entrySet()) {
+                    String fournisseurId = fournisseurEntry.getKey();
+                    Map<String, ProductAggregate> productsMap = fournisseurEntry.getValue();
                     
-                    // Créer la LigneAchat
-                    LigneAchat ligneAchat = LigneAchat.builder()
-                        .produitRef(agg.produitRef)
-                        .designation(agg.designation)
-                        .unite(agg.unite != null ? agg.unite : "U")
-                        .quantiteAchetee(agg.quantiteAcheteeTotale)
-                        .prixAchatUnitaireHT(agg.getPrixAchatPondere())
-                        .tva(agg.tva)
-                        .build();
+                    // Convertir ProductAggregate en LigneAchat (une seule ligne par produit)
+                    List<LigneAchat> lignesAchat = new ArrayList<>();
+                    for (ProductAggregate agg : productsMap.values()) {
+                        // Créer/mettre à jour le produit avec prix pondérés
+                        createOrUpdateProductFromAggregate(agg, fournisseurId, result);
+                        
+                        // Créer la LigneAchat
+                        LigneAchat ligneAchat = LigneAchat.builder()
+                            .produitRef(agg.produitRef)
+                            .designation(agg.designation)
+                            .unite(agg.unite != null ? agg.unite : "U")
+                            .quantiteAchetee(agg.quantiteAcheteeTotale)
+                            .prixAchatUnitaireHT(agg.getPrixAchatPondere())
+                            .tva(agg.tva)
+                            .build();
+                        
+                        // Calculer les totaux (arrondis)
+                        if (ligneAchat.getQuantiteAchetee() != null && ligneAchat.getPrixAchatUnitaireHT() != null) {
+                            ligneAchat.setTotalHT(NumberUtils.roundTo2Decimals(ligneAchat.getQuantiteAchetee() * ligneAchat.getPrixAchatUnitaireHT()));
+                            if (ligneAchat.getTva() != null) {
+                                ligneAchat.setTotalTTC(NumberUtils.roundTo2Decimals(ligneAchat.getTotalHT() * (1 + (ligneAchat.getTva() / 100.0))));
+                            }
+                        }
+                        
+                        lignesAchat.add(ligneAchat);
+                    }
                     
-                    // Calculer les totaux (arrondis)
-                    if (ligneAchat.getQuantiteAchetee() != null && ligneAchat.getPrixAchatUnitaireHT() != null) {
-                        ligneAchat.setTotalHT(NumberUtils.roundTo2Decimals(ligneAchat.getQuantiteAchetee() * ligneAchat.getPrixAchatUnitaireHT()));
-                        if (ligneAchat.getTva() != null) {
-                            ligneAchat.setTotalTTC(NumberUtils.roundTo2Decimals(ligneAchat.getTotalHT() * (1 + (ligneAchat.getTva() / 100.0))));
+                    // Calculer les totaux pour ce fournisseur
+                    double totalHT = 0.0;
+                    double totalTTC = 0.0;
+                    double totalTVA = 0.0;
+                    for (LigneAchat la : lignesAchat) {
+                        if (la.getTotalHT() != null) {
+                            totalHT += la.getTotalHT();
+                        }
+                        if (la.getTotalTTC() != null) {
+                            totalTTC += la.getTotalTTC();
+                        }
+                        if (la.getTva() != null && la.getTotalHT() != null) {
+                            totalTVA += la.getTotalHT() * (la.getTva() / 100.0);
                         }
                     }
                     
-                    lignesAchat.add(ligneAchat);
+                    FournisseurAchat fournisseurAchat = new FournisseurAchat();
+                    fournisseurAchat.setFournisseurId(fournisseurId);
+                    fournisseurAchat.setLignesAchat(lignesAchat);
+                    fournisseurAchat.setTotalAchatHT(NumberUtils.roundTo2Decimals(totalHT));
+                    fournisseurAchat.setTotalAchatTTC(NumberUtils.roundTo2Decimals(totalTTC));
+                    fournisseurAchat.setTotalTVA(NumberUtils.roundTo2Decimals(totalTVA));
+                    
+                    fournisseursAchat.add(fournisseurAchat);
                 }
                 
-                bc.setLignesAchat(lignesAchat);
+                bc.setFournisseursAchat(fournisseursAchat);
+                
+                // Rétrocompatibilité: garder aussi lignesAchat pour migration
+                // Prendre les lignes du premier fournisseur si disponible
+                if (!fournisseursAchat.isEmpty() && fournisseursAchat.get(0).getLignesAchat() != null) {
+                    bc.setLignesAchat(fournisseursAchat.get(0).getLignesAchat());
+                }
+                
+                // Rétrocompatibilité: garder aussi fournisseurId du premier fournisseur
+                if (!fournisseursAchat.isEmpty()) {
+                    bc.setFournisseurId(fournisseursAchat.get(0).getFournisseurId());
+                }
                 
                 // Créer les ClientVente à partir des ventes agrégées
+                // Les ventes sont agrégées par produit, il faut les regrouper par client
                 List<ClientVente> clientsVente = new ArrayList<>();
                 Map<String, ClientVente> clientVenteMap = new HashMap<>();
                 
-                for (ProductAggregate agg : productsMap.values()) {
+                // Parcourir tous les fournisseurs pour récupérer tous les ProductAggregate
+                for (Map.Entry<String, Map<String, ProductAggregate>> fournisseurEntry : productsByFournisseur.entrySet()) {
+                    Map<String, ProductAggregate> productsMap = fournisseurEntry.getValue();
+                    for (ProductAggregate agg : productsMap.values()) {
                     for (Map.Entry<String, List<VenteInfo>> clientEntry : agg.ventesParClient.entrySet()) {
                         String clientId = clientEntry.getKey();
                         List<VenteInfo> ventes = clientEntry.getValue();
@@ -285,6 +340,7 @@ public class ExcelImportService {
                         
                         clientVente.getLignesVente().add(ligneVente);
                     }
+                    }
                 }
                 
                 // Calculer les totaux pour chaque ClientVente
@@ -307,18 +363,25 @@ public class ExcelImportService {
                         
                         // Calculer la marge (prix vente - prix achat)
                         if (lv.getPrixVenteUnitaireHT() != null && lv.getQuantiteVendue() != null) {
-                            // Trouver le prix d'achat correspondant
-                            for (LigneAchat la : lignesAchat) {
-                                if (la.getProduitRef() != null && la.getProduitRef().equals(lv.getProduitRef())) {
-                                    if (la.getPrixAchatUnitaireHT() != null) {
-                                        double margeUnitaire = NumberUtils.roundTo2Decimals(lv.getPrixVenteUnitaireHT() - la.getPrixAchatUnitaireHT());
-                                        margeTotale += margeUnitaire * lv.getQuantiteVendue();
-                                        lv.setMargeUnitaire(margeUnitaire);
-                                        if (la.getPrixAchatUnitaireHT() > 0) {
-                                            lv.setMargePourcentage(NumberUtils.roundTo2Decimals((margeUnitaire / la.getPrixAchatUnitaireHT()) * 100));
+                            // Trouver le prix d'achat correspondant dans tous les fournisseurs
+                            boolean found = false;
+                            for (FournisseurAchat fa : fournisseursAchat) {
+                                if (fa.getLignesAchat() != null) {
+                                    for (LigneAchat la : fa.getLignesAchat()) {
+                                        if (la.getProduitRef() != null && la.getProduitRef().equals(lv.getProduitRef())) {
+                                            if (la.getPrixAchatUnitaireHT() != null) {
+                                                double margeUnitaire = NumberUtils.roundTo2Decimals(lv.getPrixVenteUnitaireHT() - la.getPrixAchatUnitaireHT());
+                                                margeTotale += margeUnitaire * lv.getQuantiteVendue();
+                                                lv.setMargeUnitaire(margeUnitaire);
+                                                if (la.getPrixAchatUnitaireHT() > 0) {
+                                                    lv.setMargePourcentage(NumberUtils.roundTo2Decimals((margeUnitaire / la.getPrixAchatUnitaireHT()) * 100));
+                                                }
+                                                found = true;
+                                                break;
+                                            }
                                         }
                                     }
-                                    break;
+                                    if (found) break;
                                 }
                             }
                         }
@@ -342,20 +405,23 @@ public class ExcelImportService {
             }
             
             // Calculer les totaux et ajouter les lignes pour les factures
-            for (FactureAchat fa : faMap.values()) {
-                // Utiliser bcReference comme clé pour récupérer les lignes
-                List<LineItem> lignes = faLignesMap.getOrDefault(fa.getBcReference(), new ArrayList<>());
+            for (Map.Entry<String, FactureAchat> faEntry : faMap.entrySet()) {
+                String faKey = faEntry.getKey();
+                FactureAchat fa = faEntry.getValue();
+                
+                // Utiliser la clé composite pour récupérer les lignes
+                List<LineItem> lignes = faLignesMap.getOrDefault(faKey, new ArrayList<>());
                 fa.setLignes(lignes);
-                // PRIORITÉ : Utiliser les totaux Excel si disponibles
-                String bcRef = fa.getBcReference();
-                if (bcRef != null) {
+                
+                // PRIORITÉ : Utiliser les totaux Excel si disponibles (clé composite)
+                if (faKey != null) {
                     // PRIORITÉ 1 : Utiliser le total HT Excel direct si disponible (évite la conversion)
-                    Double totalHTFromExcel = faTotalHTFromExcel.get(bcRef);
+                    Double totalHTFromExcel = faTotalHTFromExcel.get(faKey);
                     if (totalHTFromExcel != null && totalHTFromExcel > 0) {
                         fa.setTotalHT(NumberUtils.roundTo2Decimals(totalHTFromExcel));
                         // Si on a aussi le TTC Excel, l'utiliser, sinon calculer TTC depuis HT
-                        if (faTotalTTCFromExcel.containsKey(bcRef)) {
-                            Double totalTTCFromExcel = faTotalTTCFromExcel.get(bcRef);
+                        if (faTotalTTCFromExcel.containsKey(faKey)) {
+                            Double totalTTCFromExcel = faTotalTTCFromExcel.get(faKey);
                             fa.setTotalTTC(NumberUtils.roundTo2Decimals(totalTTCFromExcel));
                             fa.setTotalTVA(NumberUtils.roundTo2Decimals(totalTTCFromExcel - totalHTFromExcel));
                         } else {
@@ -363,22 +429,22 @@ public class ExcelImportService {
                             calculateFactureAchatTotalsFromExcelTotal(fa);
                         }
                         fa.setMontantRestant(NumberUtils.roundTo2Decimals(fa.getTotalTTC()));
-                        log.debug("Facture Achat BC {} : Total HT Excel direct (sommé) = {}, Total TTC = {}", 
-                            bcRef, totalHTFromExcel, fa.getTotalTTC());
-                    } else if (faTotalTTCFromExcel.containsKey(bcRef)) {
+                        log.debug("Facture Achat {} : Total HT Excel direct (sommé) = {}, Total TTC = {}", 
+                            faKey, totalHTFromExcel, fa.getTotalTTC());
+                    } else if (faTotalTTCFromExcel.containsKey(faKey)) {
                         // PRIORITÉ 2 : Utiliser le total TTC Excel et convertir en HT
-                        Double totalTTCFromExcel = faTotalTTCFromExcel.get(bcRef);
+                        Double totalTTCFromExcel = faTotalTTCFromExcel.get(faKey);
                         fa.setTotalTTC(NumberUtils.roundTo2Decimals(totalTTCFromExcel));
                         // Calculer HT depuis TTC en utilisant le taux TVA moyen des lignes ou 20% par défaut
                         calculateFactureAchatTotalsFromExcelTotal(fa);
-                        log.debug("Facture Achat BC {} : Total TTC Excel (sommé) = {}, Total HT calculé = {}", 
-                            bcRef, totalTTCFromExcel, fa.getTotalHT());
+                        log.debug("Facture Achat {} : Total TTC Excel (sommé) = {}, Total HT calculé = {}", 
+                            faKey, totalTTCFromExcel, fa.getTotalHT());
                     } else {
                         // PRIORITÉ 3 : Calculer depuis les lignes si pas de total Excel
                         calculateFactureAchatTotals(fa);
                     }
                 } else {
-                    // Calculer depuis les lignes si pas de référence BC
+                    // Calculer depuis les lignes si pas de clé
                     calculateFactureAchatTotals(fa);
                 }
             }
@@ -505,11 +571,12 @@ public class ExcelImportService {
                         // Mettre à jour la BC existante via le service (appelle calculateTotals)
                         BandeCommande existingBC = existing.get();
                         existingBC.setLignes(bc.getLignes());
-                        existingBC.setLignesAchat(bc.getLignesAchat()); // Mettre à jour aussi lignesAchat
+                        existingBC.setLignesAchat(bc.getLignesAchat()); // Rétrocompatibilité
+                        existingBC.setFournisseursAchat(bc.getFournisseursAchat()); // NOUVEAU: Mettre à jour fournisseursAchat
                         existingBC.setClientsVente(bc.getClientsVente()); // IMPORTANT: Mettre à jour clientsVente
                         existingBC.setDateBC(bc.getDateBC());
                         existingBC.setClientId(bc.getClientId());
-                        existingBC.setFournisseurId(bc.getFournisseurId());
+                        existingBC.setFournisseurId(bc.getFournisseurId()); // Rétrocompatibilité
                         existingBC.setEtat("envoyee");
                         existingBC.setUpdatedAt(LocalDateTime.now());
                         
@@ -638,8 +705,22 @@ public class ExcelImportService {
                     } else {
                         // Fallback: chercher par fournisseur et date
                         for (BandeCommande bc : bcMap.values()) {
-                            if (bc.getFournisseurId() != null && bc.getFournisseurId().equals(fa.getFournisseurId()) 
-                                && bc.getDateBC() != null && fa.getDateFacture() != null
+                            // Vérifier si le fournisseur existe dans fournisseursAchat
+                            boolean found = false;
+                            if (bc.getFournisseursAchat() != null) {
+                                for (FournisseurAchat faBC : bc.getFournisseursAchat()) {
+                                    if (faBC.getFournisseurId() != null && faBC.getFournisseurId().equals(fa.getFournisseurId())) {
+                                        found = true;
+                                        break;
+                                    }
+                                }
+                            }
+                            // Fallback rétrocompatibilité
+                            if (!found && bc.getFournisseurId() != null && bc.getFournisseurId().equals(fa.getFournisseurId())) {
+                                found = true;
+                            }
+                            
+                            if (found && bc.getDateBC() != null && fa.getDateFacture() != null
                                 && bc.getDateBC().equals(fa.getDateFacture())) {
                                 fa.setBandeCommandeId(bc.getId());
                                 break;
@@ -647,14 +728,8 @@ public class ExcelImportService {
                         }
                     }
                     
-                    // Vérifier doublon par BC (une facture achat par BC)
-                    if (fa.getBandeCommandeId() != null) {
-                        List<FactureAchat> existingByBC = factureAchatRepository.findByBandeCommandeId(fa.getBandeCommandeId());
-                        if (!existingByBC.isEmpty()) {
-                            result.getWarnings().add("Facture Achat pour BC " + fa.getBcReference() + " déjà existante, ignorée");
-                            continue;
-                        }
-                    }
+                    // SUPPRIMÉ: Vérification de doublon restrictive qui empêchait plusieurs factures par BC
+                    // Maintenant on permet plusieurs factures du même fournisseur pour le même BC
                     
                     // Utiliser le service pour créer la facture (génère automatiquement le numéro)
                     // Le service génère le numéro si non fourni
@@ -1443,7 +1518,7 @@ public class ExcelImportService {
         String fournisseurId = findOrCreateFournisseur(fournisseurNom, result);
         final String finalFournisseurId = fournisseurId; // Copie finale pour lambda
         
-        // 4. Créer ou récupérer la BC
+        // 4. Créer ou récupérer la BC (une seule BC par numeroBC, avec plusieurs fournisseurs possibles)
         BandeCommande bc = bcMap.computeIfAbsent(finalNumeroBC, k -> {
             BandeCommande newBc = new BandeCommande();
             newBc.setNumeroBC(finalNumeroBC);
@@ -1476,11 +1551,35 @@ public class ExcelImportService {
             newBc.setDateBC(dateBC);
             
             newBc.setClientId(finalClientId);
+            // Rétrocompatibilité: garder fournisseurId pour migration
             newBc.setFournisseurId(finalFournisseurId);
+            // Nouvelle structure: initialiser fournisseursAchat
+            newBc.setFournisseursAchat(new ArrayList<>());
             newBc.setEtat("envoyee"); // Si factures présentes, la BC est déjà envoyée
             newBc.setLignes(new ArrayList<>());
             return newBc;
         });
+        
+        // 4.1 Gérer le fournisseur dans la nouvelle structure multi-fournisseurs
+        // Chercher si ce fournisseur existe déjà dans fournisseursAchat
+        FournisseurAchat fournisseurAchat = null;
+        if (bc.getFournisseursAchat() == null) {
+            bc.setFournisseursAchat(new ArrayList<>());
+        }
+        for (FournisseurAchat fa : bc.getFournisseursAchat()) {
+            if (fa.getFournisseurId() != null && fa.getFournisseurId().equals(finalFournisseurId)) {
+                fournisseurAchat = fa;
+                break;
+            }
+        }
+        
+        // Si le fournisseur n'existe pas encore, le créer
+        if (fournisseurAchat == null) {
+            fournisseurAchat = new FournisseurAchat();
+            fournisseurAchat.setFournisseurId(finalFournisseurId);
+            fournisseurAchat.setLignesAchat(new ArrayList<>());
+            bc.getFournisseursAchat().add(fournisseurAchat);
+        }
         
         // 5. NOUVELLE LOGIQUE : Agréger les données produit au lieu d'ajouter directement
         // Récupérer les données du produit depuis la ligne Excel
@@ -1504,8 +1603,11 @@ public class ExcelImportService {
         String produitKey = (finalProduitRef != null ? finalProduitRef : "") + "|" + 
                            (finalDesignation != null ? finalDesignation : "") + "|" + finalUnite;
         
-        // Récupérer ou créer l'agrégat pour ce produit dans cette BC
-        Map<String, ProductAggregate> productsForBC = bcProductsMap.computeIfAbsent(finalNumeroBC, k -> new HashMap<>());
+        // Clé composite pour grouper par BC+Fournisseur
+        String bcFournisseurKey = finalNumeroBC + "|" + finalFournisseurId;
+        
+        // Récupérer ou créer l'agrégat pour ce produit dans cette BC+Fournisseur
+        Map<String, ProductAggregate> productsForBC = bcProductsMap.computeIfAbsent(bcFournisseurKey, k -> new HashMap<>());
         ProductAggregate productAgg = productsForBC.computeIfAbsent(produitKey, k -> {
             ProductAggregate agg = new ProductAggregate();
             agg.produitRef = finalProduitRef;
@@ -1560,18 +1662,21 @@ public class ExcelImportService {
         bc.getLignes().add(ligne);
         
         // 6. Créer ou récupérer la facture achat
-        // On crée toujours une facture achat pour chaque BC, même sans numéro facture fournisseur
-        // Le numéro facture fournisseur est stocké comme référence externe
+        // On crée une facture achat par combinaison BC+Fournisseur+NuméroFacture
+        // Cela permet plusieurs factures du même fournisseur pour le même BC
         String numeroFactureFournisseur = getCellValue(row, columnMap, "numero_facture_fournisseur");
         if (numeroFactureFournisseur != null) {
             numeroFactureFournisseur = numeroFactureFournisseur.trim();
         }
         
-        // Utiliser la BC comme clé pour grouper les factures achats (une facture achat par BC)
-        // Si plusieurs lignes ont la même BC, elles seront regroupées dans la même facture
+        // Clé composite pour distinguer les factures : BC|Fournisseur|NuméroFacture
+        // Si numéro facture est vide, utiliser "DEFAULT" pour permettre une facture par défaut par fournisseur
+        String faKey = finalNumeroBC + "|" + finalFournisseurId + "|" + 
+                      (numeroFactureFournisseur != null && !numeroFactureFournisseur.isEmpty() 
+                       ? numeroFactureFournisseur : "DEFAULT");
         final String finalNumeroFactureFournisseur = numeroFactureFournisseur; // Référence fournisseur
         
-        FactureAchat fa = faMap.computeIfAbsent(finalNumeroBC, k -> {
+        FactureAchat fa = faMap.computeIfAbsent(faKey, k -> {
             FactureAchat newFa = new FactureAchat();
             // Initialiser les champs avoir par défaut (rétrocompatibilité)
             newFa.setEstAvoir(false);
@@ -1653,22 +1758,22 @@ public class ExcelImportService {
             }
         }
         
-        // Stocker l'association FA -> BC (utiliser BC comme clé)
-        faToBcNumMap.put(finalNumeroBC, finalNumeroBC);
+        // Stocker l'association FA -> BC (utiliser clé composite)
+        faToBcNumMap.put(faKey, finalNumeroBC);
         
         // PRIORITÉ : Lire directement le total TTC par ligne depuis la colonne "facture_achat_ttc" du fichier Excel
         // IMPORTANT: Cette colonne contient des totaux TTC par ligne, pas un total global. Il faut SOMMER toutes les lignes.
-        // Si présent, accumuler (sommer) toutes les valeurs pour le même BC
+        // Si présent, accumuler (sommer) toutes les valeurs pour la même facture (clé composite)
         Double factureAchatTTCFromExcel = getDoubleValue(row, columnMap, "facture_achat_ttc");
         if (factureAchatTTCFromExcel != null && factureAchatTTCFromExcel != 0) {
             // Stocker le total brut depuis Excel (utiliser la valeur absolue car les avoirs sont gérés séparément)
             Double absValue = Math.abs(factureAchatTTCFromExcel);
-            // SOMMER toutes les valeurs pour la même BC (chaque ligne a sa propre valeur TTC)
-            faTotalTTCFromExcel.merge(finalNumeroBC, absValue, Double::sum);
+            // SOMMER toutes les valeurs pour la même facture (clé composite)
+            faTotalTTCFromExcel.merge(faKey, absValue, Double::sum);
             // SOMMER aussi au niveau de la BC pour aligner les totaux
             bcTotalAchatTTCFromExcel.merge(finalNumeroBC, absValue, Double::sum);
-            log.trace("BC {} : Ajout ligne facture_achat_ttc = {}, total accumulé = {}", 
-                finalNumeroBC, absValue, bcTotalAchatTTCFromExcel.get(finalNumeroBC));
+            log.trace("BC {} FA {} : Ajout ligne facture_achat_ttc = {}, total FA accumulé = {}, total BC accumulé = {}", 
+                finalNumeroBC, faKey, absValue, faTotalTTCFromExcel.get(faKey), bcTotalAchatTTCFromExcel.get(finalNumeroBC));
         }
         
         // OPTIONNEL : Lire aussi directement le total HT depuis "prix_achat_total_ht" si disponible (évite la conversion)
@@ -1677,16 +1782,16 @@ public class ExcelImportService {
             Double absValueHT = Math.abs(prixAchatTotalHTFromExcel);
             // SOMMER les totaux HT directs pour la même BC
             bcTotalAchatHTFromExcel.merge(finalNumeroBC, absValueHT, Double::sum);
-            // SOMMER aussi pour la facture achat (même clé que BC car une facture achat par BC)
-            faTotalHTFromExcel.merge(finalNumeroBC, absValueHT, Double::sum);
+            // SOMMER aussi pour la facture achat (clé composite)
+            faTotalHTFromExcel.merge(faKey, absValueHT, Double::sum);
             log.trace("BC {} FA {} : Ajout ligne prix_achat_total_ht = {}, total HT BC accumulé = {}, total HT FA accumulé = {}", 
-                finalNumeroBC, finalNumeroBC, absValueHT, 
-                bcTotalAchatHTFromExcel.get(finalNumeroBC), faTotalHTFromExcel.get(finalNumeroBC));
+                finalNumeroBC, faKey, absValueHT, 
+                bcTotalAchatHTFromExcel.get(finalNumeroBC), faTotalHTFromExcel.get(faKey));
         }
         
-        // Ajouter la ligne à la facture achat
+        // Ajouter la ligne à la facture achat (utiliser clé composite)
         LineItem faLigne = createLineItemForFacture(row, columnMap, result);
-        faLignesMap.computeIfAbsent(finalNumeroBC, k -> new ArrayList<>()).add(faLigne);
+        faLignesMap.computeIfAbsent(faKey, k -> new ArrayList<>()).add(faLigne);
         
         // 7. NOUVELLE LOGIQUE : Créer ou récupérer la facture vente (plusieurs FV possibles par client/BC)
         String numeroFV = getCellValue(row, columnMap, "numero_facture_vente");

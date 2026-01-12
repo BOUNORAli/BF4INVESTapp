@@ -90,10 +90,15 @@ public class BandeCommandeService {
                         existing.setAjouterAuStock(bc.getAjouterAuStock());
                     }
                     
-                    // Nouvelle structure multi-clients
+                    // Nouvelle structure multi-fournisseurs
+                    if (bc.getFournisseursAchat() != null) {
+                        existing.setFournisseursAchat(bc.getFournisseursAchat());
+                    }
+                    // Rétrocompatibilité
                     if (bc.getLignesAchat() != null) {
                         existing.setLignesAchat(bc.getLignesAchat());
                     }
+                    // Nouvelle structure multi-clients
                     if (bc.getClientsVente() != null) {
                         existing.setClientsVente(bc.getClientsVente());
                     }
@@ -314,12 +319,54 @@ public class BandeCommandeService {
      * Calcule tous les totaux du BC (achat + vente par client)
      */
     private void calculateTotals(BandeCommande bc) {
+        // Migration automatique si nécessaire
+        migrateToMultiFournisseur(bc);
+        
         // Utiliser la nouvelle structure si disponible
         if (bc.isMultiClient()) {
             calculateTotalsMultiClient(bc);
         } else {
             // Rétrocompatibilité avec l'ancienne structure
             calculateTotalsLegacy(bc);
+        }
+    }
+    
+    /**
+     * Migration automatique vers la structure multi-fournisseurs
+     * Si fournisseurId existe mais fournisseursAchat est vide, créer un FournisseurAchat
+     */
+    private void migrateToMultiFournisseur(BandeCommande bc) {
+        if (bc.getFournisseursAchat() == null || bc.getFournisseursAchat().isEmpty()) {
+            if (bc.getFournisseurId() != null) {
+                // Créer un FournisseurAchat avec les données existantes
+                FournisseurAchat fournisseurAchat = new FournisseurAchat();
+                fournisseurAchat.setFournisseurId(bc.getFournisseurId());
+                fournisseurAchat.setLignesAchat(bc.getLignesAchat() != null ? bc.getLignesAchat() : new ArrayList<>());
+                
+                // Calculer les totaux pour ce fournisseur
+                double totalHT = 0.0;
+                double totalTTC = 0.0;
+                double totalTVA = 0.0;
+                if (fournisseurAchat.getLignesAchat() != null) {
+                    for (LigneAchat la : fournisseurAchat.getLignesAchat()) {
+                        if (la.getTotalHT() != null) {
+                            totalHT += la.getTotalHT();
+                        }
+                        if (la.getTotalTTC() != null) {
+                            totalTTC += la.getTotalTTC();
+                        }
+                        if (la.getTva() != null && la.getTotalHT() != null) {
+                            totalTVA += la.getTotalHT() * (la.getTva() / 100.0);
+                        }
+                    }
+                }
+                fournisseurAchat.setTotalAchatHT(NumberUtils.roundTo2Decimals(totalHT));
+                fournisseurAchat.setTotalAchatTTC(NumberUtils.roundTo2Decimals(totalTTC));
+                fournisseurAchat.setTotalTVA(NumberUtils.roundTo2Decimals(totalTVA));
+                
+                bc.setFournisseursAchat(new ArrayList<>());
+                bc.getFournisseursAchat().add(fournisseurAchat);
+            }
         }
     }
     
@@ -345,8 +392,48 @@ public class BandeCommandeService {
         // Créer une map des prix d'achat par produit pour calculer les marges
         Map<String, Double> prixAchatParProduit = new HashMap<>();
         
-        // 1. Calculer les totaux d'achat
-        if (bc.getLignesAchat() != null) {
+        // 1. Calculer les totaux d'achat depuis tous les fournisseurs
+        if (bc.getFournisseursAchat() != null) {
+            for (FournisseurAchat fournisseurAchat : bc.getFournisseursAchat()) {
+                double fournisseurHT = 0.0;
+                double fournisseurTTC = 0.0;
+                double fournisseurTVA = 0.0;
+                
+                if (fournisseurAchat.getLignesAchat() != null) {
+                    for (LigneAchat ligne : fournisseurAchat.getLignesAchat()) {
+                        double qte = ligne.getQuantiteAchetee() != null ? ligne.getQuantiteAchetee() : 0;
+                        double prix = ligne.getPrixAchatUnitaireHT() != null ? ligne.getPrixAchatUnitaireHT() : 0;
+                        double tvaRate = ligne.getTva() != null ? ligne.getTva() / 100.0 : 0.0;
+                        
+                        double ht = NumberUtils.roundTo2Decimals(qte * prix);
+                        double ttc = NumberUtils.roundTo2Decimals(ht * (1 + tvaRate));
+                        
+                        ligne.setTotalHT(ht);
+                        ligne.setTotalTTC(ttc);
+                        
+                        fournisseurHT += ht;
+                        fournisseurTTC += ttc;
+                        fournisseurTVA += ht * tvaRate;
+                        
+                        totalAchatHT += ht;
+                        totalAchatTTC += ttc;
+                        
+                        // Stocker le prix d'achat pour calcul des marges
+                        if (ligne.getProduitRef() != null) {
+                            prixAchatParProduit.put(ligne.getProduitRef(), prix);
+                        }
+                    }
+                }
+                
+                // Mettre à jour les totaux du fournisseur
+                fournisseurAchat.setTotalAchatHT(NumberUtils.roundTo2Decimals(fournisseurHT));
+                fournisseurAchat.setTotalAchatTTC(NumberUtils.roundTo2Decimals(fournisseurTTC));
+                fournisseurAchat.setTotalTVA(NumberUtils.roundTo2Decimals(fournisseurTVA));
+            }
+        }
+        
+        // Rétrocompatibilité: aussi calculer depuis lignesAchat si présent
+        if (bc.getLignesAchat() != null && (bc.getFournisseursAchat() == null || bc.getFournisseursAchat().isEmpty())) {
             for (LigneAchat ligne : bc.getLignesAchat()) {
                 double qte = ligne.getQuantiteAchetee() != null ? ligne.getQuantiteAchetee() : 0;
                 double prix = ligne.getPrixAchatUnitaireHT() != null ? ligne.getPrixAchatUnitaireHT() : 0;
@@ -445,7 +532,33 @@ public class BandeCommandeService {
         double totalHTFromAchatLines = 0.0;
         double totalTVAFromAchatLines = 0.0;
         
-        if (bc.getLignesAchat() != null && !bc.getLignesAchat().isEmpty()) {
+        // Parcourir tous les fournisseurs
+        if (bc.getFournisseursAchat() != null && !bc.getFournisseursAchat().isEmpty()) {
+            for (FournisseurAchat fournisseurAchat : bc.getFournisseursAchat()) {
+                if (fournisseurAchat.getLignesAchat() != null) {
+                    for (LigneAchat ligne : fournisseurAchat.getLignesAchat()) {
+                        // Calculer le total HT de la ligne si pas déjà calculé
+                        if (ligne.getTotalHT() == null) {
+                            double qte = ligne.getQuantiteAchetee() != null ? ligne.getQuantiteAchetee() : 0;
+                            double prix = ligne.getPrixAchatUnitaireHT() != null ? ligne.getPrixAchatUnitaireHT() : 0;
+                            ligne.setTotalHT(NumberUtils.roundTo2Decimals(qte * prix));
+                            if (ligne.getTva() != null) {
+                                ligne.setTotalTTC(NumberUtils.roundTo2Decimals(ligne.getTotalHT() * (1 + (ligne.getTva() / 100.0))));
+                            }
+                        }
+                        
+                        if (ligne.getTotalHT() != null && ligne.getTva() != null) {
+                            totalHTFromAchatLines += ligne.getTotalHT();
+                            totalTVAFromAchatLines += NumberUtils.roundTo2Decimals(ligne.getTotalHT() * (ligne.getTva() / 100.0));
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Rétrocompatibilité: aussi depuis lignesAchat si présent
+        if (bc.getLignesAchat() != null && !bc.getLignesAchat().isEmpty() && 
+            (bc.getFournisseursAchat() == null || bc.getFournisseursAchat().isEmpty())) {
             for (LigneAchat ligne : bc.getLignesAchat()) {
                 // Calculer le total HT de la ligne si pas déjà calculé
                 if (ligne.getTotalHT() == null) {
@@ -509,10 +622,21 @@ public class BandeCommandeService {
             bc.setTotalAchatTTC(NumberUtils.roundTo2Decimals(totalTTC));
             bc.setTotalAchatHT(NumberUtils.roundTo2Decimals(totalHT));
         } else {
-            // Calculer depuis les lignes d'achat
+            // Calculer depuis les lignes d'achat de tous les fournisseurs
             double totalAchatHT = 0.0;
             double totalAchatTTC = 0.0;
-            if (bc.getLignesAchat() != null) {
+            if (bc.getFournisseursAchat() != null) {
+                for (FournisseurAchat fournisseurAchat : bc.getFournisseursAchat()) {
+                    if (fournisseurAchat.getTotalAchatHT() != null) {
+                        totalAchatHT += fournisseurAchat.getTotalAchatHT();
+                    }
+                    if (fournisseurAchat.getTotalAchatTTC() != null) {
+                        totalAchatTTC += fournisseurAchat.getTotalAchatTTC();
+                    }
+                }
+            }
+            // Rétrocompatibilité: aussi depuis lignesAchat si présent
+            if ((bc.getFournisseursAchat() == null || bc.getFournisseursAchat().isEmpty()) && bc.getLignesAchat() != null) {
                 for (LigneAchat ligne : bc.getLignesAchat()) {
                     if (ligne.getTotalHT() != null) {
                         totalAchatHT += ligne.getTotalHT();

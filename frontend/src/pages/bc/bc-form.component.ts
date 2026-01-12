@@ -818,8 +818,19 @@ export class BcFormComponent implements OnInit {
       ajouterAuStock: bc.ajouterAuStock || false
     });
 
-    // Nouvelle structure multi-clients
-    if (bc.lignesAchat && bc.lignesAchat.length > 0) {
+    // Nouvelle structure multi-fournisseurs (priorité)
+    if (bc.fournisseursAchat && bc.fournisseursAchat.length > 0) {
+      // Pour l'instant, utiliser le premier fournisseur pour le formulaire
+      // TODO: Adapter le formulaire pour gérer plusieurs fournisseurs
+      const premierFournisseur = bc.fournisseursAchat[0];
+      if (premierFournisseur.lignesAchat && premierFournisseur.lignesAchat.length > 0) {
+        premierFournisseur.lignesAchat.forEach(ligne => {
+          this.lignesAchatArray.push(this.createLigneAchatGroup(ligne));
+          this.prixAchatMap.set(ligne.produitRef, ligne.prixAchatUnitaireHT);
+        });
+      }
+    } else if (bc.lignesAchat && bc.lignesAchat.length > 0) {
+      // Rétrocompatibilité: utiliser lignesAchat si fournisseursAchat n'existe pas
       bc.lignesAchat.forEach(ligne => {
         this.lignesAchatArray.push(this.createLigneAchatGroup(ligne));
         this.prixAchatMap.set(ligne.produitRef, ligne.prixAchatUnitaireHT);

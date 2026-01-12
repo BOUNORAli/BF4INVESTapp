@@ -114,6 +114,14 @@ export interface LigneVente {
   margePourcentage?: number;
 }
 
+export interface FournisseurAchat {
+  fournisseurId: string;
+  lignesAchat: LigneAchat[];
+  totalAchatHT?: number;
+  totalAchatTTC?: number;
+  totalTVA?: number;
+}
+
 export interface ClientVente {
   clientId: string;
   lignesVente: LigneVente[];
@@ -139,8 +147,11 @@ export interface BC {
   responsableLivraison?: string;
   ajouterAuStock?: boolean; // Option pour ajouter les quantit├®s achet├®es au stock
   
+  // Nouvelle structure multi-fournisseurs
+  fournisseursAchat?: FournisseurAchat[];
+  
   // Nouvelle structure multi-clients
-  lignesAchat?: LigneAchat[];
+  lignesAchat?: LigneAchat[]; // Rétrocompatibilité
   clientsVente?: ClientVente[];
   
   // Ancienne structure (r├®trocompatibilit├®)
