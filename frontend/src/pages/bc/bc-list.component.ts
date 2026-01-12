@@ -45,7 +45,7 @@ import { SkeletonTableComponent } from '../../components/skeleton/skeleton-table
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
               </svg>
             </span>
-            <input type="text" [(ngModel)]="searchTerm" placeholder="N° BC..." class="w-full pl-9 pr-3 py-2.5 border border-slate-200 rounded-lg text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none">
+            <input type="text" [(ngModel)]="searchTerm" placeholder="N° BC, client, fournisseur..." class="w-full pl-9 pr-3 py-2.5 border border-slate-200 rounded-lg text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none">
           </div>
         </div>
 
@@ -340,13 +340,16 @@ export class BcListComponent implements OnInit {
     const sort = this.sortOrder();
 
     let filtered = this.bcStore.bcs().filter(bc => {
-      // Recherche dans le numéro BC et les noms des clients
+      // Recherche dans le numéro BC, les noms des clients et les noms des fournisseurs
       const clientIds = this.getClientIds(bc);
       const clientNames = clientIds.map(id => this.store.getClientName(id).toLowerCase());
+      const supplierIds = this.getSupplierIds(bc);
+      const supplierNames = supplierIds.map(id => this.store.getSupplierName(id).toLowerCase());
       const matchesSearch = bc.number.toLowerCase().includes(term) || 
-                           clientNames.some(name => name.includes(term));
+                           clientNames.some(name => name.includes(term)) ||
+                           supplierNames.some(name => name.includes(term));
       
-      const matchesSup = supId ? bc.supplierId === supId : true;
+      const matchesSup = supId ? supplierIds.includes(supId) : true;
       
       // Filtrer par client (nouveau: cherche dans tous les clients du BC)
       const matchesCli = cliId ? clientIds.includes(cliId) : true;
@@ -437,6 +440,21 @@ export class BcListComponent implements OnInit {
     // Ancienne structure: clientId unique
     if (bc.clientId) {
       return [bc.clientId];
+    }
+    return [];
+  }
+
+  /**
+   * Récupère tous les IDs des fournisseurs d'un BC (nouvelle et ancienne structure)
+   */
+  getSupplierIds(bc: BC): string[] {
+    // Nouvelle structure: fournisseursAchat
+    if (bc.fournisseursAchat && bc.fournisseursAchat.length > 0) {
+      return bc.fournisseursAchat.map(fa => fa.fournisseurId).filter(id => id);
+    }
+    // Ancienne structure: supplierId unique
+    if (bc.supplierId) {
+      return [bc.supplierId];
     }
     return [];
   }
