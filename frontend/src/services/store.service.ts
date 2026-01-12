@@ -138,7 +138,7 @@ export interface BC {
   id: string;
   number: string;
   date: string;
-  supplierId: string;
+  supplierId?: string; // Optionnel: rétrocompatibilité (utiliser fournisseursAchat pour multi-fournisseurs)
   status: 'draft' | 'sent' | 'completed';
   paymentMode?: string; // Type de paiement (LCN, chèque, virement, etc.)
   delaiPaiement?: string; // Délai de paiement en jours (ex: "120J", "30J")

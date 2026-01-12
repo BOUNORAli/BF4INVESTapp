@@ -83,13 +83,21 @@ export interface ClientVente {
   margePourcentage?: number;
 }
 
+export interface FournisseurAchat {
+  fournisseurId: string;
+  lignesAchat: LigneAchat[];
+  totalAchatHT?: number;
+  totalAchatTTC?: number;
+  totalTVA?: number;
+}
+
 // === FIN NOUVELLE STRUCTURE ===
 
 export interface BC {
   id: string;
   number: string;
   date: string;
-  supplierId: string;
+  supplierId?: string; // Optionnel: rétrocompatibilité (utiliser fournisseursAchat pour multi-fournisseurs)
   status: 'draft' | 'sent' | 'completed';
   paymentMode?: string; // Type de paiement (LCN, chèque, virement, etc.)
   delaiPaiement?: string; // Délai de paiement en jours (ex: "120J", "30J")
@@ -97,15 +105,18 @@ export interface BC {
   conditionLivraison?: string;
   responsableLivraison?: string;
   ajouterAuStock?: boolean; // Option pour ajouter les quantités achetées au stock
-  
+
+  // Nouvelle structure multi-fournisseurs
+  fournisseursAchat?: FournisseurAchat[];
+
   // Nouvelle structure multi-clients
   lignesAchat?: LigneAchat[];
   clientsVente?: ClientVente[];
-  
+
   // Ancienne structure (rétrocompatibilité)
   clientId?: string;
   items?: LineItem[];
-  
+
   // Totaux
   totalAchatHT?: number;
   totalAchatTTC?: number;
@@ -134,7 +145,7 @@ export interface Invoice {
   status: 'paid' | 'pending' | 'overdue';
   type: 'purchase' | 'sale';
   paymentMode?: string;
-  
+
   // Champs pour les calculs comptables
   typeMouvement?: string; // "C" = Client, "F" = Fournisseur, "IB", "FB", "CTP", "CTD", etc.
   nature?: string; // "facture", "paiement", "loy", etc.
@@ -144,7 +155,7 @@ export interface Invoice {
   colF?: string; // Utilisé dans le calcul du solde pour IB
   tvaRate?: number; // Taux TVA (ex: 0.20 pour 20%)
   tauxRG?: number; // Taux de remise globale (ex: 0.10 pour 10%)
-  
+
   // Champs calculés selon les formules Excel
   tvaMois?: string; // Format "mois/année" (ex: "01/2025")
   solde?: number; // Solde calculé selon type mouvement
@@ -158,10 +169,10 @@ export interface Invoice {
   tvaFactureYcRg?: number; // TVA facture incluant RG
   tvaPaye?: number; // TVA payée
   bilan?: number; // Bilan HT
-  
+
   // Prévisions de paiement
   previsionsPaiement?: PrevisionPaiement[];
-  
+
   // Fichier facture (pour factures achat)
   fichierFactureId?: string;
   fichierFactureNom?: string;
@@ -179,18 +190,18 @@ export interface Payment {
   mode: string;
   reference?: string;
   notes?: string;
-  
+
   // Champs pour les calculs comptables
   typeMouvement?: string; // "C" = Client, "F" = Fournisseur, "FB", "CTP", "CTD", etc.
   nature?: string; // "paiement", "facture", etc.
   colD?: string; // Utilisé pour les filtres (ex: "CCA")
   tvaRate?: number; // Taux TVA (ex: 0.20 pour 20%)
-  
+
   // Champs calculés selon les formules Excel
   totalPaiementTTC?: number; // Total paiement TTC calculé
   htPaye?: number; // HT payé
   tvaPaye?: number; // TVA payée
-  
+
   // Soldes après ce paiement
   soldeGlobalApres?: number;
   soldePartenaireApres?: number;
