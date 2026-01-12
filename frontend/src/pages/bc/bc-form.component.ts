@@ -106,22 +106,6 @@ import { matchesFlexibleSearch } from '../../utils/product-search.util';
                   <p class="text-xs text-red-500 mt-1">La date est requise</p>
                 }
               </div>
-              <div>
-                <label class="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Fournisseur <span class="text-red-500">*</span></label>
-                <select formControlName="supplierId" 
-                        [class.border-red-300]="isFieldInvalid('supplierId')"
-                        [class.focus:border-red-500]="isFieldInvalid('supplierId')"
-                        [class.focus:ring-red-500/20]="isFieldInvalid('supplierId')"
-                        class="w-full px-4 py-2.5 border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-slate-700 cursor-pointer">
-                  <option value="">Sélectionner...</option>
-                  @for (s of store.suppliers(); track s.id) {
-                    <option [value]="s.id">{{ s.name }}</option>
-                  }
-                </select>
-                @if (isFieldInvalid('supplierId')) {
-                  <p class="text-xs text-red-500 mt-1">Le fournisseur est requis</p>
-                }
-              </div>
                <div>
                 <label class="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Statut</label>
                 <select formControlName="status" class="w-full px-4 py-2.5 border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-slate-700">
@@ -173,15 +157,61 @@ import { matchesFlexibleSearch } from '../../utils/product-search.util';
             </div>
           </div>
 
-          <!-- Card 2: Lignes d'Achat (communes) -->
+          <!-- Card 2: Fournisseurs et Achats -->
           <div class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
-            <h2 class="text-base font-bold text-slate-800 flex items-center gap-2 p-4 md:p-6 border-b border-slate-100 bg-orange-50/50">
-              <span class="w-6 h-6 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center text-xs font-bold">2</span>
-              <span class="text-orange-800">Articles Achetés</span>
-              <span class="text-xs text-orange-600 font-normal ml-2">(auprès du fournisseur)</span>
-            </h2>
-            <div class="overflow-x-auto">
-              <table class="w-full text-sm text-left min-w-[700px]">
+            <div class="p-4 md:p-6 border-b border-slate-100 bg-orange-50/50">
+              <div class="flex items-center justify-between mb-4">
+                <h2 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                  <span class="w-6 h-6 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center text-xs font-bold">2</span>
+                  <span class="text-orange-800">Fournisseurs et Achats</span>
+                  <span class="px-2 py-0.5 bg-orange-100 text-orange-700 text-xs rounded-full font-bold">{{ fournisseursAchatArray.length }} fournisseur(s)</span>
+                </h2>
+                <button type="button" (click)="addFournisseurAchat()" class="px-4 py-2 bg-orange-600 text-white rounded-lg text-sm font-semibold hover:bg-orange-700 transition flex items-center gap-2">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                  Ajouter un fournisseur
+                </button>
+              </div>
+            </div>
+            
+            <div formArrayName="fournisseursAchat" class="divide-y divide-slate-200">
+              @for (fournisseurForm of fournisseursAchatArray.controls; track fournisseurForm; let fournisseurIdx = $index) {
+                <div [formGroupName]="fournisseurIdx" class="p-4 md:p-6 bg-white hover:bg-slate-50/30 transition-colors">
+                  <!-- Header du bloc fournisseur -->
+                  <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center gap-3">
+                      <div class="w-10 h-10 rounded-full bg-gradient-to-br from-orange-500 to-amber-600 flex items-center justify-center text-white font-bold text-sm shadow-lg shadow-orange-500/30">
+                        {{ fournisseurIdx + 1 }}
+                      </div>
+                      <div class="flex-1">
+                        <select formControlName="fournisseurId" 
+                                [class.border-red-300]="fournisseurForm.get('fournisseurId')?.invalid && (fournisseurForm.get('fournisseurId')?.dirty || fournisseurForm.get('fournisseurId')?.touched)"
+                                class="px-4 py-2.5 border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all text-slate-700 cursor-pointer font-medium min-w-[200px]">
+                          <option value="">Sélectionner un fournisseur...</option>
+                          @for (s of store.suppliers(); track s.id) {
+                            <option [value]="s.id">{{ s.name }}</option>
+                          }
+                        </select>
+                        @if (fournisseurForm.get('fournisseurId')?.invalid && (fournisseurForm.get('fournisseurId')?.dirty || fournisseurForm.get('fournisseurId')?.touched)) {
+                          <p class="text-xs text-red-500 mt-1">Le fournisseur est requis</p>
+                        }
+                      </div>
+                    </div>
+                    <div class="flex items-center gap-4">
+                      <div class="text-right">
+                        <div class="text-xs text-slate-500 uppercase">Total Fournisseur</div>
+                        <div class="text-lg font-bold text-orange-600">{{ getFournisseurTotal(fournisseurIdx) | number:'1.2-2' }} MAD</div>
+                      </div>
+                      @if (fournisseursAchatArray.length > 1) {
+                        <button type="button" (click)="removeFournisseurAchat(fournisseurIdx)" class="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
+                          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                        </button>
+                      }
+                    </div>
+                  </div>
+
+                  <!-- Tableau des lignes d'achat du fournisseur -->
+                  <div class="overflow-x-auto border border-slate-200 rounded-lg">
+                    <table class="w-full text-sm text-left min-w-[700px]">
                       <thead class="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-200">
                         <tr>
                           <th class="p-3 w-2/5">Produit</th>
@@ -193,112 +223,115 @@ import { matchesFlexibleSearch } from '../../utils/product-search.util';
                           <th class="p-3 text-center w-10"></th>
                         </tr>
                       </thead>
-                <tbody formArrayName="lignesAchat" class="divide-y divide-slate-100">
-                  @for (item of lignesAchatArray.controls; track item; let i = $index) {
-                    <tr [formGroupName]="i" class="bg-white hover:bg-slate-50/70 transition-colors">
-                      <td class="p-2 align-top">
-                        <div class="relative">
-                          <input type="text" 
-                                 formControlName="productSearch" 
-                                 (focus)="openDropdown('achat', i)" 
-                                 (blur)="closeDropdownDelayed()"
-                                 placeholder="Chercher ref ou nom..."
-                                 class="w-full p-2 border border-slate-200 rounded-md text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none placeholder-slate-400">
-                          @if (activeDropdownType() === 'achat' && activeDropdownIndex() === i) {
-                            <div class="absolute z-50 top-full left-0 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-xl max-h-48 overflow-y-auto">
-                              @for (prod of filterProducts(item.value.productSearch); track prod.id) {
-                                <div (mousedown)="selectProductAchat(i, prod)" class="p-2 hover:bg-orange-50 cursor-pointer border-b border-slate-50 last:border-0 flex flex-col">
-                                  <span class="font-medium text-slate-800 text-sm">{{ prod.name }}</span>
-                                  <div class="flex justify-between text-xs text-slate-500">
-                                    <span>Ref: {{ prod.ref }}</span>
-                                    <div class="flex items-center gap-2">
-                                      <span [class]="getStockClass(prod.stock ?? 0)" class="font-semibold">Stock: {{ prod.stock ?? 0 }}</span>
-                                      <span class="font-mono">{{ prod.priceBuyHT }} Dhs</span>
-                                    </div>
+                      <tbody formArrayName="lignesAchat" class="divide-y divide-slate-100">
+                        @for (item of getLignesAchatArray(fournisseurIdx).controls; track item; let i = $index) {
+                          <tr [formGroupName]="i" class="bg-white hover:bg-slate-50/70 transition-colors">
+                            <td class="p-2 align-top">
+                              <div class="relative">
+                                <input type="text" 
+                                       formControlName="productSearch" 
+                                       (focus)="openDropdown('achat-' + fournisseurIdx, i)" 
+                                       (blur)="closeDropdownDelayed()"
+                                       placeholder="Chercher ref ou nom..."
+                                       class="w-full p-2 border border-slate-200 rounded-md text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none placeholder-slate-400">
+                                @if (activeDropdownType() === 'achat-' + fournisseurIdx && activeDropdownIndex() === i) {
+                                  <div class="absolute z-50 top-full left-0 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                                    @for (prod of filterProducts(item.value.productSearch); track prod.id) {
+                                      <div (mousedown)="selectProductAchat(fournisseurIdx, i, prod)" class="p-2 hover:bg-orange-50 cursor-pointer border-b border-slate-50 last:border-0 flex flex-col">
+                                        <span class="font-medium text-slate-800 text-sm">{{ prod.name }}</span>
+                                        <div class="flex justify-between text-xs text-slate-500">
+                                          <span>Ref: {{ prod.ref }}</span>
+                                          <div class="flex items-center gap-2">
+                                            <span [class]="getStockClass(prod.stock ?? 0)" class="font-semibold">Stock: {{ prod.stock ?? 0 }}</span>
+                                            <span class="font-mono">{{ prod.priceBuyHT }} Dhs</span>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    }
+                                    @if (filterProducts(item.value.productSearch).length === 0) {
+                                      <div class="p-2 text-xs text-slate-400 text-center">Aucun produit trouvé</div>
+                                    }
                                   </div>
+                                }
+                              </div>
+                            </td>
+                            <td class="p-2 align-top">
+                              <input type="number" formControlName="quantiteAchetee" (input)="calculateTotals()" class="w-full p-2 border border-slate-200 rounded-md text-right focus:ring-2 focus:ring-orange-500/20 outline-none">
+                            </td>
+                            <td class="p-2 align-top">
+                              <div class="space-y-2">
+                                <!-- Radio buttons HT/TTC -->
+                                <div class="flex gap-3 text-xs">
+                                  <label class="flex items-center gap-1 cursor-pointer">
+                                    <input type="radio" formControlName="prixInputMode" value="HT" 
+                                           (change)="onPrixAchatChange(fournisseurIdx, i, 'HT')" class="w-3 h-3 text-orange-600">
+                                    <span class="font-medium">HT</span>
+                                  </label>
+                                  <label class="flex items-center gap-1 cursor-pointer">
+                                    <input type="radio" formControlName="prixInputMode" value="TTC"
+                                           (change)="onPrixAchatChange(fournisseurIdx, i, 'TTC')" class="w-3 h-3 text-orange-600">
+                                    <span class="font-medium">TTC</span>
+                                  </label>
                                 </div>
+                                
+                                <!-- Champs prix conditionnels -->
+                                @if (item.value.prixInputMode === 'HT' || !item.value.prixInputMode) {
+                                  <input type="number" formControlName="prixAchatUnitaireHT" 
+                                         (input)="onPrixAchatChange(fournisseurIdx, i, 'HT')" 
+                                         step="0.0001" 
+                                         class="w-full p-2 border border-slate-200 rounded-md text-right focus:ring-2 focus:ring-orange-500/20 outline-none">
+                                } @else {
+                                  <input type="number" formControlName="prixAchatUnitaireTTC" 
+                                         (input)="onPrixAchatChange(fournisseurIdx, i, 'TTC')" 
+                                         step="0.0001" 
+                                         class="w-full p-2 border border-slate-200 rounded-md text-right focus:ring-2 focus:ring-orange-500/20 outline-none">
+                                }
+                                
+                                <!-- Sélecteur mode calcul -->
+                                <select formControlName="calculMode" (change)="onPrixAchatChange(fournisseurIdx, i, item.value.prixInputMode || 'HT')" class="w-full p-1 border border-slate-200 rounded text-xs bg-slate-50 focus:ring-1 focus:ring-orange-500/20 outline-none">
+                                  <option value="scientific">Notation scientifique (2 décimales)</option>
+                                  <option value="exact">Notation exacte</option>
+                                </select>
+                              </div>
+                            </td>
+                            <td class="p-2 align-top">
+                              <input type="number" formControlName="tva" (input)="onPrixAchatChange(fournisseurIdx, i, item.value.prixInputMode || 'HT'); calculateTotals()" class="w-full p-2 border border-slate-200 rounded-md text-center focus:ring-2 focus:ring-orange-500/20 outline-none">
+                            </td>
+                            <td class="p-2 align-top text-center">
+                              @if (item.value.produitRef) {
+                                @let stock = getProductStock(item.value.produitRef);
+                                <span [class]="getStockClass(stock)" class="px-2 py-1 rounded text-xs font-bold">
+                                  {{ stock }}
+                                </span>
+                              } @else {
+                                <span class="text-xs text-slate-400">-</span>
                               }
-                              @if (filterProducts(item.value.productSearch).length === 0) {
-                                <div class="p-2 text-xs text-slate-400 text-center">Aucun produit trouvé</div>
-                              }
-                            </div>
-                          }
-                        </div>
-                      </td>
-                      <td class="p-2 align-top">
-                        <input type="number" formControlName="quantiteAchetee" (input)="calculateTotals()" class="w-full p-2 border border-slate-200 rounded-md text-right focus:ring-2 focus:ring-orange-500/20 outline-none">
-                      </td>
-                      <td class="p-2 align-top">
-                        <div class="space-y-2">
-                          <!-- Radio buttons HT/TTC -->
-                          <div class="flex gap-3 text-xs">
-                            <label class="flex items-center gap-1 cursor-pointer">
-                              <input type="radio" formControlName="prixInputMode" value="HT" 
-                                     (change)="onPrixAchatChange(i, 'HT')" class="w-3 h-3 text-orange-600">
-                              <span class="font-medium">HT</span>
-                            </label>
-                            <label class="flex items-center gap-1 cursor-pointer">
-                              <input type="radio" formControlName="prixInputMode" value="TTC"
-                                     (change)="onPrixAchatChange(i, 'TTC')" class="w-3 h-3 text-orange-600">
-                              <span class="font-medium">TTC</span>
-                            </label>
-                          </div>
-                          
-                          <!-- Champs prix conditionnels -->
-                          @if (item.value.prixInputMode === 'HT' || !item.value.prixInputMode) {
-                            <input type="number" formControlName="prixAchatUnitaireHT" 
-                                   (input)="onPrixAchatChange(i, 'HT')" 
-                                   step="0.0001" 
-                                   class="w-full p-2 border border-slate-200 rounded-md text-right focus:ring-2 focus:ring-orange-500/20 outline-none">
-                          } @else {
-                            <input type="number" formControlName="prixAchatUnitaireTTC" 
-                                   (input)="onPrixAchatChange(i, 'TTC')" 
-                                   step="0.0001" 
-                                   class="w-full p-2 border border-slate-200 rounded-md text-right focus:ring-2 focus:ring-orange-500/20 outline-none">
-                          }
-                          
-                          <!-- Sélecteur mode calcul -->
-                          <select formControlName="calculMode" (change)="onPrixAchatChange(i, item.value.prixInputMode || 'HT')" class="w-full p-1 border border-slate-200 rounded text-xs bg-slate-50 focus:ring-1 focus:ring-orange-500/20 outline-none">
-                            <option value="scientific">Notation scientifique (2 décimales)</option>
-                            <option value="exact">Notation exacte</option>
-                          </select>
-                        </div>
-                      </td>
-                      <td class="p-2 align-top">
-                        <input type="number" formControlName="tva" (input)="onPrixAchatChange(i, item.value.prixInputMode || 'HT'); calculateTotals()" class="w-full p-2 border border-slate-200 rounded-md text-center focus:ring-2 focus:ring-orange-500/20 outline-none">
-                      </td>
-                      <td class="p-2 align-top text-center">
-                        @if (item.value.produitRef) {
-                          @let stock = getProductStock(item.value.produitRef);
-                          <span [class]="getStockClass(stock)" class="px-2 py-1 rounded text-xs font-bold">
-                            {{ stock }}
-                          </span>
-                        } @else {
-                          <span class="text-xs text-slate-400">-</span>
+                            </td>
+                            <td class="p-2 align-top text-right font-bold text-orange-700 bg-orange-50/30 pt-4">
+                              {{ getAchatLineTotal(fournisseurIdx, i) | number:'1.2-2' }}
+                            </td>
+                            <td class="p-2 align-top text-center pt-3">
+                              <button type="button" (click)="removeLigneAchat(fournisseurIdx, i)" class="text-slate-400 hover:text-red-500 transition-colors">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                              </button>
+                            </td>
+                          </tr>
                         }
-                      </td>
-                      <td class="p-2 align-top text-right font-bold text-orange-700 bg-orange-50/30 pt-4">
-                        {{ getAchatLineTotal(i) | number:'1.2-2' }}
-                      </td>
-                      <td class="p-2 align-top text-center pt-3">
-                        <button type="button" (click)="removeLigneAchat(i)" class="text-slate-400 hover:text-red-500 transition-colors">
-                          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                        </button>
-                      </td>
-                    </tr>
-                  }
-                </tbody>
-                <tfoot class="bg-slate-50 border-t border-slate-200">
-                  <tr>
-                    <td colspan="7" class="p-3">
-                      <button type="button" (click)="addLigneAchat()" class="w-full text-center py-2 text-sm text-orange-600 hover:bg-orange-50 rounded-lg font-semibold transition flex items-center justify-center gap-1">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
-                        Ajouter un article
-                      </button>
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
+                      </tbody>
+                      <tfoot class="bg-slate-50 border-t border-slate-200">
+                        <tr>
+                          <td colspan="7" class="p-2">
+                            <button type="button" (click)="addLigneAchat(fournisseurIdx)" class="w-full text-center py-2 text-sm text-orange-600 hover:bg-orange-50 rounded-lg font-semibold transition flex items-center justify-center gap-1">
+                              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                              Ajouter une ligne
+                            </button>
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </div>
+              }
             </div>
           </div>
 
@@ -761,7 +794,6 @@ export class BcFormComponent implements OnInit {
     this.form = this.fb.group({
       number: [''], // Laisser vide - sera généré par le backend avec la nouvelle logique
       date: [new Date().toISOString().split('T')[0], Validators.required],
-      supplierId: ['', Validators.required],
       status: ['draft', Validators.required],
       paymentMode: [''], // Type de paiement (LCN, chèque, etc.)
       delaiPaiement: [''], // Délai de paiement (ex: "120J")
@@ -769,19 +801,23 @@ export class BcFormComponent implements OnInit {
       conditionLivraison: [''],
       responsableLivraison: [''],
       ajouterAuStock: [false],
-      lignesAchat: this.fb.array([]),
+      fournisseursAchat: this.fb.array([]), // Nouvelle structure multi-fournisseurs
       clientsVente: this.fb.array([])
     });
 
     this.form.valueChanges.subscribe(() => this.calculateTotals());
   }
 
-  get lignesAchatArray() {
-    return this.form.get('lignesAchat') as FormArray;
+  get fournisseursAchatArray() {
+    return this.form.get('fournisseursAchat') as FormArray;
   }
 
   get clientsVenteArray() {
     return this.form.get('clientsVente') as FormArray;
+  }
+
+  getLignesAchatArray(fournisseurIdx: number): FormArray {
+    return this.fournisseursAchatArray.at(fournisseurIdx).get('lignesAchat') as FormArray;
   }
 
   getLignesVenteArray(clientIdx: number): FormArray {
@@ -795,8 +831,8 @@ export class BcFormComponent implements OnInit {
       this.bcId = id;
       this.loadExistingBC(id);
     } else {
-      // Par défaut: 1 ligne achat
-      this.addLigneAchat();
+      // Par défaut: 1 fournisseur avec 1 ligne achat
+      this.addFournisseurAchat();
       // Ne pas créer de client par défaut - l'utilisateur choisira entre "Ajouter au stock" ou ajouter un client
     }
   }
@@ -808,7 +844,6 @@ export class BcFormComponent implements OnInit {
     this.form.patchValue({
       number: bc.number,
       date: bc.date,
-      supplierId: bc.supplierId,
       status: bc.status,
       paymentMode: bc.paymentMode || '',
       delaiPaiement: bc.delaiPaiement || '',
@@ -820,19 +855,26 @@ export class BcFormComponent implements OnInit {
 
     // Nouvelle structure multi-fournisseurs (priorité)
     if (bc.fournisseursAchat && bc.fournisseursAchat.length > 0) {
-      // Pour l'instant, utiliser le premier fournisseur pour le formulaire
-      // TODO: Adapter le formulaire pour gérer plusieurs fournisseurs
-      const premierFournisseur = bc.fournisseursAchat[0];
-      if (premierFournisseur.lignesAchat && premierFournisseur.lignesAchat.length > 0) {
-        premierFournisseur.lignesAchat.forEach(ligne => {
-          this.lignesAchatArray.push(this.createLigneAchatGroup(ligne));
-          this.prixAchatMap.set(ligne.produitRef, ligne.prixAchatUnitaireHT);
-        });
-      }
-    } else if (bc.lignesAchat && bc.lignesAchat.length > 0) {
-      // Rétrocompatibilité: utiliser lignesAchat si fournisseursAchat n'existe pas
+      bc.fournisseursAchat.forEach(fournisseur => {
+        const fournisseurGroup = this.createFournisseurAchatGroup(fournisseur);
+        this.fournisseursAchatArray.push(fournisseurGroup);
+        
+        // Stocker les prix d'achat dans le map
+        if (fournisseur.lignesAchat) {
+          fournisseur.lignesAchat.forEach(ligne => {
+            this.prixAchatMap.set(ligne.produitRef, ligne.prixAchatUnitaireHT);
+          });
+        }
+      });
+    } else if (bc.supplierId && bc.lignesAchat && bc.lignesAchat.length > 0) {
+      // Rétrocompatibilité: créer un fournisseur avec les données existantes
+      const fournisseurGroup = this.createFournisseurAchatGroup({
+        fournisseurId: bc.supplierId,
+        lignesAchat: bc.lignesAchat
+      });
+      this.fournisseursAchatArray.push(fournisseurGroup);
+      
       bc.lignesAchat.forEach(ligne => {
-        this.lignesAchatArray.push(this.createLigneAchatGroup(ligne));
         this.prixAchatMap.set(ligne.produitRef, ligne.prixAchatUnitaireHT);
       });
     }
@@ -844,19 +886,25 @@ export class BcFormComponent implements OnInit {
       });
     } else if (bc.clientId && bc.items) {
       // Rétrocompatibilité avec ancien format
-      // Convertir les anciennes lignes en lignes d'achat
-      bc.items.forEach(item => {
-        const ligneAchat = {
-          produitRef: item.ref,
-          designation: item.name,
-          unite: item.unit,
-          quantiteAchetee: item.qtyBuy,
-          prixAchatUnitaireHT: item.priceBuyHT,
-          tva: item.tvaRate
-        };
-        this.lignesAchatArray.push(this.createLigneAchatGroup(ligneAchat));
-        this.prixAchatMap.set(item.ref, item.priceBuyHT);
-      });
+      // Créer un fournisseur avec les lignes d'achat (si supplierId existe)
+      if (bc.supplierId) {
+        const fournisseurGroup = this.createFournisseurAchatGroup({
+          fournisseurId: bc.supplierId,
+          lignesAchat: bc.items.map(item => ({
+            produitRef: item.ref,
+            designation: item.name,
+            unite: item.unit,
+            quantiteAchetee: item.qtyBuy,
+            prixAchatUnitaireHT: item.priceBuyHT,
+            tva: item.tvaRate
+          }))
+        });
+        this.fournisseursAchatArray.push(fournisseurGroup);
+        
+        bc.items.forEach(item => {
+          this.prixAchatMap.set(item.ref, item.priceBuyHT);
+        });
+      }
 
       // Créer un bloc client avec les lignes de vente
       const clientVente = {
@@ -873,12 +921,13 @@ export class BcFormComponent implements OnInit {
       this.clientsVenteArray.push(this.createClientVenteGroup(clientVente));
     }
 
+    // Si aucun fournisseur, ajouter un bloc vide
+    if (this.fournisseursAchatArray.length === 0) {
+      this.addFournisseurAchat();
+    }
     // Si aucun client, ajouter un bloc vide
     if (this.clientsVenteArray.length === 0) {
       this.addClientVente();
-    }
-    if (this.lignesAchatArray.length === 0) {
-      this.addLigneAchat();
     }
 
     // Initialiser les prix TTC si manquants (pour compatibilité avec anciennes BCs)
@@ -918,6 +967,25 @@ export class BcFormComponent implements OnInit {
     });
   }
 
+  createFournisseurAchatGroup(data?: any): FormGroup {
+    const group = this.fb.group({
+      fournisseurId: [data?.fournisseurId || '', Validators.required],
+      lignesAchat: this.fb.array([])
+    });
+
+    if (data?.lignesAchat && data.lignesAchat.length > 0) {
+      const lignesArray = group.get('lignesAchat') as FormArray;
+      data.lignesAchat.forEach((ligne: any) => {
+        lignesArray.push(this.createLigneAchatGroup(ligne));
+      });
+    } else {
+      // Ajouter une ligne vide par défaut
+      (group.get('lignesAchat') as FormArray).push(this.createLigneAchatGroup());
+    }
+
+    return group;
+  }
+
   createClientVenteGroup(data?: any): FormGroup {
     const group = this.fb.group({
       clientId: [data?.clientId || ''],
@@ -937,14 +1005,25 @@ export class BcFormComponent implements OnInit {
     return group;
   }
 
-  // === Ajout/Suppression lignes ===
+  // === Ajout/Suppression fournisseurs ===
 
-  addLigneAchat() {
-    this.lignesAchatArray.push(this.createLigneAchatGroup());
+  addFournisseurAchat() {
+    this.fournisseursAchatArray.push(this.createFournisseurAchatGroup());
   }
 
-  removeLigneAchat(index: number) {
-    this.lignesAchatArray.removeAt(index);
+  removeFournisseurAchat(index: number) {
+    this.fournisseursAchatArray.removeAt(index);
+    this.calculateTotals();
+  }
+
+  // === Ajout/Suppression lignes ===
+
+  addLigneAchat(fournisseurIdx: number) {
+    this.getLignesAchatArray(fournisseurIdx).push(this.createLigneAchatGroup());
+  }
+
+  removeLigneAchat(fournisseurIdx: number, ligneIdx: number) {
+    this.getLignesAchatArray(fournisseurIdx).removeAt(ligneIdx);
     this.calculateTotals();
   }
 
@@ -989,11 +1068,20 @@ export class BcFormComponent implements OnInit {
   }
 
   getProduitsFromAchat(): any[] {
-    return this.lignesAchatArray.value.filter((l: any) => l.produitRef || l.designation);
+    const produits: any[] = [];
+    this.fournisseursAchatArray.controls.forEach((fournisseurControl) => {
+      const lignesArray = fournisseurControl.get('lignesAchat') as FormArray;
+      lignesArray.value.forEach((l: any) => {
+        if (l.produitRef || l.designation) {
+          produits.push(l);
+        }
+      });
+    });
+    return produits;
   }
 
-  selectProductAchat(index: number, product: Product) {
-    const group = this.lignesAchatArray.at(index);
+  selectProductAchat(fournisseurIdx: number, ligneIdx: number, product: Product) {
+    const group = this.getLignesAchatArray(fournisseurIdx).at(ligneIdx);
     const tva = group.value.tva || 20;
     const calculMode = group.value.calculMode || 'scientific';
     const prixHT = product.priceBuyHT;
@@ -1036,9 +1124,15 @@ export class BcFormComponent implements OnInit {
 
   // === Calculs ===
 
-  getAchatLineTotal(index: number): number {
-    const ligne = this.lignesAchatArray.at(index).value;
+  getAchatLineTotal(fournisseurIdx: number, ligneIdx: number): number {
+    const ligne = this.getLignesAchatArray(fournisseurIdx).at(ligneIdx).value;
     return (ligne.quantiteAchetee || 0) * (ligne.prixAchatUnitaireHT || 0);
+  }
+
+  getFournisseurTotal(fournisseurIdx: number): number {
+    const lignes = this.getLignesAchatArray(fournisseurIdx).value;
+    return lignes.reduce((sum: number, l: any) => 
+      sum + (l.quantiteAchetee || 0) * (l.prixAchatUnitaireHT || 0), 0);
   }
 
   getVenteLineTotal(clientIdx: number, ligneIdx: number): number {
@@ -1125,8 +1219,8 @@ export class BcFormComponent implements OnInit {
     return ht * (1 + tva);
   }
 
-  onPrixAchatChange(index: number, inputMode: 'HT' | 'TTC') {
-    const ligne = this.lignesAchatArray.at(index);
+  onPrixAchatChange(fournisseurIdx: number, ligneIdx: number, inputMode: 'HT' | 'TTC') {
+    const ligne = this.getLignesAchatArray(fournisseurIdx).at(ligneIdx);
     const calculMode = ligne.value.calculMode || 'scientific';
     
     if (inputMode === 'HT') {
@@ -1158,14 +1252,17 @@ export class BcFormComponent implements OnInit {
   }
 
   initializeMissingTTCPrices() {
-    // Initialiser les prix TTC pour les lignes d'achat
-    this.lignesAchatArray.controls.forEach((control, index) => {
-      const val = control.value;
-      if (!val.prixAchatUnitaireTTC && val.prixAchatUnitaireHT && val.prixAchatUnitaireHT > 0) {
-        const calculMode = val.calculMode || 'scientific';
-        const ttc = this.roundPrice(this.calculateTTCFromHT(val.prixAchatUnitaireHT, val.tva || 20), calculMode);
-        control.patchValue({ prixAchatUnitaireTTC: ttc, prixInputMode: val.prixInputMode || 'HT', calculMode: calculMode }, { emitEvent: false });
-      }
+    // Initialiser les prix TTC pour les lignes d'achat de tous les fournisseurs
+    this.fournisseursAchatArray.controls.forEach((fournisseurControl, fournisseurIdx) => {
+      const lignesArray = fournisseurControl.get('lignesAchat') as FormArray;
+      lignesArray.controls.forEach((control) => {
+        const val = control.value;
+        if (!val.prixAchatUnitaireTTC && val.prixAchatUnitaireHT && val.prixAchatUnitaireHT > 0) {
+          const calculMode = val.calculMode || 'scientific';
+          const ttc = this.roundPrice(this.calculateTTCFromHT(val.prixAchatUnitaireHT, val.tva || 20), calculMode);
+          control.patchValue({ prixAchatUnitaireTTC: ttc, prixInputMode: val.prixInputMode || 'HT', calculMode: calculMode }, { emitEvent: false });
+        }
+      });
     });
 
     // Initialiser les prix TTC pour les lignes de vente
@@ -1185,31 +1282,34 @@ export class BcFormComponent implements OnInit {
   calculateTotals() {
     let bTot = 0, bTva = 0, sTot = 0, sTva = 0;
 
-    // Totaux achats
-    this.lignesAchatArray.controls.forEach(control => {
-      const val = control.value;
-      const qte = val.quantiteAchetee || 0;
-      let prix = val.prixAchatUnitaireHT || 0;
-      const calculMode = val.calculMode || 'scientific';
-      
-      // Si l'utilisateur a saisi en TTC, calculer le HT à partir du TTC
-      if (val.prixInputMode === 'TTC' && val.prixAchatUnitaireTTC && val.prixAchatUnitaireTTC > 0) {
-        prix = this.roundPrice(this.calculateHTFromTTC(val.prixAchatUnitaireTTC, val.tva || 0), calculMode);
-        // Mettre à jour le prix HT dans le formulaire si nécessaire
-        if (Math.abs(prix - (val.prixAchatUnitaireHT || 0)) > 0.0001) {
-          control.patchValue({ prixAchatUnitaireHT: prix }, { emitEvent: false });
+    // Totaux achats (tous les fournisseurs)
+    this.fournisseursAchatArray.controls.forEach((fournisseurControl) => {
+      const lignesArray = fournisseurControl.get('lignesAchat') as FormArray;
+      lignesArray.controls.forEach(control => {
+        const val = control.value;
+        const qte = val.quantiteAchetee || 0;
+        let prix = val.prixAchatUnitaireHT || 0;
+        const calculMode = val.calculMode || 'scientific';
+        
+        // Si l'utilisateur a saisi en TTC, calculer le HT à partir du TTC
+        if (val.prixInputMode === 'TTC' && val.prixAchatUnitaireTTC && val.prixAchatUnitaireTTC > 0) {
+          prix = this.roundPrice(this.calculateHTFromTTC(val.prixAchatUnitaireTTC, val.tva || 0), calculMode);
+          // Mettre à jour le prix HT dans le formulaire si nécessaire
+          if (Math.abs(prix - (val.prixAchatUnitaireHT || 0)) > 0.0001) {
+            control.patchValue({ prixAchatUnitaireHT: prix }, { emitEvent: false });
+          }
         }
-      }
-      
-      const tva = (val.tva || 0) / 100;
+        
+        const tva = (val.tva || 0) / 100;
 
-      bTot += qte * prix;
-      bTva += qte * prix * tva;
+        bTot += qte * prix;
+        bTva += qte * prix * tva;
 
-      // Mettre à jour le map des prix d'achat
-      if (val.produitRef) {
-        this.prixAchatMap.set(val.produitRef, prix);
-      }
+        // Mettre à jour le map des prix d'achat
+        if (val.produitRef) {
+          this.prixAchatMap.set(val.produitRef, prix);
+        }
+      });
     });
 
     // Totaux ventes (tous les clients)
@@ -1263,8 +1363,16 @@ export class BcFormComponent implements OnInit {
       return;
     }
 
-    if (!this.form.get('date')?.value || !this.form.get('supplierId')?.value) {
-      this.store.showToast('Veuillez remplir tous les champs obligatoires (Date, Fournisseur)', 'error');
+    if (!this.form.get('date')?.value) {
+      this.store.showToast('Veuillez remplir tous les champs obligatoires (Date)', 'error');
+      return;
+    }
+
+    // Vérifier qu'il y a au moins un fournisseur avec un fournisseurId
+    const fournisseursAchat = this.fournisseursAchatArray.value;
+    const validFournisseurs = fournisseursAchat.filter((f: any) => f.fournisseurId);
+    if (validFournisseurs.length === 0) {
+      this.store.showToast('Veuillez sélectionner au moins un fournisseur', 'error');
       return;
     }
 
@@ -1283,19 +1391,22 @@ export class BcFormComponent implements OnInit {
       }
 
       // Vérifier que la somme des quantités vendues aux clients
-      // est égale aux quantités achetées auprès du fournisseur (par produit)
+      // est égale aux quantités achetées auprès des fournisseurs (par produit)
       const achatsMap = new Map<string, number>();
       const ventesMap = new Map<string, number>();
 
-      // 1) Quantités achetées par produit
-      this.lignesAchatArray.controls.forEach(control => {
-        const val = control.value;
-        const ref: string = val.produitRef || val.designation;
-        const qte: number = val.quantiteAchetee || 0;
-        if (!ref) {
-          return;
-        }
-        achatsMap.set(ref, (achatsMap.get(ref) || 0) + qte);
+      // 1) Quantités achetées par produit (tous les fournisseurs)
+      this.fournisseursAchatArray.controls.forEach((fournisseurControl) => {
+        const lignesArray = fournisseurControl.get('lignesAchat') as FormArray;
+        lignesArray.controls.forEach(control => {
+          const val = control.value;
+          const ref: string = val.produitRef || val.designation;
+          const qte: number = val.quantiteAchetee || 0;
+          if (!ref) {
+            return;
+          }
+          achatsMap.set(ref, (achatsMap.get(ref) || 0) + qte);
+        });
       });
 
       // 2) Quantités vendues (tous les clients) par produit
@@ -1327,38 +1438,45 @@ export class BcFormComponent implements OnInit {
 
     const formVal = this.form.value;
 
-    // Construire les lignes d'achat
-    const lignesAchat: LigneAchat[] = this.lignesAchatArray.value
-      .filter((l: any) => l.designation) // Filtrer seulement les lignes avec designation (produitRef peut être vide)
-      .map((l: any) => {
-        const prix = l.prixAchatUnitaireHT || 0;
-        const qte = l.quantiteAchetee || 0;
-        // Utiliser designation comme fallback pour produitRef si vide
-        const produitRef = l.produitRef || l.designation;
-        
-        // Si le prix est 0, essayer de le récupérer depuis le produit
-        if (prix === 0 && l.produitRef) {
-          const product = this.store.products().find(p => p.ref === l.produitRef);
-          if (product && product.priceBuyHT) {
-            return {
-              produitRef: produitRef,
-              designation: l.designation,
-              unite: l.unite || 'U',
-              quantiteAchetee: qte,
-              prixAchatUnitaireHT: product.priceBuyHT,
-              tva: l.tva || 20
-            };
+    // Construire les fournisseurs avec leurs lignes d'achat
+    const fournisseursAchatData = validFournisseurs.map((fournisseur: any) => {
+      const lignesAchat: LigneAchat[] = (fournisseur.lignesAchat || [])
+        .filter((l: any) => l.designation) // Filtrer seulement les lignes avec designation
+        .map((l: any) => {
+          const prix = l.prixAchatUnitaireHT || 0;
+          const qte = l.quantiteAchetee || 0;
+          // Utiliser designation comme fallback pour produitRef si vide
+          const produitRef = l.produitRef || l.designation;
+          
+          // Si le prix est 0, essayer de le récupérer depuis le produit
+          if (prix === 0 && l.produitRef) {
+            const product = this.store.products().find(p => p.ref === l.produitRef);
+            if (product && product.priceBuyHT) {
+              return {
+                produitRef: produitRef,
+                designation: l.designation,
+                unite: l.unite || 'U',
+                quantiteAchetee: qte,
+                prixAchatUnitaireHT: product.priceBuyHT,
+                tva: l.tva || 20
+              };
+            }
           }
-        }
-        return {
-          produitRef: produitRef,
-          designation: l.designation,
-          unite: l.unite || 'U',
-          quantiteAchetee: qte,
-          prixAchatUnitaireHT: prix,
-          tva: l.tva || 20
-        };
-      });
+          return {
+            produitRef: produitRef,
+            designation: l.designation,
+            unite: l.unite || 'U',
+            quantiteAchetee: qte,
+            prixAchatUnitaireHT: prix,
+            tva: l.tva || 20
+          };
+        });
+      
+      return {
+        fournisseurId: fournisseur.fournisseurId,
+        lignesAchat: lignesAchat
+      };
+    });
 
     // Construire les clients avec leurs lignes de vente (seulement si pas d'ajout au stock)
     const clientsVenteData: ClientVente[] = ajouterAuStock ? [] : validClients.map((client: any) => ({
@@ -1375,13 +1493,10 @@ export class BcFormComponent implements OnInit {
         }))
     }));
 
-    // Debug: vérifier les lignes d'achat
-    
     const bcData: BC = {
       id: this.bcId || `bc-${Date.now()}`,
       number: formVal.number,
       date: formVal.date,
-      supplierId: formVal.supplierId,
       status: formVal.status,
       paymentMode: formVal.paymentMode || undefined,
       delaiPaiement: formVal.delaiPaiement || undefined,
@@ -1389,7 +1504,7 @@ export class BcFormComponent implements OnInit {
       conditionLivraison: formVal.conditionLivraison ? formVal.conditionLivraison.trim() : '',
       responsableLivraison: formVal.responsableLivraison ? formVal.responsableLivraison.trim() : '',
       ajouterAuStock: ajouterAuStock || false,
-      lignesAchat: lignesAchat,
+      fournisseursAchat: fournisseursAchatData,
       clientsVente: clientsVenteData.length > 0 ? clientsVenteData : undefined,
       // Totaux
       totalAchatHT: this.buyTotal(),
@@ -1479,7 +1594,13 @@ export class BcFormComponent implements OnInit {
             result.fournisseurNom!.toLowerCase().includes(s.name.toLowerCase())
           );
           if (matchingSupplier) {
-            this.form.patchValue({ supplierId: matchingSupplier.id });
+            // Si aucun fournisseur, en créer un
+            if (this.fournisseursAchatArray.length === 0) {
+              this.addFournisseurAchat();
+            }
+            // Mettre à jour le premier fournisseur
+            const premierFournisseur = this.fournisseursAchatArray.at(0);
+            premierFournisseur.patchValue({ fournisseurId: matchingSupplier.id });
           }
         }
         
@@ -1505,9 +1626,18 @@ export class BcFormComponent implements OnInit {
       return;
     }
 
-    // Vider les lignes d'achat existantes
-    while (this.lignesAchatArray.length > 0) {
-      this.lignesAchatArray.removeAt(0);
+    // Si aucun fournisseur, en créer un
+    if (this.fournisseursAchatArray.length === 0) {
+      this.addFournisseurAchat();
+    }
+    
+    // Utiliser le premier fournisseur pour l'OCR
+    const premierFournisseurIdx = 0;
+    const lignesArray = this.getLignesAchatArray(premierFournisseurIdx);
+    
+    // Vider les lignes d'achat existantes du premier fournisseur
+    while (lignesArray.length > 0) {
+      lignesArray.removeAt(0);
     }
 
     // Ajouter les lignes détectées
@@ -1520,7 +1650,7 @@ export class BcFormComponent implements OnInit {
           unite: ligne.unite || 'U',
           tva: 20 // Par défaut
         });
-        this.lignesAchatArray.push(ligneGroup);
+        lignesArray.push(ligneGroup);
         
         // Stocker le prix d'achat
         if (ligne.prixUnitaireHT) {
