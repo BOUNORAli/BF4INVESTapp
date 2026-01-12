@@ -186,7 +186,7 @@ import { matchesFlexibleSearch } from '../../utils/product-search.util';
                         <tr>
                           <th class="p-3 w-2/5">Produit</th>
                           <th class="p-3 w-20">Qté</th>
-                          <th class="p-3 text-right">Prix Achat HT</th>
+                          <th class="p-3 text-right">Prix Achat (HT/TTC)</th>
                           <th class="p-3 w-16 text-center">TVA %</th>
                           <th class="p-3 w-20 text-center">Stock</th>
                           <th class="p-3 text-right bg-orange-50/50">Total HT</th>
@@ -229,10 +229,43 @@ import { matchesFlexibleSearch } from '../../utils/product-search.util';
                         <input type="number" formControlName="quantiteAchetee" (input)="calculateTotals()" class="w-full p-2 border border-slate-200 rounded-md text-right focus:ring-2 focus:ring-orange-500/20 outline-none">
                       </td>
                       <td class="p-2 align-top">
-                        <input type="number" formControlName="prixAchatUnitaireHT" (input)="calculateTotals()" class="w-full p-2 border border-slate-200 rounded-md text-right focus:ring-2 focus:ring-orange-500/20 outline-none">
+                        <div class="space-y-2">
+                          <!-- Radio buttons HT/TTC -->
+                          <div class="flex gap-3 text-xs">
+                            <label class="flex items-center gap-1 cursor-pointer">
+                              <input type="radio" formControlName="prixInputMode" value="HT" 
+                                     (change)="onPrixAchatChange(i, 'HT')" class="w-3 h-3 text-orange-600">
+                              <span class="font-medium">HT</span>
+                            </label>
+                            <label class="flex items-center gap-1 cursor-pointer">
+                              <input type="radio" formControlName="prixInputMode" value="TTC"
+                                     (change)="onPrixAchatChange(i, 'TTC')" class="w-3 h-3 text-orange-600">
+                              <span class="font-medium">TTC</span>
+                            </label>
+                          </div>
+                          
+                          <!-- Champs prix conditionnels -->
+                          @if (item.value.prixInputMode === 'HT' || !item.value.prixInputMode) {
+                            <input type="number" formControlName="prixAchatUnitaireHT" 
+                                   (input)="onPrixAchatChange(i, 'HT')" 
+                                   step="0.0001" 
+                                   class="w-full p-2 border border-slate-200 rounded-md text-right focus:ring-2 focus:ring-orange-500/20 outline-none">
+                          } @else {
+                            <input type="number" formControlName="prixAchatUnitaireTTC" 
+                                   (input)="onPrixAchatChange(i, 'TTC')" 
+                                   step="0.0001" 
+                                   class="w-full p-2 border border-slate-200 rounded-md text-right focus:ring-2 focus:ring-orange-500/20 outline-none">
+                          }
+                          
+                          <!-- Sélecteur mode calcul -->
+                          <select formControlName="calculMode" (change)="onPrixAchatChange(i, item.value.prixInputMode || 'HT')" class="w-full p-1 border border-slate-200 rounded text-xs bg-slate-50 focus:ring-1 focus:ring-orange-500/20 outline-none">
+                            <option value="scientific">Notation scientifique (2 décimales)</option>
+                            <option value="exact">Notation exacte</option>
+                          </select>
+                        </div>
                       </td>
                       <td class="p-2 align-top">
-                        <input type="number" formControlName="tva" (input)="calculateTotals()" class="w-full p-2 border border-slate-200 rounded-md text-center focus:ring-2 focus:ring-orange-500/20 outline-none">
+                        <input type="number" formControlName="tva" (input)="onPrixAchatChange(i, item.value.prixInputMode || 'HT'); calculateTotals()" class="w-full p-2 border border-slate-200 rounded-md text-center focus:ring-2 focus:ring-orange-500/20 outline-none">
                       </td>
                       <td class="p-2 align-top text-center">
                         @if (item.value.produitRef) {
@@ -344,7 +377,7 @@ import { matchesFlexibleSearch } from '../../utils/product-search.util';
                         <tr>
                           <th class="p-3 w-2/5">Produit</th>
                           <th class="p-3 w-20">Qté Vendue</th>
-                          <th class="p-3 text-right">Prix Vente HT</th>
+                          <th class="p-3 text-right">Prix Vente (HT/TTC)</th>
                           <th class="p-3 w-16 text-center">TVA %</th>
                           <th class="p-3 w-20 text-center">Stock</th>
                           <th class="p-3 w-20 text-center">Marge</th>
@@ -394,10 +427,43 @@ import { matchesFlexibleSearch } from '../../utils/product-search.util';
                               </div>
                             </td>
                             <td class="p-2 align-top">
-                              <input type="number" formControlName="prixVenteUnitaireHT" (input)="calculateTotals()" class="w-full p-2 border border-slate-200 rounded-md text-right font-medium focus:ring-2 focus:ring-blue-500/20 outline-none">
+                              <div class="space-y-2">
+                                <!-- Radio buttons HT/TTC -->
+                                <div class="flex gap-3 text-xs">
+                                  <label class="flex items-center gap-1 cursor-pointer">
+                                    <input type="radio" formControlName="prixInputMode" value="HT" 
+                                           (change)="onPrixVenteChange(clientIdx, ligneIdx, 'HT')" class="w-3 h-3 text-blue-600">
+                                    <span class="font-medium">HT</span>
+                                  </label>
+                                  <label class="flex items-center gap-1 cursor-pointer">
+                                    <input type="radio" formControlName="prixInputMode" value="TTC"
+                                           (change)="onPrixVenteChange(clientIdx, ligneIdx, 'TTC')" class="w-3 h-3 text-blue-600">
+                                    <span class="font-medium">TTC</span>
+                                  </label>
+                                </div>
+                                
+                                <!-- Champs prix conditionnels -->
+                                @if (ligneForm.value.prixInputMode === 'HT' || !ligneForm.value.prixInputMode) {
+                                  <input type="number" formControlName="prixVenteUnitaireHT" 
+                                         (input)="onPrixVenteChange(clientIdx, ligneIdx, 'HT')" 
+                                         step="0.0001" 
+                                         class="w-full p-2 border border-slate-200 rounded-md text-right font-medium focus:ring-2 focus:ring-blue-500/20 outline-none">
+                                } @else {
+                                  <input type="number" formControlName="prixVenteUnitaireTTC" 
+                                         (input)="onPrixVenteChange(clientIdx, ligneIdx, 'TTC')" 
+                                         step="0.0001" 
+                                         class="w-full p-2 border border-slate-200 rounded-md text-right font-medium focus:ring-2 focus:ring-blue-500/20 outline-none">
+                                }
+                                
+                                <!-- Sélecteur mode calcul -->
+                                <select formControlName="calculMode" (change)="onPrixVenteChange(clientIdx, ligneIdx, ligneForm.value.prixInputMode || 'HT')" class="w-full p-1 border border-slate-200 rounded text-xs bg-slate-50 focus:ring-1 focus:ring-blue-500/20 outline-none">
+                                  <option value="scientific">Notation scientifique (2 décimales)</option>
+                                  <option value="exact">Notation exacte</option>
+                                </select>
+                              </div>
                             </td>
                             <td class="p-2 align-top">
-                              <input type="number" formControlName="tva" (input)="calculateTotals()" class="w-full p-2 border border-slate-200 rounded-md text-center focus:ring-2 focus:ring-blue-500/20 outline-none">
+                              <input type="number" formControlName="tva" (input)="onPrixVenteChange(clientIdx, ligneIdx, ligneForm.value.prixInputMode || 'HT'); calculateTotals()" class="w-full p-2 border border-slate-200 rounded-md text-center focus:ring-2 focus:ring-blue-500/20 outline-none">
                             </td>
                             <td class="p-2 align-top text-center">
                               @if (ligneForm.value.produitRef) {
@@ -804,6 +870,8 @@ export class BcFormComponent implements OnInit {
       this.addLigneAchat();
     }
 
+    // Initialiser les prix TTC si manquants (pour compatibilité avec anciennes BCs)
+    this.initializeMissingTTCPrices();
     this.calculateTotals();
   }
 
@@ -817,6 +885,9 @@ export class BcFormComponent implements OnInit {
       unite: [data?.unite || 'U'],
       quantiteAchetee: [data?.quantiteAchetee || 1, [Validators.required, Validators.min(0.01)]],
       prixAchatUnitaireHT: [data?.prixAchatUnitaireHT || 0, [Validators.required, Validators.min(0)]],
+      prixAchatUnitaireTTC: [data?.prixAchatUnitaireTTC || null],
+      prixInputMode: [data?.prixInputMode || 'HT'],
+      calculMode: [data?.calculMode || 'scientific'],
       tva: [data?.tva || 20, [Validators.required, Validators.min(0)]]
     });
   }
@@ -829,6 +900,9 @@ export class BcFormComponent implements OnInit {
       unite: [data?.unite || 'U'],
       quantiteVendue: [data?.quantiteVendue || 1, [Validators.required, Validators.min(0.01)]],
       prixVenteUnitaireHT: [data?.prixVenteUnitaireHT || 0, [Validators.required, Validators.min(0)]],
+      prixVenteUnitaireTTC: [data?.prixVenteUnitaireTTC || null],
+      prixInputMode: [data?.prixInputMode || 'HT'],
+      calculMode: [data?.calculMode || 'scientific'],
       tva: [data?.tva || 20, [Validators.required, Validators.min(0)]]
     });
   }
@@ -909,14 +983,20 @@ export class BcFormComponent implements OnInit {
 
   selectProductAchat(index: number, product: Product) {
     const group = this.lignesAchatArray.at(index);
+    const tva = group.value.tva || 20;
+    const calculMode = group.value.calculMode || 'scientific';
+    const prixHT = product.priceBuyHT;
+    const prixTTC = this.roundPrice(this.calculateTTCFromHT(prixHT, tva), calculMode);
+    
     group.patchValue({
       produitRef: product.ref,
       productSearch: product.name,
       designation: product.name,
       unite: product.unit,
-      prixAchatUnitaireHT: product.priceBuyHT
+      prixAchatUnitaireHT: prixHT,
+      prixAchatUnitaireTTC: prixTTC
     });
-    this.prixAchatMap.set(product.ref, product.priceBuyHT);
+    this.prixAchatMap.set(product.ref, prixHT);
     this.activeDropdownType.set(null);
     this.calculateTotals();
   }
@@ -924,6 +1004,10 @@ export class BcFormComponent implements OnInit {
   selectProductVente(clientIdx: number, ligneIdx: number, produitAchat: any) {
     const group = this.getLignesVenteArray(clientIdx).at(ligneIdx);
     const product = this.store.products().find(p => p.ref === produitAchat.produitRef);
+    const tva = produitAchat.tva || 20;
+    const calculMode = group.value.calculMode || 'scientific';
+    const prixHT = product?.priceSellHT || produitAchat.prixAchatUnitaireHT * 1.2;
+    const prixTTC = this.roundPrice(this.calculateTTCFromHT(prixHT, tva), calculMode);
     
     group.patchValue({
       produitRef: produitAchat.produitRef,
@@ -931,8 +1015,9 @@ export class BcFormComponent implements OnInit {
       designation: produitAchat.designation,
       unite: produitAchat.unite || 'U',
       quantiteVendue: produitAchat.quantiteAchetee || 1,
-      prixVenteUnitaireHT: product?.priceSellHT || produitAchat.prixAchatUnitaireHT * 1.2,
-      tva: produitAchat.tva || 20
+      prixVenteUnitaireHT: prixHT,
+      prixVenteUnitaireTTC: prixTTC,
+      tva: tva
     });
     this.activeDropdownType.set(null);
     this.calculateTotals();
@@ -1008,6 +1093,84 @@ export class BcFormComponent implements OnInit {
     // L'utilisateur peut toujours garder les clients s'il veut
   }
 
+  // === Méthodes utilitaires pour calculs prix ===
+
+  roundPrice(value: number, mode: 'scientific' | 'exact'): number {
+    if (mode === 'scientific') {
+      // Arrondi à 2 décimales : multiplier par 100, arrondir, diviser par 100
+      return Math.round(value * 100) / 100;
+    }
+    // Mode exact : retourner tel quel (précision native JavaScript)
+    return value;
+  }
+
+  calculateHTFromTTC(ttc: number, tvaPercent: number): number {
+    const tva = tvaPercent / 100;
+    return ttc / (1 + tva);
+  }
+
+  calculateTTCFromHT(ht: number, tvaPercent: number): number {
+    const tva = tvaPercent / 100;
+    return ht * (1 + tva);
+  }
+
+  onPrixAchatChange(index: number, inputMode: 'HT' | 'TTC') {
+    const ligne = this.lignesAchatArray.at(index);
+    const calculMode = ligne.value.calculMode || 'scientific';
+    
+    if (inputMode === 'HT') {
+      const ht = ligne.value.prixAchatUnitaireHT || 0;
+      const ttc = this.roundPrice(this.calculateTTCFromHT(ht, ligne.value.tva || 0), calculMode);
+      ligne.patchValue({ prixAchatUnitaireTTC: ttc }, { emitEvent: false });
+    } else {
+      const ttc = ligne.value.prixAchatUnitaireTTC || 0;
+      const ht = this.roundPrice(this.calculateHTFromTTC(ttc, ligne.value.tva || 0), calculMode);
+      ligne.patchValue({ prixAchatUnitaireHT: ht }, { emitEvent: false });
+    }
+    this.calculateTotals();
+  }
+
+  onPrixVenteChange(clientIdx: number, ligneIdx: number, inputMode: 'HT' | 'TTC') {
+    const ligne = this.getLignesVenteArray(clientIdx).at(ligneIdx);
+    const calculMode = ligne.value.calculMode || 'scientific';
+    
+    if (inputMode === 'HT') {
+      const ht = ligne.value.prixVenteUnitaireHT || 0;
+      const ttc = this.roundPrice(this.calculateTTCFromHT(ht, ligne.value.tva || 0), calculMode);
+      ligne.patchValue({ prixVenteUnitaireTTC: ttc }, { emitEvent: false });
+    } else {
+      const ttc = ligne.value.prixVenteUnitaireTTC || 0;
+      const ht = this.roundPrice(this.calculateHTFromTTC(ttc, ligne.value.tva || 0), calculMode);
+      ligne.patchValue({ prixVenteUnitaireHT: ht }, { emitEvent: false });
+    }
+    this.calculateTotals();
+  }
+
+  initializeMissingTTCPrices() {
+    // Initialiser les prix TTC pour les lignes d'achat
+    this.lignesAchatArray.controls.forEach((control, index) => {
+      const val = control.value;
+      if (!val.prixAchatUnitaireTTC && val.prixAchatUnitaireHT && val.prixAchatUnitaireHT > 0) {
+        const calculMode = val.calculMode || 'scientific';
+        const ttc = this.roundPrice(this.calculateTTCFromHT(val.prixAchatUnitaireHT, val.tva || 20), calculMode);
+        control.patchValue({ prixAchatUnitaireTTC: ttc, prixInputMode: val.prixInputMode || 'HT', calculMode: calculMode }, { emitEvent: false });
+      }
+    });
+
+    // Initialiser les prix TTC pour les lignes de vente
+    this.clientsVenteArray.controls.forEach((clientControl, clientIdx) => {
+      const lignesArray = clientControl.get('lignesVente') as FormArray;
+      lignesArray.controls.forEach((ligneControl) => {
+        const val = ligneControl.value;
+        if (!val.prixVenteUnitaireTTC && val.prixVenteUnitaireHT && val.prixVenteUnitaireHT > 0) {
+          const calculMode = val.calculMode || 'scientific';
+          const ttc = this.roundPrice(this.calculateTTCFromHT(val.prixVenteUnitaireHT, val.tva || 20), calculMode);
+          ligneControl.patchValue({ prixVenteUnitaireTTC: ttc, prixInputMode: val.prixInputMode || 'HT', calculMode: calculMode }, { emitEvent: false });
+        }
+      });
+    });
+  }
+
   calculateTotals() {
     let bTot = 0, bTva = 0, sTot = 0, sTva = 0;
 
@@ -1015,7 +1178,18 @@ export class BcFormComponent implements OnInit {
     this.lignesAchatArray.controls.forEach(control => {
       const val = control.value;
       const qte = val.quantiteAchetee || 0;
-      const prix = val.prixAchatUnitaireHT || 0;
+      let prix = val.prixAchatUnitaireHT || 0;
+      const calculMode = val.calculMode || 'scientific';
+      
+      // Si l'utilisateur a saisi en TTC, calculer le HT à partir du TTC
+      if (val.prixInputMode === 'TTC' && val.prixAchatUnitaireTTC && val.prixAchatUnitaireTTC > 0) {
+        prix = this.roundPrice(this.calculateHTFromTTC(val.prixAchatUnitaireTTC, val.tva || 0), calculMode);
+        // Mettre à jour le prix HT dans le formulaire si nécessaire
+        if (Math.abs(prix - (val.prixAchatUnitaireHT || 0)) > 0.0001) {
+          control.patchValue({ prixAchatUnitaireHT: prix }, { emitEvent: false });
+        }
+      }
+      
       const tva = (val.tva || 0) / 100;
 
       bTot += qte * prix;
@@ -1033,7 +1207,18 @@ export class BcFormComponent implements OnInit {
       lignesArray.controls.forEach(ligneControl => {
         const val = ligneControl.value;
         const qte = val.quantiteVendue || 0;
-        const prix = val.prixVenteUnitaireHT || 0;
+        let prix = val.prixVenteUnitaireHT || 0;
+        const calculMode = val.calculMode || 'scientific';
+        
+        // Si l'utilisateur a saisi en TTC, calculer le HT à partir du TTC
+        if (val.prixInputMode === 'TTC' && val.prixVenteUnitaireTTC && val.prixVenteUnitaireTTC > 0) {
+          prix = this.roundPrice(this.calculateHTFromTTC(val.prixVenteUnitaireTTC, val.tva || 0), calculMode);
+          // Mettre à jour le prix HT dans le formulaire si nécessaire
+          if (Math.abs(prix - (val.prixVenteUnitaireHT || 0)) > 0.0001) {
+            ligneControl.patchValue({ prixVenteUnitaireHT: prix }, { emitEvent: false });
+          }
+        }
+        
         const tva = (val.tva || 0) / 100;
 
         sTot += qte * prix;

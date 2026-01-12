@@ -90,6 +90,9 @@ export interface LigneAchat {
   unite: string;
   quantiteAchetee: number;
   prixAchatUnitaireHT: number;
+  prixAchatUnitaireTTC?: number;
+  prixInputMode?: 'HT' | 'TTC';
+  calculMode?: 'scientific' | 'exact';
   tva: number;
   totalHT?: number;
   totalTTC?: number;
@@ -101,6 +104,9 @@ export interface LigneVente {
   unite: string;
   quantiteVendue: number;
   prixVenteUnitaireHT: number;
+  prixVenteUnitaireTTC?: number;
+  prixInputMode?: 'HT' | 'TTC';
+  calculMode?: 'scientific' | 'exact';
   tva: number;
   totalHT?: number;
   totalTTC?: number;
