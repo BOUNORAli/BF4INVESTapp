@@ -1273,7 +1273,8 @@ export class SalesInvoicesComponent implements OnInit {
     if (term) {
       list = list.filter(i => 
         i.number.toLowerCase().includes(term) ||
-        this.store.getClientName(i.partnerId || '').toLowerCase().includes(term)
+        this.store.getClientName(i.partnerId || '').toLowerCase().includes(term) ||
+        (i.bcId && this.store.getBCNumber(i.bcId).toLowerCase().includes(term))
       );
     }
     

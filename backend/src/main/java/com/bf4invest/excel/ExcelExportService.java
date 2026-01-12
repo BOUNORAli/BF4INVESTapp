@@ -2130,6 +2130,12 @@ public class ExcelExportService {
         
         style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
         
+        // Ajouter des bordures simples à toutes les cellules
+        style.setBorderBottom(BorderStyle.THIN);
+        style.setBorderTop(BorderStyle.THIN);
+        style.setBorderLeft(BorderStyle.THIN);
+        style.setBorderRight(BorderStyle.THIN);
+        
         // Appliquer le format selon le type
         DataFormat format = workbook.createDataFormat();
         switch (type) {

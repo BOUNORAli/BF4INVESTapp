@@ -3984,43 +3984,28 @@ public class ExcelImportService {
                     }
                     
                     try {
-                        // Vérifier si un paiement existe déjà
-                        boolean paiementExiste = false;
-                        List<Paiement> paiementsExistants = paiementService.findByFactureAchatId(facture.getId());
-                        if (operation.getReference() != null && !operation.getReference().trim().isEmpty()) {
-                            paiementExiste = paiementsExistants.stream()
-                                    .anyMatch(p -> operation.getReference().equals(p.getReference()));
-                        } else {
-                            paiementExiste = paiementsExistants.stream()
-                                    .anyMatch(p -> p.getDate() != null && p.getDate().equals(dateOperation)
-                                            && p.getMontant() != null && Math.abs(p.getMontant() - montantPaiement) < 0.01);
-                        }
+                        // Créer le paiement sans vérification de doublon
+                        // Chaque ligne Excel représente un paiement unique
+                        Paiement paiement = Paiement.builder()
+                                .factureAchatId(facture.getId())
+                                .bcReference(numeroBc)
+                                .typeMouvement("F")
+                                .nature("paiement")
+                                .date(dateOperation)
+                                .montant(montantPaiement)
+                                .mode(operation.getMoyenPayement())
+                                .reference(operation.getReference())
+                                .tvaRate(operation.getTauxTva())
+                                .totalPaiementTTC(montantPaiement)
+                                .htPaye(operation.getHtPaye())
+                                .tvaPaye(operation.getTva())
+                                .notes(commentaire)
+                                .build();
                         
-                        if (!paiementExiste) {
-                            Paiement paiement = Paiement.builder()
-                                    .factureAchatId(facture.getId())
-                                    .bcReference(numeroBc)
-                                    .typeMouvement("F")
-                                    .nature("paiement")
-                                    .date(dateOperation)
-                                    .montant(montantPaiement)
-                                    .mode(operation.getMoyenPayement())
-                                    .reference(operation.getReference())
-                                    .tvaRate(operation.getTauxTva())
-                                    .totalPaiementTTC(montantPaiement)
-                                    .htPaye(operation.getHtPaye())
-                                    .tvaPaye(operation.getTva())
-                                    .notes(commentaire)
-                                    .build();
-                            
-                            paiementService.create(paiement);
-                            paymentsProcessed.incrementAndGet();
-                            log.info("Created payment for facture achat {} (BC: {}): {} MAD - Date: {} (colonne DATE)", 
-                                    facture.getNumeroFactureAchat(), numeroBc, montantPaiement, dateOperation);
-                        } else {
-                            log.debug("Payment already exists for facture achat {} (BC: {})", 
-                                    facture.getNumeroFactureAchat(), numeroBc);
-                        }
+                        paiementService.create(paiement);
+                        paymentsProcessed.incrementAndGet();
+                        log.info("Created payment for facture achat {} (BC: {}): {} MAD - Date: {} (colonne DATE)", 
+                                facture.getNumeroFactureAchat(), numeroBc, montantPaiement, dateOperation);
                     } catch (Exception e) {
                         log.error("Error creating payment for facture achat (BC: {}): {}", numeroBc, e.getMessage(), e);
                         result.getWarnings().add(String.format("Erreur création paiement facture achat (BC %s): %s", numeroBc, e.getMessage()));
@@ -4074,43 +4059,28 @@ public class ExcelImportService {
                     }
                     
                     try {
-                        // Vérifier si un paiement existe déjà
-                        boolean paiementExiste = false;
-                        List<Paiement> paiementsExistants = paiementService.findByFactureVenteId(facture.getId());
-                        if (operation.getReference() != null && !operation.getReference().trim().isEmpty()) {
-                            paiementExiste = paiementsExistants.stream()
-                                    .anyMatch(p -> operation.getReference().equals(p.getReference()));
-                        } else {
-                            paiementExiste = paiementsExistants.stream()
-                                    .anyMatch(p -> p.getDate() != null && p.getDate().equals(dateOperation)
-                                            && p.getMontant() != null && Math.abs(p.getMontant() - montantPaiement) < 0.01);
-                        }
+                        // Créer le paiement sans vérification de doublon
+                        // Chaque ligne Excel représente un paiement unique
+                        Paiement paiement = Paiement.builder()
+                                .factureVenteId(facture.getId())
+                                .bcReference(numeroBc)
+                                .typeMouvement("C")
+                                .nature("paiement")
+                                .date(dateOperation)
+                                .montant(montantPaiement)
+                                .mode(operation.getMoyenPayement())
+                                .reference(operation.getReference())
+                                .tvaRate(operation.getTauxTva())
+                                .totalPaiementTTC(montantPaiement)
+                                .htPaye(operation.getHtPaye())
+                                .tvaPaye(operation.getTva())
+                                .notes(commentaire)
+                                .build();
                         
-                        if (!paiementExiste) {
-                            Paiement paiement = Paiement.builder()
-                                    .factureVenteId(facture.getId())
-                                    .bcReference(numeroBc)
-                                    .typeMouvement("C")
-                                    .nature("paiement")
-                                    .date(dateOperation)
-                                    .montant(montantPaiement)
-                                    .mode(operation.getMoyenPayement())
-                                    .reference(operation.getReference())
-                                    .tvaRate(operation.getTauxTva())
-                                    .totalPaiementTTC(montantPaiement)
-                                    .htPaye(operation.getHtPaye())
-                                    .tvaPaye(operation.getTva())
-                                    .notes(commentaire)
-                                    .build();
-                            
-                            paiementService.create(paiement);
-                            paymentsProcessed.incrementAndGet();
-                            log.info("Created payment for facture vente {} (BC: {}): {} MAD - Date: {} (colonne DATE)", 
-                                    facture.getNumeroFactureVente(), numeroBc, montantPaiement, dateOperation);
-                        } else {
-                            log.debug("Payment already exists for facture vente {} (BC: {})", 
-                                    facture.getNumeroFactureVente(), numeroBc);
-                        }
+                        paiementService.create(paiement);
+                        paymentsProcessed.incrementAndGet();
+                        log.info("Created payment for facture vente {} (BC: {}): {} MAD - Date: {} (colonne DATE)", 
+                                facture.getNumeroFactureVente(), numeroBc, montantPaiement, dateOperation);
                     } catch (Exception e) {
                         log.error("Error creating payment for facture vente (BC: {}): {}", numeroBc, e.getMessage(), e);
                         result.getWarnings().add(String.format("Erreur création paiement facture vente (BC %s): %s", numeroBc, e.getMessage()));

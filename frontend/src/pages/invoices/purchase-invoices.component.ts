@@ -1432,7 +1432,8 @@ export class PurchaseInvoicesComponent implements OnInit {
     if (term) {
       list = list.filter(i => 
         i.number.toLowerCase().includes(term) || 
-        this.store.getSupplierName(i.partnerId || '').toLowerCase().includes(term)
+        this.store.getSupplierName(i.partnerId || '').toLowerCase().includes(term) ||
+        (i.bcId && this.store.getBCNumber(i.bcId).toLowerCase().includes(term))
       );
     }
     
