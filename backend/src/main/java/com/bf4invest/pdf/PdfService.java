@@ -2448,14 +2448,33 @@ public class PdfService {
         Font labelFont = FontFactory.getFont(FontFactory.HELVETICA, 11, Color.BLACK);
         Font blueBoldFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 13, BLUE_DARK);
         
-        // Pour les ordres de virement, on utilise seulement la partie entière sans centimes
+        // Calculer le montant avec les centimes
         Double montant = ov.getMontant();
         if (montant == null) {
             montant = 0.0;
         }
-        long wholePart = montant.longValue();
+        
+        long wholePart = (long) montant;
+        int decimalPart = (int) Math.round((montant - wholePart) * 100);
+        
         String wholeWords = formatOvWordsWithSpaces(convertNumberToFrench(wholePart));
-        String amountInWords = wholeWords + (wholePart == 1 ? " Dirham" : " Dirhams");
+        String amountInWords;
+        
+        if (decimalPart == 0) {
+            // Pas de centimes
+            amountInWords = wholeWords + (wholePart == 1 ? " Dirham" : " Dirhams");
+        } else {
+            // Avec centimes
+            String decimalWords = formatOvWordsWithSpaces(convertNumberToFrench(decimalPart));
+            if (wholePart == 0) {
+                // Seulement des centimes
+                amountInWords = decimalWords + (decimalPart == 1 ? " Centime" : " Centimes");
+            } else {
+                // Dirhams et centimes
+                amountInWords = wholeWords + (wholePart == 1 ? " Dirham" : " Dirhams") + 
+                               " et " + decimalWords + (decimalPart == 1 ? " Centime" : " Centimes");
+            }
+        }
         
         Paragraph amountLine = new Paragraph();
         amountLine.add(new Chunk("La somme de : ", labelFont));
