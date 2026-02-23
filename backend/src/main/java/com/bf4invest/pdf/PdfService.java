@@ -2454,8 +2454,9 @@ public class PdfService {
             montant = 0.0;
         }
         
-        long wholePart = (long) montant;
-        int decimalPart = (int) Math.round((montant - wholePart) * 100);
+        double montantValue = montant.doubleValue();
+        long wholePart = (long) montantValue;
+        int decimalPart = (int) Math.round((montantValue - wholePart) * 100);
         
         String wholeWords = formatOvWordsWithSpaces(convertNumberToFrench(wholePart));
         String amountInWords;
