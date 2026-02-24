@@ -63,9 +63,16 @@ public class BandeCommandeController {
     }
     
     @PostMapping
-    public ResponseEntity<BandeCommande> createBC(@RequestBody BandeCommande bc) {
-        BandeCommande created = bcService.create(bc);
-        return ResponseEntity.status(HttpStatus.CREATED).body(created);
+    public ResponseEntity<?> createBC(@RequestBody BandeCommande bc) {
+        try {
+            BandeCommande created = bcService.create(bc);
+            return ResponseEntity.status(HttpStatus.CREATED).body(created);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Erreur lors de la création de la bande de commande: " + e.getMessage()));
+        }
     }
     
     @PutMapping("/{id}")

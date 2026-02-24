@@ -26,6 +26,21 @@ export class BcService {
         payload.ajouterAuStock = bc.ajouterAuStock;
     }
     
+    // Nouvelle structure multi-fournisseurs
+    if (bc.fournisseursAchat && bc.fournisseursAchat.length > 0) {
+        payload.fournisseursAchat = bc.fournisseursAchat.map(fa => ({
+          fournisseurId: fa.fournisseurId,
+          lignesAchat: (fa.lignesAchat || []).map(l => ({
+            produitRef: l.produitRef,
+            designation: l.designation,
+            unite: l.unite,
+            quantiteAchetee: l.quantiteAchetee,
+            prixAchatUnitaireHT: l.prixAchatUnitaireHT,
+            tva: l.tva
+          }))
+        }));
+    }
+    
     // Nouvelle structure multi-clients
     if (bc.lignesAchat && bc.lignesAchat.length > 0) {
         payload.lignesAchat = bc.lignesAchat.map(l => ({
@@ -96,6 +111,21 @@ export class BcService {
     
     if (updatedBc.ajouterAuStock !== undefined) {
         payload.ajouterAuStock = updatedBc.ajouterAuStock;
+    }
+    
+    // Nouvelle structure multi-fournisseurs
+    if (updatedBc.fournisseursAchat && updatedBc.fournisseursAchat.length > 0) {
+        payload.fournisseursAchat = updatedBc.fournisseursAchat.map(fa => ({
+          fournisseurId: fa.fournisseurId,
+          lignesAchat: (fa.lignesAchat || []).map(l => ({
+            produitRef: l.produitRef,
+            designation: l.designation,
+            unite: l.unite,
+            quantiteAchetee: l.quantiteAchetee,
+            prixAchatUnitaireHT: l.prixAchatUnitaireHT,
+            tva: l.tva
+          }))
+        }));
     }
     
     // Nouvelle structure multi-clients
@@ -191,6 +221,24 @@ export class BcService {
   }
 
   private mapBC(bc: any): BC {
+    // Mapper fournisseursAchat (nouvelle structure multi-fournisseurs)
+    const fournisseursAchat = bc.fournisseursAchat ? bc.fournisseursAchat.map((fa: any) => ({
+      fournisseurId: fa.fournisseurId || '',
+      lignesAchat: (fa.lignesAchat || []).map((l: any) => ({
+        produitRef: l.produitRef || '',
+        designation: l.designation || '',
+        unite: l.unite || 'U',
+        quantiteAchetee: l.quantiteAchetee || 0,
+        prixAchatUnitaireHT: l.prixAchatUnitaireHT || 0,
+        tva: l.tva || 20,
+        totalHT: l.totalHT,
+        totalTTC: l.totalTTC
+      })),
+      totalAchatHT: fa.totalAchatHT,
+      totalAchatTTC: fa.totalAchatTTC,
+      totalTVA: fa.totalTVA
+    })) : undefined;
+    
     // Mapper lignesAchat (nouvelle structure)
     const lignesAchat: LigneAchat[] = bc.lignesAchat ? bc.lignesAchat.map((l: any) => ({
       produitRef: l.produitRef || '',
@@ -248,6 +296,7 @@ export class BcService {
       responsableLivraison: bc.responsableLivraison,
       items: items, // R├®trocompatibilit├®
       // Nouvelle structure
+      fournisseursAchat: fournisseursAchat,
       lignesAchat: lignesAchat,
       clientsVente: clientsVente,
       // Totaux
