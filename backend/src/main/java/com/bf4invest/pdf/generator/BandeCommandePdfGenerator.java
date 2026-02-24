@@ -86,6 +86,14 @@ public class BandeCommandePdfGenerator {
     }
     
     private Supplier getSupplier(BandeCommande bc) {
+        // Nouvelle structure multi-fournisseurs: prendre le premier fournisseur
+        if (bc.getFournisseursAchat() != null && !bc.getFournisseursAchat().isEmpty()) {
+            String firstFournisseurId = bc.getFournisseursAchat().get(0).getFournisseurId();
+            if (firstFournisseurId != null) {
+                return supplierRepository.findById(firstFournisseurId).orElse(null);
+            }
+        }
+        // Rétrocompatibilité: ancienne structure
         return bc.getFournisseurId() != null ? 
             supplierRepository.findById(bc.getFournisseurId()).orElse(null) : null;
     }
@@ -184,8 +192,44 @@ public class BandeCommandePdfGenerator {
         double tauxTVA = 20.0;
         boolean hasLines = false;
         
-        // Nouvelle structure: lignesAchat
-        if (bc.getLignesAchat() != null && !bc.getLignesAchat().isEmpty()) {
+        // Nouvelle structure multi-fournisseurs: fournisseursAchat
+        if (bc.getFournisseursAchat() != null && !bc.getFournisseursAchat().isEmpty()) {
+            hasLines = true;
+            int lineNum = 1;
+            // Itérer sur tous les fournisseurs et leurs lignes d'achat
+            for (var fournisseurAchat : bc.getFournisseursAchat()) {
+                if (fournisseurAchat == null || fournisseurAchat.getLignesAchat() == null) {
+                    continue;
+                }
+                for (var ligne : fournisseurAchat.getLignesAchat()) {
+                    if (ligne == null) {
+                        log.warn("Null ligne found in fournisseursAchat for BC {}", bc.getId());
+                        continue;
+                    }
+                    
+                    PdfDocumentHelper.addTableCell(table, String.valueOf(lineNum++), Element.ALIGN_CENTER);
+                    PdfDocumentHelper.addTableCell(table, ligne.getDesignation() != null ? ligne.getDesignation() : "", 
+                        Element.ALIGN_LEFT);
+                    PdfDocumentHelper.addTableCell(table, ligne.getUnite() != null ? ligne.getUnite() : "", 
+                        Element.ALIGN_CENTER);
+                    PdfDocumentHelper.addTableCell(table, PdfFormatHelper.formatQuantity(ligne.getQuantiteAchetee()), 
+                        Element.ALIGN_RIGHT);
+                    PdfDocumentHelper.addTableCell(table, PdfFormatHelper.formatAmount(ligne.getPrixAchatUnitaireHT()), 
+                        Element.ALIGN_RIGHT);
+                    
+                    double lineTotalHT = (ligne.getQuantiteAchetee() != null ? ligne.getQuantiteAchetee() : 0) * 
+                        (ligne.getPrixAchatUnitaireHT() != null ? ligne.getPrixAchatUnitaireHT() : 0);
+                    PdfDocumentHelper.addTableCell(table, PdfFormatHelper.formatAmount(lineTotalHT), Element.ALIGN_RIGHT);
+                    
+                    totalHT += lineTotalHT;
+                    if (ligne.getTva() != null && ligne.getTva() > 0) {
+                        tauxTVA = ligne.getTva();
+                    }
+                }
+            }
+        }
+        // Rétrocompatibilité: structure lignesAchat (dépréciée)
+        else if (bc.getLignesAchat() != null && !bc.getLignesAchat().isEmpty()) {
             hasLines = true;
             int lineNum = 1;
             for (var ligne : bc.getLignesAchat()) {

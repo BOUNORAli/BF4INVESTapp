@@ -41,16 +41,20 @@ public class PdfController {
             BandeCommande bc = bcService.findById(id)
                     .orElseThrow(() -> new RuntimeException("BC not found with id: " + id));
             
-            log.debug("Found BC: id={}, numeroBC={}, hasLignesAchat={}, hasLignes={}", 
-                id, bc.getNumeroBC(), 
-                bc.getLignesAchat() != null && !bc.getLignesAchat().isEmpty(),
-                bc.getLignes() != null && !bc.getLignes().isEmpty());
+            // Check if BC has purchase lines in any structure (old or new)
+            boolean hasLignesAchat = bc.getLignesAchat() != null && !bc.getLignesAchat().isEmpty();
+            boolean hasLignes = bc.getLignes() != null && !bc.getLignes().isEmpty();
+            boolean hasFournisseursAchat = bc.getFournisseursAchat() != null && !bc.getFournisseursAchat().isEmpty() &&
+                    bc.getFournisseursAchat().stream().anyMatch(fa -> 
+                        fa.getLignesAchat() != null && !fa.getLignesAchat().isEmpty());
             
-            // Validation: vérifier que le BC a au moins des lignes
-            if ((bc.getLignesAchat() == null || bc.getLignesAchat().isEmpty()) && 
-                (bc.getLignes() == null || bc.getLignes().isEmpty())) {
-                log.warn("BC {} has no product lines (lignesAchat={}, lignes={}), cannot generate PDF", 
-                    id, bc.getLignesAchat(), bc.getLignes());
+            log.debug("Found BC: id={}, numeroBC={}, hasLignesAchat={}, hasLignes={}, hasFournisseursAchat={}", 
+                id, bc.getNumeroBC(), hasLignesAchat, hasLignes, hasFournisseursAchat);
+            
+            // Validation: vérifier que le BC a au moins des lignes dans une des structures
+            if (!hasLignesAchat && !hasLignes && !hasFournisseursAchat) {
+                log.warn("BC {} has no product lines (lignesAchat={}, lignes={}, fournisseursAchat={}), cannot generate PDF", 
+                    id, bc.getLignesAchat(), bc.getLignes(), bc.getFournisseursAchat());
                 return ResponseEntity.badRequest().build();
             }
             
