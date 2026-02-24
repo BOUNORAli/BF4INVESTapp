@@ -8,7 +8,6 @@ import { AuthService } from './services/auth.service';
 import { StoreService, BC, Invoice, Product, Client, Supplier } from './services/store.service';
 import { NavigationRefreshService } from './services/navigation-refresh.service';
 import { SearchIndexService } from './services/search-index.service';
-import { RoutePrefetchService } from './services/route-prefetch.service';
 import { filter } from 'rxjs/operators';
 
 interface SearchResult {
@@ -33,7 +32,6 @@ export class AppComponent implements OnInit, OnDestroy {
   sanitizer = inject(DomSanitizer);
   navigationRefresh = inject(NavigationRefreshService); // Initialise le service de rafraîchissement
   searchIndex = inject(SearchIndexService); // Service d'indexation pour recherche optimisée
-  routePrefetch = inject(RoutePrefetchService); // Service de prefetching des routes
 
   // État du menu mobile
   isMobileMenuOpen = signal(false);
