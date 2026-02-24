@@ -1,6 +1,7 @@
 import { Injectable, signal, computed, inject, effect } from '@angular/core';
 import { ApiService } from './api.service';
 import { ToastService, Toast } from './toast.service';
+import { AuthService } from './auth.service';
 import { ProductService } from './product.service';
 import { PartnerService } from './partner.service';
 import { BcService } from './bc.service';
@@ -379,6 +380,7 @@ export interface DashboardKpiResponse {
 export class StoreService {
   private api = inject(ApiService);
   private toastService = inject(ToastService);
+  private authService = inject(AuthService);
   private productService = inject(ProductService);
   private partnerService = inject(PartnerService);
   private bcService = inject(BcService);
@@ -459,6 +461,13 @@ export class StoreService {
       return;
     }
     
+    // Vérifier l'authentification avant de charger les données
+    if (!this.authService.isAuthenticated()) {
+      // Utilisateur non authentifié, ne pas charger les données
+      // C'est normal au démarrage si l'utilisateur n'est pas connecté
+      return;
+    }
+    
     this.dataLoading = true;
     
     try {
@@ -475,7 +484,17 @@ export class StoreService {
       
       this.dataLoaded = true;
     } catch (error) {
-      console.error('Error loading initial data:', error);
+      // Gérer silencieusement les erreurs si l'utilisateur n'est plus authentifié
+      // (peut arriver si la session expire pendant le chargement)
+      if (error && typeof error === 'object' && 'status' in error) {
+        const httpError = error as { status?: number };
+        // Ne logger que si ce n'est pas une erreur 403 (accès refusé) qui est normale si non authentifié
+        if (httpError.status !== 403) {
+          console.error('Error loading initial data:', error);
+        }
+      } else {
+        console.error('Error loading initial data:', error);
+      }
       // Ne pas afficher de toast pour ne pas bloquer l'UX
     } finally {
       this.dataLoading = false;
