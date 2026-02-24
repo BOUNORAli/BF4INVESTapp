@@ -194,39 +194,40 @@ public class BandeCommandeService {
         // 1. Récupérer le client (premier de clientsVente ou clientId pour
         // rétrocompatibilité)
         // Si ajouterAuStock est true, utiliser une référence par défaut "STK"
-        String clientId = null;
         String refClient = "STK"; // Par défaut pour ajout au stock
+        final String finalClientId; // Variable finale pour les lambdas
         
         if (Boolean.TRUE.equals(bc.getAjouterAuStock())) {
             // BC pour ajout au stock uniquement - utiliser référence "STK"
             log.debug("generateBCNumber: BC pour ajout au stock, utilisation référence STK");
+            finalClientId = null; // Pas de client pour ajout au stock
         } else {
             // BC avec client(s) - récupérer le premier client
+            String tempClientId = null;
             if (bc.getClientsVente() != null && !bc.getClientsVente().isEmpty()) {
-                clientId = bc.getClientsVente().get(0).getClientId();
+                tempClientId = bc.getClientsVente().get(0).getClientId();
             } else if (bc.getClientId() != null) {
-                clientId = bc.getClientId();
+                tempClientId = bc.getClientId();
             }
 
-            if (clientId == null) {
+            if (tempClientId == null) {
                 throw new IllegalArgumentException("Un client est requis pour générer le numéro BC (ou activer 'Ajouter au stock')");
             }
 
+            finalClientId = tempClientId; // Assigner à la variable finale
+
             // 2. Récupérer la référence du client
-            Client client = clientService.findById(clientId)
-                    .orElseThrow(() -> new IllegalArgumentException("Client non trouvé: " + clientId));
+            Client client = clientService.findById(finalClientId)
+                    .orElseThrow(() -> new IllegalArgumentException("Client non trouvé: " + finalClientId));
 
             refClient = client.getReferenceClient();
             if (refClient == null || refClient.trim().isEmpty()) {
                 // Générer depuis le nom si manquant et sauvegarder
                 refClient = generateReferenceFromName(client.getNom());
                 client.setReferenceClient(refClient);
-                clientService.update(clientId, client); // Sauvegarder la référence
+                clientService.update(finalClientId, client); // Sauvegarder la référence
             }
         }
-        
-        // Créer une variable finale pour utiliser dans les lambdas
-        final String finalClientId = clientId;
 
         // 3. Récupérer la référence du fournisseur
         // Support de la nouvelle structure multi-fournisseurs
