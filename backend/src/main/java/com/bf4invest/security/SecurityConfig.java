@@ -39,6 +39,7 @@ public class SecurityConfig {
                 .requestMatchers("/auth/**").permitAll()
                 .requestMatchers("/error").permitAll() // Allow error page for better debugging
                 .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-resources/**").permitAll()
+                .requestMatchers("/settings/logo").permitAll() // Allow logo access for login page
                 .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
                 // Toutes les autres routes nécessitent une authentification
                 .anyRequest().authenticated()

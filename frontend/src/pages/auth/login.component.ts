@@ -4,6 +4,7 @@ import { CommonModule } from '@angular/common';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { AuthService } from '../../services/auth.service';
 import { StoreService } from '../../services/store.service';
+import { getApiBaseUrlDynamic } from '../../config/environment';
 
 @Component({
   selector: 'app-login',
@@ -13,8 +14,10 @@ import { StoreService } from '../../services/store.service';
     <div class="min-h-screen bg-gradient-to-br from-sky-100 via-blue-50 to-indigo-50 flex items-center justify-center p-4 relative overflow-hidden">
       
       <!-- Logo BF4 Invest en haut à gauche -->
-      <div class="absolute top-6 left-6 z-20 flex items-center gap-2">
-        <div class="w-10 h-10 bg-[#0059B3] rounded-xl flex items-center justify-center shadow-lg">
+      <div class="absolute top-6 left-6 z-20 flex items-center gap-3">
+        <img [src]="logoUrl" alt="BF4 Invest" class="h-10 w-auto object-contain" 
+             onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+        <div class="w-10 h-10 bg-[#0059B3] rounded-xl flex items-center justify-center shadow-lg" style="display: none;">
           <span class="text-xl font-bold text-white">B</span>
         </div>
         <span class="text-xl font-bold text-slate-800 font-display">BF4 Invest</span>
@@ -41,19 +44,14 @@ import { StoreService } from '../../services/store.service';
       <!-- Carte centrale avec gradient et glassmorphism -->
       <div class="bg-gradient-to-b from-blue-50/90 via-white/95 to-white backdrop-blur-xl border border-white/50 p-10 rounded-3xl w-full max-w-md shadow-2xl relative z-10 fade-in-up">
         
-        <!-- Bouton retour (optionnel, peut être masqué) -->
-        <div class="mb-6">
-          <button class="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm hover:shadow-md transition-all hover:scale-105 border border-slate-100">
-            <svg class="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
-            </svg>
-          </button>
-        </div>
-
         <!-- Header avec logo et titre -->
         <div class="text-center mb-8">
-          <div class="w-20 h-20 bg-gradient-to-br from-[#0059B3] to-[#2563EB] rounded-2xl mx-auto flex items-center justify-center shadow-lg shadow-blue-500/30 mb-6">
-            <span class="text-4xl font-bold text-white">B</span>
+          <div class="w-24 h-24 mx-auto mb-6 flex items-center justify-center">
+            <img [src]="logoUrl" alt="BF4 Invest Logo" class="h-full w-auto object-contain max-w-full"
+                 onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+            <div class="w-24 h-24 bg-gradient-to-br from-[#0059B3] to-[#2563EB] rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/30" style="display: none;">
+              <span class="text-4xl font-bold text-white">B</span>
+            </div>
           </div>
           <h1 class="text-3xl font-bold text-slate-800 font-display mb-2">Se connecter</h1>
           <p class="text-slate-600 text-sm leading-relaxed">
@@ -122,15 +120,6 @@ import { StoreService } from '../../services/store.service';
             Se connecter
           </button>
         </form>
-        
-        <!-- Section démo (discrète) -->
-        <div class="mt-8 pt-6 border-t border-slate-200 text-center">
-          <p class="text-xs text-slate-500 mb-3">Accès rapide pour test</p>
-          <button type="button" (click)="fillDemo()" 
-            class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 px-4 py-2 rounded-full transition-colors border border-slate-200 font-medium">
-            Remplir avec compte Admin
-          </button>
-        </div>
 
       </div>
     </div>
@@ -142,6 +131,9 @@ export class LoginComponent {
   store = inject(StoreService);
 
   showPassword = signal(false);
+  
+  // URL du logo depuis le backend
+  logoUrl = getApiBaseUrlDynamic() + '/settings/logo';
 
   loginForm = this.fb.group({
     email: ['', [Validators.required, Validators.email]],

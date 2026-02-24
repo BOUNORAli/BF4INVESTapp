@@ -8,7 +8,11 @@ import com.bf4invest.model.PaymentMode;
 import com.bf4invest.service.DataDeletionService;
 import com.bf4invest.service.PaymentModeService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.core.io.Resource;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -23,6 +27,25 @@ public class SettingsController {
     
     private final PaymentModeService paymentModeService;
     private final DataDeletionService dataDeletionService;
+    
+    @GetMapping("/logo")
+    public ResponseEntity<Resource> getLogo() {
+        try {
+            String[] extensions = {"png", "jpg", "jpeg", "gif"};
+            for (String ext : extensions) {
+                Resource resource = new ClassPathResource("images/logo." + ext);
+                if (resource.exists() && resource.isReadable()) {
+                    return ResponseEntity.ok()
+                            .contentType(MediaType.parseMediaType("image/" + ext))
+                            .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"logo." + ext + "\"")
+                            .body(resource);
+                }
+            }
+            return ResponseEntity.notFound().build();
+        } catch (Exception e) {
+            return ResponseEntity.notFound().build();
+        }
+    }
     
     @GetMapping("/payment-modes")
     public ResponseEntity<List<PaymentModeDto>> getPaymentModes() {
