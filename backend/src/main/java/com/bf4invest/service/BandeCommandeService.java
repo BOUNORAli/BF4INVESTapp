@@ -52,7 +52,18 @@ public class BandeCommandeService {
         BandeCommande saved = bcRepository.save(bc);
 
         // Mettre à jour le stock si demandé
-        if (Boolean.TRUE.equals(saved.getAjouterAuStock()) && saved.getLignesAchat() != null) {
+        // Vérifier s'il y a des lignes d'achat dans la nouvelle structure (fournisseursAchat) ou l'ancienne (lignesAchat)
+        boolean hasPurchaseLines = false;
+        if (saved.getFournisseursAchat() != null && !saved.getFournisseursAchat().isEmpty()) {
+            // Nouvelle structure : vérifier si au moins un fournisseur a des lignes d'achat
+            hasPurchaseLines = saved.getFournisseursAchat().stream()
+                    .anyMatch(fa -> fa.getLignesAchat() != null && !fa.getLignesAchat().isEmpty());
+        } else if (saved.getLignesAchat() != null && !saved.getLignesAchat().isEmpty()) {
+            // Ancienne structure
+            hasPurchaseLines = true;
+        }
+        
+        if (Boolean.TRUE.equals(saved.getAjouterAuStock()) && hasPurchaseLines) {
             updateStockFromBC(saved);
         }
 
@@ -140,7 +151,18 @@ public class BandeCommandeService {
 
                     // Mettre à jour le stock si demandé (seulement si ajouterAuStock est passé à
                     // true)
-                    if (Boolean.TRUE.equals(bc.getAjouterAuStock()) && saved.getLignesAchat() != null) {
+                    // Vérifier s'il y a des lignes d'achat dans la nouvelle structure (fournisseursAchat) ou l'ancienne (lignesAchat)
+                    boolean hasPurchaseLines = false;
+                    if (saved.getFournisseursAchat() != null && !saved.getFournisseursAchat().isEmpty()) {
+                        // Nouvelle structure : vérifier si au moins un fournisseur a des lignes d'achat
+                        hasPurchaseLines = saved.getFournisseursAchat().stream()
+                                .anyMatch(fa -> fa.getLignesAchat() != null && !fa.getLignesAchat().isEmpty());
+                    } else if (saved.getLignesAchat() != null && !saved.getLignesAchat().isEmpty()) {
+                        // Ancienne structure
+                        hasPurchaseLines = true;
+                    }
+                    
+                    if (Boolean.TRUE.equals(bc.getAjouterAuStock()) && hasPurchaseLines) {
                         updateStockFromBC(saved);
                     }
 
@@ -891,7 +913,24 @@ public class BandeCommandeService {
      * Méthode publique pour permettre l'appel depuis ExcelImportService.
      */
     public void updateStockFromBC(BandeCommande bc) {
-        if (bc.getLignesAchat() == null || bc.getLignesAchat().isEmpty()) {
+        // Extraire les lignes d'achat depuis la nouvelle structure (fournisseursAchat) ou l'ancienne (lignesAchat)
+        List<LigneAchat> lignesAchat = new ArrayList<>();
+        
+        // Priorité à la nouvelle structure multi-fournisseurs
+        if (bc.getFournisseursAchat() != null && !bc.getFournisseursAchat().isEmpty()) {
+            for (FournisseurAchat fournisseurAchat : bc.getFournisseursAchat()) {
+                if (fournisseurAchat.getLignesAchat() != null) {
+                    lignesAchat.addAll(fournisseurAchat.getLignesAchat());
+                }
+            }
+        }
+        
+        // Fallback vers l'ancienne structure si la nouvelle est vide
+        if (lignesAchat.isEmpty() && bc.getLignesAchat() != null && !bc.getLignesAchat().isEmpty()) {
+            lignesAchat.addAll(bc.getLignesAchat());
+        }
+        
+        if (lignesAchat.isEmpty()) {
             return;
         }
 
@@ -920,7 +959,7 @@ public class BandeCommandeService {
         }
 
         // Traiter chaque ligne d'achat
-        for (LigneAchat ligne : bc.getLignesAchat()) {
+        for (LigneAchat ligne : lignesAchat) {
             if (ligne.getProduitRef() == null || ligne.getProduitRef().isEmpty()) {
                 continue;
             }
