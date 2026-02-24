@@ -13,16 +13,6 @@ import { getApiBaseUrlDynamic } from '../../config/environment';
   template: `
     <div class="min-h-screen bg-gradient-to-br from-sky-100 via-blue-50 to-indigo-50 flex items-center justify-center p-4 relative overflow-hidden">
       
-      <!-- Logo BF4 Invest en haut à gauche -->
-      <div class="absolute top-6 left-6 z-20 flex items-center gap-3">
-        <img [src]="logoUrl" alt="BF4 Invest" class="h-10 w-auto object-contain" 
-             onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-        <div class="w-10 h-10 bg-[#0059B3] rounded-xl flex items-center justify-center shadow-lg" style="display: none;">
-          <span class="text-xl font-bold text-white">B</span>
-        </div>
-        <span class="text-xl font-bold text-slate-800 font-display">BF4 Invest</span>
-      </div>
-
       <!-- Nuages subtils en arrière-plan -->
       <div class="absolute top-20 left-10 w-32 h-20 bg-white/30 rounded-full blur-2xl opacity-60"></div>
       <div class="absolute top-40 right-20 w-40 h-24 bg-white/25 rounded-full blur-3xl opacity-50"></div>
@@ -46,11 +36,11 @@ import { getApiBaseUrlDynamic } from '../../config/environment';
         
         <!-- Header avec logo et titre -->
         <div class="text-center mb-8">
-          <div class="w-24 h-24 mx-auto mb-6 flex items-center justify-center">
+          <div class="w-32 h-32 mx-auto mb-6 flex items-center justify-center">
             <img [src]="logoUrl" alt="BF4 Invest Logo" class="h-full w-auto object-contain max-w-full"
                  onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-            <div class="w-24 h-24 bg-gradient-to-br from-[#0059B3] to-[#2563EB] rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/30" style="display: none;">
-              <span class="text-4xl font-bold text-white">B</span>
+            <div class="w-32 h-32 bg-gradient-to-br from-[#0059B3] to-[#2563EB] rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/30" style="display: none;">
+              <span class="text-5xl font-bold text-white">B</span>
             </div>
           </div>
           <h1 class="text-3xl font-bold text-slate-800 font-display mb-2">Se connecter</h1>
