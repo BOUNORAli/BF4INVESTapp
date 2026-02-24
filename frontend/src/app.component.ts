@@ -8,6 +8,7 @@ import { AuthService } from './services/auth.service';
 import { StoreService, BC, Invoice, Product, Client, Supplier } from './services/store.service';
 import { NavigationRefreshService } from './services/navigation-refresh.service';
 import { SearchIndexService } from './services/search-index.service';
+import { getApiBaseUrlDynamic } from './config/environment';
 import { filter } from 'rxjs/operators';
 
 interface SearchResult {
@@ -32,6 +33,9 @@ export class AppComponent implements OnInit, OnDestroy {
   sanitizer = inject(DomSanitizer);
   navigationRefresh = inject(NavigationRefreshService); // Initialise le service de rafraîchissement
   searchIndex = inject(SearchIndexService); // Service d'indexation pour recherche optimisée
+
+  // URL du logo depuis le backend
+  logoUrl = getApiBaseUrlDynamic() + '/settings/logo';
 
   // État du menu mobile
   isMobileMenuOpen = signal(false);
