@@ -106,21 +106,42 @@ export class AppComponent implements OnInit, OnDestroy {
   private reminderCheckInterval: any = null;
 
   async ngOnInit() {
-    // Load notifications on app start
-    await this.store.loadNotifications(false);
-    
-    // Poll for new notifications every 30 seconds
-    setInterval(() => {
-      this.store.loadNotifications(false);
-    }, 30000);
+    // Load notifications on app start (only if authenticated)
+    if (this.auth.isAuthenticated()) {
+      try {
+        await this.store.loadNotifications(false);
+      } catch (error) {
+        // Gérer silencieusement les erreurs si l'utilisateur n'est plus authentifié
+        // (peut arriver si la session expire)
+      }
+      
+      // Poll for new notifications every 30 seconds (only if authenticated)
+      setInterval(() => {
+        if (this.auth.isAuthenticated()) {
+          this.store.loadNotifications(false).catch(() => {
+            // Gérer silencieusement les erreurs
+          });
+        }
+      }, 30000);
+    }
 
-    // Vérifier les rappels au démarrage
-    await this.store.checkPaymentReminders();
-    
-    // Vérifier les rappels toutes les heures
-    this.reminderCheckInterval = setInterval(() => {
-      this.store.checkPaymentReminders();
-    }, 3600000); // 1 heure = 3600000 ms
+    // Vérifier les rappels au démarrage (only if authenticated)
+    if (this.auth.isAuthenticated()) {
+      try {
+        await this.store.checkPaymentReminders();
+      } catch (error) {
+        // Gérer silencieusement les erreurs
+      }
+      
+      // Vérifier les rappels toutes les heures (only if authenticated)
+      this.reminderCheckInterval = setInterval(() => {
+        if (this.auth.isAuthenticated()) {
+          this.store.checkPaymentReminders().catch(() => {
+            // Gérer silencieusement les erreurs
+          });
+        }
+      }, 3600000); // 1 heure = 3600000 ms
+    }
 
     // Attendre que le rendu soit terminé avant d'initialiser l'index
     // Cela évite l'erreur NG0203 qui se produit quand les effets s'exécutent pendant l'initialisation
