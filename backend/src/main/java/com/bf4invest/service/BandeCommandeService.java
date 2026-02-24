@@ -193,49 +193,66 @@ public class BandeCommandeService {
 
         // 1. Récupérer le client (premier de clientsVente ou clientId pour
         // rétrocompatibilité)
+        // Si ajouterAuStock est true, utiliser une référence par défaut "STK"
         String clientId = null;
-        if (bc.getClientsVente() != null && !bc.getClientsVente().isEmpty()) {
-            clientId = bc.getClientsVente().get(0).getClientId();
-        } else if (bc.getClientId() != null) {
-            clientId = bc.getClientId();
-        }
+        String refClient = "STK"; // Par défaut pour ajout au stock
+        
+        if (Boolean.TRUE.equals(bc.getAjouterAuStock())) {
+            // BC pour ajout au stock uniquement - utiliser référence "STK"
+            log.debug("generateBCNumber: BC pour ajout au stock, utilisation référence STK");
+        } else {
+            // BC avec client(s) - récupérer le premier client
+            if (bc.getClientsVente() != null && !bc.getClientsVente().isEmpty()) {
+                clientId = bc.getClientsVente().get(0).getClientId();
+            } else if (bc.getClientId() != null) {
+                clientId = bc.getClientId();
+            }
 
-        if (clientId == null) {
-            throw new IllegalArgumentException("Un client est requis pour générer le numéro BC");
-        }
+            if (clientId == null) {
+                throw new IllegalArgumentException("Un client est requis pour générer le numéro BC (ou activer 'Ajouter au stock')");
+            }
 
+            // 2. Récupérer la référence du client
+            Client client = clientService.findById(clientId)
+                    .orElseThrow(() -> new IllegalArgumentException("Client non trouvé: " + clientId));
+
+            refClient = client.getReferenceClient();
+            if (refClient == null || refClient.trim().isEmpty()) {
+                // Générer depuis le nom si manquant et sauvegarder
+                refClient = generateReferenceFromName(client.getNom());
+                client.setReferenceClient(refClient);
+                clientService.update(clientId, client); // Sauvegarder la référence
+            }
+        }
+        
         // Créer une variable finale pour utiliser dans les lambdas
         final String finalClientId = clientId;
 
-        // 2. Récupérer la référence du client
-        Client client = clientService.findById(finalClientId)
-                .orElseThrow(() -> new IllegalArgumentException("Client non trouvé: " + finalClientId));
-
-        String refClient = client.getReferenceClient();
-        if (refClient == null || refClient.trim().isEmpty()) {
-            // Générer depuis le nom si manquant et sauvegarder
-            refClient = generateReferenceFromName(client.getNom());
-            client.setReferenceClient(refClient);
-            clientService.update(finalClientId, client); // Sauvegarder la référence
-        }
-
         // 3. Récupérer la référence du fournisseur
-        if (bc.getFournisseurId() == null) {
+        // Support de la nouvelle structure multi-fournisseurs
+        String fournisseurId = null;
+        if (bc.getFournisseursAchat() != null && !bc.getFournisseursAchat().isEmpty()) {
+            fournisseurId = bc.getFournisseursAchat().get(0).getFournisseurId();
+        } else if (bc.getFournisseurId() != null) {
+            fournisseurId = bc.getFournisseurId();
+        }
+        
+        if (fournisseurId == null) {
             throw new IllegalArgumentException("Un fournisseur est requis pour générer le numéro BC");
         }
 
         // Créer une variable finale pour le fournisseurId
-        final String fournisseurId = bc.getFournisseurId();
+        final String finalFournisseurId = fournisseurId;
 
-        Supplier supplier = supplierService.findById(fournisseurId)
-                .orElseThrow(() -> new IllegalArgumentException("Fournisseur non trouvé: " + fournisseurId));
+        Supplier supplier = supplierService.findById(finalFournisseurId)
+                .orElseThrow(() -> new IllegalArgumentException("Fournisseur non trouvé: " + finalFournisseurId));
 
         String refFournisseur = supplier.getReferenceFournisseur();
         if (refFournisseur == null || refFournisseur.trim().isEmpty()) {
             // Générer depuis le nom si manquant et sauvegarder
             refFournisseur = generateReferenceFromName(supplier.getNom());
             supplier.setReferenceFournisseur(refFournisseur);
-            supplierService.update(fournisseurId, supplier); // Sauvegarder la référence
+            supplierService.update(finalFournisseurId, supplier); // Sauvegarder la référence
         }
 
         // 4. Extraire mois et année de la date BC
@@ -262,23 +279,41 @@ public class BandeCommandeService {
                         return false;
 
                     // Filtrer par fournisseur (avec vérification null)
-                    if (existingBc.getFournisseurId() == null)
+                    // Support de la nouvelle structure multi-fournisseurs
+                    String existingFournisseurId = null;
+                    if (existingBc.getFournisseursAchat() != null && !existingBc.getFournisseursAchat().isEmpty()) {
+                        existingFournisseurId = existingBc.getFournisseursAchat().get(0).getFournisseurId();
+                    } else if (existingBc.getFournisseurId() != null) {
+                        existingFournisseurId = existingBc.getFournisseurId();
+                    }
+                    
+                    if (existingFournisseurId == null)
                         return false;
-                    if (!existingBc.getFournisseurId().equals(fournisseurId))
+                    if (!existingFournisseurId.equals(finalFournisseurId))
                         return false;
 
                     // Vérifier si cette BC concerne le même client
                     // Support des deux structures : multi-clients (clientsVente) et
                     // rétrocompatibilité (clientId)
-                    String existingClientId = null;
-                    if (existingBc.getClientsVente() != null && !existingBc.getClientsVente().isEmpty()) {
-                        existingClientId = existingBc.getClientsVente().get(0).getClientId();
-                    } else if (existingBc.getClientId() != null) {
-                        existingClientId = existingBc.getClientId();
+                    // Gérer aussi le cas "ajouterAuStock" (pas de client)
+                    if (Boolean.TRUE.equals(existingBc.getAjouterAuStock())) {
+                        // BC existante pour stock - comparer avec notre BC
+                        return Boolean.TRUE.equals(bc.getAjouterAuStock());
+                    } else {
+                        // BC existante avec client
+                        if (Boolean.TRUE.equals(bc.getAjouterAuStock())) {
+                            return false; // La nouvelle est pour stock, l'existante a un client
+                        }
+                        // Les deux ont des clients - comparer
+                        String existingClientId = null;
+                        if (existingBc.getClientsVente() != null && !existingBc.getClientsVente().isEmpty()) {
+                            existingClientId = existingBc.getClientsVente().get(0).getClientId();
+                        } else if (existingBc.getClientId() != null) {
+                            existingClientId = existingBc.getClientId();
+                        }
+                        // Ne compter que si le client correspond
+                        return finalClientId != null && finalClientId.equals(existingClientId);
                     }
-
-                    // Ne compter que si le client correspond
-                    return finalClientId.equals(existingClientId);
                 })
                 .count();
 
