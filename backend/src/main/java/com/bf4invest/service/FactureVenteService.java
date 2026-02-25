@@ -69,6 +69,11 @@ public class FactureVenteService {
     }
     
     public FactureVente create(FactureVente facture) {
+        log.info("🔵 FactureVenteService.create - Création facture: clientId={}, bandeCommandeId={}, totalHT={}, totalTTC={}, lignes={}",
+            facture.getClientId(), facture.getBandeCommandeId(), 
+            facture.getTotalHT(), facture.getTotalTTC(),
+            facture.getLignes() != null ? facture.getLignes().size() : 0);
+        
         // ========== VALIDATION ET GESTION DES AVOIRS ==========
         if (Boolean.TRUE.equals(facture.getEstAvoir())) {
             // Initialiser les champs avoir si nécessaire
@@ -184,7 +189,14 @@ public class FactureVenteService {
         facture.setCreatedAt(LocalDateTime.now());
         facture.setUpdatedAt(LocalDateTime.now());
         
+        log.info("🔵 FactureVenteService.create - Avant sauvegarde: clientId={}, bandeCommandeId={}, lignes={}",
+            facture.getClientId(), facture.getBandeCommandeId(),
+            facture.getLignes() != null ? facture.getLignes().size() : 0);
+        
         FactureVente saved = factureRepository.save(facture);
+        
+        log.info("🔵 FactureVenteService.create - Après sauvegarde: id={}, lignes={}",
+            saved.getId(), saved.getLignes() != null ? saved.getLignes().size() : 0);
         
         // Décrémenter le stock des produits vendus
         if (saved.getLignes() != null && !saved.getLignes().isEmpty()) {
@@ -552,38 +564,52 @@ public class FactureVenteService {
      */
     private void syncLignesFromBC(FactureVente facture) {
         if (facture == null) {
+            log.warn("⚠️ FactureVenteService.syncLignesFromBC - Facture est null");
             return;
         }
         
         // Ne pas écraser les lignes si elles sont déjà fournies
         if (facture.getLignes() != null && !facture.getLignes().isEmpty()) {
-            log.debug("FactureVenteService.syncLignesFromBC - Facture {} a déjà des lignes, pas de synchronisation", 
-                facture.getNumeroFactureVente() != null ? facture.getNumeroFactureVente() : "(nouvelle)");
+            log.debug("FactureVenteService.syncLignesFromBC - Facture {} a déjà {} lignes, pas de synchronisation", 
+                facture.getNumeroFactureVente() != null ? facture.getNumeroFactureVente() : "(nouvelle)",
+                facture.getLignes().size());
             return;
         }
         
         BandeCommande bc = null;
+        String bcId = facture.getBandeCommandeId();
         
         // Chercher la BC par bandeCommandeId
-        if (facture.getBandeCommandeId() != null && !facture.getBandeCommandeId().isEmpty()) {
-            bc = bandeCommandeRepository.findById(facture.getBandeCommandeId()).orElse(null);
+        if (bcId != null && !bcId.isEmpty()) {
+            bc = bandeCommandeRepository.findById(bcId).orElse(null);
+            log.debug("🔵 FactureVenteService.syncLignesFromBC - Recherche BC par ID: {} -> {}", bcId, bc != null ? "trouvée" : "non trouvée");
         }
         
         // Fallback: chercher par bcReference
         if (bc == null && facture.getBcReference() != null && !facture.getBcReference().isEmpty()) {
             bc = bandeCommandeRepository.findByNumeroBC(facture.getBcReference()).orElse(null);
+            log.debug("🔵 FactureVenteService.syncLignesFromBC - Recherche BC par référence: {} -> {}", 
+                facture.getBcReference(), bc != null ? "trouvée" : "non trouvée");
         }
         
         if (bc == null) {
-            log.debug("FactureVenteService.syncLignesFromBC - Aucune BC trouvée pour la facture");
+            log.warn("⚠️ FactureVenteService.syncLignesFromBC - Aucune BC trouvée (bandeCommandeId={}, bcReference={})", 
+                bcId, facture.getBcReference());
             return;
         }
         
+        log.info("🔵 FactureVenteService.syncLignesFromBC - BC trouvée: {} (id={}), clientsVente={}, lignes={}", 
+            bc.getNumeroBC(), bc.getId(),
+            bc.getClientsVente() != null ? bc.getClientsVente().size() : 0,
+            bc.getLignes() != null ? bc.getLignes().size() : 0);
+        
         List<LineItem> lignesFacture = new ArrayList<>();
+        String factureClientId = facture.getClientId();
         
         // NOUVELLE STRUCTURE: clientsVente (multi-clients)
         if (bc.getClientsVente() != null && !bc.getClientsVente().isEmpty()) {
-            String factureClientId = facture.getClientId();
+            log.debug("🔵 FactureVenteService.syncLignesFromBC - Utilisation de la nouvelle structure (clientsVente), {} clients", 
+                bc.getClientsVente().size());
             
             // Trouver le ClientVente correspondant au clientId de la facture
             ClientVente clientVenteMatch = null;
@@ -592,6 +618,8 @@ public class FactureVenteService {
                     .filter(cv -> factureClientId.equals(cv.getClientId()))
                     .findFirst()
                     .orElse(null);
+                log.debug("🔵 FactureVenteService.syncLignesFromBC - Recherche ClientVente pour clientId {} -> {}", 
+                    factureClientId, clientVenteMatch != null ? "trouvé" : "non trouvé");
             }
             
             // Si aucun match trouvé, utiliser le premier client (fallback)
@@ -608,19 +636,28 @@ public class FactureVenteService {
             
             // Convertir les LigneVente en LineItem
             if (clientVenteMatch != null && clientVenteMatch.getLignesVente() != null) {
+                log.debug("🔵 FactureVenteService.syncLignesFromBC - ClientVente trouvé avec {} lignesVente", 
+                    clientVenteMatch.getLignesVente().size());
                 for (LigneVente ligneVente : clientVenteMatch.getLignesVente()) {
                     LineItem lineItem = convertLigneVenteToLineItem(ligneVente);
                     if (lineItem != null) {
                         lignesFacture.add(lineItem);
+                        log.debug("🔵 FactureVenteService.syncLignesFromBC - Ligne convertie: {} x {} = {} HT", 
+                            ligneVente.getQuantiteVendue(), ligneVente.getDesignation(), lineItem.getTotalHT());
                     }
                 }
+            } else {
+                log.warn("⚠️ FactureVenteService.syncLignesFromBC - ClientVente trouvé mais lignesVente est null ou vide");
             }
         }
         // ANCIENNE STRUCTURE: lignes (deprecated)
         else if (bc.getLignes() != null && !bc.getLignes().isEmpty()) {
             // Les lignes de l'ancienne structure sont déjà des LineItem
             lignesFacture.addAll(bc.getLignes());
-            log.info("ℹ️ FactureVenteService.syncLignesFromBC - Utilisation de l'ancienne structure (lignes) pour BC {}", 
+            log.info("ℹ️ FactureVenteService.syncLignesFromBC - Utilisation de l'ancienne structure (lignes) pour BC {}, {} lignes", 
+                bc.getNumeroBC(), bc.getLignes().size());
+        } else {
+            log.warn("⚠️ FactureVenteService.syncLignesFromBC - BC {} n'a ni clientsVente ni lignes (ancienne structure)", 
                 bc.getNumeroBC());
         }
         
@@ -630,8 +667,8 @@ public class FactureVenteService {
                 lignesFacture.size(), bc.getNumeroBC(), 
                 facture.getNumeroFactureVente() != null ? facture.getNumeroFactureVente() : "(nouvelle)");
         } else {
-            log.debug("FactureVenteService.syncLignesFromBC - Aucune ligne trouvée dans la BC {} pour la facture",
-                bc.getNumeroBC());
+            log.warn("⚠️ FactureVenteService.syncLignesFromBC - Aucune ligne trouvée dans la BC {} pour la facture (clientId={})",
+                bc.getNumeroBC(), factureClientId);
         }
     }
     
