@@ -2,8 +2,10 @@ package com.bf4invest.service;
 
 import com.bf4invest.config.AppConfig;
 import com.bf4invest.model.BandeCommande;
+import com.bf4invest.model.ClientVente;
 import com.bf4invest.model.FactureVente;
 import com.bf4invest.model.LineItem;
+import com.bf4invest.model.LigneVente;
 import com.bf4invest.model.PrevisionPaiement;
 import com.bf4invest.model.Product;
 import com.bf4invest.repository.BandeCommandeRepository;
@@ -15,6 +17,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -141,6 +144,11 @@ public class FactureVenteService {
         
         // PRIORITÉ 1: Si la facture est liée à une BC, utiliser les totaux de la BC
         syncTotalsFromBC(facture);
+        
+        // PRIORITÉ 1B: Si la facture est liée à une BC, synchroniser les lignes depuis la BC
+        if (facture.getBandeCommandeId() != null && !facture.getBandeCommandeId().isEmpty()) {
+            syncLignesFromBC(facture);
+        }
         
         // PRIORITÉ 2: Si les totaux ne sont pas encore définis (pas de BC liée), calculer depuis les lignes ou totaux fournis
         if (facture.getTotalHT() == null && facture.getTotalTTC() == null) {
@@ -535,6 +543,136 @@ public class FactureVenteService {
             log.debug("FactureVenteService.syncTotalsFromBC - BC {} trouvée mais totaux non disponibles", 
                 bc.getNumeroBC() != null ? bc.getNumeroBC() : bc.getId());
         }
+    }
+    
+    /**
+     * Synchronise les lignes de la facture avec les lignes de vente de la BC liée
+     * Extrait les lignes depuis clientsVente (nouvelle structure) ou lignes (ancienne structure)
+     * et les convertit en LineItem pour la facture
+     */
+    private void syncLignesFromBC(FactureVente facture) {
+        if (facture == null) {
+            return;
+        }
+        
+        // Ne pas écraser les lignes si elles sont déjà fournies
+        if (facture.getLignes() != null && !facture.getLignes().isEmpty()) {
+            log.debug("FactureVenteService.syncLignesFromBC - Facture {} a déjà des lignes, pas de synchronisation", 
+                facture.getNumeroFactureVente() != null ? facture.getNumeroFactureVente() : "(nouvelle)");
+            return;
+        }
+        
+        BandeCommande bc = null;
+        
+        // Chercher la BC par bandeCommandeId
+        if (facture.getBandeCommandeId() != null && !facture.getBandeCommandeId().isEmpty()) {
+            bc = bandeCommandeRepository.findById(facture.getBandeCommandeId()).orElse(null);
+        }
+        
+        // Fallback: chercher par bcReference
+        if (bc == null && facture.getBcReference() != null && !facture.getBcReference().isEmpty()) {
+            bc = bandeCommandeRepository.findByNumeroBC(facture.getBcReference()).orElse(null);
+        }
+        
+        if (bc == null) {
+            log.debug("FactureVenteService.syncLignesFromBC - Aucune BC trouvée pour la facture");
+            return;
+        }
+        
+        List<LineItem> lignesFacture = new ArrayList<>();
+        
+        // NOUVELLE STRUCTURE: clientsVente (multi-clients)
+        if (bc.getClientsVente() != null && !bc.getClientsVente().isEmpty()) {
+            String factureClientId = facture.getClientId();
+            
+            // Trouver le ClientVente correspondant au clientId de la facture
+            ClientVente clientVenteMatch = null;
+            if (factureClientId != null && !factureClientId.isEmpty()) {
+                clientVenteMatch = bc.getClientsVente().stream()
+                    .filter(cv -> factureClientId.equals(cv.getClientId()))
+                    .findFirst()
+                    .orElse(null);
+            }
+            
+            // Si aucun match trouvé, utiliser le premier client (fallback)
+            if (clientVenteMatch == null) {
+                if (factureClientId != null && !factureClientId.isEmpty()) {
+                    log.warn("⚠️ FactureVenteService.syncLignesFromBC - ClientId {} de la facture ne correspond à aucun ClientVente dans la BC {}. Utilisation du premier client.",
+                        factureClientId, bc.getNumeroBC());
+                } else {
+                    log.info("ℹ️ FactureVenteService.syncLignesFromBC - Facture sans clientId, utilisation du premier client de la BC {}", 
+                        bc.getNumeroBC());
+                }
+                clientVenteMatch = bc.getClientsVente().get(0);
+            }
+            
+            // Convertir les LigneVente en LineItem
+            if (clientVenteMatch != null && clientVenteMatch.getLignesVente() != null) {
+                for (LigneVente ligneVente : clientVenteMatch.getLignesVente()) {
+                    LineItem lineItem = convertLigneVenteToLineItem(ligneVente);
+                    if (lineItem != null) {
+                        lignesFacture.add(lineItem);
+                    }
+                }
+            }
+        }
+        // ANCIENNE STRUCTURE: lignes (deprecated)
+        else if (bc.getLignes() != null && !bc.getLignes().isEmpty()) {
+            // Les lignes de l'ancienne structure sont déjà des LineItem
+            lignesFacture.addAll(bc.getLignes());
+            log.info("ℹ️ FactureVenteService.syncLignesFromBC - Utilisation de l'ancienne structure (lignes) pour BC {}", 
+                bc.getNumeroBC());
+        }
+        
+        if (!lignesFacture.isEmpty()) {
+            facture.setLignes(lignesFacture);
+            log.info("✅ FactureVenteService.syncLignesFromBC - {} lignes synchronisées depuis BC {} vers facture {}",
+                lignesFacture.size(), bc.getNumeroBC(), 
+                facture.getNumeroFactureVente() != null ? facture.getNumeroFactureVente() : "(nouvelle)");
+        } else {
+            log.debug("FactureVenteService.syncLignesFromBC - Aucune ligne trouvée dans la BC {} pour la facture",
+                bc.getNumeroBC());
+        }
+    }
+    
+    /**
+     * Convertit un LigneVente en LineItem pour la facture
+     */
+    private LineItem convertLigneVenteToLineItem(LigneVente ligneVente) {
+        if (ligneVente == null) {
+            return null;
+        }
+        
+        LineItem lineItem = new LineItem();
+        lineItem.setProduitRef(ligneVente.getProduitRef());
+        lineItem.setDesignation(ligneVente.getDesignation());
+        lineItem.setUnite(ligneVente.getUnite() != null ? ligneVente.getUnite() : "U");
+        
+        // Convertir quantiteVendue de Double à Integer
+        if (ligneVente.getQuantiteVendue() != null) {
+            lineItem.setQuantiteVendue(ligneVente.getQuantiteVendue().intValue());
+        }
+        
+        lineItem.setPrixVenteUnitaireHT(ligneVente.getPrixVenteUnitaireHT());
+        lineItem.setTva(ligneVente.getTva());
+        
+        // Utiliser les totaux calculés si disponibles, sinon les recalculer
+        if (ligneVente.getTotalHT() != null) {
+            lineItem.setTotalHT(NumberUtils.roundTo2Decimals(ligneVente.getTotalHT()));
+        } else if (ligneVente.getPrixVenteUnitaireHT() != null && ligneVente.getQuantiteVendue() != null) {
+            double totalHT = ligneVente.getPrixVenteUnitaireHT() * ligneVente.getQuantiteVendue();
+            lineItem.setTotalHT(NumberUtils.roundTo2Decimals(totalHT));
+        }
+        
+        if (ligneVente.getTotalTTC() != null) {
+            lineItem.setTotalTTC(NumberUtils.roundTo2Decimals(ligneVente.getTotalTTC()));
+        } else if (lineItem.getTotalHT() != null && ligneVente.getTva() != null) {
+            double tvaRate = ligneVente.getTva() / 100.0;
+            double totalTTC = lineItem.getTotalHT() * (1 + tvaRate);
+            lineItem.setTotalTTC(NumberUtils.roundTo2Decimals(totalTTC));
+        }
+        
+        return lineItem;
     }
     
     private void calculateMontantRestant(FactureVente facture) {
