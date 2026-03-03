@@ -55,10 +55,12 @@ export const Header: React.FC = () => {
       <TopBar />
       <div
         className={`transition-all ${
-          isScrolled ? 'border-b border-[color:var(--color-border-subtle)] bg-white/90 shadow-lg backdrop-blur' : 'bg-transparent'
+          isScrolled
+            ? 'border-b border-[color:var(--color-border-subtle)] bg-white/95 shadow-lg backdrop-blur'
+            : 'bg-white/95'
         }`}
       >
-        <div className="section-shell flex items-center justify-between py-4">
+        <div className="section-shell flex items-center justify-between py-3 md:py-4">
           <button
             type="button"
             onClick={(e) => goTo('/', e)}

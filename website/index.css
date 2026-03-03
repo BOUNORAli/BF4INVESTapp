@@ -133,3 +133,28 @@ a {
   background-size: 26px 26px;
 }
 
+@media (max-width: 640px) {
+  body {
+    font-size: 15px;
+    line-height: 1.5;
+  }
+
+  .section-shell {
+    padding-left: 1.25rem;
+    padding-right: 1.25rem;
+  }
+
+  .section-title {
+    font-size: 1.75rem;
+    line-height: 1.25;
+  }
+
+  .section-subtitle {
+    font-size: 0.95rem;
+  }
+
+  .card-premium {
+    border-radius: 1.25rem;
+  }
+}
+

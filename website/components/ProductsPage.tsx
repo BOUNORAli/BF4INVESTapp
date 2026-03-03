@@ -181,7 +181,7 @@ export const ProductsPage: React.FC = () => {
   }, [searchTerm, activeCategory, sourceProducts]);
 
   return (
-    <section className="section-shell py-14">
+    <section className="section-shell py-12 md:py-14">
       <div>
         {/* En-tête */}
         <header className="mb-8 flex flex-col gap-5 md:mb-10 md:flex-row md:items-end md:justify-between">
@@ -203,7 +203,7 @@ export const ProductsPage: React.FC = () => {
 
         <div className="grid gap-8 lg:grid-cols-[260px,1fr]">
           {/* Filtres */}
-          <aside className="space-y-6">
+          <aside className="order-1 space-y-6 lg:order-none">
             <div>
               <h3 className="text-xs font-semibold uppercase tracking-[0.25em] text-primary">Catégories</h3>
               <div className="mt-4 flex flex-col gap-1">
@@ -235,7 +235,7 @@ export const ProductsPage: React.FC = () => {
           </aside>
 
           {/* Contenu principal */}
-          <div className="space-y-4">
+          <div className="order-2 space-y-4 lg:order-none">
             {/* Barre de recherche */}
             <div className="relative">
               <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
@@ -248,26 +248,30 @@ export const ProductsPage: React.FC = () => {
               />
             </div>
 
-            <div className="flex items-center justify-between text-xs text-secondary">
-              <span>
+            <div className="flex flex-col gap-2 text-xs text-secondary sm:flex-row sm:items-center sm:justify-between">
+              <span className="order-2 sm:order-none">
                 {filteredProducts.length} référence{filteredProducts.length > 1 ? 's' : ''} trouvée
                 {filteredProducts.length > 1 ? 's' : ''}
                 {apiProducts.length > 0 && ' (données temps réel)'}
               </span>
               {searchTerm && (
-                <button
-                  type="button"
-                  onClick={() => setSearchTerm('')}
-                  className="text-xs font-bold text-slate-700 hover:text-primary"
-                >
-                  Effacer
-                </button>
+                <div className="order-1 self-start sm:order-none">
+                  <button
+                    type="button"
+                    onClick={() => setSearchTerm('')}
+                    className="text-xs font-bold text-slate-700 hover:text-primary"
+                  >
+                    Effacer
+                  </button>
+                </div>
               )}
             </div>
 
             {/* Grille produits */}
             {loading ? (
-              <p className="card-premium py-10 text-center text-sm text-secondary">Chargement du catalogue en cours...</p>
+              <p className="card-premium py-10 text-center text-sm text-secondary">
+                Chargement du catalogue en cours...
+              </p>
             ) : filteredProducts.length > 0 ? (
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {filteredProducts.map((p) => (

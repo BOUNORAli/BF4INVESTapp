@@ -14,10 +14,10 @@ const HeroSection: React.FC = () => {
   return (
     <section className="relative overflow-hidden pt-8">
       <div className="absolute inset-0 grid-luxe opacity-35" />
-      <div className="section-shell relative z-10 grid gap-8 py-16 md:grid-cols-[1.2fr,0.8fr] md:py-24">
+      <div className="section-shell relative z-10 grid gap-8 py-12 md:grid-cols-[1.2fr,0.8fr] md:py-24">
         <div>
           <p className="section-kicker">Supply Partner Premium - Maroc</p>
-          <h1 className="mt-4 max-w-3xl font-display text-4xl leading-tight text-primary md:text-6xl">
+          <h1 className="mt-4 max-w-3xl font-display text-3xl leading-tight text-primary sm:text-4xl md:text-6xl">
             Le partenaire de confiance pour les achats BTP à haute exigence.
           </h1>
           <p className="mt-6 max-w-2xl text-base leading-relaxed text-ink-soft">
@@ -76,8 +76,8 @@ const HeroSection: React.FC = () => {
 };
 
 const ProofSection: React.FC = () => (
-  <section className="section-shell py-5">
-    <div className="grid gap-4 md:grid-cols-4">
+  <section className="section-shell py-6 md:py-8">
+    <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4">
       {STATS.map((stat, idx) => (
         <motion.article
           key={stat.label}
@@ -119,12 +119,12 @@ const CapabilitiesSection: React.FC = () => {
   ];
 
   return (
-    <section className="section-shell py-14">
+    <section className="section-shell py-10 md:py-14">
       <div className="mb-8">
         <p className="section-kicker">Ce qui nous différencie</p>
         <h2 className="section-title">Une infrastructure commerciale conçue pour les décideurs exigeants</h2>
       </div>
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
         {capabilities.map((cap) => (
           <article key={cap.title} className="card-premium p-6">
             <cap.icon className="h-6 w-6 text-accent" />

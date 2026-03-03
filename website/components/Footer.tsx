@@ -8,8 +8,8 @@ const APP_URL = (import.meta as any).env.VITE_APP_URL || 'https://bf4invest-app.
 export const Footer: React.FC = () => {
 
   return (
-    <footer className="mt-16 border-t border-[color:var(--color-border-subtle)] bg-primary text-slate-200">
-      <div className="section-shell grid gap-8 py-12 md:grid-cols-[1.7fr,1.1fr,1.1fr,1fr]">
+    <footer className="mt-12 border-t border-[color:var(--color-border-subtle)] bg-primary text-slate-200 md:mt-16">
+      <div className="section-shell grid gap-8 py-10 md:grid-cols-[1.7fr,1.1fr,1.1fr,1fr] md:py-12">
         <div className="space-y-4 md:pr-6">
           <div className="flex items-center gap-3">
             <Logo className="h-9 w-28" light />

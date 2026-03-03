@@ -46,7 +46,7 @@ export const ContactPage: React.FC = () => {
   };
 
   return (
-    <section className="section-shell py-14">
+    <section className="section-shell py-12 md:py-14">
       <div>
         {/* Titre */}
         <header className="mb-8">
@@ -58,7 +58,7 @@ export const ContactPage: React.FC = () => {
           </p>
         </header>
 
-        <div className="grid gap-10 md:grid-cols-[1.1fr,1.5fr]">
+        <div className="grid gap-8 md:grid-cols-[1.1fr,1.5fr]">
           {/* Colonne informations */}
           <aside className="space-y-6 text-sm text-secondary">
             <div className="card-premium p-5">

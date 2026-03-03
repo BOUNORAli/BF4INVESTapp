@@ -6,7 +6,7 @@ export const AboutPage: React.FC = () => {
   const navigate = useNavigate();
 
   return (
-    <section className="section-shell py-16 md:py-20">
+    <section className="section-shell py-12 md:py-20">
       <p className="section-kicker">À propos de BF4 Invest</p>
       <h2 className="section-title">Une culture de fiabilité au service des professionnels du BTP</h2>
       <p className="section-subtitle">
@@ -16,7 +16,7 @@ export const AboutPage: React.FC = () => {
       </p>
 
       <div className="mt-10 grid gap-6 md:grid-cols-[1.1fr,0.9fr]">
-        <article className="card-premium p-7">
+        <article className="card-premium p-6 md:p-7">
           <h3 className="font-display text-2xl text-primary">Notre approche</h3>
           <div className="mt-5 space-y-4 text-sm leading-relaxed text-ink-soft">
             <p>
@@ -34,7 +34,7 @@ export const AboutPage: React.FC = () => {
           </div>
         </article>
 
-        <article className="card-premium p-7">
+        <article className="card-premium p-6 md:p-7">
           <h3 className="font-display text-2xl text-primary">Ce que vous obtenez</h3>
           <div className="mt-5 space-y-4">
             {[
@@ -73,7 +73,7 @@ export const AboutPage: React.FC = () => {
         </article>
       </div>
 
-      <div className="mt-8 card-premium flex flex-col items-start justify-between gap-4 p-7 md:flex-row md:items-center">
+      <div className="mt-8 card-premium flex flex-col items-start justify-between gap-4 p-6 md:flex-row md:items-center">
         <div>
           <p className="text-sm font-semibold text-primary">Discutons de vos besoins d’approvisionnement</p>
           <p className="mt-1 text-sm text-ink-soft">
