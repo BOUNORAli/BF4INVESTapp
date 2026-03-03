@@ -19,10 +19,10 @@ export const PARTNERS: Partner[] = [
 ];
 
 export const STATS: Stat[] = [
-  { value: 500, label: 'Références en Stock', suffix: '+' },
-  { value: 24, label: 'Heures de Livraison', suffix: 'h' },
-  { value: 15, label: "Années d'Expérience", suffix: '+' },
-  { value: 100, label: 'Conformité Normes', suffix: '%' },
+  { value: 500, label: 'Références Actives', suffix: '+' },
+  { value: 24, label: 'Délai Initial de Réponse', suffix: 'h' },
+  { value: 15, label: "Années d'Expertise Marché", suffix: '+' },
+  { value: 98, label: 'Taux de Service Opérationnel', suffix: '%' },
 ];
 
 export const PRODUCT_CATEGORIES: ProductCategory[] = [
@@ -63,16 +63,16 @@ export const PRODUCTS: Product[] = [
 
 export const FAQ_ITEMS: FaqItem[] = [
   {
-    question: 'Fournissez-vous des certificats techniques (DIN/ISO) ?',
-    answer: 'Oui, tous nos produits de boulonnerie et aciers sont accompagnés de certificats de conformité aux normes internationales (DIN, ISO, NM) sur simple demande lors de la commande.'
+    question: 'Pouvez-vous traiter des besoins urgents pour des chantiers en activité ?',
+    answer: "Oui. Nous priorisons les demandes critiques avec une qualification rapide, puis une proposition adaptée aux contraintes de délai et de disponibilité."
   },
   {
-    question: 'Comment fonctionne le système de devis ?',
-    answer: 'Ajoutez vos produits au panier de devis, validez votre demande, et nos commerciaux vous renvoient une proforma chiffrée avec les remises quantitatives sous 4 heures.'
+    question: 'Comment se déroule une demande de devis chez BF4 Invest ?',
+    answer: "Vous transmettez votre besoin via le formulaire ou par téléphone, notre équipe consolide les références, vérifie la faisabilité logistique et vous adresse une proposition claire."
   },
   {
-    question: 'Quelles sont vos conditions de livraison à Meknès ?',
-    answer: 'Pour les clients de Meknès et environs, nous assurons une livraison en 24h pour les produits en stock. Nous possédons notre propre flotte logistique.'
+    question: 'Travaillez-vous uniquement à Meknès ?',
+    answer: "Non. Notre base est à Meknès, mais nous accompagnons des clients sur l'ensemble du territoire marocain avec une organisation logistique dédiée."
   }
 ];
 

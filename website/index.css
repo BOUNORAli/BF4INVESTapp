@@ -1,23 +1,28 @@
-@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@200;300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Manrope", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Manrope", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Manrope", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-display: "Playfair Display", Georgia, serif;
 
-  --color-primary: #0B1120;
+  --color-primary: #0f172a;
   --color-secondary: #334155;
-  --color-accent: #0066FF;
-  --color-accent-hover: #0052cc;
-  --color-light: #F8FAFC;
-  --color-light-gray: #E2E8F0;
+  --color-accent: #b78a2c;
+  --color-accent-hover: #9f7421;
+  --color-light: #f8fafc;
+  --color-light-gray: #d6dde8;
   --color-dark-gray: #64748b;
-  --color-background-light: #ffffff;
+  --color-background-light: #f4f7fb;
   --color-background-dark: #020617;
+  --color-surface: #ffffff;
+  --color-surface-soft: #eef2f9;
+  --color-border-subtle: #d9e2ef;
+  --color-ink-soft: #475569;
+  --color-success: #0f766e;
+  --color-warning: #b45309;
 
   --animate-fade-in-up: fadeInUp 1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   --animate-slide-in-right: slideInRight 1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-  --animate-marquee: marquee 25s linear infinite;
 
   @keyframes fadeInUp {
     0% { opacity: 0; transform: translateY(40px); }
@@ -27,15 +32,16 @@
     0% { transform: translateX(100%); }
     100% { transform: translateX(0); }
   }
-  @keyframes marquee {
-    0% { transform: translateX(0); }
-    100% { transform: translateX(-50%); }
+  @keyframes premiumPulse {
+    0% { box-shadow: 0 0 0 0 rgba(183, 138, 44, 0.4); }
+    70% { box-shadow: 0 0 0 18px rgba(183, 138, 44, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(183, 138, 44, 0); }
   }
 }
 
 :root {
-  --scrollbar-bg: #f0f9ff;
-  --scrollbar-thumb: #0066FF;
+  --scrollbar-bg: #edf2f8;
+  --scrollbar-thumb: #9fb2cc;
 }
 
 html.dark {
@@ -55,17 +61,75 @@ html.dark {
 }
 
 ::selection {
-  background-color: #0066FF;
+  background-color: #b78a2c;
   color: white;
 }
 
 body {
+  margin: 0;
+  min-height: 100vh;
+  color: #0f172a;
+  background:
+    radial-gradient(1200px 500px at 8% -10%, rgba(183, 138, 44, 0.14), transparent 60%),
+    radial-gradient(1000px 480px at 95% 0%, rgba(15, 118, 110, 0.08), transparent 60%),
+    linear-gradient(180deg, #f8fbff 0%, #f4f7fb 100%);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+a {
+  color: inherit;
+}
+
+.section-shell {
+  @apply mx-auto w-full max-w-7xl px-6 md:px-10;
+}
+
+.section-kicker {
+  @apply text-[11px] font-bold uppercase tracking-[0.24em] text-accent;
+}
+
+.section-title {
+  @apply mt-3 font-display text-3xl text-primary md:text-4xl;
+}
+
+.section-subtitle {
+  @apply mt-4 max-w-3xl text-sm leading-relaxed text-ink-soft md:text-base;
+}
+
+.glass-surface {
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.92), rgba(248, 251, 255, 0.78));
+  border: 1px solid rgba(217, 226, 239, 0.9);
+  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(8px);
+}
+
+.card-premium {
+  @apply rounded-2xl border border-[color:var(--color-border-subtle)] bg-[color:var(--color-surface)] shadow-[0_14px_32px_rgba(15,23,42,0.06)];
+}
+
+.btn-primary {
+  @apply inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-6 py-3 text-xs font-bold uppercase tracking-[0.18em] text-white transition-all hover:-translate-y-0.5 hover:bg-slate-800;
+}
+
+.btn-secondary {
+  @apply inline-flex items-center justify-center gap-2 rounded-xl border border-[color:var(--color-border-subtle)] bg-white px-6 py-3 text-xs font-bold uppercase tracking-[0.18em] text-primary transition-all hover:-translate-y-0.5 hover:border-accent hover:text-accent;
+}
+
+.btn-accent {
+  @apply inline-flex items-center justify-center gap-2 rounded-xl bg-accent px-6 py-3 text-xs font-bold uppercase tracking-[0.18em] text-white transition-all hover:-translate-y-0.5 hover:bg-accent-hover;
+}
+
+.grid-luxe {
+  background-image:
+    linear-gradient(to right, rgba(148, 163, 184, 0.12) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(148, 163, 184, 0.12) 1px, transparent 1px);
+  background-size: 48px 48px;
 }
 
 .bg-dots {
-  background-image: radial-gradient(#94a3b8 1px, transparent 1px);
-  background-size: 24px 24px;
+  background-image: radial-gradient(rgba(148, 163, 184, 0.4) 0.7px, transparent 0.7px);
+  background-size: 26px 26px;
 }
 

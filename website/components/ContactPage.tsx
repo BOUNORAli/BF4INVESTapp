@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { FAQ_ITEMS } from '../constants';
-import { MapPin, Phone, Mail, ChevronDown, ArrowRight, Check, Clock } from './icons';
+import { MapPin, Phone, Mail, ChevronDown, ArrowRight, Check, BadgeCheck, ShieldCheck, TimerReset } from './icons';
 
 const FORM_ENDPOINT = 'https://formspree.io/f/mjkpydkb';
 
@@ -46,31 +46,30 @@ export const ContactPage: React.FC = () => {
   };
 
   return (
-    <section className="bg-light py-12">
-      <div className="mx-auto max-w-6xl px-6 md:px-10">
+    <section className="section-shell py-14">
+      <div>
         {/* Titre */}
         <header className="mb-8">
-          <p className="text-xs font-semibold uppercase tracking-[0.25em] text-accent">
-            Service client &amp; commercial
-          </p>
-          <h2 className="mt-2 text-2xl font-extrabold text-primary md:text-3xl">Parlons de votre projet</h2>
-          <p className="mt-2 text-sm text-secondary md:text-base">
-            Une question technique ? Une demande de prix ? Nos équipes vous répondent sous 24 heures ouvrées.
+          <p className="section-kicker">Contact stratégique</p>
+          <h2 className="section-title">Construisons votre demande de devis avec précision</h2>
+          <p className="section-subtitle">
+            Décrivez vos besoins chantier ou industriels. Nos équipes commerciales vous reviennent avec une proposition
+            claire, exploitable et alignée à vos contraintes de délais.
           </p>
         </header>
 
-        <div className="grid gap-10 md:grid-cols-[1.2fr,1.5fr]">
+        <div className="grid gap-10 md:grid-cols-[1.1fr,1.5fr]">
           {/* Colonne informations */}
           <aside className="space-y-6 text-sm text-secondary">
-            <div className="rounded-xl bg-white p-5 shadow-sm">
+            <div className="card-premium p-5">
               <h3 className="mb-3 text-xs font-semibold uppercase tracking-[0.25em] text-primary">
-                Coordonnées
+                Contact direct
               </h3>
               <div className="space-y-3">
                 <div className="flex items-start gap-3">
                   <Phone className="mt-0.5 h-4 w-4 text-accent" />
                   <div>
-                    <p className="text-xs font-semibold text-primary">Service commercial</p>
+                    <p className="text-xs font-semibold text-primary">Cellule commerciale</p>
                     <p>+212 6 61 35 03 36</p>
                   </div>
                 </div>
@@ -84,16 +83,16 @@ export const ContactPage: React.FC = () => {
                 <div className="flex items-start gap-3">
                   <MapPin className="mt-0.5 h-4 w-4 text-accent" />
                   <div>
-                    <p className="text-xs font-semibold text-primary">Siège &amp; Dépôt</p>
+                    <p className="text-xs font-semibold text-primary">Siège &amp; plateforme logistique</p>
                     <p>Hamria, Meknès, Maroc</p>
                   </div>
                 </div>
               </div>
             </div>
 
-            <div className="rounded-xl bg-white p-5 shadow-sm">
+            <div className="card-premium p-5">
               <h3 className="mb-3 text-xs font-semibold uppercase tracking-[0.25em] text-primary">
-                Horaires d'ouverture
+                Disponibilité
               </h3>
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
@@ -110,17 +109,26 @@ export const ContactPage: React.FC = () => {
                 </div>
               </div>
             </div>
+
+            <div className="card-premium p-5">
+              <h3 className="mb-3 text-xs font-semibold uppercase tracking-[0.25em] text-primary">Engagement de service</h3>
+              <div className="space-y-3 text-xs text-ink-soft">
+                <p className="inline-flex items-center gap-2"><TimerReset className="h-4 w-4 text-accent" />Retour sous 4h ouvrées pour les demandes critiques</p>
+                <p className="inline-flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-accent" />Approche orientée conformité et fiabilité d'exécution</p>
+                <p className="inline-flex items-center gap-2"><BadgeCheck className="h-4 w-4 text-accent" />Suivi professionnel jusqu'à validation opérationnelle</p>
+              </div>
+            </div>
           </aside>
 
           {/* Colonne formulaire */}
           <div className="space-y-8">
             <form
               onSubmit={handleSubmit}
-              className="space-y-4 rounded-xl bg-white p-6 shadow-sm"
+              className="card-premium space-y-4 p-6"
             >
-              <h3 className="text-sm font-semibold text-primary">Formulaire de contact</h3>
+              <h3 className="text-sm font-semibold text-primary">Formulaire de qualification du besoin</h3>
               <p className="text-xs text-secondary">
-                Les champs marqués d'un astérisque (*) sont obligatoires.
+                Les champs marqués d'un astérisque (*) nous aident à vous répondre avec précision.
               </p>
 
               <div className="grid gap-4 md:grid-cols-2">
@@ -134,7 +142,7 @@ export const ContactPage: React.FC = () => {
                     required
                     value={formData.name}
                     onChange={handleChange}
-                    className="w-full rounded-sm border border-light-gray px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent/30"
+                    className="w-full rounded-xl border border-[color:var(--color-border-subtle)] bg-white px-3 py-2.5 text-sm outline-none focus:border-accent"
                   />
                 </div>
                 <div className="space-y-1">
@@ -146,7 +154,7 @@ export const ContactPage: React.FC = () => {
                     name="company"
                     value={formData.company}
                     onChange={handleChange}
-                    className="w-full rounded-sm border border-light-gray px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent/30"
+                    className="w-full rounded-xl border border-[color:var(--color-border-subtle)] bg-white px-3 py-2.5 text-sm outline-none focus:border-accent"
                   />
                 </div>
                 <div className="space-y-1">
@@ -160,7 +168,7 @@ export const ContactPage: React.FC = () => {
                     required
                     value={formData.email}
                     onChange={handleChange}
-                    className="w-full rounded-sm border border-light-gray px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent/30"
+                    className="w-full rounded-xl border border-[color:var(--color-border-subtle)] bg-white px-3 py-2.5 text-sm outline-none focus:border-accent"
                   />
                 </div>
                 <div className="space-y-1">
@@ -172,7 +180,7 @@ export const ContactPage: React.FC = () => {
                     name="phone"
                     value={formData.phone}
                     onChange={handleChange}
-                    className="w-full rounded-sm border border-light-gray px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent/30"
+                    className="w-full rounded-xl border border-[color:var(--color-border-subtle)] bg-white px-3 py-2.5 text-sm outline-none focus:border-accent"
                   />
                 </div>
               </div>
@@ -187,13 +195,13 @@ export const ContactPage: React.FC = () => {
                   required
                   value={formData.subject}
                   onChange={handleChange}
-                  className="w-full rounded-sm border border-light-gray px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent/30"
+                  className="w-full rounded-xl border border-[color:var(--color-border-subtle)] bg-white px-3 py-2.5 text-sm outline-none focus:border-accent"
                 >
                   <option value="">Sélectionnez...</option>
-                  <option value="devis">Demande de devis</option>
-                  <option value="technique">Question technique</option>
-                  <option value="commande">Suivi de commande</option>
-                  <option value="autre">Autre demande</option>
+                  <option value="devis">Demande de devis prioritaire</option>
+                  <option value="technique">Validation technique produit</option>
+                  <option value="commande">Suivi opérationnel de commande</option>
+                  <option value="autre">Autre besoin professionnel</option>
                 </select>
               </div>
 
@@ -208,36 +216,36 @@ export const ContactPage: React.FC = () => {
                   rows={4}
                   value={formData.message}
                   onChange={handleChange}
-                  className="w-full rounded-sm border border-light-gray px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent/30"
+                  className="w-full rounded-xl border border-[color:var(--color-border-subtle)] bg-white px-3 py-2.5 text-sm outline-none focus:border-accent"
                 />
               </div>
 
               <button
                 type="submit"
                 disabled={status === 'submitting'}
-                className="inline-flex items-center gap-2 rounded-sm bg-accent px-6 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-white shadow-md hover:bg-accent-hover disabled:opacity-60"
+                className="btn-primary"
               >
-                {status === 'submitting' ? 'Transmission...' : 'Envoyer'}
+                {status === 'submitting' ? 'Transmission...' : 'Envoyer la demande'}
                 {status !== 'submitting' && <ArrowRight className="h-3.5 w-3.5" />}
               </button>
 
               {status === 'success' && (
                 <p className="mt-2 flex items-center gap-2 text-xs text-emerald-600">
                   <Check className="h-3.5 w-3.5" />
-                  Votre demande a bien été reçue. Nos équipes reviennent vers vous sous 24h.
+                  Votre demande a bien été reçue. Un conseiller BF4 Invest vous contacte rapidement.
                 </p>
               )}
               {status === 'error' && (
                 <p className="mt-2 flex items-center gap-2 text-xs text-red-600">
-                  Une erreur est survenue lors de l'envoi. Merci de nous contacter par téléphone.
+                  Une erreur est survenue. Merci de nous contacter directement par téléphone.
                 </p>
               )}
             </form>
 
             {/* FAQ */}
-            <section className="rounded-xl bg-white p-6 shadow-sm">
-              <h3 className="mb-4 text-sm font-semibold text-primary">Questions fréquentes</h3>
-              <div className="divide-y divide-light-gray">
+            <section className="card-premium p-6">
+              <h3 className="mb-4 text-sm font-semibold text-primary">Questions fréquentes des décideurs</h3>
+              <div className="divide-y divide-[color:var(--color-border-subtle)]">
                 {FAQ_ITEMS.map((item, index) => {
                   const isOpen = openFaq === index;
                   return (

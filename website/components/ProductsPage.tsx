@@ -1,8 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { PRODUCTS, PRODUCT_CATEGORIES } from '../constants';
 import type { Product, ProductCategory } from '../types';
-import { Search, ArrowRight, Download, FileText, Check } from './icons';
-import { motion, AnimatePresence } from 'motion/react';
+import { Search, ArrowRight, FileText, Check, PackageCheck } from './icons';
 import { useNavigate } from 'react-router-dom';
 
 const API_BASE_URL = (import.meta as any).env.VITE_API_BASE_URL || 'https://bf4investapp-production.up.railway.app/api';
@@ -66,12 +65,12 @@ interface ProductCardProps {
 const ProductCard: React.FC<ProductCardProps> = ({ product, onContactClick }) => {
 
   return (
-    <article className="group flex flex-col overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-light-gray/60 transition-all hover:-translate-y-1 hover:shadow-lg">
+    <article className="card-premium group flex flex-col overflow-hidden transition-all hover:-translate-y-1 hover:shadow-[0_18px_35px_rgba(15,23,42,0.14)]">
       {/* Badge stock */}
       <div className="flex items-center justify-between px-4 pt-4 text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
         <span className="flex items-center gap-1">
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-          En stock
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+          Disponible
         </span>
       </div>
 
@@ -101,27 +100,28 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onContactClick }) =>
               <span className="text-xs text-secondary">/ {product.unit}</span>
             </>
           ) : (
-            <span className="text-sm font-semibold text-primary">Sur devis</span>
+            <span className="text-sm font-semibold text-primary">Tarif sur devis</span>
           )}
         </div>
       </div>
 
       {/* Actions */}
-      <div className="flex items-center justify-between border-t border-light-gray px-4 py-3">
+      <div className="flex items-center justify-between border-t border-[color:var(--color-border-subtle)] px-4 py-3">
         <button
           type="button"
           className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-secondary hover:text-primary"
         >
           <FileText className="h-3.5 w-3.5" />
-          Fiche tech.
+          Détails
         </button>
         <button
           type="button"
           onClick={onContactClick}
-          className="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-white shadow-md transition-all hover:-translate-y-0.5 hover:bg-accent-hover hover:shadow-lg"
+          className="flex items-center gap-1 rounded-lg bg-primary px-3 py-2 text-[11px] font-bold uppercase tracking-[0.14em] text-white transition-all hover:bg-slate-800"
           aria-label="Commander"
         >
           <ArrowRight className="h-4 w-4" />
+          Devis
         </button>
       </div>
     </article>
@@ -181,43 +181,41 @@ export const ProductsPage: React.FC = () => {
   }, [searchTerm, activeCategory, sourceProducts]);
 
   return (
-    <section className="bg-light py-10">
-      <div className="mx-auto max-w-6xl px-6 md:px-10">
+    <section className="section-shell py-14">
+      <div>
         {/* En-tête */}
-        <header className="mb-8 flex flex-col gap-4 md:mb-10 md:flex-row md:items-end md:justify-between">
+        <header className="mb-8 flex flex-col gap-5 md:mb-10 md:flex-row md:items-end md:justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.25em] text-accent">Catalogue 2025</p>
-            <h2 className="mt-2 text-2xl font-extrabold text-primary md:text-3xl">Nos Produits</h2>
-            <p className="mt-2 text-sm text-secondary">
-              Plus de 500 références disponibles immédiatement sur notre parc logistique de Meknès.
+            <p className="section-kicker">Catalogue professionnel BF4 Invest</p>
+            <h2 className="section-title">Références disponibles pour vos opérations BTP</h2>
+            <p className="section-subtitle">
+              Cette page est synchronisée avec le stock réel de l'application. Sélectionnez vos références et lancez
+              une demande de devis qualifiée.
             </p>
           </div>
-          <button
-            type="button"
-            className="inline-flex items-center gap-2 rounded-sm border border-light-gray px-4 py-2 text-xs font-semibold text-primary hover:border-accent hover:text-accent"
-          >
-            <Download className="h-4 w-4" />
-            Télécharger PDF
-          </button>
+          <div className="card-premium flex items-center gap-2 px-4 py-3 text-xs">
+            <PackageCheck className="h-4 w-4 text-success" />
+            <span className="font-semibold text-primary">
+              {apiProducts.length > 0 ? 'Données produits en temps réel' : 'Catalogue de secours activé'}
+            </span>
+          </div>
         </header>
 
         <div className="grid gap-8 lg:grid-cols-[260px,1fr]">
           {/* Filtres */}
           <aside className="space-y-6">
             <div>
-              <h3 className="text-xs font-semibold uppercase tracking-[0.25em] text-primary">
-                Départements
-              </h3>
+              <h3 className="text-xs font-semibold uppercase tracking-[0.25em] text-primary">Catégories</h3>
               <div className="mt-4 flex flex-col gap-1">
                 {PRODUCT_CATEGORIES.map((cat) => (
                   <button
                     key={cat}
                     type="button"
                     onClick={() => setActiveCategory(cat)}
-                    className={`flex w-full items-center justify-between border-l-2 px-4 py-2 text-left text-sm font-medium transition-all ${
+                    className={`flex w-full items-center justify-between rounded-lg px-4 py-2 text-left text-sm font-medium transition-all ${
                       activeCategory === cat
-                        ? 'border-accent bg-light text-primary'
-                        : 'border-transparent text-gray-500 hover:bg-light hover:text-primary'
+                        ? 'bg-slate-100 text-primary'
+                        : 'text-gray-500 hover:bg-slate-50 hover:text-primary'
                     }`}
                   >
                     <span>{cat}</span>
@@ -226,12 +224,12 @@ export const ProductsPage: React.FC = () => {
                 ))}
               </div>
             </div>
-            <div className="rounded-lg bg-white p-4 text-xs text-secondary shadow-sm">
-              <p className="font-semibold text-primary">Besoin spécifique ?</p>
+            <div className="card-premium p-4 text-xs text-secondary">
+              <p className="font-semibold text-primary">Besoin d'un sourcing spécifique ?</p>
               <p className="mt-1">
-                Nous sourçons pour vous les matériaux hors-catalogue auprès de nos partenaires industriels.
+                Nous proposons une offre personnalisée pour les références hors-catalogue et les achats multi-sites.
               </p>
-              <p className="mt-2 font-semibold text-accent">Appeler le dépôt</p>
+              <p className="mt-2 font-semibold text-accent">Parler à un conseiller</p>
               <p>+212 6 61 35 03 36</p>
             </div>
           </aside>
@@ -245,8 +243,8 @@ export const ProductsPage: React.FC = () => {
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Rechercher une référence (ex: vis, groupe électrogène, tube PVC...)"
-                className="w-full rounded-sm border border-light-gray bg-light px-12 py-4 text-sm text-primary outline-none placeholder:text-gray-400 focus:border-accent focus:ring-2 focus:ring-accent/20"
+                placeholder="Rechercher par référence ou désignation"
+                className="w-full rounded-xl border border-[color:var(--color-border-subtle)] bg-white px-12 py-4 text-sm text-primary outline-none placeholder:text-gray-400 focus:border-accent"
               />
             </div>
 
@@ -260,16 +258,16 @@ export const ProductsPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setSearchTerm('')}
-                  className="text-xs font-bold text-red-500 hover:text-red-700"
+                  className="text-xs font-bold text-slate-700 hover:text-primary"
                 >
-                  Réinitialiser
+                  Effacer
                 </button>
               )}
             </div>
 
             {/* Grille produits */}
             {loading ? (
-              <p className="py-10 text-center text-sm text-secondary">Chargement des produits en cours...</p>
+              <p className="card-premium py-10 text-center text-sm text-secondary">Chargement du catalogue en cours...</p>
             ) : filteredProducts.length > 0 ? (
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {filteredProducts.map((p) => (
@@ -281,7 +279,7 @@ export const ProductsPage: React.FC = () => {
                 ))}
               </div>
             ) : (
-              <div className="space-y-3 rounded-lg bg-white p-6 text-sm text-secondary shadow-sm">
+              <div className="card-premium space-y-3 p-6 text-sm text-secondary">
                 <p>Aucun produit ne correspond à votre recherche.</p>
                 <button
                   type="button"

@@ -34,7 +34,7 @@ const ScrollToTopButton: React.FC = () => {
     <button
       type="button"
       onClick={scrollToTop}
-      className="fixed bottom-8 right-8 z-40 flex h-10 w-10 items-center justify-center rounded-full bg-accent text-white shadow-lg hover:bg-accent-hover transition-colors"
+      className="fixed bottom-8 right-8 z-40 flex h-11 w-11 items-center justify-center rounded-full bg-primary text-white shadow-lg transition-colors hover:bg-slate-800"
       aria-label="Remonter en haut de la page"
     >
       <ChevronUp className="h-5 w-5" />
@@ -67,13 +67,13 @@ const AppContent: React.FC = () => {
     const path = location.pathname;
 
     if (path === '/' || path === '') {
-      document.title = 'BF4 Invest - Matériaux de Construction au Maroc';
+      document.title = 'BF4 Invest - Négoce BTP Premium au Maroc';
     } else if (path.startsWith('/a-propos')) {
-      document.title = 'À Propos - BF4 Invest';
+      document.title = 'À propos - BF4 Invest';
     } else if (path.startsWith('/produits')) {
-      document.title = 'Nos Produits - BF4 Invest';
+      document.title = 'Catalogue Produits - BF4 Invest';
     } else if (path.startsWith('/contact')) {
-      document.title = 'Contact - BF4 Invest';
+      document.title = 'Demande de Devis - BF4 Invest';
     } else {
       document.title = 'BF4 Invest';
     }
@@ -92,7 +92,7 @@ const AppContent: React.FC = () => {
     <ThemeContext.Provider value={{ theme, toggleTheme }}>
       <div className="min-h-screen bg-background-light text-primary">
         <Header />
-        <main className="pt-24">
+        <main className="pt-24 md:pt-28">
           <AnimatePresence mode="wait">
             <motion.div
               key={location.pathname}

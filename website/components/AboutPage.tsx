@@ -1,115 +1,89 @@
-import React, { useRef, useState, useEffect } from 'react';
-import { Shield, Diamond, BrainCircuit, Check, Truck, Users, Building } from './icons';
+import React from 'react';
+import { ShieldCheck, Truck, BadgeCheck, Users, ArrowRight } from './icons';
 import { useNavigate } from 'react-router-dom';
-
-const useOnScreen = (options: IntersectionObserverInit) => {
-  const ref = useRef<HTMLDivElement | null>(null);
-  const [isVisible, setIsVisible] = useState(false);
-
-  useEffect(() => {
-    const observer = new IntersectionObserver(([entry]) => {
-      if (entry.isIntersecting) {
-        setIsVisible(true);
-        observer.unobserve(entry.target);
-      }
-    }, options);
-
-    if (ref.current) {
-      observer.observe(ref.current);
-    }
-
-    return () => {
-      if (ref.current) {
-        observer.unobserve(ref.current);
-      }
-    };
-  }, [options]);
-
-  return [ref, isVisible] as const;
-};
 
 export const AboutPage: React.FC = () => {
   const navigate = useNavigate();
-  const [ref, isVisible] = useOnScreen({ threshold: 0.1 });
 
   return (
-    <section className="bg-light py-16">
-      <div className="mx-auto max-w-6xl px-6 md:px-10">
-        <div className="mb-12 grid gap-8 md:grid-cols-2">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.25em] text-accent">Depuis 2009</p>
-            <h2 className="mt-3 text-3xl font-extrabold text-primary md:text-4xl">
-              L'Expertise BTP.
-              <br />
-              La Puissance Logistique.
-            </h2>
-            <p className="mt-4 text-sm text-secondary md:text-base">
-              BF4 Invest n'est pas un simple fournisseur. Nous sommes le partenaire stratégique des constructeurs qui
-              façonnent le Maroc de demain.
-            </p>
-          </div>
-          <div className="space-y-4 text-sm text-secondary md:text-base">
+    <section className="section-shell py-16 md:py-20">
+      <p className="section-kicker">À propos de BF4 Invest</p>
+      <h2 className="section-title">Une culture de fiabilité au service des professionnels du BTP</h2>
+      <p className="section-subtitle">
+        Depuis Meknès, BF4 Invest accompagne des acteurs publics et privés dans leurs approvisionnements stratégiques.
+        Notre mission est simple: sécuriser vos achats techniques avec un haut niveau de transparence, de disponibilité
+        et d’exécution.
+      </p>
+
+      <div className="mt-10 grid gap-6 md:grid-cols-[1.1fr,0.9fr]">
+        <article className="card-premium p-7">
+          <h3 className="font-display text-2xl text-primary">Notre approche</h3>
+          <div className="mt-5 space-y-4 text-sm leading-relaxed text-ink-soft">
             <p>
-              Fondée à Meknès, BF4 Invest s'est construite sur un constat simple : les grands chantiers souffrent trop
-              souvent de ruptures de stock et de matériaux non conformes.
+              Nous construisons chaque collaboration sur la même exigence que vos chantiers: fiabilité opérationnelle,
+              conformité technique et engagement sur les délais annoncés.
             </p>
             <p>
-              Nous avons décidé de changer la donne. En investissant massivement dans nos capacités de stockage et en
-              nouant des partenariats directs avec les usines (Sonasid, LafargeHolcim), nous avons créé un hub
-              logistique capable de servir les projets les plus exigeants, du génie civil aux complexes résidentiels.
+              Nos équipes combinent expertise produit, lecture des contraintes terrain et coordination logistique pour
+              garantir des livraisons pertinentes, au bon moment, avec le bon niveau de service.
+            </p>
+            <p>
+              Ce positionnement nous permet de devenir plus qu’un fournisseur: un partenaire de décision dans vos
+              achats BTP et industriels.
             </p>
           </div>
-        </div>
+        </article>
 
-        <div
-          ref={ref}
-          className={`grid gap-6 md:grid-cols-3 transition-opacity duration-700 ${
-            isVisible ? 'opacity-100' : 'opacity-0'
-          }`}
-        >
-          <div className="rounded-xl bg-white p-6 shadow-sm">
-            <Shield className="h-8 w-8 text-accent" />
-            <h3 className="mt-4 text-sm font-semibold text-primary">Conformité totale</h3>
-            <p className="mt-2 text-xs text-secondary">
-              Pas de compromis sur la sécurité. Aciers certifiés NM, Ciments normes ISO. Chaque livraison est
-              accompagnée de ses certificats d'origine.
-            </p>
+        <article className="card-premium p-7">
+          <h3 className="font-display text-2xl text-primary">Ce que vous obtenez</h3>
+          <div className="mt-5 space-y-4">
+            {[
+              {
+                icon: ShieldCheck,
+                title: 'Conformité et traçabilité',
+                text: 'Spécifications claires, documentation disponible et processus contrôlés.',
+              },
+              {
+                icon: Truck,
+                title: 'Performance logistique',
+                text: 'Organisation des livraisons selon votre planning chantier.',
+              },
+              {
+                icon: BadgeCheck,
+                title: 'Engagement qualité',
+                text: 'Sélection des références selon des critères stricts de performance.',
+              },
+              {
+                icon: Users,
+                title: 'Accompagnement dédié',
+                text: 'Un interlocuteur commercial réactif pour vos besoins prioritaires.',
+              },
+            ].map((item) => (
+              <div key={item.title} className="rounded-xl border border-[color:var(--color-border-subtle)] bg-[color:var(--color-surface-soft)] p-4">
+                <div className="flex items-start gap-3">
+                  <item.icon className="mt-0.5 h-5 w-5 text-accent" />
+                  <div>
+                    <p className="text-sm font-semibold text-primary">{item.title}</p>
+                    <p className="mt-1 text-xs text-ink-soft">{item.text}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
-          <div className="rounded-xl bg-white p-6 shadow-sm">
-            <Truck className="h-8 w-8 text-accent" />
-            <h3 className="mt-4 text-sm font-semibold text-primary">Logistique JIT</h3>
-            <p className="mt-2 text-xs text-secondary">
-              \"Just-In-Time\". Notre flotte de camions et nos partenaires logistiques assurent des livraisons cadencées
-              pour ne jamais arrêter vos équipes.
-            </p>
-          </div>
-          <div className="rounded-xl bg-white p-6 shadow-sm">
-            <BrainCircuit className="h-8 w-8 text-accent" />
-            <h3 className="mt-4 text-sm font-semibold text-primary">Expertise technique</h3>
-            <p className="mt-2 text-xs text-secondary">
-              Nos commerciaux sont des techniciens. Ils comprennent vos plans, vos contraintes de ferraillage et vos
-              besoins en hydraulique.
-            </p>
-          </div>
-        </div>
+        </article>
+      </div>
 
-        <div className="mt-12 rounded-xl bg-primary px-8 py-10 text-white md:flex md:items-center md:justify-between">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.25em] text-emerald-400">
-              Rejoignez les leaders du BTP
-            </p>
-            <h3 className="mt-3 text-xl font-extrabold md:text-2xl">
-              Ouvrez un compte professionnel BF4 Invest et bénéficiez de tarifs préférentiels.
-            </h3>
-          </div>
-          <button
-            type="button"
-            onClick={() => navigate('/contact')}
-            className="mt-6 rounded bg-white px-8 py-3 text-xs font-bold uppercase tracking-[0.2em] text-primary shadow-lg md:mt-0"
-          >
-            Contacter la direction
-          </button>
+      <div className="mt-8 card-premium flex flex-col items-start justify-between gap-4 p-7 md:flex-row md:items-center">
+        <div>
+          <p className="text-sm font-semibold text-primary">Discutons de vos besoins d’approvisionnement</p>
+          <p className="mt-1 text-sm text-ink-soft">
+            Notre équipe vous propose une réponse concrète, adaptée à votre activité et à vos objectifs budgétaires.
+          </p>
         </div>
+        <button type="button" onClick={() => navigate('/contact')} className="btn-accent">
+          Contacter BF4 Invest
+          <ArrowRight className="h-4 w-4" />
+        </button>
       </div>
     </section>
   );
