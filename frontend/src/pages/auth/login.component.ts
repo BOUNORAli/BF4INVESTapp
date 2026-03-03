@@ -4,7 +4,7 @@ import { CommonModule } from '@angular/common';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { AuthService } from '../../services/auth.service';
 import { StoreService } from '../../services/store.service';
-import { getApiBaseUrlDynamic } from '../../config/environment';
+import { getApiBaseUrlDynamic, getPublicSiteUrlDynamic } from '../../config/environment';
 
 @Component({
   selector: 'app-login',
@@ -33,7 +33,15 @@ import { getApiBaseUrlDynamic } from '../../config/environment';
 
       <!-- Carte centrale avec gradient et glassmorphism -->
       <div class="bg-gradient-to-b from-blue-50/90 via-white/95 to-white backdrop-blur-xl border border-white/50 p-10 rounded-3xl w-full max-w-md shadow-2xl relative z-10 fade-in-up">
-        
+        <!-- Lien retour vers le site public -->
+        <div class="mb-4 flex justify-center">
+          <a [href]="publicSiteUrl" target="_blank" rel="noopener"
+             class="text-xs text-slate-500 hover:text-[#0059B3] transition-colors flex items-center gap-1">
+            <span class="text-base leading-none">←</span>
+            <span>Retour au site public</span>
+          </a>
+        </div>
+
         <!-- Header avec logo et titre -->
         <div class="text-center mb-8">
           <div class="w-32 h-32 mx-auto mb-6 flex items-center justify-center">
@@ -124,6 +132,8 @@ export class LoginComponent {
   
   // URL du logo depuis le backend
   logoUrl = getApiBaseUrlDynamic() + '/settings/logo';
+  // URL du site public (vitrine)
+  publicSiteUrl = getPublicSiteUrlDynamic();
 
   loginForm = this.fb.group({
     email: ['', [Validators.required, Validators.email]],

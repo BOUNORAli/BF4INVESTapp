@@ -8,7 +8,7 @@ import { AuthService } from './services/auth.service';
 import { StoreService, BC, Invoice, Product, Client, Supplier } from './services/store.service';
 import { NavigationRefreshService } from './services/navigation-refresh.service';
 import { SearchIndexService } from './services/search-index.service';
-import { getApiBaseUrlDynamic } from './config/environment';
+import { getApiBaseUrlDynamic, getPublicSiteUrlDynamic } from './config/environment';
 import { filter } from 'rxjs/operators';
 
 interface SearchResult {
@@ -36,6 +36,8 @@ export class AppComponent implements OnInit, OnDestroy {
 
   // URL du logo depuis le backend
   logoUrl = getApiBaseUrlDynamic() + '/settings/logo';
+  // URL du site public (vitrine)
+  publicSiteUrl = getPublicSiteUrlDynamic();
 
   // État du menu mobile
   isMobileMenuOpen = signal(false);

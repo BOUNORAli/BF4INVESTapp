@@ -39,3 +39,23 @@ export function getApiBaseUrlDynamic(): string {
 // Pour la compatibilité, on garde une constante mais elle sera réévaluée si nécessaire
 export const API_BASE_URL = getApiBaseUrl();
 
+function getPublicSiteUrl(): string {
+  if (typeof window === 'undefined') {
+    // Valeur par défaut côté serveur
+    return 'https://bf4invest-website.vercel.app';
+  }
+
+  // Possibilité d'injecter une URL personnalisée via window.ENV.PUBLIC_SITE_URL
+  const injectedUrl = (window as any).ENV?.PUBLIC_SITE_URL;
+  if (injectedUrl && typeof injectedUrl === 'string') {
+    return injectedUrl;
+  }
+
+  // URL par défaut du site vitrine (à adapter si vous changez de domaine)
+  return 'https://bf4invest-website.vercel.app';
+}
+
+export function getPublicSiteUrlDynamic(): string {
+  return getPublicSiteUrl();
+}
+
