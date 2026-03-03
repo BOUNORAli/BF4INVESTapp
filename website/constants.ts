@@ -21,7 +21,7 @@ export const PARTNERS: Partner[] = [
 export const STATS: Stat[] = [
   { value: 500, label: 'Références en Stock', suffix: '+' },
   { value: 24, label: 'Heures de Livraison', suffix: 'h' },
-  { value: 15, label: \"Années d'Expérience\", suffix: '+' },
+  { value: 15, label: "Années d'Expérience", suffix: '+' },
   { value: 100, label: 'Conformité Normes', suffix: '%' },
 ];
 
