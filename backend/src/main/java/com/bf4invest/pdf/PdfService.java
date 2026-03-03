@@ -6,6 +6,7 @@ import com.bf4invest.repository.ClientRepository;
 import com.bf4invest.repository.SupplierRepository;
 import com.bf4invest.repository.BandeCommandeRepository;
 import com.bf4invest.service.CompanyInfoService;
+import com.bf4invest.util.NumberUtils;
 import com.lowagie.text.*;
 import com.lowagie.text.pdf.*;
 import lombok.RequiredArgsConstructor;
@@ -111,6 +112,16 @@ public class PdfService {
         // Informations facture (numéro, date, ref)
         addFactureInfo(document, facture);
         
+        // Si la facture n'a pas de lignes mais est liée à une BC,
+        // tenter de récupérer les lignes depuis la BC (permet de réparer les anciennes factures vides)
+        if ((facture.getLignes() == null || facture.getLignes().isEmpty())
+                && facture.getBandeCommandeId() != null && !facture.getBandeCommandeId().isEmpty()) {
+            log.info("🔵 PdfService.generateFactureVente - Facture {} sans lignes, tentative de récupération depuis BC {}",
+                    facture.getNumeroFactureVente() != null ? facture.getNumeroFactureVente() : "(nouvelle)",
+                    facture.getBandeCommandeId());
+            populateLignesFromBC(facture);
+        }
+        
         // Tableau des lignes
         addFactureProductTable(document, facture);
         
@@ -149,6 +160,134 @@ public class PdfService {
         
         document.close();
         return baos.toByteArray();
+    }
+
+    /**
+     * Récupère les lignes de vente depuis la BandeCommande liée lorsque la facture
+     * n'a pas de lignes enregistrées (cas des anciennes factures créées avant la
+     * mise en place de la synchronisation).
+     */
+    private void populateLignesFromBC(FactureVente facture) {
+        if (facture == null) {
+            log.warn("⚠️ PdfService.populateLignesFromBC - Facture est null");
+            return;
+        }
+
+        String bcId = facture.getBandeCommandeId();
+        if (bcId == null || bcId.isEmpty()) {
+            log.warn("⚠️ PdfService.populateLignesFromBC - Facture {} sans bandeCommandeId, impossible de récupérer les lignes depuis une BC",
+                    facture.getNumeroFactureVente());
+            return;
+        }
+
+        BandeCommande bc = bandeCommandeRepository.findById(bcId).orElse(null);
+        if (bc == null && facture.getBcReference() != null && !facture.getBcReference().isEmpty()) {
+            bc = bandeCommandeRepository.findByNumeroBC(facture.getBcReference()).orElse(null);
+            log.debug("🔵 PdfService.populateLignesFromBC - Recherche BC par référence {} -> {}",
+                    facture.getBcReference(), bc != null ? "trouvée" : "non trouvée");
+        }
+
+        if (bc == null) {
+            log.warn("⚠️ PdfService.populateLignesFromBC - Aucune BC trouvée pour facture {} (bandeCommandeId={}, bcReference={})",
+                    facture.getNumeroFactureVente(), bcId, facture.getBcReference());
+            return;
+        }
+
+        log.info("🔵 PdfService.populateLignesFromBC - BC trouvée pour facture {}: numeroBC={}, id={}",
+                facture.getNumeroFactureVente(), bc.getNumeroBC(), bc.getId());
+
+        java.util.List<LineItem> lignesFacture = new java.util.ArrayList<>();
+        String factureClientId = facture.getClientId();
+
+        // Nouvelle structure multi-clients: clientsVente
+        if (bc.getClientsVente() != null && !bc.getClientsVente().isEmpty()) {
+            ClientVente clientVenteMatch = null;
+            if (factureClientId != null && !factureClientId.isEmpty()) {
+                clientVenteMatch = bc.getClientsVente().stream()
+                        .filter(cv -> factureClientId.equals(cv.getClientId()))
+                        .findFirst()
+                        .orElse(null);
+                log.debug("🔵 PdfService.populateLignesFromBC - Recherche ClientVente pour clientId {} -> {}",
+                        factureClientId, clientVenteMatch != null ? "trouvé" : "non trouvé");
+            }
+
+            // Fallback: utiliser le premier client si aucun match
+            if (clientVenteMatch == null && !bc.getClientsVente().isEmpty()) {
+                clientVenteMatch = bc.getClientsVente().get(0);
+                log.warn("⚠️ PdfService.populateLignesFromBC - ClientId {} ne correspond à aucun ClientVente dans la BC {}, utilisation du premier client",
+                        factureClientId, bc.getNumeroBC());
+            }
+
+            if (clientVenteMatch != null && clientVenteMatch.getLignesVente() != null) {
+                for (LigneVente ligneVente : clientVenteMatch.getLignesVente()) {
+                    LineItem lineItem = convertLigneVenteToLineItemForPdf(ligneVente);
+                    if (lineItem != null) {
+                        lignesFacture.add(lineItem);
+                    }
+                }
+            } else {
+                log.warn("⚠️ PdfService.populateLignesFromBC - ClientVente trouvé mais lignesVente null ou vide pour BC {}",
+                        bc.getNumeroBC());
+            }
+        }
+        // Ancienne structure: lignes (déjà des LineItem)
+        else if (bc.getLignes() != null && !bc.getLignes().isEmpty()) {
+            lignesFacture.addAll(bc.getLignes());
+            log.info("ℹ️ PdfService.populateLignesFromBC - Utilisation de l'ancienne structure (lignes) de la BC {} pour la facture {}",
+                    bc.getNumeroBC(), facture.getNumeroFactureVente());
+        } else {
+            log.warn("⚠️ PdfService.populateLignesFromBC - BC {} n'a ni clientsVente ni lignes, aucune ligne à synchroniser",
+                    bc.getNumeroBC());
+        }
+
+        if (!lignesFacture.isEmpty()) {
+            facture.setLignes(lignesFacture);
+            log.info("✅ PdfService.populateLignesFromBC - {} lignes récupérées depuis BC {} pour la facture {}",
+                    lignesFacture.size(), bc.getNumeroBC(),
+                    facture.getNumeroFactureVente() != null ? facture.getNumeroFactureVente() : "(nouvelle)");
+        } else {
+            log.warn("⚠️ PdfService.populateLignesFromBC - Aucune ligne récupérée depuis BC {} pour la facture {} (clientId={})",
+                    bc.getNumeroBC(), facture.getNumeroFactureVente(), factureClientId);
+        }
+    }
+
+    /**
+     * Version locale de la conversion LigneVente -> LineItem pour l'affichage PDF.
+     * Calque la logique de FactureVenteService sans dépendre directement de ce service.
+     */
+    private LineItem convertLigneVenteToLineItemForPdf(LigneVente ligneVente) {
+        if (ligneVente == null) {
+            return null;
+        }
+
+        LineItem lineItem = new LineItem();
+        lineItem.setProduitRef(ligneVente.getProduitRef());
+        lineItem.setDesignation(ligneVente.getDesignation());
+        lineItem.setUnite(ligneVente.getUnite() != null ? ligneVente.getUnite() : "U");
+
+        if (ligneVente.getQuantiteVendue() != null) {
+            lineItem.setQuantiteVendue(ligneVente.getQuantiteVendue().intValue());
+        }
+
+        lineItem.setPrixVenteUnitaireHT(ligneVente.getPrixVenteUnitaireHT());
+        lineItem.setTva(ligneVente.getTva());
+
+        if (ligneVente.getTotalHT() != null) {
+            lineItem.setTotalHT(NumberUtils.roundTo2Decimals(ligneVente.getTotalHT()));
+        } else if (ligneVente.getPrixVenteUnitaireHT() != null && ligneVente.getQuantiteVendue() != null) {
+            double totalHT = ligneVente.getPrixVenteUnitaireHT() * ligneVente.getQuantiteVendue();
+            lineItem.setTotalHT(NumberUtils.roundTo2Decimals(totalHT));
+        }
+
+        if (ligneVente.getTotalTTC() != null) {
+            lineItem.setTotalTTC(NumberUtils.roundTo2Decimals(ligneVente.getTotalTTC()));
+        } else if (lineItem.getTotalHT() != null && ligneVente.getTva() != null) {
+            double tvaRate = ligneVente.getTva() / 100.0;
+            double totalTTC = lineItem.getTotalHT() * (1 + tvaRate);
+            lineItem.setTotalTTC(NumberUtils.roundTo2Decimals(totalTTC));
+        }
+
+        return lineItem;
     }
     
     public byte[] generateBonDeLivraison(FactureVente facture) throws DocumentException, IOException {

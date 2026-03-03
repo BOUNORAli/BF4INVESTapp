@@ -89,7 +89,26 @@ public class PdfController {
             FactureVente facture = factureVenteService.findById(id)
                     .orElseThrow(() -> new RuntimeException("Facture not found"));
             
+            // Mémoriser l'état initial des lignes pour savoir si la génération PDF les a complétées
+            boolean hadNoLinesInitially = facture.getLignes() == null || facture.getLignes().isEmpty();
+            
             byte[] pdfBytes = pdfService.generateFactureVente(facture);
+            
+            // Si la facture était sans lignes mais qu'après génération PDF elle en possède,
+            // cela signifie que PdfService.populateLignesFromBC a réparé la facture.
+            // On persiste alors cette réparation pour les prochains appels.
+            boolean hasLinesNow = facture.getLignes() != null && !facture.getLignes().isEmpty();
+            if (hadNoLinesInitially && hasLinesNow && facture.getId() != null) {
+                try {
+                    log.info("✅ PdfController.generateFactureVentePdf - Facture {} réparée avec {} lignes, sauvegarde en base",
+                            facture.getNumeroFactureVente(), facture.getLignes().size());
+                    factureVenteService.update(facture.getId(), facture);
+                } catch (Exception e) {
+                    log.warn("⚠️ PdfController.generateFactureVentePdf - Impossible de sauvegarder la facture réparée {}: {}",
+                            facture.getId(), e.getMessage(), e);
+                    // On ne bloque pas la génération du PDF si la sauvegarde échoue
+                }
+            }
             
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_PDF);
