@@ -49,12 +49,19 @@ export class ProductService {
       prixVenteUnitaireHT: product.priceSellHT,
       quantiteEnStock: product.stock !== undefined ? product.stock : 0
     };
-    // Inclure l'image si présente (extraire base64 depuis data URL)
+    // Gestion de l'image :
+    // - si imageUrl est présent : on met à jour l'image
+    // - si imageUrl est absent (et qu'on est en édition) : on envoie une valeur vide pour demander la suppression
     if (product.imageUrl) {
+      // Inclure l'image si présente (extraire base64 depuis data URL)
       const base64Data = this.extractBase64FromDataUrl(product.imageUrl);
       const contentType = this.extractContentTypeFromDataUrl(product.imageUrl);
       payload.imageBase64 = base64Data;
       payload.imageContentType = contentType;
+    } else {
+      // Instruction explicite : supprimer l'image côté backend
+      payload.imageBase64 = '';
+      payload.imageContentType = '';
     }
     const updated = await this.api.put<any>(`/produits/${product.id}`, payload).toPromise();
     return this.mapProduct(updated);

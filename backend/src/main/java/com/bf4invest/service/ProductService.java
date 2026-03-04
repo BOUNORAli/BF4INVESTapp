@@ -55,10 +55,17 @@ public class ProductService {
                     if (product.getQuantiteEnStock() != null) {
                         existing.setQuantiteEnStock(product.getQuantiteEnStock());
                     }
-                    // Mettre à jour l'image si fournie
+                    // Mettre à jour ou supprimer l'image
                     if (product.getImageBase64() != null) {
-                        existing.setImageBase64(product.getImageBase64());
-                        existing.setImageContentType(product.getImageContentType());
+                        if (product.getImageBase64().isEmpty()) {
+                            // Instruction explicite de suppression de l'image
+                            existing.setImageBase64(null);
+                            existing.setImageContentType(null);
+                        } else {
+                            // Nouvelle image fournie
+                            existing.setImageBase64(product.getImageBase64());
+                            existing.setImageContentType(product.getImageContentType());
+                        }
                     }
                     existing.setUpdatedAt(LocalDateTime.now());
                     Product saved = productRepository.save(existing);
