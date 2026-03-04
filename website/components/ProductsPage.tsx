@@ -17,6 +17,25 @@ type PublicProductDto = {
   quantiteEnStock?: number;
   imageBase64?: string;
   imageContentType?: string;
+  categorie?: string;
+};
+
+const DEFAULT_CATEGORY: ProductCategory = 'Matériaux de Construction';
+
+const mapCategorieToProductCategory = (categorie?: string): ProductCategory => {
+  if (!categorie) return DEFAULT_CATEGORY;
+  const normalized = categorie.trim().toLowerCase();
+  const mapping: Record<string, ProductCategory> = {
+    'tous': 'Tous',
+    'boulonnerie et visserie': 'Boulonnerie et Visserie',
+    'outillage industriel': 'Outillage Industriel',
+    'aciers et fils': 'Aciers et Fils',
+    'tubes et canalisations': 'Tubes et Canalisations',
+    'matériaux de construction': 'Matériaux de Construction',
+    'materiaux de construction': 'Matériaux de Construction',
+    'signalisation et epi': 'Signalisation et EPI',
+  };
+  return mapping[normalized] ?? DEFAULT_CATEGORY;
 };
 
 const getProductImage = (product: Product): string => {
@@ -154,8 +173,7 @@ export const ProductsPage: React.FC = () => {
               ? `data:${p.imageContentType};base64,${p.imageBase64}`
               : undefined;
 
-          // Faute de catégorie dans le backend, on rattache au bloc Matériaux de Construction
-          const category: ProductCategory = 'Matériaux de Construction';
+          const category: ProductCategory = mapCategorieToProductCategory(p.categorie);
 
           return { name, ref: p.refArticle, unit, price, category, imageUrl };
         });

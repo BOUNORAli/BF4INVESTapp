@@ -1,12 +1,30 @@
 import React from 'react';
 import { PRODUCTS, STATS } from '../constants';
-import type { Product } from '../types';
+import type { Product, ProductCategory } from '../types';
 import { ArrowRight, CheckCircle2, ShieldCheck, Truck, TimerReset, Building2, Boxes } from './icons';
 import { motion } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 
 const API_BASE_URL = (import.meta as any).env.VITE_API_BASE_URL || 'https://bf4investapp-production.up.railway.app/api';
 const PUBLIC_PRODUCTS_URL = `${API_BASE_URL}/public/produits`;
+
+const DEFAULT_CATEGORY: ProductCategory = 'Matériaux de Construction';
+
+const mapCategorieToProductCategory = (categorie?: string): ProductCategory => {
+  if (!categorie) return DEFAULT_CATEGORY;
+  const normalized = categorie.trim().toLowerCase();
+  const mapping: Record<string, ProductCategory> = {
+    'tous': 'Tous',
+    'boulonnerie et visserie': 'Boulonnerie et Visserie',
+    'outillage industriel': 'Outillage Industriel',
+    'aciers et fils': 'Aciers et Fils',
+    'tubes et canalisations': 'Tubes et Canalisations',
+    'matériaux de construction': 'Matériaux de Construction',
+    'materiaux de construction': 'Matériaux de Construction',
+    'signalisation et epi': 'Signalisation et EPI',
+  };
+  return mapping[normalized] ?? DEFAULT_CATEGORY;
+};
 
 const HeroSection: React.FC = () => {
   const navigate = useNavigate();
@@ -167,8 +185,11 @@ const ProductsTeaserSection: React.FC = () => {
           ref: item.refArticle,
           unit: item.unite || 'U',
           price: typeof item.prixVentePondereHT === 'number' ? item.prixVentePondereHT : 'Sur demande',
-          category: 'Matériaux de Construction',
-          imageUrl: item.imageBase64 && item.imageContentType ? `data:${item.imageContentType};base64,${item.imageBase64}` : undefined,
+          category: mapCategorieToProductCategory(item.categorie),
+          imageUrl:
+            item.imageBase64 && item.imageContentType
+              ? `data:${item.imageContentType};base64,${item.imageBase64}`
+              : undefined,
         }));
 
         if (mapped.length > 0) setTeaserProducts(mapped);

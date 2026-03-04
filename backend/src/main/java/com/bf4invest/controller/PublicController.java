@@ -43,6 +43,9 @@ public class PublicController {
                         .quantiteEnStock(p.getQuantiteEnStock())
                         .imageBase64(p.getImageBase64())
                         .imageContentType(p.getImageContentType())
+                        .categorie(p.getCategorie() != null && !p.getCategorie().trim().isEmpty()
+                                ? p.getCategorie()
+                                : "Matériaux de Construction")
                         .build())
                 .collect(Collectors.toList());
 

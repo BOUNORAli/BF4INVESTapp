@@ -18,6 +18,7 @@ export class ProductService {
       refArticle: product.ref,
       designation: product.name,
       unite: product.unit,
+      categorie: product.category,
       prixAchatPondereHT: product.priceBuyHT, // Utiliser prix pondéré
       prixVentePondereHT: product.priceSellHT, // Utiliser prix pondéré
       // Garder aussi les anciens champs pour rétrocompatibilité
@@ -42,6 +43,7 @@ export class ProductService {
       refArticle: product.ref,
       designation: product.name,
       unite: product.unit,
+      categorie: product.category,
       prixAchatPondereHT: product.priceBuyHT, // Utiliser prix pondéré
       prixVentePondereHT: product.priceSellHT, // Utiliser prix pondéré
       // Garder aussi les anciens champs pour rétrocompatibilité
@@ -97,6 +99,7 @@ export class ProductService {
       ref: p.refArticle || p.ref,
       name: p.designation || p.name,
       unit: p.unite || p.unit,
+      category: p.categorie || p.category || 'Matériaux de Construction',
       // Utiliser les prix pondérés en priorité, avec fallback sur prix unitaires pour rétrocompatibilité
       priceBuyHT: p.prixAchatPondereHT ?? p.prixAchatUnitaireHT ?? p.priceBuyHT ?? 0,
       priceSellHT: p.prixVentePondereHT ?? p.prixVenteUnitaireHT ?? p.priceSellHT ?? 0,

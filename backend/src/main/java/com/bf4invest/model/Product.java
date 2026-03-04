@@ -21,6 +21,7 @@ public class Product {
     private String refArticle;
     private String designation;
     private String unite; // sac, palette, M3, etc.
+    private String categorie; // Catégorie fonctionnelle pour le site vitrine et l'analyse
     
     // Anciens champs (conservés pour rétrocompatibilité/migration)
     @Deprecated

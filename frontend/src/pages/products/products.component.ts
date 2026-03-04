@@ -122,6 +122,17 @@ import { matchesFlexibleSearch } from '../../utils/product-search.util';
                <form [formGroup]="form" (ngSubmit)="onSubmit()" class="flex-1 overflow-y-auto p-6 space-y-5">
                   <!-- Image Upload Section -->
                   <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-1">Catégorie</label>
+                    <select formControlName="category" class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition bg-white">
+                      <option value="Matériaux de Construction">Matériaux de Construction</option>
+                      <option value="Aciers et Fils">Aciers et Fils</option>
+                      <option value="Tubes et Canalisations">Tubes et Canalisations</option>
+                      <option value="Boulonnerie et Visserie">Boulonnerie et Visserie</option>
+                      <option value="Outillage Industriel">Outillage Industriel</option>
+                      <option value="Signalisation et EPI">Signalisation et EPI</option>
+                    </select>
+                  </div>
+                  <div>
                     <label class="block text-sm font-semibold text-slate-700 mb-2">Image du Produit</label>
                     @if (imagePreview()) {
                       <div class="relative mb-3">
@@ -221,6 +232,7 @@ export class ProductsComponent {
   form: FormGroup = this.fb.group({
     ref: ['', Validators.required],
     name: ['', Validators.required],
+    category: ['Matériaux de Construction'],
     unit: ['U', Validators.required],
     priceBuyHT: [0, [Validators.required, Validators.min(0)]],
     priceSellHT: [0, [Validators.required, Validators.min(0)]],
@@ -259,7 +271,7 @@ export class ProductsComponent {
   openForm() {
     this.isEditMode.set(false);
     this.editingId = null;
-    this.form.reset({ unit: 'U', priceBuyHT: 0, priceSellHT: 0, stock: 0 });
+    this.form.reset({ unit: 'U', category: 'Matériaux de Construction', priceBuyHT: 0, priceSellHT: 0, stock: 0 });
     this.selectedImageFile = null;
     this.imagePreview.set(null);
     this.isFormOpen.set(true);
@@ -272,7 +284,10 @@ export class ProductsComponent {
   editProduct(prod: Product) {
     this.isEditMode.set(true);
     this.editingId = prod.id;
-    this.form.patchValue(prod);
+    this.form.patchValue({
+      ...prod,
+      category: prod.category || 'Matériaux de Construction'
+    });
     this.selectedImageFile = null;
     this.imagePreview.set(prod.imageUrl || null);
     this.isFormOpen.set(true);

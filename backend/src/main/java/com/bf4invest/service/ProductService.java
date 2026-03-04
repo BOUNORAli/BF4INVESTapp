@@ -29,6 +29,10 @@ public class ProductService {
         if (product.getQuantiteEnStock() == null) {
             product.setQuantiteEnStock(0);
         }
+        // Initialiser la catégorie par défaut si non fournie
+        if (product.getCategorie() == null || product.getCategorie().trim().isEmpty()) {
+            product.setCategorie("Matériaux de Construction");
+        }
         product.setCreatedAt(LocalDateTime.now());
         product.setUpdatedAt(LocalDateTime.now());
         Product saved = productRepository.save(product);
@@ -48,6 +52,15 @@ public class ProductService {
                     existing.setRefArticle(product.getRefArticle());
                     existing.setDesignation(product.getDesignation());
                     existing.setUnite(product.getUnite());
+                    // Mettre à jour la catégorie si fournie, sinon conserver l'existante
+                    if (product.getCategorie() != null) {
+                        String cat = product.getCategorie().trim();
+                        if (cat.isEmpty()) {
+                            existing.setCategorie("Matériaux de Construction");
+                        } else {
+                            existing.setCategorie(cat);
+                        }
+                    }
                     existing.setPrixAchatUnitaireHT(product.getPrixAchatUnitaireHT());
                     existing.setPrixVenteUnitaireHT(product.getPrixVenteUnitaireHT());
                     existing.setTva(product.getTva());

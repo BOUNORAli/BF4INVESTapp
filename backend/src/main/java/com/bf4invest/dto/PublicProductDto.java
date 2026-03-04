@@ -23,5 +23,6 @@ public class PublicProductDto {
     private Integer quantiteEnStock;
     private String imageBase64;
     private String imageContentType;
+    private String categorie;
 }
 

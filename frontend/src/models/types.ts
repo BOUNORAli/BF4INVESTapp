@@ -3,6 +3,7 @@ export interface Product {
   ref: string;
   name: string;
   unit: string;
+  category?: string;
   priceBuyHT: number;
   priceSellHT: number;
   stock?: number; // Quantité en stock
