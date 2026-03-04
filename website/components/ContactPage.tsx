@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { FAQ_ITEMS } from '../constants';
 import { MapPin, Phone, Mail, ChevronDown, ArrowRight, Check, BadgeCheck, ShieldCheck, TimerReset } from './icons';
 
-const FORM_ENDPOINT = 'https://formspree.io/f/mjkpydkb';
+const FORM_ENDPOINT =
+  (import.meta as any).env.VITE_CONTACT_FORM_ENDPOINT || 'https://formspree.io/f/mjkpydkb';
 
 export const ContactPage: React.FC = () => {
   const [formData, setFormData] = useState({
@@ -14,24 +15,37 @@ export const ContactPage: React.FC = () => {
     message: '',
   });
   const [status, setStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
+  const [configError, setConfigError] = useState(false);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
+    if (status === 'error') {
+      setStatus('idle');
+      setConfigError(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!FORM_ENDPOINT || FORM_ENDPOINT.includes('VOTRE_CODE')) {
+      setConfigError(true);
       setStatus('error');
       return;
     }
+    setConfigError(false);
     setStatus('submitting');
     try {
+      const body = new URLSearchParams(
+        formData as unknown as Record<string, string>
+      ).toString();
       const response = await fetch(FORM_ENDPOINT, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify(formData),
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          Accept: 'application/json',
+        },
+        body,
       });
       if (response.ok) {
         setStatus('success');
@@ -166,6 +180,8 @@ export const ContactPage: React.FC = () => {
                     type="email"
                     name="email"
                     required
+                    pattern="[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"
+                    title="Exemple : contact@entreprise.com"
                     value={formData.email}
                     onChange={handleChange}
                     className="w-full rounded-xl border border-[color:var(--color-border-subtle)] bg-white px-3 py-2.5 text-sm outline-none focus:border-accent"
@@ -229,15 +245,26 @@ export const ContactPage: React.FC = () => {
                 {status !== 'submitting' && <ArrowRight className="h-3.5 w-3.5" />}
               </button>
 
-              {status === 'success' && (
-                <p className="mt-2 flex items-center gap-2 text-xs text-emerald-600">
-                  <Check className="h-3.5 w-3.5" />
-                  Votre demande a bien été reçue. Un conseiller BF4 Invest vous contacte rapidement.
-                </p>
-              )}
-              {status === 'error' && (
-                <p className="mt-2 flex items-center gap-2 text-xs text-red-600">
-                  Une erreur est survenue. Merci de nous contacter directement par téléphone.
+              {(status === 'success' || status === 'error') && (
+                <p
+                  role="status"
+                  aria-live="polite"
+                  className={`mt-2 flex items-center gap-2 text-xs ${status === 'success' ? 'text-emerald-600' : 'text-red-600'}`}
+                >
+                  {status === 'success' ? (
+                    <>
+                      <Check className="h-3.5 w-3.5" />
+                      Votre demande a bien été reçue. Un conseiller BF4 Invest vous contacte rapidement.
+                    </>
+                  ) : configError ? (
+                    <>
+                      Le formulaire de contact n'est pas configuré. Merci de nous contacter par téléphone.
+                    </>
+                  ) : (
+                    <>
+                      Une erreur est survenue. Merci de nous contacter directement par téléphone ou de réessayer.
+                    </>
+                  )}
                 </p>
               )}
             </form>

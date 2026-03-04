@@ -36,7 +36,8 @@ public class SecurityConfig {
             .csrf(AbstractHttpConfigurer::disable)
             .cors(cors -> cors.configurationSource(corsConfigurationSource))
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/auth/**").permitAll()
+                .requestMatchers("/auth/login", "/auth/refresh", "/auth/logout").permitAll()
+                .requestMatchers("/auth/**").authenticated()
                 .requestMatchers("/error").permitAll() // Allow error page for better debugging
                 .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-resources/**").permitAll()
                 .requestMatchers("/settings/logo").permitAll() // Allow logo access for login page

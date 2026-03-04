@@ -23,6 +23,9 @@ app:
   data-initializer:
     enabled: false
 
+# Premier administrateur (ProdDataInitializer) : si la collection users est vide,
+# définir ADMIN_EMAIL et ADMIN_PASSWORD (et optionnellement ADMIN_NAME) en variables d'environnement.
+
 logging:
   level:
     com.bf4invest: INFO

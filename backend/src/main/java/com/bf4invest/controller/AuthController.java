@@ -1,5 +1,6 @@
 package com.bf4invest.controller;
 
+import com.bf4invest.dto.ChangePasswordRequest;
 import com.bf4invest.dto.LoginRequest;
 import com.bf4invest.dto.LoginResponse;
 import com.bf4invest.dto.RefreshTokenRequest;
@@ -8,6 +9,8 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 @Slf4j
@@ -41,6 +44,22 @@ public class AuthController {
             authService.revokeRefreshToken(request.getRefreshToken());
         }
         return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/change-password")
+    public ResponseEntity<Void> changePassword(@Valid @RequestBody ChangePasswordRequest request) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || auth.getPrincipal() == null) {
+            return ResponseEntity.status(401).build();
+        }
+        String email = auth.getPrincipal().toString();
+        try {
+            authService.changePassword(email, request.getCurrentPassword(), request.getNewPassword());
+            return ResponseEntity.ok().build();
+        } catch (RuntimeException e) {
+            log.debug("Change password failed for {}: {}", email, e.getMessage());
+            return ResponseEntity.status(401).build();
+        }
     }
 }
 

@@ -5,6 +5,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { AuthService } from './services/auth.service';
+import { UserService } from './services/user.service';
 import { StoreService, BC, Invoice, Product, Client, Supplier } from './services/store.service';
 import { NavigationRefreshService } from './services/navigation-refresh.service';
 import { SearchIndexService } from './services/search-index.service';
@@ -28,6 +29,7 @@ interface SearchResult {
 })
 export class AppComponent implements OnInit, OnDestroy {
   auth = inject(AuthService);
+  userService = inject(UserService);
   store = inject(StoreService);
   router = inject(Router);
   sanitizer = inject(DomSanitizer);
@@ -52,6 +54,13 @@ export class AppComponent implements OnInit, OnDestroy {
   isMobileSearchOpen = signal(false);
   selectedResultIndex = signal(-1);
   private searchDebounceTimer: any = null;
+
+  showChangePasswordModal = signal(false);
+  changePasswordCurrent = '';
+  changePasswordNew = '';
+  changePasswordConfirm = '';
+  changePasswordError = signal<string | null>(null);
+  changePasswordSubmitting = signal(false);
 
   constructor() {
     // Fermer le menu mobile et notifs lors d'un changement de page
@@ -92,6 +101,42 @@ export class AppComponent implements OnInit, OnDestroy {
 
   closeNotifications() {
     this.isNotificationsOpen.set(false);
+  }
+
+  openChangePasswordModal() {
+    this.showChangePasswordModal.set(true);
+    this.changePasswordCurrent = '';
+    this.changePasswordNew = '';
+    this.changePasswordConfirm = '';
+    this.changePasswordError.set(null);
+  }
+
+  closeChangePasswordModal() {
+    this.showChangePasswordModal.set(false);
+    this.changePasswordError.set(null);
+  }
+
+  submitChangePassword() {
+    this.changePasswordError.set(null);
+    if (!this.changePasswordNew || this.changePasswordNew.length < 6) {
+      this.changePasswordError.set('Le nouveau mot de passe doit contenir au moins 6 caractères.');
+      return;
+    }
+    if (this.changePasswordNew !== this.changePasswordConfirm) {
+      this.changePasswordError.set('La confirmation ne correspond pas au nouveau mot de passe.');
+      return;
+    }
+    this.changePasswordSubmitting.set(true);
+    this.userService.changePassword(this.changePasswordCurrent, this.changePasswordNew).subscribe({
+      next: () => {
+        this.changePasswordSubmitting.set(false);
+        this.closeChangePasswordModal();
+      },
+      error: () => {
+        this.changePasswordSubmitting.set(false);
+        this.changePasswordError.set('Mot de passe actuel incorrect ou erreur serveur.');
+      }
+    });
   }
 
   viewNotificationHistory() {

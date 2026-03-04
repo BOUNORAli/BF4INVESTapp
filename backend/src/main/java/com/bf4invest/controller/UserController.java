@@ -6,6 +6,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
@@ -23,7 +25,9 @@ public class UserController {
     
     @GetMapping
     public ResponseEntity<List<User>> getAllUsers() {
-        return ResponseEntity.ok(userRepository.findAll());
+        List<User> users = userRepository.findAll();
+        users.forEach(u -> u.setPassword(null));
+        return ResponseEntity.ok(users);
     }
     
     @GetMapping("/{id}")
@@ -73,8 +77,24 @@ public class UserController {
     
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteUser(@PathVariable String id) {
+        User target = userRepository.findById(id).orElse(null);
+        if (target == null) {
+            return ResponseEntity.notFound().build();
+        }
+        String currentEmail = getCurrentUserEmail();
+        if (currentEmail != null && currentEmail.equals(target.getEmail())) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+        if (target.getRole() == User.Role.ADMIN && userRepository.countByRole(User.Role.ADMIN) <= 1) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+        }
         userRepository.deleteById(id);
         return ResponseEntity.noContent().build();
+    }
+
+    private String getCurrentUserEmail() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return (auth != null && auth.getPrincipal() != null) ? auth.getPrincipal().toString() : null;
     }
 }
 

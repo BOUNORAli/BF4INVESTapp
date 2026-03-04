@@ -135,4 +135,21 @@ export class AuthService {
     const token = localStorage.getItem('bf4_token');
     return this.currentUser() !== null && token !== null;
   }
+
+  isAdmin(): boolean {
+    const role = this.currentUser()?.role;
+    return role === 'ADMIN' || role === 'admin';
+  }
+
+  hasRole(role: string): boolean {
+    const r = this.currentUser()?.role;
+    if (!r) return false;
+    return r === role || (role === 'ADMIN' && r === 'admin') || (role === 'admin' && r === 'ADMIN');
+  }
+
+  hasAnyRole(roles: string[]): boolean {
+    const r = this.currentUser()?.role;
+    if (!r) return false;
+    return roles.some(role => this.hasRole(role));
+  }
 }

@@ -97,9 +97,6 @@ export const Footer: React.FC = () => {
             <Mail className="mt-0.5 h-4 w-4 text-accent" />
             <p>bf4invest@gmail.com</p>
           </div>
-          <p className="text-xs text-slate-400">
-            RC: 54287 &nbsp;·&nbsp; ICE: 002889872000062 &nbsp;·&nbsp; IF: 2435421
-          </p>
         </div>
       </div>
       <div className="border-t border-slate-800">

@@ -1,4 +1,3 @@
-
 import { Routes, CanActivateFn, Router } from '@angular/router';
 import { inject } from '@angular/core';
 import { AuthService } from './services/auth.service';
@@ -6,12 +5,16 @@ import { AuthService } from './services/auth.service';
 const authGuard: CanActivateFn = () => {
   const auth = inject(AuthService);
   const router = inject(Router);
-  
-  if (auth.isAuthenticated()) {
-    return true;
-  }
-  
+  if (auth.isAuthenticated()) return true;
   return router.createUrlTree(['/login']);
+};
+
+const roleGuard = (allowedRoles: string[]): CanActivateFn => () => {
+  const auth = inject(AuthService);
+  const router = inject(Router);
+  if (!auth.isAuthenticated()) return router.createUrlTree(['/login']);
+  if (auth.hasAnyRole(allowedRoles)) return true;
+  return router.createUrlTree(['/dashboard']);
 };
 
 export const routes: Routes = [
@@ -66,10 +69,17 @@ export const routes: Routes = [
       },
       { 
         path: 'import', 
+        canActivate: [roleGuard(['ADMIN', 'COMMERCIAL'])],
         loadComponent: () => import('./pages/import/import.component').then(m => m.ImportComponent)
       },
       { 
+        path: 'users', 
+        canActivate: [roleGuard(['ADMIN'])],
+        loadComponent: () => import('./pages/users/users.component').then(m => m.UsersComponent)
+      },
+      { 
         path: 'settings', 
+        canActivate: [roleGuard(['ADMIN'])],
         loadComponent: () => import('./pages/settings/settings.component').then(m => m.SettingsComponent)
       },
       { 
@@ -82,6 +92,7 @@ export const routes: Routes = [
       },
       { 
         path: 'audit', 
+        canActivate: [roleGuard(['ADMIN'])],
         loadComponent: () => import('./pages/audit/audit.component').then(m => m.AuditComponent)
       },
       { 
