@@ -134,6 +134,7 @@ export const ProductsPage: React.FC = () => {
   const [activeCategory, setActiveCategory] = useState<ProductCategory>('Tous');
   const [apiProducts, setApiProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(false);
+  const [source, setSource] = useState<'api' | 'fallback'>('api');
 
   useEffect(() => {
     const fetchProducts = async () => {
@@ -159,9 +160,13 @@ export const ProductsPage: React.FC = () => {
           return { name, ref: p.refArticle, unit, price, category, imageUrl };
         });
         setApiProducts(mapped);
+        setSource('api');
       } catch (err) {
-        // En cas d'erreur, on reste sur le catalogue statique
-        console.warn('Impossible de charger les produits publics BF4 depuis le backend :', err);
+        console.warn(
+          'Impossible de charger les produits publics BF4 depuis le backend, utilisation du catalogue de démonstration :',
+          err,
+        );
+        setSource('fallback');
       } finally {
         setLoading(false);
       }
@@ -170,7 +175,7 @@ export const ProductsPage: React.FC = () => {
     fetchProducts();
   }, []);
 
-  const sourceProducts = apiProducts.length > 0 ? apiProducts : PRODUCTS;
+  const sourceProducts = source === 'api' ? apiProducts : PRODUCTS;
 
   const filteredProducts = useMemo(() => {
     return sourceProducts.filter((product) => {
@@ -196,7 +201,7 @@ export const ProductsPage: React.FC = () => {
           <div className="card-premium flex items-center gap-2 px-4 py-3 text-xs">
             <PackageCheck className="h-4 w-4 text-success" />
             <span className="font-semibold text-primary">
-              {apiProducts.length > 0 ? 'Données produits en temps réel' : 'Catalogue de secours activé'}
+              {source === 'api' ? 'Données produits en temps réel' : 'Catalogue de démonstration (API indisponible)'}
             </span>
           </div>
         </header>
@@ -252,7 +257,7 @@ export const ProductsPage: React.FC = () => {
               <span className="order-2 sm:order-none">
                 {filteredProducts.length} référence{filteredProducts.length > 1 ? 's' : ''} trouvée
                 {filteredProducts.length > 1 ? 's' : ''}
-                {apiProducts.length > 0 && ' (données temps réel)'}
+                {source === 'api' && ' (données temps réel)'}
               </span>
               {searchTerm && (
                 <div className="order-1 self-start sm:order-none">
