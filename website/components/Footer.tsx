@@ -1,18 +1,36 @@
-import React from 'react';
-import { Logo, Phone, Mail, MapPin, Linkedin, Facebook, ArrowUpRight } from './icons';
+import React, { useState, useEffect } from 'react';
+import { Phone, Mail, MapPin, Linkedin, Facebook, ArrowUpRight } from './icons';
 import { NAV_LINKS } from '../constants';
 import { Link } from 'react-router-dom';
 
 const APP_URL = (import.meta as any).env.VITE_APP_URL || 'https://bf4invest-app.vercel.app';
+const API_BASE_URL = (import.meta as any).env.VITE_API_BASE_URL || 'https://bf4investapp-production.up.railway.app/api';
+const LOGO_URL = `${API_BASE_URL}/settings/logo`;
 
 export const Footer: React.FC = () => {
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch(LOGO_URL)
+      .then((res) => (res.ok ? res.blob() : Promise.reject()))
+      .then((blob) => setLogoUrl(URL.createObjectURL(blob)))
+      .catch(() => setLogoUrl(null));
+  }, []);
 
   return (
     <footer className="mt-12 border-t border-[color:var(--color-border-subtle)] bg-primary text-slate-200 md:mt-16">
       <div className="section-shell grid gap-8 py-10 md:grid-cols-[1.7fr,1.1fr,1.1fr,1fr] md:py-12">
         <div className="space-y-4 md:pr-6">
           <div className="flex items-center gap-3">
-            <Logo className="h-9 w-28" light />
+            {logoUrl ? (
+              <img
+                src={logoUrl}
+                alt="BF4 Invest"
+                className="h-9 w-auto max-w-[140px] object-contain"
+              />
+            ) : (
+              <span className="text-lg font-bold tracking-tight text-white">BF4 Invest</span>
+            )}
             <span className="text-xs uppercase tracking-[0.2em] text-slate-300">Supply Partner BTP</span>
           </div>
           <p className="text-sm text-slate-300">

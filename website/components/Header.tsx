@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { NAV_LINKS } from '../constants';
-import { Menu, X, Phone, Clock3, Logo, FileText, Lock, ArrowUpRight } from './icons';
+import { Menu, X, Phone, Clock3, FileText, Lock, ArrowUpRight } from './icons';
 import { motion, AnimatePresence } from 'motion/react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
@@ -76,7 +76,6 @@ export const Header: React.FC = () => {
                   (ev.currentTarget as HTMLImageElement).style.display = 'none';
                 }}
               />
-              <Logo className="h-8 w-24" aria-hidden="true" />
             </div>
             <div className="hidden text-left lg:block">
               <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-accent">BF4 Invest</p>
