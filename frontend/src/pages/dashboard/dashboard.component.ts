@@ -390,7 +390,16 @@ export class DashboardComponent implements OnInit {
   navigationRefresh = inject(NavigationRefreshService);
   router = inject(Router);
 
-  recentBCs = computed(() => this.bcStore.bcs().slice(0, 5));
+  recentBCs = computed(() => {
+    const bcs = this.bcStore.bcs();
+    return [...bcs]
+      .sort((a, b) => {
+        const dateA = a.date ? new Date(a.date).getTime() : 0;
+        const dateB = b.date ? new Date(b.date).getTime() : 0;
+        return dateB - dateA;
+      })
+      .slice(0, 5);
+  });
   
   // KPIs from backend
   readonly kpis = computed(() => this.dashboardStore.dashboardKPIs());
