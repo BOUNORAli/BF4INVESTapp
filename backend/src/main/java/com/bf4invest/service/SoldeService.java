@@ -1,5 +1,6 @@
 package com.bf4invest.service;
 
+import com.bf4invest.model.Charge;
 import com.bf4invest.model.Client;
 import com.bf4invest.model.FactureAchat;
 import com.bf4invest.model.FactureVente;
@@ -7,6 +8,7 @@ import com.bf4invest.model.HistoriqueSolde;
 import com.bf4invest.model.Paiement;
 import com.bf4invest.model.SoldeGlobal;
 import com.bf4invest.model.Supplier;
+import com.bf4invest.repository.ChargeRepository;
 import com.bf4invest.repository.ClientRepository;
 import com.bf4invest.repository.FactureAchatRepository;
 import com.bf4invest.repository.FactureVenteRepository;
@@ -35,6 +37,7 @@ public class SoldeService {
     private final SupplierRepository supplierRepository;
     private final FactureVenteRepository factureVenteRepository;
     private final FactureAchatRepository factureAchatRepository;
+    private final ChargeRepository chargeRepository;
     
     /**
      * Initialise le solde de départ
@@ -535,10 +538,11 @@ public class SoldeService {
     }
 
     /**
-     * Calcule le solde actuel projeté si tous les clients ont payé et tous les fournisseurs ont été payés
-     * Formule : Solde Banque + Créances Clients - Dettes Fournisseurs
-     * 
-     * @return Le solde projeté
+     * Calcule le solde actuel projeté si tous les clients ont payé, tous les fournisseurs ont été payés
+     * et toutes les charges prévues (non payées) sont réglées.
+     * Formule : Solde Banque + Créances Clients - Dettes Fournisseurs - Charges prévues
+     *
+     * @return Le solde projeté (solde global)
      */
     public Double calculerSoldeActuelProjete() {
         // Récupérer le solde banque actuel
@@ -575,12 +579,23 @@ public class SoldeService {
                     return Math.max(0.0, totalTTC - totalPaiements);
                 })
                 .sum());
-        
-        // Solde projeté = Banque + Créances - Dettes
-        double soldeProjete = NumberUtils.roundTo2Decimals(soldeBanque + creancesClients - dettesFournisseurs);
-        
-        log.info("Solde projeté - Banque: {}, Créances clients: {}, Dettes fournisseurs: {}, Projeté: {}", 
-                soldeBanque, creancesClients, dettesFournisseurs, soldeProjete);
+
+        // Charges prévues (non encore payées)
+        double chargesPrevues = NumberUtils.roundTo2Decimals(
+                chargeRepository.findAll().stream()
+                        .filter(charge -> charge != null
+                                && charge.getMontant() != null
+                                && charge.getMontant() > 0
+                                && "PREVUE".equalsIgnoreCase(charge.getStatut()))
+                        .mapToDouble(Charge::getMontant)
+                        .sum()
+        );
+
+        // Solde projeté (global) = Banque + Créances - Dettes - Charges prévues
+        double soldeProjete = NumberUtils.roundTo2Decimals(soldeBanque + creancesClients - dettesFournisseurs - chargesPrevues);
+
+        log.info("Solde projeté - Banque: {}, Créances clients: {}, Dettes fournisseurs: {}, Charges prévues: {}, Projeté: {}",
+                soldeBanque, creancesClients, dettesFournisseurs, chargesPrevues, soldeProjete);
         
         return soldeProjete;
     }
