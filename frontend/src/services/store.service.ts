@@ -296,6 +296,7 @@ export interface SoldeGlobal {
   id?: string;
   soldeInitial: number;
   soldeActuel: number;
+  soldeActuelProjete?: number;
   dateDebut: string;
 }
 

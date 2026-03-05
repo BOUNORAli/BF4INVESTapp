@@ -399,17 +399,8 @@ export class DashboardComponent implements OnInit {
   
   // Solde global
   readonly soldeGlobal = computed(() => this.dashboardStore.soldeGlobal());
-  // Utiliser le solde projeté si le solde actuel est 0 ou null
-  readonly soldeActuel = computed(() => {
-    const solde = this.soldeGlobal();
-    if (!solde) return 0;
-    // Si soldeActuel est 0 ou null et qu'on a un solde projeté, utiliser celui-ci
-    if ((solde.soldeActuel === 0 || solde.soldeActuel === null) && solde.soldeActuelProjete != null) {
-      return solde.soldeActuelProjete;
-    }
-    return solde.soldeActuel || 0;
-  });
-  readonly soldeActuelProjete = computed(() => this.soldeGlobal()?.soldeActuelProjete ?? this.soldeActuel());
+  readonly soldeActuel = computed(() => this.soldeGlobal()?.soldeActuel ?? 0);
+  readonly soldeActuelProjete = computed(() => this.soldeGlobal()?.soldeActuelProjete ?? 0);
   readonly isLoadingSolde = signal(false);
   
   // État de rafraîchissement global

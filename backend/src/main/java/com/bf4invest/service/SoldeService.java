@@ -13,6 +13,7 @@ import com.bf4invest.repository.ClientRepository;
 import com.bf4invest.repository.FactureAchatRepository;
 import com.bf4invest.repository.FactureVenteRepository;
 import com.bf4invest.repository.HistoriqueSoldeRepository;
+import com.bf4invest.repository.PaiementRepository;
 import com.bf4invest.repository.SoldeGlobalRepository;
 import com.bf4invest.repository.SupplierRepository;
 import com.bf4invest.util.NumberUtils;
@@ -33,6 +34,7 @@ public class SoldeService {
     
     private final SoldeGlobalRepository soldeGlobalRepository;
     private final HistoriqueSoldeRepository historiqueSoldeRepository;
+    private final PaiementRepository paiementRepository;
     private final ClientRepository clientRepository;
     private final SupplierRepository supplierRepository;
     private final FactureVenteRepository factureVenteRepository;
@@ -73,13 +75,59 @@ public class SoldeService {
     }
     
     /**
-     * Récupère le solde global actuel
+     * Recalcule dynamiquement le solde bancaire actuel à partir des données sources.
+     */
+    public Double recalculerSoldeActuel() {
+        Double soldeInitial = soldeGlobalRepository.findAll().stream()
+                .findFirst()
+                .map(SoldeGlobal::getSoldeInitial)
+                .orElse(0.0);
+
+        double paiementsClients = paiementRepository.findAll().stream()
+                .filter(p -> p.getFactureVenteId() != null)
+                .filter(p -> p.getMontant() != null && p.getMontant() > 0)
+                .mapToDouble(Paiement::getMontant)
+                .sum();
+
+        double paiementsFournisseurs = paiementRepository.findAll().stream()
+                .filter(p -> p.getFactureAchatId() != null)
+                .filter(p -> p.getMontant() != null && p.getMontant() > 0)
+                .mapToDouble(Paiement::getMontant)
+                .sum();
+
+        double chargesPayees = chargeRepository.findAll().stream()
+                .filter(c -> "PAYEE".equalsIgnoreCase(c.getStatut()))
+                .filter(c -> c.getMontant() != null && c.getMontant() > 0)
+                .mapToDouble(Charge::getMontant)
+                .sum();
+
+        double virementsDirects = historiqueSoldeRepository.findAll().stream()
+                .filter(h -> "ORDRE_VIREMENT".equals(h.getType()))
+                .filter(h -> h.getMontant() != null && h.getMontant() > 0)
+                .mapToDouble(HistoriqueSolde::getMontant)
+                .sum();
+
+        double apportsExternes = historiqueSoldeRepository.findAll().stream()
+                .filter(h -> "APPORT_EXTERNE".equals(h.getType()))
+                .filter(h -> h.getMontant() != null && h.getMontant() > 0)
+                .mapToDouble(HistoriqueSolde::getMontant)
+                .sum();
+
+        return NumberUtils.roundTo2Decimals(
+                soldeInitial
+                        + paiementsClients
+                        - paiementsFournisseurs
+                        - chargesPayees
+                        - virementsDirects
+                        + apportsExternes
+        );
+    }
+
+    /**
+     * Récupère le solde global actuel (wrapper conservé pour compatibilité).
      */
     public Double getSoldeGlobalActuel() {
-        return soldeGlobalRepository.findAll().stream()
-                .findFirst()
-                .map(SoldeGlobal::getSoldeActuel)
-                .orElse(0.0);
+        return recalculerSoldeActuel();
     }
     
     /**
@@ -308,70 +356,24 @@ public class SoldeService {
     
     /**
      * Récupère le solde global complet (avec solde initial et solde projeté)
-     * Si aucun solde n'existe mais qu'il y a un historique, recalcule depuis l'historique
+     * en utilisant un recalcul dynamique du solde actuel.
      */
     public Optional<SoldeGlobal> getSoldeGlobal() {
+        Double soldeActuelRecalcule = recalculerSoldeActuel();
+
         Optional<SoldeGlobal> soldeOpt = soldeGlobalRepository.findAll().stream().findFirst();
-        
-        // Si aucun solde n'existe mais qu'il y a un historique, recalculer depuis l'historique
-        if (soldeOpt.isEmpty()) {
-            List<HistoriqueSolde> historique = historiqueSoldeRepository.findAllByOrderByDateDesc();
-            if (!historique.isEmpty()) {
-                // Prendre le solde global après de la dernière transaction
-                HistoriqueSolde dernier = historique.get(0);
-                if (dernier.getSoldeGlobalApres() != null) {
-                    // Créer un solde global à partir de l'historique
-                    SoldeGlobal soldeGlobal = SoldeGlobal.builder()
-                            .soldeInitial(dernier.getSoldeGlobalApres())
-                            .soldeActuel(dernier.getSoldeGlobalApres())
-                            .dateDebut(dernier.getDate() != null ? dernier.getDate().toLocalDate() : LocalDate.now())
-                            .createdAt(LocalDateTime.now())
-                            .updatedAt(LocalDateTime.now())
-                            .build();
-                    soldeGlobal = soldeGlobalRepository.save(soldeGlobal);
-                    // Calculer et ajouter le solde projeté (non sauvegardé, calcul dynamique)
-                    soldeGlobal.setSoldeActuelProjete(calculerSoldeActuelProjete());
-                    return Optional.of(soldeGlobal);
-                }
-            }
-        } else {
-            // Vérifier si le solde actuel est cohérent avec l'historique
-            SoldeGlobal solde = soldeOpt.get();
-            List<HistoriqueSolde> historique = historiqueSoldeRepository.findAllByOrderByDateDesc();
-            if (!historique.isEmpty()) {
-                HistoriqueSolde dernier = historique.get(0);
-                if (dernier.getSoldeGlobalApres() != null && 
-                    !dernier.getSoldeGlobalApres().equals(solde.getSoldeActuel())) {
-                    // Le solde n'est pas à jour, le mettre à jour
-                    solde.setSoldeActuel(dernier.getSoldeGlobalApres());
-                    solde.setUpdatedAt(LocalDateTime.now());
-                    solde = soldeGlobalRepository.save(solde);
-                }
-            }
-            // Toujours recalculer le solde projeté (calcul dynamique, ne pas sauvegarder)
-            solde.setSoldeActuelProjete(calculerSoldeActuelProjete());
-            return Optional.of(solde);
-        }
-        
-        // Si aucun solde n'existe, créer un avec solde projeté calculé (ne pas sauvegarder car c'est juste pour retourner)
-        if (soldeOpt.isEmpty()) {
-            Double soldeProjete = calculerSoldeActuelProjete();
-            SoldeGlobal soldeGlobal = SoldeGlobal.builder()
-                    .soldeInitial(0.0)
-                    .soldeActuel(0.0)
-                    .soldeActuelProjete(soldeProjete)
-                    .dateDebut(LocalDate.now())
-                    .createdAt(LocalDateTime.now())
-                    .updatedAt(LocalDateTime.now())
-                    .build();
-            return Optional.of(soldeGlobal);
-        }
-        
-        // Mettre à jour le solde projeté (calcul dynamique, ne pas sauvegarder car c'est recalculé à chaque fois)
-        SoldeGlobal solde = soldeOpt.get();
-        solde.setSoldeActuelProjete(calculerSoldeActuelProjete());
-        // Ne pas sauvegarder le solde projeté car c'est un calcul dynamique qui doit être recalculé à chaque appel
-        return Optional.of(solde);
+
+        SoldeGlobal soldeGlobal = soldeOpt.orElseGet(() -> SoldeGlobal.builder()
+                .soldeInitial(0.0)
+                .dateDebut(LocalDate.now())
+                .createdAt(LocalDateTime.now())
+                .updatedAt(LocalDateTime.now())
+                .build());
+
+        soldeGlobal.setSoldeActuel(soldeActuelRecalcule);
+        soldeGlobal.setSoldeActuelProjete(calculerSoldeActuelProjete());
+
+        return Optional.of(soldeGlobal);
     }
     
     /**
@@ -545,12 +547,13 @@ public class SoldeService {
      * @return Le solde projeté (solde global)
      */
     public Double calculerSoldeActuelProjete() {
-        // Récupérer le solde banque actuel
-        Double soldeBanque = getSoldeGlobalActuel();
+        // Recalculer le solde banque actuel
+        Double soldeBanque = recalculerSoldeActuel();
         
         // Ce que les clients me doivent (factures vente non payées)
         double creancesClients = NumberUtils.roundTo2Decimals(factureVenteRepository.findAll().stream()
                 .filter(fv -> !"regle".equalsIgnoreCase(fv.getEtatPaiement())) // Inclut null et insensible à la casse
+                .filter(fv -> fv.getEstAvoir() == null || !fv.getEstAvoir())
                 .mapToDouble(fv -> {
                     // Utiliser montantRestant si disponible, sinon calculer
                     if (fv.getMontantRestant() != null && fv.getMontantRestant() > 0) {
@@ -567,6 +570,7 @@ public class SoldeService {
         // Ce que je dois aux fournisseurs (factures achat non payées)
         double dettesFournisseurs = NumberUtils.roundTo2Decimals(factureAchatRepository.findAll().stream()
                 .filter(fa -> !"regle".equalsIgnoreCase(fa.getEtatPaiement())) // Inclut null et insensible à la casse
+                .filter(fa -> fa.getEstAvoir() == null || !fa.getEstAvoir())
                 .mapToDouble(fa -> {
                     // Utiliser montantRestant si disponible, sinon calculer
                     if (fa.getMontantRestant() != null && fa.getMontantRestant() > 0) {
