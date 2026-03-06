@@ -3,7 +3,6 @@ import { inject } from '@angular/core';
 import { catchError, throwError, switchMap, BehaviorSubject, filter, take } from 'rxjs';
 import { ToastService } from '../services/toast.service';
 import { AuthService } from '../services/auth.service';
-import { Router } from '@angular/router';
 
 let isRefreshing = false;
 const refreshTokenSubject = new BehaviorSubject<string | null>(null);
@@ -11,7 +10,6 @@ const refreshTokenSubject = new BehaviorSubject<string | null>(null);
 export const errorInterceptor: HttpInterceptorFn = (req, next) => {
   const toastService = inject(ToastService);
   const authService = inject(AuthService);
-  const router = inject(Router);
 
   return next(req).pipe(
     catchError((error: HttpErrorResponse) => {
@@ -61,9 +59,6 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
           // Logout handled elsewhere if it was a protected route, otherwise login failed
         } else if (error.status === 403) {
           errorMessage = 'Accès refusé. Vous n\'avez pas les droits nécessaires.';
-          if (authService.currentUser()) {
-            authService.logout();
-          }
         } else if (error.status === 404) {
           errorMessage = 'Ressource non trouvée.';
         } else if (error.status === 500) {

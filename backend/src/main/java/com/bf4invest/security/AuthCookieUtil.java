@@ -19,6 +19,10 @@ public class AuthCookieUtil {
     @Value("${cookie.secure:false}")
     private boolean secure;
 
+    private String sameSitePolicy() {
+        return secure ? "None" : "Lax";
+    }
+
     /**
      * Add httpOnly auth cookies to the response (login / refresh).
      */
@@ -28,7 +32,7 @@ public class AuthCookieUtil {
                 .secure(secure)
                 .path(COOKIE_PATH)
                 .maxAge(ACCESS_MAX_AGE)
-                .sameSite("Strict")
+                .sameSite(sameSitePolicy())
                 .build();
         response.addHeader("Set-Cookie", accessCookie.toString());
 
@@ -37,7 +41,7 @@ public class AuthCookieUtil {
                 .secure(secure)
                 .path(COOKIE_PATH)
                 .maxAge(REFRESH_MAX_AGE)
-                .sameSite("Strict")
+                .sameSite(sameSitePolicy())
                 .build();
         response.addHeader("Set-Cookie", refreshCookie.toString());
     }
@@ -51,7 +55,7 @@ public class AuthCookieUtil {
                 .secure(secure)
                 .path(COOKIE_PATH)
                 .maxAge(0)
-                .sameSite("Strict")
+                .sameSite(sameSitePolicy())
                 .build();
         response.addHeader("Set-Cookie", clearAccess.toString());
 
@@ -60,7 +64,7 @@ public class AuthCookieUtil {
                 .secure(secure)
                 .path(COOKIE_PATH)
                 .maxAge(0)
-                .sameSite("Strict")
+                .sameSite(sameSitePolicy())
                 .build();
         response.addHeader("Set-Cookie", clearRefresh.toString());
     }
