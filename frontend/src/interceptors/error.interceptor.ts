@@ -27,16 +27,10 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
           refreshTokenSubject.next(null);
 
           return authService.refreshToken().pipe(
-            switchMap((response: any) => {
+            switchMap(() => {
               isRefreshing = false;
-              const newToken = response.token;
-              refreshTokenSubject.next(newToken);
-              
-              // Cloner la requête avec le nouveau token
-              const authReq = req.clone({
-                setHeaders: { Authorization: `Bearer ${newToken}` }
-              });
-              return next(authReq);
+              refreshTokenSubject.next('ok');
+              return next(req);
             }),
             catchError((refreshError) => {
               isRefreshing = false;
@@ -46,16 +40,10 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
             })
           );
         } else {
-          // Si un refresh est déjà en cours, attendre qu'il se termine
           return refreshTokenSubject.pipe(
-            filter(token => token !== null),
+            filter(v => v !== null),
             take(1),
-            switchMap(token => {
-              const authReq = req.clone({
-                setHeaders: { Authorization: `Bearer ${token}` }
-              });
-              return next(authReq);
-            })
+            switchMap(() => next(req))
           );
         }
       }
@@ -73,14 +61,9 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
           // Logout handled elsewhere if it was a protected route, otherwise login failed
         } else if (error.status === 403) {
           errorMessage = 'Accès refusé. Vous n\'avez pas les droits nécessaires.';
-          // Ne pas déconnecter automatiquement si l'utilisateur n'a pas de token
-          // (c'est normal au démarrage si l'utilisateur n'est pas connecté)
-          const token = localStorage.getItem('bf4_token');
-          if (token) {
-            // L'utilisateur a un token mais accès refusé = droits insuffisants, déconnecter
+          if (authService.currentUser()) {
             authService.logout();
           }
-          // Sinon, pas de token = utilisateur non connecté, c'est normal, ne pas déconnecter
         } else if (error.status === 404) {
           errorMessage = 'Ressource non trouvée.';
         } else if (error.status === 500) {

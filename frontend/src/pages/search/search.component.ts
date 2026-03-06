@@ -260,10 +260,13 @@ export class SearchComponent implements OnInit {
   }
 
   highlightText(text: string, query: string): SafeHtml {
-    if (!query) return this.sanitizer.bypassSecurityTrustHtml(text);
+    if (!text) return this.sanitizer.bypassSecurityTrustHtml('');
+    const sanitized = text.replace(/[<>&"']/g, c =>
+      ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' })[c]!);
+    if (!query) return this.sanitizer.bypassSecurityTrustHtml(sanitized);
     const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const regex = new RegExp(`(${escapedQuery})`, 'gi');
-    const highlighted = text.replace(regex, '<mark class="bg-yellow-200 text-yellow-900 px-0.5 rounded">$1</mark>');
+    const highlighted = sanitized.replace(regex, '<mark class="bg-yellow-200 text-yellow-900 px-0.5 rounded">$1</mark>');
     return this.sanitizer.bypassSecurityTrustHtml(highlighted);
   }
 

@@ -13,33 +13,48 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.UUID;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class AuthService {
-    
+
+    private static final int MAX_FAILED_ATTEMPTS = 5;
+    private static final int LOCKOUT_MINUTES = 15;
+
+    /** email -> (failed count, lockout until epoch millis) */
+    private final Map<String, LockoutEntry> failedAttempts = new ConcurrentHashMap<>();
+
     private final UserRepository userRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final AuthenticationManager authenticationManager;
     private final JwtUtil jwtUtil;
     private final PasswordEncoder passwordEncoder;
-    
+
     @Value("${jwt.refresh-expiration:604800000}")
     private Long refreshExpirationMs;
-    
+
     public LoginResponse login(LoginRequest request) {
-        Authentication authentication = authenticationManager.authenticate(
-            new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword())
-        );
-        
-        User user = userRepository.findByEmail(request.getEmail())
+        String email = request.getEmail();
+        checkLockout(email);
+
+        try {
+            authenticationManager.authenticate(
+                new UsernamePasswordAuthenticationToken(email, request.getPassword())
+            );
+        } catch (org.springframework.security.core.AuthenticationException e) {
+            recordFailedLogin(email);
+            throw e;
+        }
+
+        clearFailedAttempts(email);
+        User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
         
         // Générer access token (court)
@@ -143,6 +158,34 @@ public class AuthService {
         userRepository.save(user);
         log.info("Mot de passe modifié pour utilisateur: {}", userEmail);
     }
+
+    private void checkLockout(String email) {
+        LockoutEntry entry = failedAttempts.get(email);
+        if (entry != null && entry.lockoutUntilEpochMs > System.currentTimeMillis()) {
+            long minutesLeft = (entry.lockoutUntilEpochMs - System.currentTimeMillis()) / 60_000;
+            throw new RuntimeException("Compte temporairement verrouillé après trop de tentatives. Réessayez dans " + minutesLeft + " minute(s).");
+        }
+        if (entry != null && entry.lockoutUntilEpochMs <= System.currentTimeMillis()) {
+            failedAttempts.remove(email);
+        }
+    }
+
+    private void recordFailedLogin(String email) {
+        failedAttempts.compute(email, (k, v) -> {
+            int next = (v == null) ? 1 : v.failedCount + 1;
+            long lockoutUntil = next >= MAX_FAILED_ATTEMPTS
+                ? System.currentTimeMillis() + LOCKOUT_MINUTES * 60_000L
+                : 0;
+            return new LockoutEntry(next, lockoutUntil);
+        });
+        log.warn("Échec de connexion pour {} (tentatives enregistrées)", email);
+    }
+
+    private void clearFailedAttempts(String email) {
+        failedAttempts.remove(email);
+    }
+
+    private record LockoutEntry(int failedCount, long lockoutUntilEpochMs) {}
 }
 
 

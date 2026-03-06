@@ -20,7 +20,7 @@ interface LoginRequest {
 }
 
 interface LoginResponse {
-  token: string;
+  token?: string;
   refreshToken?: string;
   user: {
     id: string;
@@ -45,11 +45,9 @@ export class AuthService {
   constructor() {
     this.httpClient = new HttpClient(this.httpBackend);
 
-    // Récupérer du localStorage pour persister la session
+    // Restore user from localStorage (auth is cookie-based; token not readable by JS)
     const savedUser = localStorage.getItem('bf4_user');
-    const token = localStorage.getItem('bf4_token');
-    
-    if (savedUser && token) {
+    if (savedUser) {
       try {
         this.currentUser.set(JSON.parse(savedUser));
       } catch (e) {
@@ -66,13 +64,7 @@ export class AuthService {
         password
       } as LoginRequest).toPromise();
 
-      if (response?.token && response?.user) {
-        // Stocker le token et les infos utilisateur
-        localStorage.setItem('bf4_token', response.token);
-        if (response.refreshToken) {
-          localStorage.setItem('bf4_refresh_token', response.refreshToken);
-        }
-
+      if (response?.user) {
         const user: User = {
           id: response.user.id,
           name: response.user.name,
@@ -80,14 +72,11 @@ export class AuthService {
           role: response.user.role as any,
           avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(response.user.name)}&background=2563EB&color=fff`
         };
-
         localStorage.setItem('bf4_user', JSON.stringify(user));
         this.currentUser.set(user);
-        
         this.router.navigate(['/dashboard']);
         return true;
       }
-      
       return false;
     } catch (error: any) {
       console.error('Login error:', error);
@@ -95,45 +84,46 @@ export class AuthService {
     }
   }
 
-  refreshToken(): Observable<any> {
-    const refreshToken = localStorage.getItem('bf4_refresh_token');
-    if (!refreshToken) {
-      return throwError(() => new Error('No refresh token'));
-    }
-
-    // Utiliser la fonction dynamique pour récupérer l'URL
+  refreshToken(): Observable<LoginResponse> {
     const baseUrl = getApiBaseUrlDynamic();
-    const apiUrl = baseUrl.includes('votre-backend') 
-      ? 'https://bf4investapp-production.up.railway.app/api' 
+    const apiUrl = baseUrl.includes('votre-backend')
+      ? 'https://bf4investapp-production.up.railway.app/api'
       : baseUrl;
 
-    return this.httpClient.post<any>(`${apiUrl}/auth/refresh`, { refreshToken }).pipe(
-      tap((response: any) => {
-        if (response && response.token) {
-          localStorage.setItem('bf4_token', response.token);
-          if (response.refreshToken) {
-            localStorage.setItem('bf4_refresh_token', response.refreshToken);
-          }
+    return this.httpClient.post<LoginResponse>(`${apiUrl}/auth/refresh`, {}, { withCredentials: true }).pipe(
+      tap((response) => {
+        if (response?.user) {
+          const user: User = {
+            id: response.user.id,
+            name: response.user.name,
+            email: response.user.email,
+            role: response.user.role as any,
+            avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(response.user.name)}&background=2563EB&color=fff`
+          };
+          localStorage.setItem('bf4_user', JSON.stringify(user));
+          this.currentUser.set(user);
         }
       })
     );
   }
 
-  logout() {
+  async logout(): Promise<void> {
+    try {
+      await this.api.post('/auth/logout', {}).toPromise();
+    } catch {
+      // Ignore errors (e.g. already logged out, network)
+    }
     this.clearAuth();
     this.router.navigate(['/login']);
   }
 
   private clearAuth() {
     this.currentUser.set(null);
-    localStorage.removeItem('bf4_token');
-    localStorage.removeItem('bf4_refresh_token');
     localStorage.removeItem('bf4_user');
   }
 
   isAuthenticated(): boolean {
-    const token = localStorage.getItem('bf4_token');
-    return this.currentUser() !== null && token !== null;
+    return this.currentUser() !== null;
   }
 
   isAdmin(): boolean {

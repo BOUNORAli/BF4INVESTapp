@@ -8,13 +8,14 @@ import { AppComponent } from './src/app.component';
 import { routes } from './src/app.routes';
 import { errorInterceptor } from './src/interceptors/error.interceptor';
 import { cacheInterceptor } from './src/interceptors/cache.interceptor';
+import { credentialsInterceptor } from './src/interceptors/credentials.interceptor';
 
 bootstrapApplication(AppComponent, {
   providers: [
     provideZonelessChangeDetection(),
     provideRouter(routes, withHashLocation()),
     provideHttpClient(
-      withInterceptors([cacheInterceptor, errorInterceptor]),
+      withInterceptors([credentialsInterceptor, cacheInterceptor, errorInterceptor]),
       withInterceptorsFromDi()
     )
   ]

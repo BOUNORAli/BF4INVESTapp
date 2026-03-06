@@ -41,6 +41,10 @@ jwt:
   expiration: ${JWT_EXPIRATION:3600000} # 1 hour in milliseconds (access token)
   refresh-expiration: ${JWT_REFRESH_EXPIRATION:604800000} # 7 days in milliseconds (refresh token)
 
+# Auth cookies (httpOnly) - set COOKIE_SECURE=true in production (HTTPS)
+cookie:
+  secure: ${COOKIE_SECURE:false}
+
 # Application Configuration
 app:
   name: BF4 Invest

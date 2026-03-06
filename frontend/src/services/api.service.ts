@@ -22,16 +22,9 @@ export class ApiService {
   }
 
   private getHeaders(): HttpHeaders {
-    const token = localStorage.getItem('bf4_token');
-    let headers = new HttpHeaders({
+    return new HttpHeaders({
       'Content-Type': 'application/json'
     });
-    
-    if (token) {
-      headers = headers.set('Authorization', `Bearer ${token}`);
-    }
-    
-    return headers;
   }
 
   get<T>(endpoint: string, params?: Record<string, any>): Observable<T> {
@@ -57,16 +50,8 @@ export class ApiService {
   }
 
   postBlob(endpoint: string, body: any): Observable<Blob> {
-    const token = localStorage.getItem('bf4_token');
-    let headers = new HttpHeaders({
-      'Content-Type': 'application/json'
-    });
-    if (token) {
-      headers = headers.set('Authorization', `Bearer ${token}`);
-    }
-    
     return this.http.post(`${this.getApiUrl()}${endpoint}`, body, {
-      headers: headers,
+      headers: this.getHeaders(),
       responseType: 'blob'
     });
   }
@@ -86,16 +71,9 @@ export class ApiService {
   uploadFile(endpoint: string, file: File): Observable<any> {
     const formData = new FormData();
     formData.append('file', file);
-    
-    const token = localStorage.getItem('bf4_token');
-    let headers = new HttpHeaders();
-    if (token) {
-      headers = headers.set('Authorization', `Bearer ${token}`);
-    }
     // Don't set Content-Type - browser will set it automatically with boundary for FormData
 
     return this.http.post(`${this.getApiUrl()}${endpoint}`, formData, {
-      headers: headers,
       responseType: 'blob', // Accepter blob pour détecter les fichiers Excel
       observe: 'response'
     }).pipe(
@@ -138,7 +116,6 @@ export class ApiService {
   uploadFileWithParams<T = any>(endpoint: string, file: File, params?: Record<string, any>): Observable<T> {
     const formData = new FormData();
     formData.append('file', file);
-    
     if (params) {
       Object.keys(params).forEach(key => {
         if (params[key] !== null && params[key] !== undefined) {
@@ -146,26 +123,10 @@ export class ApiService {
         }
       });
     }
-    
-    const token = localStorage.getItem('bf4_token');
-    let headers = new HttpHeaders();
-    if (token) {
-      headers = headers.set('Authorization', `Bearer ${token}`);
-    }
-    // Don't set Content-Type - browser will set it automatically with boundary for FormData
-
-    return this.http.post<T>(`${this.getApiUrl()}${endpoint}`, formData, {
-      headers: headers
-    });
+    return this.http.post<T>(`${this.getApiUrl()}${endpoint}`, formData, {});
   }
 
   downloadFile(endpoint: string, params?: any): Observable<Blob> {
-    const token = localStorage.getItem('bf4_token');
-    let headers = new HttpHeaders();
-    if (token) {
-      headers = headers.set('Authorization', `Bearer ${token}`);
-    }
-
     let url = `${this.getApiUrl()}${endpoint}`;
     if (params) {
       const queryString = new URLSearchParams(params).toString();
@@ -173,11 +134,7 @@ export class ApiService {
         url += '?' + queryString;
       }
     }
-
-    return this.http.get(url, {
-      headers: headers,
-      responseType: 'blob'
-    });
+    return this.http.get(url, { responseType: 'blob' });
   }
 
   /**
@@ -211,17 +168,10 @@ export class ApiService {
       });
     }
     
-    const token = localStorage.getItem('bf4_token');
-    let headers = new HttpHeaders();
-    if (token) {
-      headers = headers.set('Authorization', `Bearer ${token}`);
-    }
-
     return this.http.post<{ fileId: string; filename: string; contentType: string; size: number; message: string }>(
       `${this.getApiUrl()}/files/upload`,
       formData,
       {
-        headers: headers,
         reportProgress: true,
         observe: 'events'
       }
@@ -292,17 +242,10 @@ export class ApiService {
       formData.append('factureId', factureId);
     }
 
-    const token = localStorage.getItem('bf4_token');
-    let headers = new HttpHeaders();
-    if (token) {
-      headers = headers.set('Authorization', `Bearer ${token}`);
-    }
-
     const url = `${this.getApiUrl()}/factures-achats/files/upload`;
     console.log('🌐 [API] Envoi POST vers:', url);
 
     return this.http.post(url, formData, {
-      headers,
       observe: 'events',
       reportProgress: true
     }).pipe(
@@ -323,24 +266,12 @@ export class ApiService {
   }
 
   downloadFactureAchatFile(fileId: string): Observable<Blob> {
-    const token = localStorage.getItem('bf4_token');
-    let headers = new HttpHeaders();
-    if (token) {
-      headers = headers.set('Authorization', `Bearer ${token}`);
-    }
     return this.http.get(`${this.getApiUrl()}/factures-achats/files/${fileId}`, {
-      headers,
       responseType: 'blob'
     });
   }
 
   deleteFactureAchatFile(fileId: string, factureId?: string, contentType?: string): Observable<any> {
-    const token = localStorage.getItem('bf4_token');
-    let headers = new HttpHeaders();
-    if (token) {
-      headers = headers.set('Authorization', `Bearer ${token}`);
-    }
-    // HttpParams encode automatiquement, donc pas besoin d'encoder manuellement
     let params = new HttpParams().set('fileId', fileId);
     if (factureId) {
       params = params.set('factureId', factureId);
@@ -348,44 +279,25 @@ export class ApiService {
     if (contentType) {
       params = params.set('contentType', contentType);
     }
-    return this.http.delete(`${this.getApiUrl()}/factures-achats/files`, { headers, params });
+    return this.http.delete(`${this.getApiUrl()}/factures-achats/files`, { params });
   }
 
   getFactureAchatFileUrl(fileId: string, contentType?: string): Observable<{ url: string }> {
-    const token = localStorage.getItem('bf4_token');
-    let headers = new HttpHeaders();
-    if (token) {
-      headers = headers.set('Authorization', `Bearer ${token}`);
-    }
-    // HttpParams encode automatiquement, donc pas besoin d'encoder manuellement
-    // Si on encode manuellement, HttpParams va encoder encore une fois = double encodage
     let params = new HttpParams().set('fileId', fileId);
     if (contentType) {
       params = params.set('contentType', contentType);
     }
-    return this.http.get<{ url: string }>(`${this.getApiUrl()}/factures-achats/files/url`, { headers, params });
+    return this.http.get<{ url: string }>(`${this.getApiUrl()}/factures-achats/files/url`, { params });
   }
 
   getReleveFileUrl(fileId: string): Observable<{ url: string }> {
-    const token = localStorage.getItem('bf4_token');
-    let headers = new HttpHeaders();
-    if (token) {
-      headers = headers.set('Authorization', `Bearer ${token}`);
-    }
-    // HttpParams encode automatiquement, donc pas besoin d'encoder manuellement
     const params = new HttpParams().set('fileId', fileId);
-    return this.http.get<{ url: string }>(`${this.getApiUrl()}/releve-bancaire/files/url`, { headers, params });
+    return this.http.get<{ url: string }>(`${this.getApiUrl()}/releve-bancaire/files/url`, { params });
   }
-  
+
   deleteReleveFile(fileId: string): Observable<any> {
-    const token = localStorage.getItem('bf4_token');
-    let headers = new HttpHeaders();
-    if (token) {
-      headers = headers.set('Authorization', `Bearer ${token}`);
-    }
-    // HttpParams encode automatiquement, donc pas besoin d'encoder manuellement
     const params = new HttpParams().set('fileId', fileId);
-    return this.http.delete(`${this.getApiUrl()}/releve-bancaire/files`, { headers, params });
+    return this.http.delete(`${this.getApiUrl()}/releve-bancaire/files`, { params });
   }
 
   /**
