@@ -59,8 +59,8 @@ public class SecurityConfig {
                     .policy(ReferrerPolicyHeaderWriter.ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN))
             )
             .authenticationProvider(authenticationProvider())
-            .addFilterBefore(loginRateLimitFilter, JwtAuthenticationFilter.class)
-            .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
+            .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
+            .addFilterBefore(loginRateLimitFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
