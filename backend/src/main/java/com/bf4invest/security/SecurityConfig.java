@@ -55,13 +55,8 @@ public class SecurityConfig {
             .headers(headers -> headers
                 .frameOptions(frame -> frame.deny())
                 .contentTypeOptions(Customizer.withDefaults())
-                .httpStrictTransportSecurity(hsts -> hsts
-                    .includeSubDomains(true)
-                    .maxAgeInSeconds(63072000))
                 .referrerPolicy(referrer -> referrer
                     .policy(ReferrerPolicyHeaderWriter.ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN))
-                .permissionsPolicy(permissions -> permissions
-                    .policy("camera=(), microphone=(), geolocation=()"))
             )
             .authenticationProvider(authenticationProvider())
             .addFilterBefore(loginRateLimitFilter, JwtAuthenticationFilter.class)
