@@ -25,7 +25,7 @@
                 "output": "/"
               },
               {
-                "glob": "favicon.svg",
+                "glob": "logo.png",
                 "input": "src",
                 "output": "/"
               }
