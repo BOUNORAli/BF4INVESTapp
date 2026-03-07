@@ -23,6 +23,11 @@
                 "glob": "manifest.json",
                 "input": "src",
                 "output": "/"
+              },
+              {
+                "glob": "favicon.svg",
+                "input": "src",
+                "output": "/"
               }
             ]
           },
