@@ -18,6 +18,11 @@ cors:
   allowed:
     origins: ${CORS_ALLOWED_ORIGINS} # Pas de fallback en prod - doit être défini
 
+# Cookies d'authentification - OBLIGATOIRE en production (HTTPS)
+# COOKIE_SECURE=true pour que le navigateur envoie les cookies en cross-origin (SameSite=None)
+cookie:
+  secure: ${COOKIE_SECURE:true}
+
 # Désactiver l'initialisation automatique des données en production
 app:
   data-initializer:
