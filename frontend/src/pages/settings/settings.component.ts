@@ -324,7 +324,7 @@ import { AuthService } from '../../services/auth.service';
           }
         </div>
       </div>
-
+      
       <!-- Migration des Données Card -->
       @if (auth.currentUser()?.role === 'ADMIN') {
         <div class="bg-blue-50 rounded-xl shadow-sm border-2 border-blue-200 overflow-hidden">
@@ -402,6 +402,130 @@ import { AuthService } from '../../services/auth.service';
                   }
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- Sauvegarde des Données Card (ADMIN uniquement) -->
+      @if (auth.currentUser()?.role === 'ADMIN') {
+        <div class="bg-emerald-50 rounded-xl shadow-sm border-2 border-emerald-200 overflow-hidden">
+          <div class="p-6 border-b border-emerald-100 bg-emerald-100/50 flex justify-between items-center">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-full flex items-center justify-center bg-emerald-200 text-emerald-700">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8l7-5 7 5v9a2 2 0 01-2 2H7a2 2 0 01-2-2V8z"></path>
+                </svg>
+              </div>
+              <div>
+                <h2 class="text-lg font-bold text-emerald-900">Sauvegarde des Données</h2>
+                <p class="text-xs text-emerald-700">
+                  Exportez régulièrement vos données au même format que l'import pour pouvoir les restaurer en cas de besoin.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div class="p-6 space-y-6">
+            <!-- Sauvegardes individuelles -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <button type="button"
+                      (click)="downloadBackup('produits')"
+                      [disabled]="isDownloadingBackup()"
+                      class="flex items-center justify-between w-full px-4 py-3 bg-white border border-emerald-200 rounded-lg hover:bg-emerald-50 transition disabled:opacity-60">
+                <div class="flex items-center gap-3">
+                  <div class="w-8 h-8 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v9a2 2 0 01-2 2H6a2 2 0 01-2-2V7"></path>
+                    </svg>
+                  </div>
+                  <div class="text-left">
+                    <p class="text-sm font-semibold text-slate-800">Catalogue Produits</p>
+                    <p class="text-xs text-slate-500">Export Excel réimportable (.xlsx)</p>
+                  </div>
+                </div>
+                <span class="text-xs font-medium text-emerald-700">Télécharger</span>
+              </button>
+
+              <button type="button"
+                      (click)="downloadBackup('bandes-commandes')"
+                      [disabled]="isDownloadingBackup()"
+                      class="flex items-center justify-between w-full px-4 py-3 bg-white border border-emerald-200 rounded-lg hover:bg-emerald-50 transition disabled:opacity-60">
+                <div class="flex items-center gap-3">
+                  <div class="w-8 h-8 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7h18M3 12h18M3 17h18"></path>
+                    </svg>
+                  </div>
+                  <div class="text-left">
+                    <p class="text-sm font-semibold text-slate-800">Historique BC</p>
+                    <p class="text-xs text-slate-500">Export Excel au format import</p>
+                  </div>
+                </div>
+                <span class="text-xs font-medium text-emerald-700">Télécharger</span>
+              </button>
+
+              <button type="button"
+                      (click)="downloadBackup('operations')"
+                      [disabled]="isDownloadingBackup()"
+                      class="flex items-center justify-between w-full px-4 py-3 bg-white border border-emerald-200 rounded-lg hover:bg-emerald-50 transition disabled:opacity-60">
+                <div class="flex items-center gap-3">
+                  <div class="w-8 h-8 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-6a2 2 0 012-2h8M9 5l-2 2 2 2M15 19l2-2-2-2"></path>
+                    </svg>
+                  </div>
+                  <div class="text-left">
+                    <p class="text-sm font-semibold text-slate-800">Opérations Comptables</p>
+                    <p class="text-xs text-slate-500">Export Excel réimportable</p>
+                  </div>
+                </div>
+                <span class="text-xs font-medium text-emerald-700">Télécharger</span>
+              </button>
+
+              <button type="button"
+                      (click)="downloadBackup('releve-bancaire')"
+                      [disabled]="isDownloadingBackup()"
+                      class="flex items-center justify-between w-full px-4 py-3 bg-white border border-emerald-200 rounded-lg hover:bg-emerald-50 transition disabled:opacity-60">
+                <div class="flex items-center gap-3">
+                  <div class="w-8 h-8 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h11M9 21V3m4 18h8"></path>
+                    </svg>
+                  </div>
+                  <div class="text-left">
+                    <p class="text-sm font-semibold text-slate-800">Relevé Bancaire</p>
+                    <p class="text-xs text-slate-500">Export Excel réimportable</p>
+                  </div>
+                </div>
+                <span class="text-xs font-medium text-emerald-700">Télécharger</span>
+              </button>
+            </div>
+
+            <!-- Sauvegarde complète -->
+            <div class="border-t border-emerald-100 pt-4">
+              <button type="button"
+                      (click)="downloadFullBackup()"
+                      [disabled]="isDownloadingBackup()"
+                      class="w-full px-4 py-3 bg-emerald-600 text-white font-bold rounded-lg hover:bg-emerald-700 transition disabled:opacity-60 disabled:cursor-not-allowed shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2">
+                @if (isDownloadingBackup()) {
+                  <svg class="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  <span>Sauvegarde en cours...</span>
+                } @else {
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v16h16V8l-6-4H4z"></path>
+                  </svg>
+                  <span>Télécharger la sauvegarde complète (.zip)</span>
+                }
+              </button>
+
+              <p class="mt-2 text-xs text-emerald-800">
+                Le fichier ZIP contient les données réimportables (Produits, BC, Opérations, Relevé) ainsi que des fichiers de référence
+                (Clients, Fournisseurs, Charges).
+              </p>
             </div>
           </div>
         </div>
@@ -637,6 +761,9 @@ export class SettingsComponent implements OnInit {
   apportMotif = signal<string>('');
   apportDate = signal<string>('');
 
+  // Sauvegarde / export des données
+  isDownloadingBackup = signal(false);
+
   // Gestion de la migration de données
   isMigrating = signal(false);
   migrationResult = signal<{
@@ -842,6 +969,65 @@ export class SettingsComponent implements OnInit {
     } finally {
       this.isMigrating.set(false);
     }
+  }
+
+  // Sauvegarde / export
+  private async downloadBlobFromEndpoint(endpoint: string, suggestedFileName?: string) {
+    try {
+      this.isDownloadingBackup.set(true);
+      const blob = await this.api.downloadFile(endpoint).toPromise();
+      if (!blob) {
+        this.store.showToast('Aucune donnée à télécharger', 'info');
+        return;
+      }
+
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = suggestedFileName || 'export.xlsx';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error downloading backup:', error);
+      this.store.showToast('Erreur lors du téléchargement de la sauvegarde', 'error');
+    } finally {
+      this.isDownloadingBackup.set(false);
+    }
+  }
+
+  async downloadBackup(type: 'produits' | 'bandes-commandes' | 'operations' | 'releve-bancaire') {
+    let endpoint = '';
+    let fileName = '';
+
+    switch (type) {
+      case 'produits':
+        endpoint = '/backup/produits';
+        fileName = 'Catalogue_Produits.xlsx';
+        break;
+      case 'bandes-commandes':
+        endpoint = '/backup/bandes-commandes';
+        fileName = 'Historique_BC.xlsx';
+        break;
+      case 'operations':
+        endpoint = '/backup/operations';
+        fileName = 'Operations_Comptables.xlsx';
+        break;
+      case 'releve-bancaire':
+        endpoint = '/backup/releve-bancaire';
+        fileName = 'Releve_Bancaire.xlsx';
+        break;
+    }
+
+    await this.downloadBlobFromEndpoint(endpoint, fileName);
+  }
+
+  async downloadFullBackup() {
+    const today = new Date();
+    const dateStr = today.toISOString().slice(0, 10);
+    const fileName = `Sauvegarde_BF4Invest_${dateStr}.zip`;
+    await this.downloadBlobFromEndpoint('/backup/complet', fileName);
   }
   
   // Méthodes pour la suppression de données

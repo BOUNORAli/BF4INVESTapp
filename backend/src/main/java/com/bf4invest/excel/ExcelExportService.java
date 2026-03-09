@@ -9,8 +9,11 @@ import com.bf4invest.model.FactureVente;
 import com.bf4invest.model.HistoriqueSolde;
 import com.bf4invest.model.LigneAchat;
 import com.bf4invest.model.LigneVente;
+import com.bf4invest.model.OperationComptable;
 import com.bf4invest.model.Paiement;
+import com.bf4invest.model.Product;
 import com.bf4invest.model.Supplier;
+import com.bf4invest.model.TransactionBancaire;
 import com.bf4invest.repository.ClientRepository;
 import com.bf4invest.repository.FactureAchatRepository;
 import com.bf4invest.repository.FactureVenteRepository;
@@ -2187,7 +2190,583 @@ public class ExcelExportService {
         style.setVerticalAlignment(VerticalAlignment.CENTER);
         return style;
     }
-    
+
+    /**
+     * Exporte le catalogue produits au format identique au modèle d'import.
+     */
+    public byte[] exportProductsToImportFormat(List<Product> products) throws IOException {
+        try (XSSFWorkbook workbook = new XSSFWorkbook();
+             ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+
+            Sheet sheet = workbook.createSheet("Catalogue Produits");
+
+            CellStyle headerStyle = createHeaderStyle(workbook);
+            CellStyle numberStyle = createFrenchNumberStyle(workbook);
+
+            // En-têtes identiques au template d'import
+            String[] headers = {
+                    "REF ARTICLE", "DESIGNATION", "UNITE", "PRIX ACHAT U HT",
+                    "PRIX VENTE U HT", "TVA (%)", "FOURNISSEUR", "QUANTITE STOCK"
+            };
+
+            Row headerRow = sheet.createRow(0);
+            for (int i = 0; i < headers.length; i++) {
+                Cell cell = headerRow.createCell(i);
+                cell.setCellValue(headers[i]);
+                cell.setCellStyle(headerStyle);
+            }
+
+            // Cache des fournisseurs pour résoudre les noms
+            Map<String, Supplier> suppliersById = supplierRepository.findAll().stream()
+                    .collect(Collectors.toMap(Supplier::getId, s -> s));
+
+            int rowNum = 1;
+            if (products != null) {
+                for (Product product : products) {
+                    Row row = sheet.createRow(rowNum++);
+
+                    String fournisseurName = null;
+                    if (product.getFournisseurId() != null) {
+                        Supplier supplier = suppliersById.get(product.getFournisseurId());
+                        if (supplier != null) {
+                            fournisseurName = supplier.getNom();
+                        }
+                    }
+
+                    int col = 0;
+
+                    row.createCell(col++).setCellValue(product.getRefArticle() != null ? product.getRefArticle() : "");
+                    row.createCell(col++).setCellValue(product.getDesignation() != null ? product.getDesignation() : "");
+                    row.createCell(col++).setCellValue(product.getUnite() != null ? product.getUnite() : "");
+
+                    // Prix achat U HT (pondéré si disponible, sinon ancien champ)
+                    Double prixAchat = product.getPrixAchatPondereHT() != null
+                            ? product.getPrixAchatPondereHT()
+                            : product.getPrixAchatUnitaireHT();
+                    Cell prixAchatCell = row.createCell(col++);
+                    if (prixAchat != null) {
+                        prixAchatCell.setCellValue(prixAchat);
+                        prixAchatCell.setCellStyle(numberStyle);
+                    }
+
+                    // Prix vente U HT (pondéré si disponible, sinon ancien champ)
+                    Double prixVente = product.getPrixVentePondereHT() != null
+                            ? product.getPrixVentePondereHT()
+                            : product.getPrixVenteUnitaireHT();
+                    Cell prixVenteCell = row.createCell(col++);
+                    if (prixVente != null) {
+                        prixVenteCell.setCellValue(prixVente);
+                        prixVenteCell.setCellStyle(numberStyle);
+                    }
+
+                    Cell tvaCell = row.createCell(col++);
+                    if (product.getTva() != null) {
+                        tvaCell.setCellValue(product.getTva());
+                        tvaCell.setCellStyle(numberStyle);
+                    }
+
+                    row.createCell(col++).setCellValue(fournisseurName != null ? fournisseurName : "");
+
+                    Cell stockCell = row.createCell(col);
+                    if (product.getQuantiteEnStock() != null) {
+                        stockCell.setCellValue(product.getQuantiteEnStock());
+                        stockCell.setCellStyle(numberStyle);
+                    }
+                }
+            }
+
+            // Ajuster la largeur des colonnes
+            for (int i = 0; i < headers.length; i++) {
+                sheet.autoSizeColumn(i);
+            }
+
+            workbook.write(out);
+            return out.toByteArray();
+        }
+    }
+
+    /**
+     * Exporte les opérations comptables au format identique au modèle d'import.
+     */
+    public byte[] exportOperationsToImportFormat(List<OperationComptable> operations) throws IOException {
+        try (XSSFWorkbook workbook = new XSSFWorkbook();
+             ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+
+            Sheet sheet = workbook.createSheet("Opérations Comptables");
+
+            CellStyle headerStyle = createHeaderStyle(workbook);
+            CellStyle numberStyle = createFrenchNumberStyle(workbook);
+            CellStyle dateStyle = createDateStyle(workbook);
+
+            String[] headers = {
+                    "AFFECTATION/N°BC", "RELEVE BQ", "CONTRE PARTIE", "NOM CLIENT/FRS", "Client/Fourn",
+                    "SOURCE payement", "DATE", "TYPE", "N° FACTURE", "REFERENCE",
+                    "TOTAL TTC APRES RG", "Total payement TTC", "Taux TVA", "TAUX RG",
+                    "Moyen de payement", "COMMENT AIRE", "tva mois", "annee", "mois",
+                    "SOLDE BANQUE", "TOTAL TTC APRES RG (calculé)", "Total payement TTC (calculé)",
+                    "RG TTC", "RG HT", "FACTURE HT YC RG", "HT PAYE", "TVA FACTURE YC RG", "TVA", "bilan", "CA"
+            };
+
+            Row headerRow = sheet.createRow(0);
+            for (int i = 0; i < headers.length; i++) {
+                Cell cell = headerRow.createCell(i);
+                cell.setCellValue(headers[i]);
+                cell.setCellStyle(headerStyle);
+            }
+
+            int rowNum = 1;
+            if (operations != null) {
+                for (OperationComptable op : operations) {
+                    Row row = sheet.createRow(rowNum++);
+                    int col = 0;
+
+                    row.createCell(col++).setCellValue(op.getNumeroBc() != null ? op.getNumeroBc() : "");
+                    row.createCell(col++).setCellValue(op.getReleveBancaire() != null ? op.getReleveBancaire() : "");
+                    row.createCell(col++).setCellValue(op.getContrePartie() != null ? op.getContrePartie() : "");
+                    row.createCell(col++).setCellValue(op.getNomClientFrs() != null ? op.getNomClientFrs() : "");
+                    row.createCell(col++).setCellValue(op.getTypeOperation() != null ? op.getTypeOperation().name() : "");
+                    row.createCell(col++).setCellValue(op.getSourcePayement() != null ? op.getSourcePayement() : "");
+
+                    Cell dateCell = row.createCell(col++);
+                    if (op.getDateOperation() != null) {
+                        dateCell.setCellValue(java.sql.Date.valueOf(op.getDateOperation()));
+                        dateCell.setCellStyle(dateStyle);
+                    }
+
+                    row.createCell(col++).setCellValue(op.getTypeMouvement() != null ? op.getTypeMouvement().name() : "");
+                    row.createCell(col++).setCellValue(op.getNumeroFacture() != null ? op.getNumeroFacture() : "");
+                    row.createCell(col++).setCellValue(op.getReference() != null ? op.getReference() : "");
+
+                    Cell totalTtcApresRgCell = row.createCell(col++);
+                    if (op.getTotalTtcApresRg() != null) {
+                        totalTtcApresRgCell.setCellValue(op.getTotalTtcApresRg());
+                        totalTtcApresRgCell.setCellStyle(numberStyle);
+                    }
+
+                    Cell totalPaiementTtcCell = row.createCell(col++);
+                    if (op.getTotalPayementTtc() != null) {
+                        totalPaiementTtcCell.setCellValue(op.getTotalPayementTtc());
+                        totalPaiementTtcCell.setCellStyle(numberStyle);
+                    }
+
+                    Cell tauxTvaCell = row.createCell(col++);
+                    if (op.getTauxTva() != null) {
+                        tauxTvaCell.setCellValue(op.getTauxTva());
+                        tauxTvaCell.setCellStyle(numberStyle);
+                    }
+
+                    Cell tauxRgCell = row.createCell(col++);
+                    if (op.getTauxRg() != null) {
+                        tauxRgCell.setCellValue(op.getTauxRg());
+                        tauxRgCell.setCellStyle(numberStyle);
+                    }
+
+                    row.createCell(col++).setCellValue(op.getMoyenPayement() != null ? op.getMoyenPayement() : "");
+                    row.createCell(col++).setCellValue(op.getCommentaire() != null ? op.getCommentaire() : "");
+
+                    Cell tvaMoisCell = row.createCell(col++);
+                    if (op.getTvaMois() != null) {
+                        tvaMoisCell.setCellValue(op.getTvaMois());
+                        tvaMoisCell.setCellStyle(numberStyle);
+                    }
+
+                    Cell anneeCell = row.createCell(col++);
+                    if (op.getAnnee() != null) {
+                        anneeCell.setCellValue(op.getAnnee());
+                        anneeCell.setCellStyle(numberStyle);
+                    }
+
+                    Cell moisCell = row.createCell(col++);
+                    if (op.getMois() != null) {
+                        moisCell.setCellValue(op.getMois());
+                        moisCell.setCellStyle(numberStyle);
+                    }
+
+                    Cell soldeBanqueCell = row.createCell(col++);
+                    if (op.getSoldeBanque() != null) {
+                        soldeBanqueCell.setCellValue(op.getSoldeBanque());
+                        soldeBanqueCell.setCellStyle(numberStyle);
+                    }
+
+                    Cell totalTtcApresRgCalcCell = row.createCell(col++);
+                    if (op.getTotalTtcApresRgCalcule() != null) {
+                        totalTtcApresRgCalcCell.setCellValue(op.getTotalTtcApresRgCalcule());
+                        totalTtcApresRgCalcCell.setCellStyle(numberStyle);
+                    }
+
+                    Cell totalPaiementTtcCalcCell = row.createCell(col++);
+                    if (op.getTotalPayementTtcCalcule() != null) {
+                        totalPaiementTtcCalcCell.setCellValue(op.getTotalPayementTtcCalcule());
+                        totalPaiementTtcCalcCell.setCellStyle(numberStyle);
+                    }
+
+                    Cell rgTtcCell = row.createCell(col++);
+                    if (op.getRgTtc() != null) {
+                        rgTtcCell.setCellValue(op.getRgTtc());
+                        rgTtcCell.setCellStyle(numberStyle);
+                    }
+
+                    Cell rgHtCell = row.createCell(col++);
+                    if (op.getRgHt() != null) {
+                        rgHtCell.setCellValue(op.getRgHt());
+                        rgHtCell.setCellStyle(numberStyle);
+                    }
+
+                    Cell factureHtYcRgCell = row.createCell(col++);
+                    if (op.getFactureHtYcRg() != null) {
+                        factureHtYcRgCell.setCellValue(op.getFactureHtYcRg());
+                        factureHtYcRgCell.setCellStyle(numberStyle);
+                    }
+
+                    Cell htPayeCell = row.createCell(col++);
+                    if (op.getHtPaye() != null) {
+                        htPayeCell.setCellValue(op.getHtPaye());
+                        htPayeCell.setCellStyle(numberStyle);
+                    }
+
+                    Cell tvaYcRgCell = row.createCell(col++);
+                    if (op.getTvaYcRg() != null) {
+                        tvaYcRgCell.setCellValue(op.getTvaYcRg());
+                        tvaYcRgCell.setCellStyle(numberStyle);
+                    }
+
+                    Cell tvaCell = row.createCell(col++);
+                    if (op.getTva() != null) {
+                        tvaCell.setCellValue(op.getTva());
+                        tvaCell.setCellStyle(numberStyle);
+                    }
+
+                    Cell bilanCell = row.createCell(col++);
+                    if (op.getBilan() != null) {
+                        bilanCell.setCellValue(op.getBilan());
+                        bilanCell.setCellStyle(numberStyle);
+                    }
+
+                    row.createCell(col).setCellValue(op.getCa() != null ? op.getCa() : "");
+                }
+            }
+
+            for (int i = 0; i < headers.length; i++) {
+                sheet.autoSizeColumn(i);
+            }
+
+            workbook.write(out);
+            return out.toByteArray();
+        }
+    }
+
+    /**
+     * Exporte les transactions bancaires au format identique au modèle d'import.
+     */
+    public byte[] exportReleveBancaireToImportFormat(List<TransactionBancaire> transactions) throws IOException {
+        try (XSSFWorkbook workbook = new XSSFWorkbook();
+             ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+
+            Sheet sheet = workbook.createSheet("Relevé Bancaire");
+
+            CellStyle headerStyle = createHeaderStyle(workbook);
+            CellStyle numberStyle = createFrenchNumberStyle(workbook);
+            CellStyle dateStyle = createDateStyle(workbook);
+
+            String[] headers = {
+                    "Date", "Valeur", "Libellé", "Débit", "Crédit", "Référence"
+            };
+
+            Row headerRow = sheet.createRow(0);
+            for (int i = 0; i < headers.length; i++) {
+                Cell cell = headerRow.createCell(i);
+                cell.setCellValue(headers[i]);
+                cell.setCellStyle(headerStyle);
+            }
+
+            int rowNum = 1;
+            if (transactions != null) {
+                for (TransactionBancaire tx : transactions) {
+                    Row row = sheet.createRow(rowNum++);
+                    int col = 0;
+
+                    Cell dateOpCell = row.createCell(col++);
+                    if (tx.getDateOperation() != null) {
+                        dateOpCell.setCellValue(java.sql.Date.valueOf(tx.getDateOperation()));
+                        dateOpCell.setCellStyle(dateStyle);
+                    }
+
+                    Cell dateValCell = row.createCell(col++);
+                    if (tx.getDateValeur() != null) {
+                        dateValCell.setCellValue(java.sql.Date.valueOf(tx.getDateValeur()));
+                        dateValCell.setCellStyle(dateStyle);
+                    }
+
+                    row.createCell(col++).setCellValue(tx.getLibelle() != null ? tx.getLibelle() : "");
+
+                    Cell debitCell = row.createCell(col++);
+                    if (tx.getDebit() != null) {
+                        debitCell.setCellValue(tx.getDebit());
+                        debitCell.setCellStyle(numberStyle);
+                    }
+
+                    Cell creditCell = row.createCell(col++);
+                    if (tx.getCredit() != null) {
+                        creditCell.setCellValue(tx.getCredit());
+                        creditCell.setCellStyle(numberStyle);
+                    }
+
+                    row.createCell(col).setCellValue(tx.getReference() != null ? tx.getReference() : "");
+                }
+            }
+
+            for (int i = 0; i < headers.length; i++) {
+                sheet.autoSizeColumn(i);
+            }
+
+            workbook.write(out);
+            return out.toByteArray();
+        }
+    }
+
+    /**
+     * Exporte les clients dans un fichier Excel de référence.
+     */
+    public byte[] exportClientsToExcel(List<Client> clients) throws IOException {
+        try (XSSFWorkbook workbook = new XSSFWorkbook();
+             ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+
+            Sheet sheet = workbook.createSheet("Clients");
+
+            CellStyle headerStyle = createHeaderStyle(workbook);
+
+            String[] headers = {
+                    "ID", "ICE", "Nom", "Référence", "Adresse", "Téléphone", "Email", "RIB",
+                    "Contacts", "Solde Client", "Créé le", "Mis à jour le"
+            };
+
+            Row headerRow = sheet.createRow(0);
+            for (int i = 0; i < headers.length; i++) {
+                Cell cell = headerRow.createCell(i);
+                cell.setCellValue(headers[i]);
+                cell.setCellStyle(headerStyle);
+            }
+
+            int rowNum = 1;
+            if (clients != null) {
+                for (Client client : clients) {
+                    Row row = sheet.createRow(rowNum++);
+                    int col = 0;
+
+                    row.createCell(col++).setCellValue(client.getId() != null ? client.getId() : "");
+                    row.createCell(col++).setCellValue(client.getIce() != null ? client.getIce() : "");
+                    row.createCell(col++).setCellValue(client.getNom() != null ? client.getNom() : "");
+                    row.createCell(col++).setCellValue(client.getReferenceClient() != null ? client.getReferenceClient() : "");
+                    row.createCell(col++).setCellValue(client.getAdresse() != null ? client.getAdresse() : "");
+                    row.createCell(col++).setCellValue(client.getTelephone() != null ? client.getTelephone() : "");
+                    row.createCell(col++).setCellValue(client.getEmail() != null ? client.getEmail() : "");
+                    row.createCell(col++).setCellValue(client.getRib() != null ? client.getRib() : "");
+
+                    String contacts = "";
+                    if (client.getContacts() != null && !client.getContacts().isEmpty()) {
+                        contacts = client.getContacts().stream()
+                                .map(c -> {
+                                    StringBuilder sb = new StringBuilder();
+                                    if (c.getNom() != null) sb.append(c.getNom());
+                                    if (c.getTel() != null && !c.getTel().isEmpty()) {
+                                        if (sb.length() > 0) sb.append(" - ");
+                                        sb.append(c.getTel());
+                                    }
+                                    if (c.getEmail() != null && !c.getEmail().isEmpty()) {
+                                        if (sb.length() > 0) sb.append(" - ");
+                                        sb.append(c.getEmail());
+                                    }
+                                    return sb.toString();
+                                })
+                                .reduce((a, b) -> a + " | " + b)
+                                .orElse("");
+                    }
+                    row.createCell(col++).setCellValue(contacts);
+
+                    if (client.getSoldeClient() != null) {
+                        row.createCell(col++).setCellValue(client.getSoldeClient());
+                    } else {
+                        row.createCell(col++).setCellValue("");
+                    }
+
+                    row.createCell(col++).setCellValue(
+                            client.getCreatedAt() != null ? client.getCreatedAt().toString() : ""
+                    );
+                    row.createCell(col).setCellValue(
+                            client.getUpdatedAt() != null ? client.getUpdatedAt().toString() : ""
+                    );
+                }
+            }
+
+            for (int i = 0; i < headers.length; i++) {
+                sheet.autoSizeColumn(i);
+            }
+
+            workbook.write(out);
+            return out.toByteArray();
+        }
+    }
+
+    /**
+     * Exporte les fournisseurs dans un fichier Excel de référence.
+     */
+    public byte[] exportSuppliersToExcel(List<Supplier> suppliers) throws IOException {
+        try (XSSFWorkbook workbook = new XSSFWorkbook();
+             ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+
+            Sheet sheet = workbook.createSheet("Fournisseurs");
+
+            CellStyle headerStyle = createHeaderStyle(workbook);
+
+            String[] headers = {
+                    "ID", "Nom", "ICE", "Référence", "Contact", "Adresse", "Téléphone", "Email",
+                    "Banque", "RIB", "Modes Paiement Acceptés", "Date Régularité Fiscale",
+                    "Solde Fournisseur", "Créé le", "Mis à jour le"
+            };
+
+            Row headerRow = sheet.createRow(0);
+            for (int i = 0; i < headers.length; i++) {
+                Cell cell = headerRow.createCell(i);
+                cell.setCellValue(headers[i]);
+                cell.setCellStyle(headerStyle);
+            }
+
+            int rowNum = 1;
+            if (suppliers != null) {
+                for (Supplier supplier : suppliers) {
+                    Row row = sheet.createRow(rowNum++);
+                    int col = 0;
+
+                    row.createCell(col++).setCellValue(supplier.getId() != null ? supplier.getId() : "");
+                    row.createCell(col++).setCellValue(supplier.getNom() != null ? supplier.getNom() : "");
+                    row.createCell(col++).setCellValue(supplier.getIce() != null ? supplier.getIce() : "");
+                    row.createCell(col++).setCellValue(supplier.getReferenceFournisseur() != null ? supplier.getReferenceFournisseur() : "");
+                    row.createCell(col++).setCellValue(supplier.getContact() != null ? supplier.getContact() : "");
+                    row.createCell(col++).setCellValue(supplier.getAdresse() != null ? supplier.getAdresse() : "");
+                    row.createCell(col++).setCellValue(supplier.getTelephone() != null ? supplier.getTelephone() : "");
+                    row.createCell(col++).setCellValue(supplier.getEmail() != null ? supplier.getEmail() : "");
+                    row.createCell(col++).setCellValue(supplier.getBanque() != null ? supplier.getBanque() : "");
+                    row.createCell(col++).setCellValue(supplier.getRib() != null ? supplier.getRib() : "");
+
+                    String modes = "";
+                    if (supplier.getModesPaiementAcceptes() != null && !supplier.getModesPaiementAcceptes().isEmpty()) {
+                        modes = String.join(", ", supplier.getModesPaiementAcceptes());
+                    }
+                    row.createCell(col++).setCellValue(modes);
+
+                    row.createCell(col++).setCellValue(
+                            supplier.getDateRegulariteFiscale() != null ? supplier.getDateRegulariteFiscale().toString() : ""
+                    );
+
+                    if (supplier.getSoldeFournisseur() != null) {
+                        row.createCell(col++).setCellValue(supplier.getSoldeFournisseur());
+                    } else {
+                        row.createCell(col++).setCellValue("");
+                    }
+
+                    row.createCell(col++).setCellValue(
+                            supplier.getCreatedAt() != null ? supplier.getCreatedAt().toString() : ""
+                    );
+                    row.createCell(col).setCellValue(
+                            supplier.getUpdatedAt() != null ? supplier.getUpdatedAt().toString() : ""
+                    );
+                }
+            }
+
+            for (int i = 0; i < headers.length; i++) {
+                sheet.autoSizeColumn(i);
+            }
+
+            workbook.write(out);
+            return out.toByteArray();
+        }
+    }
+
+    /**
+     * Exporte les charges dans un fichier Excel de référence.
+     */
+    public byte[] exportChargesToExcel(List<Charge> charges) throws IOException {
+        try (XSSFWorkbook workbook = new XSSFWorkbook();
+             ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+
+            Sheet sheet = workbook.createSheet("Charges");
+
+            CellStyle headerStyle = createHeaderStyle(workbook);
+            CellStyle numberStyle = createFrenchNumberStyle(workbook);
+            CellStyle dateStyle = createDateStyle(workbook);
+
+            String[] headers = {
+                    "ID", "Libellé", "Catégorie", "Montant", "Date Échéance",
+                    "Statut", "Date Paiement", "Imposable", "Taux Imposition",
+                    "Notes", "Créé le", "Mis à jour le"
+            };
+
+            Row headerRow = sheet.createRow(0);
+            for (int i = 0; i < headers.length; i++) {
+                Cell cell = headerRow.createCell(i);
+                cell.setCellValue(headers[i]);
+                cell.setCellStyle(headerStyle);
+            }
+
+            int rowNum = 1;
+            if (charges != null) {
+                for (Charge charge : charges) {
+                    Row row = sheet.createRow(rowNum++);
+                    int col = 0;
+
+                    row.createCell(col++).setCellValue(charge.getId() != null ? charge.getId() : "");
+                    row.createCell(col++).setCellValue(charge.getLibelle() != null ? charge.getLibelle() : "");
+                    row.createCell(col++).setCellValue(charge.getCategorie() != null ? charge.getCategorie() : "");
+
+                    Cell montantCell = row.createCell(col++);
+                    if (charge.getMontant() != null) {
+                        montantCell.setCellValue(charge.getMontant());
+                        montantCell.setCellStyle(numberStyle);
+                    }
+
+                    Cell echeanceCell = row.createCell(col++);
+                    if (charge.getDateEcheance() != null) {
+                        echeanceCell.setCellValue(java.sql.Date.valueOf(charge.getDateEcheance()));
+                        echeanceCell.setCellStyle(dateStyle);
+                    }
+
+                    row.createCell(col++).setCellValue(charge.getStatut() != null ? charge.getStatut() : "");
+
+                    Cell paiementCell = row.createCell(col++);
+                    if (charge.getDatePaiement() != null) {
+                        paiementCell.setCellValue(java.sql.Date.valueOf(charge.getDatePaiement()));
+                        paiementCell.setCellStyle(dateStyle);
+                    }
+
+                    String imposable = charge.getImposable() == null ? "" : (charge.getImposable() ? "Oui" : "Non");
+                    row.createCell(col++).setCellValue(imposable);
+
+                    Cell tauxCell = row.createCell(col++);
+                    if (charge.getTauxImposition() != null) {
+                        tauxCell.setCellValue(charge.getTauxImposition());
+                        tauxCell.setCellStyle(numberStyle);
+                    }
+
+                    row.createCell(col++).setCellValue(charge.getNotes() != null ? charge.getNotes() : "");
+
+                    row.createCell(col++).setCellValue(
+                            charge.getCreatedAt() != null ? charge.getCreatedAt().toString() : ""
+                    );
+                    row.createCell(col).setCellValue(
+                            charge.getUpdatedAt() != null ? charge.getUpdatedAt().toString() : ""
+                    );
+                }
+            }
+
+            for (int i = 0; i < headers.length; i++) {
+                sheet.autoSizeColumn(i);
+            }
+
+            workbook.write(out);
+            return out.toByteArray();
+        }
+    }
+
     /**
      * Style pour les nombres français avec fond (pour alternance de lignes)
      */
