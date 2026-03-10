@@ -32,6 +32,8 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
             }),
             catchError((refreshError) => {
               isRefreshing = false;
+              // Débloquer les requêtes en attente pour éviter les fuites de souscriptions
+              refreshTokenSubject.next('failed');
               authService.logout();
               toastService.showToast('Session expirée. Veuillez vous reconnecter.', 'error');
               return throwError(() => refreshError);

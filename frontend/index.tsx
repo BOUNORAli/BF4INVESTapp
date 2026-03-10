@@ -9,10 +9,6 @@ import { routes } from './src/app.routes';
 import { errorInterceptor } from './src/interceptors/error.interceptor';
 import { cacheInterceptor } from './src/interceptors/cache.interceptor';
 import { credentialsInterceptor } from './src/interceptors/credentials.interceptor';
-import { inject } from '@vercel/analytics';
-
-// Initialize Vercel Web Analytics
-inject();
 
 bootstrapApplication(AppComponent, {
   providers: [

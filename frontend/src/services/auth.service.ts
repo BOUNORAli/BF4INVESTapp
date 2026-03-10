@@ -30,6 +30,10 @@ interface LoginResponse {
   };
 }
 
+// Clés de stockage local pour le fallback token (mobile / navigateurs qui bloquent les cookies tiers)
+const ACCESS_TOKEN_STORAGE_KEY = 'bf4_token_access';
+const REFRESH_TOKEN_STORAGE_KEY = 'bf4_refresh_token';
+
 @Injectable({
   providedIn: 'root'
 })
@@ -65,6 +69,14 @@ export class AuthService {
       } as LoginRequest).toPromise();
 
       if (response?.user) {
+        // Sauvegarder aussi les tokens en fallback pour les navigateurs qui bloquent les cookies (ex: Safari mobile)
+        if (response.token) {
+          localStorage.setItem(ACCESS_TOKEN_STORAGE_KEY, response.token);
+        }
+        if (response.refreshToken) {
+          localStorage.setItem(REFRESH_TOKEN_STORAGE_KEY, response.refreshToken);
+        }
+
         const user: User = {
           id: response.user.id,
           name: response.user.name,
@@ -93,6 +105,14 @@ export class AuthService {
     return this.httpClient.post<LoginResponse>(`${apiUrl}/auth/refresh`, {}, { withCredentials: true }).pipe(
       tap((response) => {
         if (response?.user) {
+          // Mettre à jour les tokens si le backend les renvoie
+          if (response.token) {
+            localStorage.setItem(ACCESS_TOKEN_STORAGE_KEY, response.token);
+          }
+          if (response.refreshToken) {
+            localStorage.setItem(REFRESH_TOKEN_STORAGE_KEY, response.refreshToken);
+          }
+
           const user: User = {
             id: response.user.id,
             name: response.user.name,
@@ -120,6 +140,8 @@ export class AuthService {
   private clearAuth() {
     this.currentUser.set(null);
     localStorage.removeItem('bf4_user');
+    localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
+    localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
   }
 
   isAuthenticated(): boolean {

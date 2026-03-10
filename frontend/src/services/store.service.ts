@@ -453,8 +453,17 @@ export class StoreService {
   private dataLoading = false;
 
   constructor() {
-    // Charger les donn├®es au d├®marrage (une seule fois)
+    // Charger les données au démarrage (une seule fois) si l'utilisateur
+    // est déjà authentifié (ex: rechargement de page).
     this.loadInitialData();
+  }
+
+  /**
+   * Point d'entrée explicite pour lancer le chargement initial des données
+   * juste après un login réussi.
+   */
+  async triggerInitialLoad(): Promise<void> {
+    await this.loadInitialData();
   }
 
   private async loadInitialData() {

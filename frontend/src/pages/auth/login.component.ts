@@ -144,12 +144,16 @@ export class LoginComponent {
     this.showPassword.update(value => !value);
   }
 
-  onSubmit() {
+  async onSubmit() {
     if (this.loginForm.valid) {
       const { email, password } = this.loginForm.value;
-      const success = this.auth.login(email!, password!);
+      const success = await this.auth.login(email!, password!);
       if (success) {
         this.store.showToast('Connexion réussie', 'success');
+        // Lancer le chargement initial des données après un login réussi
+        this.store.triggerInitialLoad().catch(() => {
+          // Les erreurs sont déjà loggées dans le StoreService
+        });
       } else {
         this.store.showToast('Identifiants incorrects', 'error');
       }

@@ -34,9 +34,9 @@ public class AuthController {
             HttpServletResponse httpResponse) {
         LoginResponse response = authService.login(request);
         authCookieUtil.addAuthCookies(httpResponse, response.getToken(), response.getRefreshToken());
-        return ResponseEntity.ok(LoginResponse.builder()
-                .user(response.getUser())
-                .build());
+        // Retourner également les tokens dans le body pour les clients qui ne peuvent
+        // pas stocker correctement les cookies (ex: certains navigateurs mobiles).
+        return ResponseEntity.ok(response);
     }
     
     @PostMapping("/refresh")
@@ -51,9 +51,7 @@ public class AuthController {
         try {
             LoginResponse response = authService.refreshToken(refreshTokenValue);
             authCookieUtil.addAuthCookies(httpResponse, response.getToken(), response.getRefreshToken());
-            return ResponseEntity.ok(LoginResponse.builder()
-                    .user(response.getUser())
-                    .build());
+            return ResponseEntity.ok(response);
         } catch (RuntimeException e) {
             log.error("Erreur lors du refresh token: {}", e.getMessage());
             return ResponseEntity.status(401).build();
