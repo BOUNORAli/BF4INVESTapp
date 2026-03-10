@@ -436,7 +436,9 @@ import { AuthService } from '../../services/auth.service';
                 <div class="flex items-center gap-3">
                   <div class="w-8 h-8 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v9a2 2 0 01-2 2H6a2 2 0 01-2-2V7"></path>
+                      <!-- Icône boîte / produit -->
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M3 7l9-4 9 4-9 4-9-4zM3 7v10l9 4 9-4V7" />
                     </svg>
                   </div>
                   <div class="text-left">
@@ -454,7 +456,9 @@ import { AuthService } from '../../services/auth.service';
                 <div class="flex items-center gap-3">
                   <div class="w-8 h-8 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7h18M3 12h18M3 17h18"></path>
+                      <!-- Icône liste / historique -->
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M5 7h14M5 12h14M5 17h9M7 5v2M7 10v2M7 15v2" />
                     </svg>
                   </div>
                   <div class="text-left">
@@ -472,7 +476,9 @@ import { AuthService } from '../../services/auth.service';
                 <div class="flex items-center gap-3">
                   <div class="w-8 h-8 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-6a2 2 0 012-2h8M9 5l-2 2 2 2M15 19l2-2-2-2"></path>
+                      <!-- Icône comptabilité / tableau -->
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M4 5h16v14H4zM9 5v14M15 5v14M4 11h16" />
                     </svg>
                   </div>
                   <div class="text-left">
@@ -490,7 +496,9 @@ import { AuthService } from '../../services/auth.service';
                 <div class="flex items-center gap-3">
                   <div class="w-8 h-8 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h11M9 21V3m4 18h8"></path>
+                      <!-- Icône relevé bancaire / graphique -->
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M4 19h16M5 16l3-4 3 3 4-6 4 5" />
                     </svg>
                   </div>
                   <div class="text-left">
