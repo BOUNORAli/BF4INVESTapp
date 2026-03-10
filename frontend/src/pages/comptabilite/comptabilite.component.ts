@@ -43,6 +43,10 @@ import type { CompteComptable, EcritureComptable } from '../../models/types';
                   class="px-6 py-4 font-semibold whitespace-nowrap hover:bg-slate-50 transition">
             CPC
           </button>
+          <button (click)="activeTab.set('plan-comptable')" [class]="activeTab() === 'plan-comptable' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-slate-600'"
+                  class="px-6 py-4 font-semibold whitespace-nowrap hover:bg-slate-50 transition">
+            Plan Comptable
+          </button>
         </div>
 
         <!-- Journal Tab -->
@@ -230,6 +234,105 @@ import type { CompteComptable, EcritureComptable } from '../../models/types';
           </div>
         }
 
+        <!-- Plan Comptable Tab -->
+        @if (activeTab() === 'plan-comptable') {
+          <div class="p-6 space-y-4">
+            <div class="flex items-center justify-between mb-2">
+              <div>
+                <h2 class="text-lg font-bold text-slate-800">Plan Comptable</h2>
+                <p class="text-xs text-slate-500">Modifiez les comptes (libellé, type) ou désactivez ceux que vous n'utilisez pas.</p>
+              </div>
+              <button (click)="loadComptesPlan()" class="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 text-sm">
+                Recharger
+              </button>
+            </div>
+
+            <!-- Formulaire d'ajout -->
+            <div class="bg-slate-50 border border-slate-200 rounded-lg p-4 space-y-3">
+              <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+                <div>
+                  <label class="block text-xs font-semibold text-slate-600 mb-1">Code</label>
+                  <input type="text" [(ngModel)]="newCompte.code" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm">
+                </div>
+                <div class="md:col-span-2">
+                  <label class="block text-xs font-semibold text-slate-600 mb-1">Libellé</label>
+                  <input type="text" [(ngModel)]="newCompte.libelle" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm">
+                </div>
+                <div>
+                  <label class="block text-xs font-semibold text-slate-600 mb-1">Classe</label>
+                  <input type="text" [(ngModel)]="newCompte.classe" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm" placeholder="1..7">
+                </div>
+              </div>
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div>
+                  <label class="block text-xs font-semibold text-slate-600 mb-1">Type</label>
+                  <select [(ngModel)]="newCompte.type" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm">
+                    <option value="">Sélectionner...</option>
+                    <option value="ACTIF">Actif</option>
+                    <option value="PASSIF">Passif</option>
+                    <option value="CHARGE">Charge</option>
+                    <option value="PRODUIT">Produit</option>
+                    <option value="TRESORERIE">Trésorerie</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-xs font-semibold text-slate-600 mb-1">Compte parent (code)</label>
+                  <input type="text" [(ngModel)]="newCompte.compteParent" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm">
+                </div>
+                <div class="flex items-end">
+                  <button (click)="createCompte()"
+                          [disabled]="!newCompte.code || !newCompte.libelle || !newCompte.type"
+                          class="w-full px-4 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 transition disabled:opacity-50">
+                    Ajouter le compte
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Liste des comptes -->
+            <div class="overflow-x-auto max-h-[480px] border border-slate-200 rounded-lg">
+              <table class="w-full text-sm">
+                <thead class="bg-slate-50 border-b border-slate-200">
+                  <tr>
+                    <th class="px-3 py-2 text-left text-xs font-semibold text-slate-600">Code</th>
+                    <th class="px-3 py-2 text-left text-xs font-semibold text-slate-600">Libellé</th>
+                    <th class="px-3 py-2 text-left text-xs font-semibold text-slate-600">Classe</th>
+                    <th class="px-3 py-2 text-left text-xs font-semibold text-slate-600">Type</th>
+                    <th class="px-3 py-2 text-left text-xs font-semibold text-slate-600">Parent</th>
+                    <th class="px-3 py-2 text-right text-xs font-semibold text-slate-600">Actif</th>
+                    <th class="px-3 py-2 text-right text-xs font-semibold text-slate-600">Actions</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                  @for (c of comptesPlan(); track c.id) {
+                    <tr class="hover:bg-slate-50">
+                      <td class="px-3 py-2 font-mono text-xs">{{ c.code }}</td>
+                      <td class="px-3 py-2">
+                        <input type="text" [(ngModel)]="c.libelle" (blur)="saveCompte(c)" class="w-full bg-transparent border-b border-dashed border-slate-200 focus:border-blue-500 focus:outline-none text-xs">
+                      </td>
+                      <td class="px-3 py-2 text-xs">{{ c.classe }}</td>
+                      <td class="px-3 py-2 text-xs">{{ c.type }}</td>
+                      <td class="px-3 py-2 text-xs">{{ c.compteParent }}</td>
+                      <td class="px-3 py-2 text-right">
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold"
+                              [class.bg-emerald-100]="c.actif" [class.text-emerald-700]="c.actif"
+                              [class.bg-slate-100]="!c.actif" [class.text-slate-500]="!c.actif">
+                          {{ c.actif ? 'Actif' : 'Inactif' }}
+                        </span>
+                      </td>
+                      <td class="px-3 py-2 text-right">
+                        <button (click)="toggleCompteActif(c)" class="text-xs text-slate-500 hover:text-emerald-700 mr-2">
+                          {{ c.actif ? 'Désactiver' : 'Activer' }}
+                        </button>
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          </div>
+        }
+
         <!-- Bilan Tab -->
         @if (activeTab() === 'bilan') {
           <div class="p-6">
@@ -309,13 +412,15 @@ export class ComptabiliteComponent implements OnInit {
   private route = inject(ActivatedRoute);
   private router = inject(Router);
 
-  activeTab = signal<'journal' | 'balance' | 'grand-livre' | 'bilan' | 'cpc'>('balance');
+  activeTab = signal<'journal' | 'balance' | 'grand-livre' | 'bilan' | 'cpc' | 'plan-comptable'>('balance');
   comptes = signal<CompteComptable[]>([]);
   journal = signal<EcritureComptable[]>([]);
   balance = signal<CompteComptable[]>([]);
   grandLivre = signal<EcritureComptable[]>([]);
   bilanData = signal<any>(null);
   cpcData = signal<any>(null);
+  comptesPlan = signal<CompteComptable[]>([]);
+  newCompte: any = { code: '', libelle: '', classe: '', type: '', compteParent: '' };
   selectedCompteCode: string = '';
   dateDebut: string = new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0];
   dateFin: string = new Date().toISOString().split('T')[0];
@@ -346,6 +451,43 @@ export class ComptabiliteComponent implements OnInit {
     const diff = Math.abs(this.totalDebit() - this.totalCredit());
     return diff < 0.01; // Tolérance de 0.01
   });
+
+  loadComptesPlan() {
+    this.comptabiliteService.getComptes().subscribe({
+      next: (data) => this.comptesPlan.set(data),
+      error: () => this.store.showToast('Erreur lors du chargement du plan comptable', 'error')
+    });
+  }
+
+  createCompte() {
+    this.comptabiliteService.createCompte(this.newCompte).subscribe({
+      next: () => {
+        this.store.showToast('Compte créé', 'success');
+        this.newCompte = { code: '', libelle: '', classe: '', type: '', compteParent: '' };
+        this.loadComptesPlan();
+      },
+      error: () => this.store.showToast('Erreur lors de la création du compte', 'error')
+    });
+  }
+
+  saveCompte(compte: CompteComptable) {
+    if (!compte.id) return;
+    this.comptabiliteService.updateCompte(compte.id, { libelle: compte.libelle, classe: compte.classe, type: compte.type, compteParent: compte.compteParent, actif: compte.actif }).subscribe({
+      next: () => this.store.showToast('Compte mis à jour', 'success'),
+      error: () => this.store.showToast('Erreur lors de la mise à jour du compte', 'error')
+    });
+  }
+
+  toggleCompteActif(compte: CompteComptable) {
+    if (!compte.id) return;
+    this.comptabiliteService.deactivateCompte(compte.id).subscribe({
+      next: (updated) => {
+        compte.actif = updated.actif;
+        this.store.showToast(updated.actif ? 'Compte activé' : 'Compte désactivé', 'success');
+      },
+      error: () => this.store.showToast('Erreur lors de la mise à jour du statut du compte', 'error')
+    });
+  }
 
   ngOnInit() {
     // Lire les query params pour pieceType/pieceId

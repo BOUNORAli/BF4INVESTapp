@@ -318,6 +318,81 @@ public class ComptabiliteService {
     }
 
     /**
+     * Crée un nouveau compte comptable à partir d'un DTO.
+     * Valide l'unicité du code et initialise les soldes à 0.
+     */
+    public CompteComptable createCompte(CompteComptable dto) {
+        if (dto.getCode() == null || dto.getCode().trim().isEmpty()) {
+            throw new IllegalArgumentException("Le code du compte est obligatoire");
+        }
+        String code = dto.getCode().trim();
+        compteRepository.findByCode(code).ifPresent(existing -> {
+            throw new IllegalArgumentException("Un compte avec le code " + code + " existe déjà");
+        });
+
+        LocalDateTime now = LocalDateTime.now();
+
+        CompteComptable compte = CompteComptable.builder()
+                .code(code)
+                .libelle(dto.getLibelle())
+                .classe(dto.getClasse())
+                .type(dto.getType())
+                .collectif(dto.getCollectif() != null ? dto.getCollectif() : Boolean.FALSE)
+                .compteParent(dto.getCompteParent())
+                .soldeDebit(0.0)
+                .soldeCredit(0.0)
+                .solde(0.0)
+                .actif(dto.getActif() != null ? dto.getActif() : Boolean.TRUE)
+                .createdAt(now)
+                .updatedAt(now)
+                .build();
+
+        return compteRepository.save(compte);
+    }
+
+    /**
+     * Met à jour un compte existant (libellé, type, parent, actif...).
+     * Ne permet pas de modifier les soldes directement.
+     */
+    public CompteComptable updateCompte(String id, CompteComptable dto) {
+        CompteComptable compte = compteRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Compte introuvable pour id " + id));
+
+        if (dto.getLibelle() != null) {
+            compte.setLibelle(dto.getLibelle());
+        }
+        if (dto.getClasse() != null) {
+            compte.setClasse(dto.getClasse());
+        }
+        if (dto.getType() != null) {
+            compte.setType(dto.getType());
+        }
+        if (dto.getCollectif() != null) {
+            compte.setCollectif(dto.getCollectif());
+        }
+        if (dto.getCompteParent() != null) {
+            compte.setCompteParent(dto.getCompteParent());
+        }
+        if (dto.getActif() != null) {
+            compte.setActif(dto.getActif());
+        }
+
+        compte.setUpdatedAt(LocalDateTime.now());
+        return compteRepository.save(compte);
+    }
+
+    /**
+     * Désactive un compte comptable (soft delete).
+     */
+    public CompteComptable deactivateCompte(String id) {
+        CompteComptable compte = compteRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Compte introuvable pour id " + id));
+        compte.setActif(false);
+        compte.setUpdatedAt(LocalDateTime.now());
+        return compteRepository.save(compte);
+    }
+
+    /**
      * Génère une écriture comptable pour une facture vente
      * Débit: 41111 (Clients - Ventes) / Crédit: 7121 (Ventes de marchandises) + 4457 (TVA collectée)
      */
@@ -912,6 +987,64 @@ public class ComptabiliteService {
         return getOrCreateCurrentExercice();
     }
 
+    /**
+     * Crée une écriture comptable manuelle (journal OD) avec validation des totaux.
+     */
+    @Transactional
+    public EcritureComptable createEcritureManuelle(EcritureComptable dto) {
+        if (dto.getDateEcriture() == null) {
+            throw new IllegalArgumentException("La date de l'écriture est obligatoire");
+        }
+        if (dto.getLignes() == null || dto.getLignes().isEmpty()) {
+            throw new IllegalArgumentException("Au moins une ligne d'écriture est requise");
+        }
+
+        double totalDebit = 0.0;
+        double totalCredit = 0.0;
+
+        for (LigneEcriture ligne : dto.getLignes()) {
+            if (ligne.getCompteCode() == null || ligne.getCompteCode().trim().isEmpty()) {
+                throw new IllegalArgumentException("Chaque ligne doit avoir un compte comptable");
+            }
+            // Vérifier que le compte existe
+            if (compteRepository.findByCode(ligne.getCompteCode().trim()).isEmpty()) {
+                throw new IllegalArgumentException("Compte inexistant: " + ligne.getCompteCode());
+            }
+            if (ligne.getDebit() != null && ligne.getDebit() > 0) {
+                totalDebit += ligne.getDebit();
+            }
+            if (ligne.getCredit() != null && ligne.getCredit() > 0) {
+                totalCredit += ligne.getCredit();
+            }
+        }
+
+        if (Math.abs(totalDebit - totalCredit) > 0.01) {
+            throw new IllegalArgumentException("L'écriture n'est pas équilibrée (débit != crédit)");
+        }
+
+        ExerciceComptable exercice = getExerciceForDate(dto.getDateEcriture());
+        LocalDateTime now = LocalDateTime.now();
+
+        EcritureComptable ecriture = EcritureComptable.builder()
+                .dateEcriture(dto.getDateEcriture())
+                .journal(dto.getJournal() != null && !dto.getJournal().isBlank() ? dto.getJournal() : "OD")
+                .numeroPiece(dto.getNumeroPiece())
+                .libelle(dto.getLibelle())
+                .lignes(dto.getLignes())
+                .pieceJustificativeType(dto.getPieceJustificativeType())
+                .pieceJustificativeId(dto.getPieceJustificativeId())
+                .exerciceId(exercice != null ? exercice.getId() : null)
+                .lettree(Boolean.FALSE)
+                .pointage(Boolean.FALSE)
+                .createdAt(now)
+                .updatedAt(now)
+                .build();
+
+        EcritureComptable saved = ecritureRepository.save(ecriture);
+        updateComptesSoldes(saved.getLignes());
+        return saved;
+    }
+
     // ========== MÉTHODES POUR LE CONTROLLER ==========
 
     /**
@@ -1150,6 +1283,8 @@ public class ComptabiliteService {
     public Map<String, Integer> regenererEcrituresManquantes() {
         int facturesVenteTraitees = 0;
         int facturesAchatTraitees = 0;
+        int paiementsTraites = 0;
+        int chargesTraitees = 0;
         int erreurs = 0;
 
         // Récupérer toutes les factures vente
@@ -1175,13 +1310,17 @@ public class ComptabiliteService {
         List<FactureAchat> facturesAchat = factureAchatRepository.findAll();
         for (FactureAchat facture : facturesAchat) {
             try {
-                // Vérifier si une écriture existe déjà
+                String pieceType = facture.getEstAvoir() != null && facture.getEstAvoir() ? "AVOIR_ACHAT" : "FACTURE_ACHAT";
                 List<EcritureComptable> existing = ecritureRepository.findByPieceJustificativeTypeAndPieceJustificativeId(
-                        "FACTURE_ACHAT", facture.getId());
+                        pieceType, facture.getId());
                 if (existing.isEmpty()) {
-                    genererEcritureFactureAchat(facture);
+                    if (Boolean.TRUE.equals(facture.getEstAvoir())) {
+                        genererEcritureAvoirAchat(facture);
+                    } else {
+                        genererEcritureFactureAchat(facture);
+                    }
                     facturesAchatTraitees++;
-                    log.info("Écriture générée pour facture achat {}", facture.getNumeroFactureAchat());
+                    log.info("Écriture générée pour {} {}", pieceType, facture.getNumeroFactureAchat());
                 }
             } catch (Exception e) {
                 log.error("Erreur lors de la génération de l'écriture pour facture achat {}: {}", 
@@ -1190,11 +1329,49 @@ public class ComptabiliteService {
             }
         }
 
+        // Récupérer tous les paiements
+        List<Paiement> paiements = paiementRepository.findAll();
+        for (Paiement paiement : paiements) {
+            try {
+                List<EcritureComptable> existing = ecritureRepository.findByPieceJustificativeTypeAndPieceJustificativeId(
+                        "PAIEMENT", paiement.getId());
+                if (existing.isEmpty()) {
+                    genererEcriturePaiement(paiement);
+                    paiementsTraites++;
+                    log.info("Écriture générée pour paiement {}", paiement.getId());
+                }
+            } catch (Exception e) {
+                log.error("Erreur lors de la génération de l'écriture pour paiement {}: {}", 
+                        paiement.getId(), e.getMessage());
+                erreurs++;
+            }
+        }
+
+        // Récupérer toutes les charges
+        List<Charge> charges = chargeRepository.findAll();
+        for (Charge charge : charges) {
+            try {
+                List<EcritureComptable> existing = ecritureRepository.findByPieceJustificativeTypeAndPieceJustificativeId(
+                        "CHARGE", charge.getId());
+                if (existing.isEmpty()) {
+                    genererEcritureCharge(charge);
+                    chargesTraitees++;
+                    log.info("Écriture générée pour charge {}", charge.getId());
+                }
+            } catch (Exception e) {
+                log.error("Erreur lors de la génération de l'écriture pour charge {}: {}", 
+                        charge.getId(), e.getMessage());
+                erreurs++;
+            }
+        }
+
         Map<String, Integer> result = new HashMap<>();
         result.put("facturesVenteTraitees", facturesVenteTraitees);
         result.put("facturesAchatTraitees", facturesAchatTraitees);
+        result.put("paiementsTraites", paiementsTraites);
+        result.put("chargesTraitees", chargesTraitees);
         result.put("erreurs", erreurs);
-        result.put("total", facturesVenteTraitees + facturesAchatTraitees);
+        result.put("total", facturesVenteTraitees + facturesAchatTraitees + paiementsTraites + chargesTraitees);
 
         log.info("Régénération des écritures terminée: {} factures vente, {} factures achat, {} erreurs", 
                 facturesVenteTraitees, facturesAchatTraitees, erreurs);

@@ -46,6 +46,48 @@ public class ComptabiliteController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
+    @PostMapping("/comptes")
+    public ResponseEntity<CompteComptable> createCompte(@RequestBody CompteComptable compte) {
+        try {
+            CompteComptable created = comptabiliteService.createCompte(compte);
+            return ResponseEntity.status(HttpStatus.CREATED).body(created);
+        } catch (IllegalArgumentException e) {
+            log.warn("Erreur de validation lors de la création du compte: {}", e.getMessage());
+            return ResponseEntity.badRequest().build();
+        } catch (Exception e) {
+            log.error("Erreur lors de la création du compte comptable", e);
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+
+    @PutMapping("/comptes/{id}")
+    public ResponseEntity<CompteComptable> updateCompte(@PathVariable String id, @RequestBody CompteComptable compte) {
+        try {
+            CompteComptable updated = comptabiliteService.updateCompte(id, compte);
+            return ResponseEntity.ok(updated);
+        } catch (IllegalArgumentException e) {
+            log.warn("Erreur de validation lors de la mise à jour du compte: {}", e.getMessage());
+            return ResponseEntity.badRequest().build();
+        } catch (Exception e) {
+            log.error("Erreur lors de la mise à jour du compte comptable", e);
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+
+    @PostMapping("/comptes/{id}/desactiver")
+    public ResponseEntity<CompteComptable> deactivateCompte(@PathVariable String id) {
+        try {
+            CompteComptable updated = comptabiliteService.deactivateCompte(id);
+            return ResponseEntity.ok(updated);
+        } catch (IllegalArgumentException e) {
+            log.warn("Erreur lors de la désactivation du compte: {}", e.getMessage());
+            return ResponseEntity.badRequest().build();
+        } catch (Exception e) {
+            log.error("Erreur lors de la désactivation du compte comptable", e);
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+
     // ========== EXERCICES COMPTABLES ==========
 
     @GetMapping("/exercices")
@@ -106,6 +148,20 @@ public class ComptabiliteController {
         return comptabiliteService.getEcritureById(id)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
+    }
+
+    @PostMapping("/ecritures")
+    public ResponseEntity<EcritureComptable> createEcritureManuelle(@RequestBody EcritureComptable ecriture) {
+        try {
+            EcritureComptable created = comptabiliteService.createEcritureManuelle(ecriture);
+            return ResponseEntity.status(HttpStatus.CREATED).body(created);
+        } catch (IllegalArgumentException e) {
+            log.warn("Erreur de validation lors de la création de l'écriture manuelle: {}", e.getMessage());
+            return ResponseEntity.badRequest().build();
+        } catch (Exception e) {
+            log.error("Erreur lors de la création de l'écriture manuelle", e);
+            return ResponseEntity.internalServerError().build();
+        }
     }
 
     // ========== GRAND LIVRE ==========

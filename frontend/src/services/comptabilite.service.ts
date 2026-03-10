@@ -17,6 +17,18 @@ export class ComptabiliteService {
     return this.api.get<CompteComptable>(`/comptabilite/comptes/${code}`);
   }
 
+  createCompte(payload: Partial<CompteComptable>): Observable<CompteComptable> {
+    return this.api.post<CompteComptable>('/comptabilite/comptes', payload);
+  }
+
+  updateCompte(id: string, payload: Partial<CompteComptable>): Observable<CompteComptable> {
+    return this.api.put<CompteComptable>(`/comptabilite/comptes/${id}`, payload);
+  }
+
+  deactivateCompte(id: string): Observable<CompteComptable> {
+    return this.api.post<CompteComptable>(`/comptabilite/comptes/${id}/desactiver`, {});
+  }
+
   getExercices(): Observable<ExerciceComptable[]> {
     return this.api.get<ExerciceComptable[]>('/comptabilite/exercices');
   }
@@ -86,8 +98,8 @@ export class ComptabiliteService {
     return this.api.downloadFile('/pdf/comptabilite/cpc', params);
   }
 
-  regenererEcrituresManquantes(): Observable<{ facturesVenteTraitees: number; facturesAchatTraitees: number; erreurs: number; total: number }> {
-    return this.api.post<{ facturesVenteTraitees: number; facturesAchatTraitees: number; erreurs: number; total: number }>('/comptabilite/regenerer-ecritures', {});
+  regenererEcrituresManquantes(): Observable<{ facturesVenteTraitees: number; facturesAchatTraitees: number; paiementsTraites: number; chargesTraitees: number; erreurs: number; total: number }> {
+    return this.api.post<{ facturesVenteTraitees: number; facturesAchatTraitees: number; paiementsTraites: number; chargesTraitees: number; erreurs: number; total: number }>('/comptabilite/regenerer-ecritures', {});
   }
 }
 
