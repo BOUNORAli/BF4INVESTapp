@@ -100,9 +100,13 @@ public class TVAService {
 
         Double tvaCollecteeTotale = tvaCollectee20 + tvaCollectee14 + tvaCollectee10 + tvaCollectee7 + tvaCollectee0;
         Double tvaDeductibleTotale = tvaDeductible20 + tvaDeductible14 + tvaDeductible10 + tvaDeductible7 + tvaDeductible0;
-        Double tvaAPayer = tvaCollecteeTotale - tvaDeductibleTotale;
-        Double tvaCredit = tvaAPayer < 0 ? Math.abs(tvaAPayer) : 0.0;
-        if (tvaAPayer < 0) tvaAPayer = 0.0;
+
+        // Crédit reporté du mois précédent (si déclaration validée/déposée)
+        Double creditReporte = getCreditReportePourMoisPrecedent(mois, annee);
+
+        Double resultatBrut = tvaCollecteeTotale - tvaDeductibleTotale - creditReporte;
+        Double tvaAPayer = resultatBrut >= 0 ? resultatBrut : 0.0;
+        Double tvaCredit = resultatBrut < 0 ? Math.abs(resultatBrut) : 0.0;
 
         String periode = String.format("%02d/%d", mois, annee);
 
@@ -124,6 +128,7 @@ public class TVAService {
                 .tvaDeductibleTotale(tvaDeductibleTotale)
                 .tvaAPayer(tvaAPayer)
                 .tvaCredit(tvaCredit)
+                .creditReporte(creditReporte)
                 .statut(DeclarationTVA.StatutDeclaration.BROUILLON)
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
@@ -264,6 +269,30 @@ public class TVAService {
     }
     
     /**
+     * Récupère le crédit de TVA à reporter pour le mois précédent (si déclaration validée ou déposée).
+     */
+    private Double getCreditReportePourMoisPrecedent(Integer mois, Integer annee) {
+        int moisPrec = mois - 1;
+        int anneePrec = annee;
+        if (moisPrec == 0) {
+            moisPrec = 12;
+            anneePrec = annee - 1;
+        }
+        if (anneePrec <= 0) {
+            return 0.0;
+        }
+        Optional<DeclarationTVA> precOpt = declarationRepository.findByMoisAndAnnee(moisPrec, anneePrec);
+        if (precOpt.isPresent()) {
+            DeclarationTVA prec = precOpt.get();
+            if (prec.getStatut() == DeclarationTVA.StatutDeclaration.VALIDEE
+                    || prec.getStatut() == DeclarationTVA.StatutDeclaration.DEPOSEE) {
+                return prec.getTvaCredit() != null ? prec.getTvaCredit() : 0.0;
+            }
+        }
+        return 0.0;
+    }
+    
+    /**
      * Calcule et génère une déclaration TVA basée sur les dates de règlement (paiements)
      * Règles:
      * - TVA Collectée (Ventes): Basée sur la date de paiement du client
@@ -299,23 +328,28 @@ public class TVAService {
         Double tvaDeductible0 = 0.0;
         
         for (Paiement paiement : paiements) {
-            if (paiement.getTvaPaye() == null || paiement.getTvaPaye() <= 0) {
+            if (paiement.getTvaPaye() == null || paiement.getTvaPaye() == 0.0) {
                 continue; // Pas de TVA sur ce paiement
             }
-            
-            Double tvaPayee = paiement.getTvaPaye();
+
+            // On travaille en valeur absolue, le signe (avoir ou non) est déterminé par la facture liée
+            Double tvaPayee = Math.abs(paiement.getTvaPaye());
             Double tauxTVA = paiement.getTvaRate() != null ? paiement.getTvaRate() : 0.20;
             
             // Ventes (TVA collectée)
             if (paiement.getFactureVenteId() != null) {
                 Optional<FactureVente> factureOpt = factureVenteRepository.findById(paiement.getFactureVenteId());
                 if (factureOpt.isPresent()) {
-                    // TVA collectée au mois du paiement (toujours)
-                    if (tauxTVA == 0.20) tvaCollectee20 += tvaPayee;
-                    else if (tauxTVA == 0.14) tvaCollectee14 += tvaPayee;
-                    else if (tauxTVA == 0.10) tvaCollectee10 += tvaPayee;
-                    else if (tauxTVA == 0.07) tvaCollectee7 += tvaPayee;
-                    else tvaCollectee0 += tvaPayee;
+                    FactureVente facture = factureOpt.get();
+                    boolean estAvoir = Boolean.TRUE.equals(facture.getEstAvoir());
+                    double signe = estAvoir ? -1.0 : 1.0;
+                    double montant = tvaPayee * signe;
+
+                    if (tauxTVA == 0.20) tvaCollectee20 += montant;
+                    else if (tauxTVA == 0.14) tvaCollectee14 += montant;
+                    else if (tauxTVA == 0.10) tvaCollectee10 += montant;
+                    else if (tauxTVA == 0.07) tvaCollectee7 += montant;
+                    else tvaCollectee0 += montant;
                 }
             }
             
@@ -324,7 +358,10 @@ public class TVAService {
                 Optional<FactureAchat> factureOpt = factureAchatRepository.findById(paiement.getFactureAchatId());
                 if (factureOpt.isPresent()) {
                     FactureAchat facture = factureOpt.get();
-                    
+                    boolean estAvoir = Boolean.TRUE.equals(facture.getEstAvoir());
+                    double signe = estAvoir ? -1.0 : 1.0;
+                    double montant = tvaPayee * signe;
+
                     // Exception: Si paiement avant facture → TVA au mois de la facture
                     boolean paiementAvantFacture = paiement.getDate() != null && facture.getDateFacture() != null
                             && paiement.getDate().isBefore(facture.getDateFacture());
@@ -336,11 +373,11 @@ public class TVAService {
                         
                         if (moisFacture == mois && anneeFacture == annee) {
                             // La facture est dans le même mois, on peut l'ajouter
-                            if (tauxTVA == 0.20) tvaDeductible20 += tvaPayee;
-                            else if (tauxTVA == 0.14) tvaDeductible14 += tvaPayee;
-                            else if (tauxTVA == 0.10) tvaDeductible10 += tvaPayee;
-                            else if (tauxTVA == 0.07) tvaDeductible7 += tvaPayee;
-                            else tvaDeductible0 += tvaPayee;
+                            if (tauxTVA == 0.20) tvaDeductible20 += montant;
+                            else if (tauxTVA == 0.14) tvaDeductible14 += montant;
+                            else if (tauxTVA == 0.10) tvaDeductible10 += montant;
+                            else if (tauxTVA == 0.07) tvaDeductible7 += montant;
+                            else tvaDeductible0 += montant;
                         } else {
                             // La facture est dans un autre mois, on ne l'ajoute pas ici
                             // Elle sera comptabilisée dans le mois de la facture
@@ -349,48 +386,40 @@ public class TVAService {
                         }
                     } else {
                         // TVA déductible au mois du paiement (normal)
-                        if (tauxTVA == 0.20) tvaDeductible20 += tvaPayee;
-                        else if (tauxTVA == 0.14) tvaDeductible14 += tvaPayee;
-                        else if (tauxTVA == 0.10) tvaDeductible10 += tvaPayee;
-                        else if (tauxTVA == 0.07) tvaDeductible7 += tvaPayee;
-                        else tvaDeductible0 += tvaPayee;
+                        if (tauxTVA == 0.20) tvaDeductible20 += montant;
+                        else if (tauxTVA == 0.14) tvaDeductible14 += montant;
+                        else if (tauxTVA == 0.10) tvaDeductible10 += montant;
+                        else if (tauxTVA == 0.07) tvaDeductible7 += montant;
+                        else tvaDeductible0 += montant;
                     }
                 }
             }
         }
         
-        // Gérer les factures achat avec paiement avant facture dans un autre mois
-        // Il faut aussi compter la TVA déductible pour les factures du mois dont le paiement a été fait avant
-        // Récupérer toutes les factures achat du mois
-        List<FactureAchat> facturesAchatDuMois = factureAchatRepository.findByDateFactureBetween(dateDebut, dateFin);
-        
-        for (FactureAchat facture : facturesAchatDuMois) {
-            if (facture.getTotalTVA() == null || facture.getTotalTVA() <= 0) continue;
-            
-            // Chercher les paiements de cette facture effectués avant la date de facture
-            List<Paiement> paiementsAvantFacture = paiementRepository.findByFactureAchatId(facture.getId()).stream()
-                    .filter(p -> p.getDate() != null && facture.getDateFacture() != null
-                            && p.getDate().isBefore(facture.getDateFacture()))
-                    .toList();
-            
-            if (!paiementsAvantFacture.isEmpty()) {
-                // Il y a eu un paiement avant la facture, la TVA est déductible ce mois-ci
-                Double tvaFacture = facture.getTotalTVA();
-                Double tauxTVA = facture.getTvaRate() != null ? facture.getTvaRate() : 0.20;
-                
-                if (tauxTVA == 0.20) tvaDeductible20 += tvaFacture;
-                else if (tauxTVA == 0.14) tvaDeductible14 += tvaFacture;
-                else if (tauxTVA == 0.10) tvaDeductible10 += tvaFacture;
-                else if (tauxTVA == 0.07) tvaDeductible7 += tvaFacture;
-                else tvaDeductible0 += tvaFacture;
+        // Intégrer la TVA déductible sur charges du mois (charges imposables uniquement)
+        List<Charge> chargesDuMois = getChargesByMonth(mois, annee);
+        for (Charge charge : chargesDuMois) {
+            if (charge.getMontant() == null || charge.getMontant() <= 0 || charge.getTauxImposition() == null) {
+                continue;
             }
+            double taux = charge.getTauxImposition(); // ex: 0.20
+            double tvaCharge = charge.getMontant() * taux;
+            if (taux == 0.20) tvaDeductible20 += tvaCharge;
+            else if (taux == 0.14) tvaDeductible14 += tvaCharge;
+            else if (taux == 0.10) tvaDeductible10 += tvaCharge;
+            else if (taux == 0.07) tvaDeductible7 += tvaCharge;
+            else tvaDeductible0 += tvaCharge;
         }
         
         Double tvaCollecteeTotale = tvaCollectee20 + tvaCollectee14 + tvaCollectee10 + tvaCollectee7 + tvaCollectee0;
         Double tvaDeductibleTotale = tvaDeductible20 + tvaDeductible14 + tvaDeductible10 + tvaDeductible7 + tvaDeductible0;
-        Double tvaAPayer = tvaCollecteeTotale - tvaDeductibleTotale;
-        Double tvaCredit = tvaAPayer < 0 ? Math.abs(tvaAPayer) : 0.0;
-        if (tvaAPayer < 0) tvaAPayer = 0.0;
+
+        // Crédit reporté du mois précédent (si déclaration validée/déposée)
+        Double creditReporte = getCreditReportePourMoisPrecedent(mois, annee);
+
+        Double resultatBrut = tvaCollecteeTotale - tvaDeductibleTotale - creditReporte;
+        Double tvaAPayer = resultatBrut >= 0 ? resultatBrut : 0.0;
+        Double tvaCredit = resultatBrut < 0 ? Math.abs(resultatBrut) : 0.0;
         
         String periode = String.format("%02d/%d", mois, annee);
         
@@ -412,6 +441,7 @@ public class TVAService {
                 .tvaDeductibleTotale(tvaDeductibleTotale)
                 .tvaAPayer(tvaAPayer)
                 .tvaCredit(tvaCredit)
+                .creditReporte(creditReporte)
                 .statut(DeclarationTVA.StatutDeclaration.BROUILLON)
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())

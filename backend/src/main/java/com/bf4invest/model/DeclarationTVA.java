@@ -41,8 +41,9 @@ public class DeclarationTVA {
     private Double tvaDeductibleTotale; // Total TVA déductible
     
     // Résultat
-    private Double tvaAPayer; // TVA à payer (si positif)
-    private Double tvaCredit; // TVA crédit (si négatif, reporté au mois suivant)
+    private Double tvaAPayer;   // TVA à payer du mois (après prise en compte du crédit reporté)
+    private Double tvaCredit;   // Crédit de TVA généré ce mois (si résultat négatif)
+    private Double creditReporte; // Crédit de TVA reporté du mois précédent utilisé dans le calcul
     
     private StatutDeclaration statut; // BROUILLON, VALIDEE, DEPOSEE
     private LocalDate dateDepot; // Date de dépôt à la DGI
