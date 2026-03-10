@@ -1161,7 +1161,7 @@ public class ComptabiliteService {
     // ========== BILAN ==========
 
     /**
-     * Calcule le bilan (Actif et Passif)
+     * Calcule le bilan (Actif et Passif) selon une structure proche du PCGE marocain.
      */
     public Map<String, Object> getBilan(LocalDate date, String exerciceId) {
         List<CompteComptable> balance = getBalance(
@@ -1170,45 +1170,72 @@ public class ComptabiliteService {
                 exerciceId
         );
 
-        // Actif
-        Double actifImmobilise = balance.stream()
+        // Actif immobilisé (classe 2)
+        double actifImmobilise = balance.stream()
                 .filter(c -> "2".equals(c.getClasse()))
-                .mapToDouble(c -> c.getSolde() != null && c.getSolde() > 0 ? c.getSolde() : 0.0)
+                .mapToDouble(c -> c.getSolde() != null ? c.getSolde() : 0.0)
+                .filter(v -> v > 0)
                 .sum();
 
-        Double actifCirculant = balance.stream()
-                .filter(c -> "3".equals(c.getClasse()) || "5".equals(c.getClasse()))
-                .mapToDouble(c -> c.getSolde() != null && c.getSolde() > 0 ? c.getSolde() : 0.0)
+        // Créances (clients et autres comptes de tiers débiteurs – classe 4, type ACTIF)
+        double creances = balance.stream()
+                .filter(c -> "4".equals(c.getClasse()) && c.getType() == CompteComptable.TypeCompte.ACTIF)
+                .mapToDouble(c -> c.getSolde() != null ? c.getSolde() : 0.0)
+                .filter(v -> v > 0)
                 .sum();
 
-        Double creances = balance.stream()
-                .filter(c -> "4111".equals(c.getCode()) || c.getCode().startsWith("4111"))
-                .mapToDouble(c -> c.getSolde() != null && c.getSolde() > 0 ? c.getSolde() : 0.0)
+        // Stocks (classe 3)
+        double stocks = balance.stream()
+                .filter(c -> "3".equals(c.getClasse()))
+                .mapToDouble(c -> c.getSolde() != null ? c.getSolde() : 0.0)
+                .filter(v -> v > 0)
                 .sum();
 
-        Double totalActif = actifImmobilise + actifCirculant + creances;
+        // Trésorerie actif (comptes de trésorerie avec solde débiteur positif)
+        double tresorerieActif = balance.stream()
+                .filter(c -> "5".equals(c.getClasse()) && c.getType() == CompteComptable.TypeCompte.TRESORERIE)
+                .mapToDouble(c -> c.getSolde() != null ? c.getSolde() : 0.0)
+                .filter(v -> v > 0)
+                .sum();
 
-        // Passif
-        Double capitauxPropres = balance.stream()
+        double actifCirculant = stocks + creances + tresorerieActif;
+        double totalActif = actifImmobilise + actifCirculant;
+
+        // Capitaux propres (classe 1)
+        double capitauxPropres = balance.stream()
                 .filter(c -> "1".equals(c.getClasse()))
-                .mapToDouble(c -> c.getSolde() != null && c.getSolde() > 0 ? c.getSolde() : 0.0)
+                .mapToDouble(c -> c.getSolde() != null ? c.getSolde() : 0.0)
+                .filter(v -> v > 0)
                 .sum();
 
-        Double dettes = balance.stream()
-                .filter(c -> "4411".equals(c.getCode()) || c.getCode().startsWith("4411"))
-                .mapToDouble(c -> c.getSolde() != null && c.getSolde() > 0 ? c.getSolde() : 0.0)
+        // Dettes financières et d'exploitation (classe 4, type PASSIF)
+        double dettes = balance.stream()
+                .filter(c -> "4".equals(c.getClasse()) && c.getType() == CompteComptable.TypeCompte.PASSIF)
+                .mapToDouble(c -> c.getSolde() != null ? c.getSolde() : 0.0)
+                .filter(v -> v > 0)
                 .sum();
 
-        Double totalPassif = capitauxPropres + dettes;
+        // Trésorerie-passif (soldes créditeurs éventuels de comptes de trésorerie)
+        double tresoreriePassif = balance.stream()
+                .filter(c -> "5".equals(c.getClasse()) && c.getType() == CompteComptable.TypeCompte.TRESORERIE)
+                .mapToDouble(c -> c.getSolde() != null ? c.getSolde() : 0.0)
+                .filter(v -> v < 0) // découverts ou soldes créditeurs
+                .map(v -> Math.abs(v))
+                .sum();
+
+        double totalPassif = capitauxPropres + dettes + tresoreriePassif;
 
         Map<String, Object> bilan = new HashMap<>();
         bilan.put("date", date);
         bilan.put("actifImmobilise", actifImmobilise);
-        bilan.put("actifCirculant", actifCirculant);
         bilan.put("creances", creances);
+        bilan.put("stocks", stocks);
+        bilan.put("tresorerieActif", tresorerieActif);
+        bilan.put("actifCirculant", actifCirculant);
         bilan.put("totalActif", totalActif);
         bilan.put("capitauxPropres", capitauxPropres);
         bilan.put("dettes", dettes);
+        bilan.put("tresoreriePassif", tresoreriePassif);
         bilan.put("totalPassif", totalPassif);
         bilan.put("resultat", totalActif - totalPassif);
 
@@ -1223,42 +1250,66 @@ public class ComptabiliteService {
     public Map<String, Object> getCPC(LocalDate dateDebut, LocalDate dateFin, String exerciceId) {
         List<CompteComptable> balance = getBalance(dateDebut, dateFin, exerciceId);
 
-        // Produits d'exploitation (Classe 7)
-        Double produitsExploitation = balance.stream()
-                .filter(c -> "7".equals(c.getClasse()))
-                .mapToDouble(c -> c.getSolde() != null && c.getSolde() > 0 ? c.getSolde() : 0.0)
+        // Produits d'exploitation (classe 7 hors comptes financiers et exceptionnels)
+        double produitsExploitation = balance.stream()
+                .filter(c -> "7".equals(c.getClasse())
+                        && !List.of("7611", "7511").contains(c.getCode()))
+                .mapToDouble(c -> c.getSolde() != null ? c.getSolde() : 0.0)
+                .filter(v -> v > 0)
                 .sum();
 
-        // Charges d'exploitation (Classe 6)
-        Double chargesExploitation = balance.stream()
-                .filter(c -> "6".equals(c.getClasse()))
-                .mapToDouble(c -> c.getSolde() != null && c.getSolde() > 0 ? c.getSolde() : 0.0)
+        // Charges d'exploitation (classe 6 hors charges financières 6211, impôt 6312, charges exceptionnelles 6711)
+        double chargesExploitation = balance.stream()
+                .filter(c -> "6".equals(c.getClasse())
+                        && !List.of("6211", "6312", "6711").contains(c.getCode()))
+                .mapToDouble(c -> c.getSolde() != null ? c.getSolde() : 0.0)
+                .filter(v -> v > 0)
                 .sum();
 
-        Double resultatExploitation = produitsExploitation - chargesExploitation;
+        double resultatExploitation = produitsExploitation - chargesExploitation;
 
-        // Produits financiers
-        Double produitsFinanciers = balance.stream()
+        // Produits financiers (ex: 7611)
+        double produitsFinanciers = balance.stream()
                 .filter(c -> "7611".equals(c.getCode()))
-                .mapToDouble(c -> c.getSolde() != null && c.getSolde() > 0 ? c.getSolde() : 0.0)
+                .mapToDouble(c -> c.getSolde() != null ? c.getSolde() : 0.0)
+                .filter(v -> v > 0)
                 .sum();
 
-        // Charges financières
-        Double chargesFinancieres = balance.stream()
+        // Charges financières (ex: 6211)
+        double chargesFinancieres = balance.stream()
                 .filter(c -> "6211".equals(c.getCode()))
-                .mapToDouble(c -> c.getSolde() != null && c.getSolde() > 0 ? c.getSolde() : 0.0)
+                .mapToDouble(c -> c.getSolde() != null ? c.getSolde() : 0.0)
+                .filter(v -> v > 0)
                 .sum();
 
-        Double resultatFinancier = produitsFinanciers - chargesFinancieres;
-        Double resultatCourant = resultatExploitation + resultatFinancier;
+        double resultatFinancier = produitsFinanciers - chargesFinancieres;
+        double resultatCourant = resultatExploitation + resultatFinancier;
+
+        // Produits non courants (exceptionnels) – ex: 7511
+        double produitsNonCourants = balance.stream()
+                .filter(c -> "7511".equals(c.getCode()))
+                .mapToDouble(c -> c.getSolde() != null ? c.getSolde() : 0.0)
+                .filter(v -> v > 0)
+                .sum();
+
+        // Charges non courantes (exceptionnelles) – ex: 6711, 6511
+        double chargesNonCourantes = balance.stream()
+                .filter(c -> List.of("6711", "6511").contains(c.getCode()))
+                .mapToDouble(c -> c.getSolde() != null ? c.getSolde() : 0.0)
+                .filter(v -> v > 0)
+                .sum();
+
+        double resultatNonCourant = produitsNonCourants - chargesNonCourantes;
+        double resultatAvantImpot = resultatCourant + resultatNonCourant;
 
         // Impôts sur les bénéfices
-        Double impotBenefices = balance.stream()
+        double impotBenefices = balance.stream()
                 .filter(c -> "6312".equals(c.getCode()))
-                .mapToDouble(c -> c.getSolde() != null && c.getSolde() > 0 ? c.getSolde() : 0.0)
+                .mapToDouble(c -> c.getSolde() != null ? c.getSolde() : 0.0)
+                .filter(v -> v > 0)
                 .sum();
 
-        Double resultatNet = resultatCourant - impotBenefices;
+        double resultatNet = resultatAvantImpot - impotBenefices;
 
         Map<String, Object> cpc = new HashMap<>();
         cpc.put("dateDebut", dateDebut);
@@ -1270,6 +1321,10 @@ public class ComptabiliteService {
         cpc.put("chargesFinancieres", chargesFinancieres);
         cpc.put("resultatFinancier", resultatFinancier);
         cpc.put("resultatCourant", resultatCourant);
+        cpc.put("produitsNonCourants", produitsNonCourants);
+        cpc.put("chargesNonCourantes", chargesNonCourantes);
+        cpc.put("resultatNonCourant", resultatNonCourant);
+        cpc.put("resultatAvantImpot", resultatAvantImpot);
         cpc.put("impotBenefices", impotBenefices);
         cpc.put("resultatNet", resultatNet);
 
