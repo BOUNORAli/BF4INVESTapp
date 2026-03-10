@@ -325,5 +325,42 @@ public class ComptabiliteController {
             return ResponseEntity.internalServerError().build();
         }
     }
+
+    // ========== CLOTURE D'EXERCICE ==========
+
+    @PostMapping("/exercices/{id}/cloturer")
+    public ResponseEntity<ExerciceComptable> cloturerExercice(@PathVariable String id) {
+        try {
+            ExerciceComptable exercice = comptabiliteService.cloturerExercice(id);
+            return ResponseEntity.ok(exercice);
+        } catch (IllegalStateException e) {
+            log.warn("Erreur lors de la clôture de l'exercice {}: {}", id, e.getMessage());
+            return ResponseEntity.status(HttpStatus.CONFLICT).build();
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().build();
+        } catch (Exception e) {
+            log.error("Erreur inattendue lors de la clôture de l'exercice {}", id, e);
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+
+    // ========== LETTRAGE ==========
+
+    public record LettrageRequest(String compteCode, List<String> ecritureIds) {}
+
+    @PostMapping("/lettrage")
+    public ResponseEntity<Void> lettrer(@RequestBody LettrageRequest request) {
+        try {
+            comptabiliteService.lettrerEcritures(request.compteCode(), request.ecritureIds());
+            return ResponseEntity.ok().build();
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().build();
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).build();
+        } catch (Exception e) {
+            log.error("Erreur lors du lettrage des écritures", e);
+            return ResponseEntity.internalServerError().build();
+        }
+    }
 }
 

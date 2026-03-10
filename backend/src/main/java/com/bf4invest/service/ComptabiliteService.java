@@ -1331,6 +1331,111 @@ public class ComptabiliteService {
         return cpc;
     }
 
+    // ========== CLOTURE D'EXERCICE ==========
+
+    /**
+     * Clôture un exercice comptable:
+     * - Vérifie que toutes les écritures sont équilibrées
+     * - Calcule le résultat net via le CPC
+     * - Marque l'exercice comme CLOTURE
+     * - Crée automatiquement l'exercice suivant en OUVERT
+     *
+     * Pour rester simple et éviter les erreurs sur les données existantes,
+     * cette version ne génère pas encore les écritures de report à nouveau,
+     * mais prépare toute la mécanique de statut et de contrôle.
+     */
+    @Transactional
+    public ExerciceComptable cloturerExercice(String exerciceId) {
+        ExerciceComptable exercice = exerciceRepository.findById(exerciceId)
+                .orElseThrow(() -> new IllegalArgumentException("Exercice introuvable pour id " + exerciceId));
+
+        if (exercice.getStatut() == ExerciceComptable.StatutExercice.CLOTURE) {
+            throw new IllegalStateException("L'exercice est déjà clôturé");
+        }
+
+        // Vérifier l'équilibre de toutes les écritures de l'exercice
+        List<EcritureComptable> ecritures = ecritureRepository.findByExerciceId(exercice.getId());
+        for (EcritureComptable ecriture : ecritures) {
+            if (ecriture.getLignes() == null || ecriture.getLignes().isEmpty()) {
+                continue;
+            }
+            double totalDebit = 0.0;
+            double totalCredit = 0.0;
+            for (LigneEcriture ligne : ecriture.getLignes()) {
+                if (ligne.getDebit() != null) totalDebit += ligne.getDebit();
+                if (ligne.getCredit() != null) totalCredit += ligne.getCredit();
+            }
+            if (Math.abs(totalDebit - totalCredit) > 0.01) {
+                throw new IllegalStateException("Écriture non équilibrée détectée lors de la clôture: " + ecriture.getId());
+            }
+        }
+
+        // Calculer le résultat net de l'exercice via CPC
+        Map<String, Object> cpc = getCPC(exercice.getDateDebut(), exercice.getDateFin(), exercice.getId());
+        Double resultatNet = cpc.get("resultatNet") instanceof Double ? (Double) cpc.get("resultatNet") : 0.0;
+        log.info("Résultat net de l'exercice {}: {}", exercice.getCode(), resultatNet);
+
+        // Marquer l'exercice comme clôturé
+        exercice.setStatut(ExerciceComptable.StatutExercice.CLOTURE);
+        exercice.setUpdatedAt(LocalDateTime.now());
+        exerciceRepository.save(exercice);
+
+        // Créer automatiquement l'exercice suivant si inexistant
+        LocalDate newDebut = exercice.getDateFin().plusDays(1);
+        LocalDate newFin = LocalDate.of(newDebut.getYear(), 12, 31);
+        ExerciceComptable next = ExerciceComptable.builder()
+                .dateDebut(newDebut)
+                .dateFin(newFin)
+                .statut(ExerciceComptable.StatutExercice.OUVERT)
+                .createdAt(LocalDateTime.now())
+                .updatedAt(LocalDateTime.now())
+                .build();
+        ExerciceComptable savedNext = createExercice(next);
+
+        log.info("Exercice {} clôturé. Nouvel exercice {} créé.", exercice.getCode(), savedNext.getCode());
+        return exercice;
+    }
+
+    // ========== LETTRAGE ==========
+
+    /**
+     * Lettre un ensemble d'écritures pour un même compte (clients / fournisseurs).
+     * Vérifie que la somme des débits et crédits sur le compte est nulle.
+     */
+    @Transactional
+    public void lettrerEcritures(String compteCode, List<String> ecritureIds) {
+        if (compteCode == null || compteCode.isBlank() || ecritureIds == null || ecritureIds.isEmpty()) {
+            throw new IllegalArgumentException("Compte et écritures à lettrer requis");
+        }
+
+        List<EcritureComptable> ecritures = ecritureRepository.findAllById(ecritureIds);
+        if (ecritures.size() != ecritureIds.size()) {
+            throw new IllegalArgumentException("Certaines écritures à lettrer sont introuvables");
+        }
+
+        double totalDebit = 0.0;
+        double totalCredit = 0.0;
+
+        for (EcritureComptable ecriture : ecritures) {
+            if (ecriture.getLignes() == null) continue;
+            for (LigneEcriture ligne : ecriture.getLignes()) {
+                if (!compteCode.equals(ligne.getCompteCode())) continue;
+                if (ligne.getDebit() != null) totalDebit += ligne.getDebit();
+                if (ligne.getCredit() != null) totalCredit += ligne.getCredit();
+            }
+        }
+
+        if (Math.abs(totalDebit - totalCredit) > 0.01) {
+            throw new IllegalStateException("Impossible de lettrer: le total débit et crédit ne se compensent pas pour le compte " + compteCode);
+        }
+
+        for (EcritureComptable ecriture : ecritures) {
+            ecriture.setLettree(Boolean.TRUE);
+            ecriture.setUpdatedAt(LocalDateTime.now());
+        }
+        ecritureRepository.saveAll(ecritures);
+    }
+
     /**
      * Régénère les écritures comptables pour toutes les factures existantes qui n'en ont pas encore
      */
