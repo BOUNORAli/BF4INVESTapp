@@ -1,0 +1,75 @@
+# Vercel Web Analytics Implementation
+
+## Overview
+Successfully implemented Vercel Web Analytics for the BF4 Invest Manager Angular application following Vercel's official documentation.
+
+## Changes Made
+
+### 1. Installed Dependencies
+- Added `@vercel/analytics` package (version ^1.6.1) to the project
+- Updated `package.json` and `package-lock.json` accordingly
+
+### 2. Modified Files
+
+#### `frontend/index.tsx`
+- Imported the `inject` function from `@vercel/analytics`
+- Called `inject()` at the application entry point to initialize Web Analytics
+- This implementation follows the "other frameworks" pattern from Vercel's guide, as Angular doesn't have a dedicated component wrapper
+
+#### `frontend/index.html`
+- Added Vercel Web Analytics script tags in the `<head>` section
+- Includes the analytics initialization script and deferred loading of `/_vercel/insights/script.js`
+- This provides a fallback/redundant implementation to ensure analytics work properly
+
+## Implementation Strategy
+
+Since Angular is not one of the frameworks with a dedicated Analytics component (like Next.js, Remix, etc.), I implemented the analytics using the "other" framework approach:
+
+1. **Primary Method**: Used the `inject()` function from `@vercel/analytics` in the main bootstrap file (`index.tsx`)
+2. **Fallback Method**: Added HTML script tags to `index.html` for additional coverage
+
+Both methods are compatible and will ensure analytics tracking works correctly.
+
+## Build Verification
+
+The application was successfully built with the new analytics integration:
+- â Build completed without errors
+- â All chunks generated properly
+- â No compilation issues with TypeScript or Angular
+
+## Next Steps for Deployment
+
+To complete the Vercel Web Analytics setup:
+
+1. **Enable Analytics in Vercel Dashboard**:
+   - Go to your project on Vercel
+   - Navigate to the **Analytics** tab
+   - Click **Enable** to activate Web Analytics
+   - This will add routes at `/_vercel/insights/*`
+
+2. **Deploy to Vercel**:
+   - Deploy using `vercel deploy` or push to your connected Git repository
+   - Analytics will start tracking after deployment
+
+3. **Verify Analytics**:
+   - After deployment, visit your site and check the browser's Network tab
+   - Look for requests to `/_vercel/insights/view` to confirm tracking is active
+
+4. **View Data**:
+   - Access the Analytics dashboard on Vercel
+   - Data will populate after visitors access your site
+
+## Files Modified
+- `frontend/index.tsx` - Added analytics injection
+- `frontend/index.html` - Added analytics script tags
+- `frontend/package.json` - Added @vercel/analytics dependency
+- `frontend/package-lock.json` - Updated with new dependency tree
+
+## Compatibility Notes
+
+The implementation is compatible with the existing Angular 21 setup and uses:
+- Standalone components architecture
+- Zone-less change detection
+- Hash-based routing
+
+No conflicts or breaking changes were introduced.
