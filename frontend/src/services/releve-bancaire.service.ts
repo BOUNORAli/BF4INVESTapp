@@ -1,7 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { ApiService } from './api.service';
-import type { TransactionBancaire } from '../models/types';
+import type { SplitAllocation, TransactionBancaire } from '../models/types';
 
 export interface ImportResult {
   totalRows: number;
@@ -42,6 +42,18 @@ export class ReleveBancaireService {
     if (factureAchatId) body.factureAchatId = factureAchatId;
     
     return this.api.put<void>(`/releve-bancaire/transactions/${transactionId}/link`, body);
+  }
+
+  getRapprochementEtat(params?: { mois?: number; annee?: number }): Observable<any> {
+    return this.api.get<any>('/releve-bancaire/rapprochement', params);
+  }
+
+  pointerTransaction(transactionId: string, ecritureId: string): Observable<void> {
+    return this.api.post<void>(`/releve-bancaire/transactions/${transactionId}/pointage`, { ecritureId });
+  }
+
+  splitTransaction(transactionId: string, allocations: SplitAllocation[]): Observable<void> {
+    return this.api.post<void>(`/releve-bancaire/transactions/${transactionId}/split`, allocations);
   }
 
   // PDF file management (Cloudinary)

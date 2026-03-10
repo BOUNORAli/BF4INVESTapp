@@ -31,6 +31,8 @@ public class ReleveBancaireController {
     private final TransactionBancaireRepository transactionRepository;
     private final FileStorageService fileStorageService;
     private final ReleveBancaireFichierRepository releveFichierRepository;
+
+    public record PointageRequest(String ecritureId) {}
     
     /**
      * Importe un fichier Excel de relevé bancaire
@@ -145,6 +147,56 @@ public class ReleveBancaireController {
             }
         } catch (Exception e) {
             log.error("Erreur lors de la liaison de la transaction", e);
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+
+    /**
+     * Etat de rapprochement bancaire (transactions vs ecritures compte 5141).
+     */
+    @GetMapping("/rapprochement")
+    public ResponseEntity<Map<String, Object>> getRapprochementEtat(
+            @RequestParam(required = false) Integer mois,
+            @RequestParam(required = false) Integer annee
+    ) {
+        try {
+            return ResponseEntity.ok(mappingService.getEtatRapprochement(mois, annee));
+        } catch (Exception e) {
+            log.error("Erreur lors du chargement de l'etat de rapprochement", e);
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+
+    /**
+     * Pointe une transaction bancaire avec une ecriture comptable.
+     */
+    @PostMapping("/transactions/{id}/pointage")
+    public ResponseEntity<Void> pointerTransaction(
+            @PathVariable String id,
+            @RequestBody PointageRequest request
+    ) {
+        try {
+            boolean success = mappingService.pointerTransactionAvecEcriture(id, request.ecritureId());
+            return success ? ResponseEntity.ok().build() : ResponseEntity.badRequest().build();
+        } catch (Exception e) {
+            log.error("Erreur lors du pointage de transaction", e);
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+
+    /**
+     * Split une transaction bancaire en plusieurs paiements.
+     */
+    @PostMapping("/transactions/{id}/split")
+    public ResponseEntity<Void> splitTransaction(
+            @PathVariable String id,
+            @RequestBody List<TransactionMappingService.SplitAllocation> allocations
+    ) {
+        try {
+            boolean success = mappingService.splitTransaction(id, allocations);
+            return success ? ResponseEntity.ok().build() : ResponseEntity.badRequest().build();
+        } catch (Exception e) {
+            log.error("Erreur lors du split de transaction", e);
             return ResponseEntity.internalServerError().build();
         }
     }

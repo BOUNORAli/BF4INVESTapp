@@ -186,6 +186,7 @@ export interface Payment {
   factureAchatId?: string;
   factureVenteId?: string;
   bcReference?: string; // Référence BC associée
+  transactionBancaireId?: string;
   date: string;
   montant: number;
   mode: string;
@@ -385,6 +386,7 @@ export interface EcritureComptable {
   lignes: LigneEcriture[];
   pieceJustificativeType?: string;
   pieceJustificativeId?: string;
+  transactionBancaireId?: string;
   exerciceId?: string;
   lettree?: boolean;
   pointage?: boolean;
@@ -422,6 +424,43 @@ export interface DeclarationTVA {
   notes?: string;
 }
 
+export interface AjustementFiscal {
+  libelle: string;
+  montant: number;
+}
+
+export interface DeclarationIS {
+  id?: string;
+  annee: number;
+  dateDebut: string;
+  dateFin: string;
+  exerciceId?: string;
+  resultatComptable: number;
+  reintegrations: AjustementFiscal[];
+  deductions: AjustementFiscal[];
+  totalReintegrations: number;
+  totalDeductions: number;
+  resultatFiscal: number;
+  chiffreAffaires: number;
+  isCalcule: number;
+  cotisationMinimale: number;
+  isDu: number;
+  acomptesPayes: number;
+  reliquat: number;
+  excedent: number;
+  statut: 'BROUILLON' | 'VALIDEE';
+}
+
+export interface AcompteIS {
+  id: string;
+  numero: number;
+  dateEcheance: string;
+  montant: number;
+  statut: 'EN_ATTENTE' | 'PAYE' | 'EN_RETARD';
+  datePaiement?: string;
+  montantPaye?: number;
+}
+
 export interface TransactionBancaire {
   id?: string;
   dateOperation: string; // ISO date
@@ -438,5 +477,11 @@ export interface TransactionBancaire {
   annee?: number;
   createdAt?: string;
   updatedAt?: string;
+}
+
+export interface SplitAllocation {
+  factureVenteId?: string;
+  factureAchatId?: string;
+  montant: number;
 }
 

@@ -22,6 +22,7 @@ public class Paiement {
     private String factureAchatId; // Optionnel
     private String factureVenteId; // Optionnel
     private String bcReference; // Référence BC associée (colonne AFFECTATION de l'Excel)
+    private String transactionBancaireId; // Transaction source si paiement issu du relevé bancaire
     
     // Type de mouvement (colonne E de l'Excel)
     private String typeMouvement; // "C" = Client, "F" = Fournisseur, "FB", "CTP", "CTD", etc.

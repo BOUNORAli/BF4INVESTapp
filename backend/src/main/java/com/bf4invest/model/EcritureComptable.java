@@ -30,6 +30,7 @@ public class EcritureComptable {
     // Pièce justificative
     private String pieceJustificativeType; // FACTURE_VENTE, FACTURE_ACHAT, PAIEMENT, CHARGE, etc.
     private String pieceJustificativeId; // ID de la facture, paiement, charge, etc.
+    private String transactionBancaireId; // Lien optionnel vers transaction bancaire (rapprochement)
     
     private String exerciceId; // ID de l'exercice comptable
     private Boolean lettree; // true si l'écriture est lettrée (rapprochement bancaire)

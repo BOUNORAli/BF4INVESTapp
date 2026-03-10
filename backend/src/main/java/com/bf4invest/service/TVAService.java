@@ -221,7 +221,13 @@ public class TVAService {
 
         declaration.setStatut(DeclarationTVA.StatutDeclaration.VALIDEE);
         declaration.setUpdatedAt(LocalDateTime.now());
-        return declarationRepository.save(declaration);
+        DeclarationTVA saved = declarationRepository.save(declaration);
+        try {
+            comptabiliteService.genererEcritureDeclarationTVA(saved);
+        } catch (Exception e) {
+            log.warn("Erreur génération écriture déclaration TVA {}: {}", saved.getId(), e.getMessage());
+        }
+        return saved;
     }
 
     /**

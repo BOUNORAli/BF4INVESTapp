@@ -14,5 +14,6 @@ public interface EcritureComptableRepository extends MongoRepository<EcritureCom
     List<EcritureComptable> findByExerciceId(String exerciceId);
     List<EcritureComptable> findByPieceJustificativeTypeAndPieceJustificativeId(String type, String id);
     List<EcritureComptable> findByDateEcritureBetweenAndExerciceId(LocalDate dateDebut, LocalDate dateFin, String exerciceId);
+    List<EcritureComptable> findByPointageFalseAndLignesCompteCode(String compteCode);
 }
 

@@ -2,6 +2,7 @@ package com.bf4invest.service;
 
 import com.bf4invest.model.*;
 import com.bf4invest.repository.*;
+import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -21,6 +22,7 @@ public class TransactionMappingService {
     private final FactureAchatRepository factureAchatRepository;
     private final PaiementRepository paiementRepository;
     private final PaiementService paiementService;
+    private final EcritureComptableRepository ecritureComptableRepository;
     
     /**
      * Mappe automatiquement les transactions bancaires aux factures/paiements
@@ -66,9 +68,7 @@ public class TransactionMappingService {
      */
     private boolean mapperTransactionToFacture(TransactionBancaire transaction) {
         // Déterminer le montant de la transaction
-        Double montantTransaction = transaction.getCredit() != null && transaction.getCredit() > 0 
-                ? transaction.getCredit() 
-                : (transaction.getDebit() != null && transaction.getDebit() > 0 ? transaction.getDebit() : 0.0);
+        Double montantTransaction = getMontantTransaction(transaction);
         
         if (montantTransaction == 0.0) {
             return false;
@@ -225,6 +225,7 @@ public class TransactionMappingService {
                     .date(transaction.getDateOperation())
                     .montant(montant)
                     .reference(transaction.getReference())
+                    .transactionBancaireId(transaction.getId())
                     .mode(determinerModePaiement(transaction.getLibelle()));
             
             if (factureVente != null) {
@@ -334,6 +335,143 @@ public class TransactionMappingService {
         }
         
         return false;
+    }
+
+    /**
+     * Etat de rapprochement: transactions bancaires non mappees, ecritures banque non pointees et ecart.
+     */
+    public Map<String, Object> getEtatRapprochement(Integer mois, Integer annee) {
+        List<TransactionBancaire> transactions = (mois != null && annee != null)
+                ? transactionRepository.findByMoisAndAnnee(mois, annee)
+                : transactionRepository.findAll();
+
+        List<EcritureComptable> ecrituresBanqueNonPointees = ecritureComptableRepository
+                .findByPointageFalseAndLignesCompteCode("5141");
+
+        double soldeBancaire = transactions.stream()
+                .mapToDouble(t -> nz(t.getCredit()) - nz(t.getDebit()))
+                .sum();
+        double soldeComptable = ecrituresBanqueNonPointees.stream()
+                .mapToDouble(this::mouvementBanqueEcriture)
+                .sum();
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("transactions", transactions);
+        result.put("ecrituresBanqueNonPointees", ecrituresBanqueNonPointees);
+        result.put("soldeBancaire", soldeBancaire);
+        result.put("soldeComptableNonPointe", soldeComptable);
+        result.put("ecart", soldeBancaire - soldeComptable);
+        return result;
+    }
+
+    @Transactional
+    public boolean pointerTransactionAvecEcriture(String transactionId, String ecritureId) {
+        Optional<TransactionBancaire> transactionOpt = transactionRepository.findById(transactionId);
+        Optional<EcritureComptable> ecritureOpt = ecritureComptableRepository.findById(ecritureId);
+        if (transactionOpt.isEmpty() || ecritureOpt.isEmpty()) {
+            return false;
+        }
+
+        TransactionBancaire transaction = transactionOpt.get();
+        EcritureComptable ecriture = ecritureOpt.get();
+        double montantTransaction = getMontantTransaction(transaction);
+        double montantEcriture = Math.abs(mouvementBanqueEcriture(ecriture));
+        if (Math.abs(montantTransaction - montantEcriture) > 0.01) {
+            return false;
+        }
+
+        ecriture.setPointage(true);
+        ecriture.setTransactionBancaireId(transaction.getId());
+        ecriture.setUpdatedAt(LocalDateTime.now());
+        ecritureComptableRepository.save(ecriture);
+
+        transaction.setMapped(true);
+        transaction.setUpdatedAt(LocalDateTime.now());
+        transactionRepository.save(transaction);
+        return true;
+    }
+
+    @Transactional
+    public boolean splitTransaction(String transactionId, List<SplitAllocation> allocations) {
+        Optional<TransactionBancaire> transactionOpt = transactionRepository.findById(transactionId);
+        if (transactionOpt.isEmpty() || allocations == null || allocations.isEmpty()) {
+            return false;
+        }
+
+        TransactionBancaire transaction = transactionOpt.get();
+        double montantTransaction = getMontantTransaction(transaction);
+        double totalSplit = allocations.stream().mapToDouble(a -> nz(a.getMontant())).sum();
+        if (Math.abs(montantTransaction - totalSplit) > 0.01) {
+            return false;
+        }
+
+        for (SplitAllocation allocation : allocations) {
+            Paiement paiement = creerPaiementSplit(transaction, allocation);
+            if (paiement == null) {
+                throw new IllegalStateException("Impossible de créer un paiement pour le split");
+            }
+        }
+
+        transaction.setMapped(true);
+        transaction.setUpdatedAt(LocalDateTime.now());
+        transactionRepository.save(transaction);
+        return true;
+    }
+
+    private Paiement creerPaiementSplit(TransactionBancaire transaction, SplitAllocation allocation) {
+        if (allocation == null || allocation.getMontant() == null || allocation.getMontant() <= 0) {
+            return null;
+        }
+        if ((allocation.getFactureVenteId() == null || allocation.getFactureVenteId().isBlank())
+                && (allocation.getFactureAchatId() == null || allocation.getFactureAchatId().isBlank())) {
+            return null;
+        }
+
+        Paiement.PaiementBuilder builder = Paiement.builder()
+                .date(transaction.getDateOperation())
+                .montant(allocation.getMontant())
+                .reference(transaction.getReference())
+                .transactionBancaireId(transaction.getId())
+                .mode(determinerModePaiement(transaction.getLibelle()));
+
+        if (allocation.getFactureVenteId() != null && !allocation.getFactureVenteId().isBlank()) {
+            FactureVente facture = factureVenteRepository.findById(allocation.getFactureVenteId()).orElse(null);
+            if (facture == null) return null;
+            builder.factureVenteId(facture.getId()).typeMouvement("C").nature("paiement");
+            if (facture.getTvaRate() != null) builder.tvaRate(facture.getTvaRate());
+        } else {
+            FactureAchat facture = factureAchatRepository.findById(allocation.getFactureAchatId()).orElse(null);
+            if (facture == null) return null;
+            builder.factureAchatId(facture.getId()).typeMouvement("F").nature("paiement");
+            if (facture.getTvaRate() != null) builder.tvaRate(facture.getTvaRate());
+        }
+
+        return paiementService.create(builder.build());
+    }
+
+    private double mouvementBanqueEcriture(EcritureComptable ecriture) {
+        if (ecriture.getLignes() == null) return 0.0;
+        return ecriture.getLignes().stream()
+                .filter(l -> "5141".equals(l.getCompteCode()))
+                .mapToDouble(l -> nz(l.getDebit()) - nz(l.getCredit()))
+                .sum();
+    }
+
+    private double getMontantTransaction(TransactionBancaire transaction) {
+        return transaction.getCredit() != null && transaction.getCredit() > 0
+                ? transaction.getCredit()
+                : (transaction.getDebit() != null && transaction.getDebit() > 0 ? transaction.getDebit() : 0.0);
+    }
+
+    private double nz(Double value) {
+        return value != null ? value : 0.0;
+    }
+
+    @Data
+    public static class SplitAllocation {
+        private String factureVenteId;
+        private String factureAchatId;
+        private Double montant;
     }
 }
 

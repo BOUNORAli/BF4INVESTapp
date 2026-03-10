@@ -820,6 +820,7 @@ public class ComptabiliteService {
                 .lignes(lignes)
                 .pieceJustificativeType("PAIEMENT")
                 .pieceJustificativeId(paiement.getId())
+                .transactionBancaireId(paiement.getTransactionBancaireId())
                 .exerciceId(exercice.getId())
                 .lettree(false)
                 .pointage(false)
@@ -912,6 +913,106 @@ public class ComptabiliteService {
         EcritureComptable saved = ecritureRepository.save(ecriture);
         updateComptesSoldes(lignes);
         log.info("Écriture générée pour charge {}", charge.getLibelle());
+        return saved;
+    }
+
+    /**
+     * Génère l'écriture de déclaration TVA validée:
+     * Débit 4457 / Crédit 4456 / solde vers 4455 (à payer) ou 4444 (crédit TVA).
+     */
+    @Transactional
+    public EcritureComptable genererEcritureDeclarationTVA(DeclarationTVA declaration) {
+        List<EcritureComptable> existing = ecritureRepository.findByPieceJustificativeTypeAndPieceJustificativeId(
+                "DECLARATION_TVA", declaration.getId());
+        if (!existing.isEmpty()) {
+            return existing.get(0);
+        }
+
+        ensureEssentialAccountsExist();
+        ExerciceComptable exercice = getExerciceForDate(LocalDate.of(declaration.getAnnee(), declaration.getMois(), 1));
+        if (exercice == null) {
+            return null;
+        }
+
+        Optional<CompteComptable> c4457 = compteRepository.findByCode("4457");
+        Optional<CompteComptable> c4456 = compteRepository.findByCode("4456");
+        Optional<CompteComptable> c4455 = compteRepository.findByCode("4455");
+        Optional<CompteComptable> c4444 = compteRepository.findByCode("4444");
+        if (c4457.isEmpty() || c4456.isEmpty() || c4455.isEmpty() || c4444.isEmpty()) {
+            log.error("Comptes TVA manquants pour l'écriture de déclaration");
+            return null;
+        }
+
+        double collectee = declaration.getTvaCollecteeTotale() != null ? declaration.getTvaCollecteeTotale() : 0.0;
+        double deduct = declaration.getTvaDeductibleTotale() != null ? declaration.getTvaDeductibleTotale() : 0.0;
+        double creditReporte = declaration.getCreditReporte() != null ? declaration.getCreditReporte() : 0.0;
+        double aPayer = declaration.getTvaAPayer() != null ? declaration.getTvaAPayer() : 0.0;
+        double credit = declaration.getTvaCredit() != null ? declaration.getTvaCredit() : 0.0;
+
+        List<LigneEcriture> lignes = new ArrayList<>();
+        if (collectee > 0) {
+            lignes.add(LigneEcriture.builder()
+                    .compteCode("4457")
+                    .compteLibelle(c4457.get().getLibelle())
+                    .debit(collectee)
+                    .credit(null)
+                    .libelle("Solder TVA collectée " + declaration.getPeriode())
+                    .build());
+        }
+        if (deduct > 0) {
+            lignes.add(LigneEcriture.builder()
+                    .compteCode("4456")
+                    .compteLibelle(c4456.get().getLibelle())
+                    .debit(null)
+                    .credit(deduct)
+                    .libelle("Solder TVA déductible " + declaration.getPeriode())
+                    .build());
+        }
+        if (creditReporte > 0) {
+            lignes.add(LigneEcriture.builder()
+                    .compteCode("4444")
+                    .compteLibelle(c4444.get().getLibelle())
+                    .debit(null)
+                    .credit(creditReporte)
+                    .libelle("Utilisation crédit TVA reporté " + declaration.getPeriode())
+                    .build());
+        }
+        if (aPayer > 0) {
+            lignes.add(LigneEcriture.builder()
+                    .compteCode("4455")
+                    .compteLibelle(c4455.get().getLibelle())
+                    .debit(null)
+                    .credit(aPayer)
+                    .libelle("TVA à payer " + declaration.getPeriode())
+                    .build());
+        }
+        if (credit > 0) {
+            lignes.add(LigneEcriture.builder()
+                    .compteCode("4444")
+                    .compteLibelle(c4444.get().getLibelle())
+                    .debit(credit)
+                    .credit(null)
+                    .libelle("Crédit TVA à reporter " + declaration.getPeriode())
+                    .build());
+        }
+
+        EcritureComptable ecriture = EcritureComptable.builder()
+                .dateEcriture(LocalDate.of(declaration.getAnnee(), declaration.getMois(), 1).withDayOfMonth(
+                        LocalDate.of(declaration.getAnnee(), declaration.getMois(), 1).lengthOfMonth()))
+                .journal("OD")
+                .numeroPiece("TVA-" + declaration.getPeriode().replace("/", ""))
+                .libelle("Déclaration TVA " + declaration.getPeriode())
+                .lignes(lignes)
+                .pieceJustificativeType("DECLARATION_TVA")
+                .pieceJustificativeId(declaration.getId())
+                .exerciceId(exercice.getId())
+                .lettree(false)
+                .pointage(false)
+                .createdAt(LocalDateTime.now())
+                .updatedAt(LocalDateTime.now())
+                .build();
+        EcritureComptable saved = ecritureRepository.save(ecriture);
+        updateComptesSoldes(lignes);
         return saved;
     }
 

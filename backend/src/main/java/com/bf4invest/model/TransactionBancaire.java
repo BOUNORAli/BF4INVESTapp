@@ -33,6 +33,7 @@ public class TransactionBancaire {
     private String factureVenteId; // Lien optionnel vers une facture vente
     private String factureAchatId; // Lien optionnel vers une facture achat
     private String paiementId; // Lien optionnel vers un paiement créé depuis cette transaction
+    private String compteBancaireCode; // Compte bancaire comptable (ex: 5141)
     
     // Statut de mapping
     private Boolean mapped; // Si la transaction a été mappée à une facture/paiement

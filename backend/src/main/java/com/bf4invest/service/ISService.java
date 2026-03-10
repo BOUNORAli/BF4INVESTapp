@@ -1,13 +1,29 @@
 package com.bf4invest.service;
 
-import com.bf4invest.model.ExerciceComptable;
-import com.bf4invest.repository.ExerciceComptableRepository;
+import com.bf4invest.model.AcompteIS;
+import com.bf4invest.model.DeclarationIS;
+import com.bf4invest.model.ISBaremeConfig;
+import com.bf4invest.repository.AcompteISRepository;
+import com.bf4invest.repository.DeclarationISRepository;
+import com.bf4invest.repository.ISBaremeConfigRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.poi.ss.usermodel.CellStyle;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.time.LocalDate;
-import java.util.*;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
 @Slf4j
 @Service
@@ -15,112 +31,344 @@ import java.util.*;
 public class ISService {
 
     private final ComptabiliteService comptabiliteService;
-    private final ExerciceComptableRepository exerciceRepository;
+    private final DeclarationISRepository declarationISRepository;
+    private final AcompteISRepository acompteISRepository;
+    private final ISBaremeConfigRepository baremeConfigRepository;
 
-    /**
-     * Calcule l'IS (Impôt sur les Sociétés) pour une période donnée
-     * Barème progressif marocain:
-     * - 10% jusqu'à 300 000 MAD
-     * - 20% de 300 001 à 1 000 000 MAD
-     * - 31% au-delà (ou 28% selon secteur)
-     */
-    public Map<String, Object> calculerIS(LocalDate dateDebut, LocalDate dateFin, String exerciceId) {
-        // Récupérer le CPC pour obtenir le résultat net
-        Map<String, Object> cpc = comptabiliteService.getCPC(dateDebut, dateFin, exerciceId);
-        Double resultatNet = (Double) cpc.get("resultatNet");
-        if (resultatNet == null) resultatNet = 0.0;
+    @Transactional
+    public DeclarationIS calculerEtEnregistrerDeclaration(
+            Integer annee,
+            LocalDate dateDebut,
+            LocalDate dateFin,
+            String exerciceId,
+            List<DeclarationIS.AjustementFiscal> reintegrations,
+            List<DeclarationIS.AjustementFiscal> deductions
+    ) {
+        int safeAnnee = annee != null ? annee : (dateFin != null ? dateFin.getYear() : LocalDate.now().getYear());
+        LocalDate debut = dateDebut != null ? dateDebut : LocalDate.of(safeAnnee, 1, 1);
+        LocalDate fin = dateFin != null ? dateFin : LocalDate.of(safeAnnee, 12, 31);
 
-        // Résultat fiscal = Résultat comptable + réintégrations - déductions
-        // Pour simplifier, on prend le résultat net tel quel (à affiner selon besoins)
-        Double resultatFiscal = resultatNet;
+        Map<String, Object> cpc = comptabiliteService.getCPC(debut, fin, exerciceId);
+        double resultatComptable = asDouble(cpc.get("resultatNet"));
+        double chiffreAffaires = asDouble(cpc.get("produitsExploitation"));
+        double totalReintegrations = sumAjustements(reintegrations);
+        double totalDeductions = sumAjustements(deductions);
+        double resultatFiscal = resultatComptable + totalReintegrations - totalDeductions;
 
-        // Calculer le CA pour la cotisation minimale
-        Double ca = (Double) cpc.get("produitsExploitation");
-        if (ca == null) ca = 0.0;
+        ISBaremeConfig cfg = getOrCreateBareme();
+        double isCalcule = calculISProgressif(resultatFiscal, cfg);
+        double cotisationMinimale = Math.max(chiffreAffaires * nz(cfg.getCotisationMinimaleTaux()), nz(cfg.getCotisationMinimaleMinimum()));
+        double isDu = Math.max(isCalcule, cotisationMinimale);
 
-        // Cotisation minimale = 0.5% du CA, minimum 3000 MAD
-        Double cotisationMinimale = Math.max(ca * 0.005, 3000.0);
+        List<AcompteIS> acomptes = getOrGenerateAcomptes(safeAnnee);
+        double acomptesPayes = acomptes.stream()
+                .filter(a -> a.getStatut() == AcompteIS.StatutAcompte.PAYE)
+                .mapToDouble(a -> nz(a.getMontantPaye()))
+                .sum();
 
-        // Calcul IS selon barème progressif
-        Double isCalcule = 0.0;
-        if (resultatFiscal > 0) {
-            if (resultatFiscal <= 300000) {
-                isCalcule = resultatFiscal * 0.10;
-            } else if (resultatFiscal <= 1000000) {
-                isCalcule = 300000 * 0.10 + (resultatFiscal - 300000) * 0.20;
-            } else {
-                isCalcule = 300000 * 0.10 + 700000 * 0.20 + (resultatFiscal - 1000000) * 0.31;
-            }
+        double reliquat = isDu > acomptesPayes ? (isDu - acomptesPayes) : 0.0;
+        double excedent = acomptesPayes > isDu ? (acomptesPayes - isDu) : 0.0;
+
+        DeclarationIS declaration = declarationISRepository.findByAnnee(safeAnnee)
+                .orElseGet(DeclarationIS::new);
+        declaration.setAnnee(safeAnnee);
+        declaration.setDateDebut(debut);
+        declaration.setDateFin(fin);
+        declaration.setExerciceId(exerciceId);
+        declaration.setResultatComptable(resultatComptable);
+        declaration.setReintegrations(reintegrations != null ? reintegrations : List.of());
+        declaration.setDeductions(deductions != null ? deductions : List.of());
+        declaration.setTotalReintegrations(totalReintegrations);
+        declaration.setTotalDeductions(totalDeductions);
+        declaration.setResultatFiscal(resultatFiscal);
+        declaration.setChiffreAffaires(chiffreAffaires);
+        declaration.setIsCalcule(isCalcule);
+        declaration.setCotisationMinimale(cotisationMinimale);
+        declaration.setIsDu(isDu);
+        declaration.setAcomptesPayes(acomptesPayes);
+        declaration.setReliquat(reliquat);
+        declaration.setExcedent(excedent);
+        declaration.setStatut(DeclarationIS.StatutDeclaration.BROUILLON);
+        declaration.setUpdatedAt(LocalDateTime.now());
+        if (declaration.getCreatedAt() == null) {
+            declaration.setCreatedAt(LocalDateTime.now());
+        }
+        return declarationISRepository.save(declaration);
+    }
+
+    public List<DeclarationIS> getDeclarations() {
+        return declarationISRepository.findAllByOrderByAnneeDesc();
+    }
+
+    public Optional<DeclarationIS> getDeclarationByAnnee(Integer annee) {
+        return declarationISRepository.findByAnnee(annee);
+    }
+
+    @Transactional
+    public DeclarationIS validerDeclaration(Integer annee) {
+        DeclarationIS declaration = declarationISRepository.findByAnnee(annee)
+                .orElseThrow(() -> new IllegalArgumentException("Declaration IS introuvable pour " + annee));
+        declaration.setStatut(DeclarationIS.StatutDeclaration.VALIDEE);
+        declaration.setUpdatedAt(LocalDateTime.now());
+        return declarationISRepository.save(declaration);
+    }
+
+    public List<AcompteIS> getOrGenerateAcomptes(Integer annee) {
+        List<AcompteIS> existing = acompteISRepository.findByAnneeOrderByTrimestreAsc(annee);
+        if (!existing.isEmpty()) {
+            return refreshAcompteStatus(existing);
         }
 
-        // L'IS à payer est le maximum entre IS calculé et cotisation minimale
-        Double isAPayer = Math.max(isCalcule, cotisationMinimale);
+        double isReference = declarationISRepository.findByAnnee(annee - 1)
+                .map(DeclarationIS::getIsDu)
+                .orElseGet(() -> {
+                    Map<String, Object> previous = calculerIS(
+                            LocalDate.of(annee - 1, 1, 1),
+                            LocalDate.of(annee - 1, 12, 31),
+                            null
+                    );
+                    return asDouble(previous.get("isAPayer"));
+                });
+        double montantAcompte = isReference * 0.25;
 
+        LocalDateTime now = LocalDateTime.now();
+        List<AcompteIS> generated = new ArrayList<>();
+        generated.add(buildAcompte(annee, 1, LocalDate.of(annee, 3, 31), montantAcompte, now));
+        generated.add(buildAcompte(annee, 2, LocalDate.of(annee, 6, 30), montantAcompte, now));
+        generated.add(buildAcompte(annee, 3, LocalDate.of(annee, 9, 30), montantAcompte, now));
+        generated.add(buildAcompte(annee, 4, LocalDate.of(annee, 12, 31), montantAcompte, now));
+        return acompteISRepository.saveAll(generated);
+    }
+
+    @Transactional
+    public AcompteIS marquerAcomptePaye(String acompteId, LocalDate datePaiement, Double montantPaye) {
+        AcompteIS acompte = acompteISRepository.findById(acompteId)
+                .orElseThrow(() -> new IllegalArgumentException("Acompte IS introuvable"));
+        acompte.setDatePaiement(datePaiement != null ? datePaiement : LocalDate.now());
+        acompte.setMontantPaye(montantPaye != null ? montantPaye : acompte.getMontant());
+        acompte.setStatut(AcompteIS.StatutAcompte.PAYE);
+        acompte.setUpdatedAt(LocalDateTime.now());
+        return acompteISRepository.save(acompte);
+    }
+
+    @Transactional
+    public ISBaremeConfig updateBareme(ISBaremeConfig payload) {
+        ISBaremeConfig cfg = getOrCreateBareme();
+        cfg.setSeuilTaux1(payload.getSeuilTaux1());
+        cfg.setSeuilTaux2(payload.getSeuilTaux2());
+        cfg.setTaux1(payload.getTaux1());
+        cfg.setTaux2(payload.getTaux2());
+        cfg.setTaux3(payload.getTaux3());
+        cfg.setCotisationMinimaleTaux(payload.getCotisationMinimaleTaux());
+        cfg.setCotisationMinimaleMinimum(payload.getCotisationMinimaleMinimum());
+        cfg.setUpdatedAt(LocalDateTime.now());
+        return baremeConfigRepository.save(cfg);
+    }
+
+    public ISBaremeConfig getBareme() {
+        return getOrCreateBareme();
+    }
+
+    public byte[] exportDeclaration(Integer annee) throws IOException {
+        DeclarationIS declaration = declarationISRepository.findByAnnee(annee)
+                .orElseThrow(() -> new IllegalArgumentException("Aucune declaration IS pour l'annee " + annee));
+        List<AcompteIS> acomptes = getOrGenerateAcomptes(annee);
+
+        try (XSSFWorkbook workbook = new XSSFWorkbook()) {
+            Sheet synthese = workbook.createSheet("Declaration IS");
+            CellStyle headerStyle = workbook.createCellStyle();
+            var font = workbook.createFont();
+            font.setBold(true);
+            headerStyle.setFont(font);
+
+            int r = 0;
+            Row title = synthese.createRow(r++);
+            title.createCell(0).setCellValue("Declaration IS - " + annee);
+            title.getCell(0).setCellStyle(headerStyle);
+
+            r++;
+            r = addLine(synthese, r, "Resultat comptable", declaration.getResultatComptable());
+            r = addLine(synthese, r, "Total reintegrations", declaration.getTotalReintegrations());
+            r = addLine(synthese, r, "Total deductions", declaration.getTotalDeductions());
+            r = addLine(synthese, r, "Resultat fiscal", declaration.getResultatFiscal());
+            r = addLine(synthese, r, "IS calcule", declaration.getIsCalcule());
+            r = addLine(synthese, r, "Cotisation minimale", declaration.getCotisationMinimale());
+            r = addLine(synthese, r, "IS du", declaration.getIsDu());
+            r = addLine(synthese, r, "Acomptes payes", declaration.getAcomptesPayes());
+            r = addLine(synthese, r, "Reliquat", declaration.getReliquat());
+            r = addLine(synthese, r, "Excedent", declaration.getExcedent());
+
+            Sheet acomptesSheet = workbook.createSheet("Acomptes");
+            Row h = acomptesSheet.createRow(0);
+            h.createCell(0).setCellValue("Trimestre");
+            h.createCell(1).setCellValue("Echeance");
+            h.createCell(2).setCellValue("Montant");
+            h.createCell(3).setCellValue("Statut");
+            h.createCell(4).setCellValue("Date paiement");
+            h.createCell(5).setCellValue("Montant paye");
+            for (int i = 0; i <= 5; i++) {
+                h.getCell(i).setCellStyle(headerStyle);
+            }
+            int ar = 1;
+            for (AcompteIS a : acomptes) {
+                Row row = acomptesSheet.createRow(ar++);
+                row.createCell(0).setCellValue(a.getTrimestre());
+                row.createCell(1).setCellValue(a.getDateEcheance() != null ? a.getDateEcheance().toString() : "");
+                row.createCell(2).setCellValue(nz(a.getMontant()));
+                row.createCell(3).setCellValue(a.getStatut() != null ? a.getStatut().name() : "");
+                row.createCell(4).setCellValue(a.getDatePaiement() != null ? a.getDatePaiement().toString() : "");
+                row.createCell(5).setCellValue(nz(a.getMontantPaye()));
+            }
+
+            for (int i = 0; i < 2; i++) {
+                synthese.autoSizeColumn(i);
+            }
+            for (int i = 0; i <= 5; i++) {
+                acomptesSheet.autoSizeColumn(i);
+            }
+
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            workbook.write(out);
+            return out.toByteArray();
+        }
+    }
+
+    /**
+     * Compatibilite ascendante endpoint historique.
+     */
+    public Map<String, Object> calculerIS(LocalDate dateDebut, LocalDate dateFin, String exerciceId) {
+        DeclarationIS declaration = calculerEtEnregistrerDeclaration(
+                dateFin != null ? dateFin.getYear() : LocalDate.now().getYear(),
+                dateDebut,
+                dateFin,
+                exerciceId,
+                List.of(),
+                List.of()
+        );
         Map<String, Object> result = new HashMap<>();
-        result.put("dateDebut", dateDebut);
-        result.put("dateFin", dateFin);
-        result.put("resultatNet", resultatNet);
-        result.put("resultatFiscal", resultatFiscal);
-        result.put("ca", ca);
-        result.put("isCalcule", isCalcule);
-        result.put("cotisationMinimale", cotisationMinimale);
-        result.put("isAPayer", isAPayer);
-
+        result.put("dateDebut", declaration.getDateDebut());
+        result.put("dateFin", declaration.getDateFin());
+        result.put("resultatNet", declaration.getResultatComptable());
+        result.put("resultatFiscal", declaration.getResultatFiscal());
+        result.put("ca", declaration.getChiffreAffaires());
+        result.put("isCalcule", declaration.getIsCalcule());
+        result.put("cotisationMinimale", declaration.getCotisationMinimale());
+        result.put("isAPayer", declaration.getIsDu());
+        result.put("acomptesPayes", declaration.getAcomptesPayes());
+        result.put("reliquat", declaration.getReliquat());
+        result.put("excedent", declaration.getExcedent());
         return result;
     }
 
     /**
-     * Calcule les acomptes provisionnels IS pour l'année
-     * 4 acomptes: 31/03, 30/06, 30/09, 31/12
-     * Chaque acompte = 25% de l'IS de l'année précédente
+     * Compatibilite ascendante endpoint historique.
      */
     public List<Map<String, Object>> calculerAcomptes(Integer annee) {
-        // Récupérer l'IS de l'année précédente
-        Integer anneePrecedente = annee - 1;
-        LocalDate debutPrecedent = LocalDate.of(anneePrecedente, 1, 1);
-        LocalDate finPrecedent = LocalDate.of(anneePrecedente, 12, 31);
-        
-        Map<String, Object> isPrecedent = calculerIS(debutPrecedent, finPrecedent, null);
-        Double isAnneePrecedente = (Double) isPrecedent.get("isAPayer");
-        if (isAnneePrecedente == null) isAnneePrecedente = 0.0;
+        List<AcompteIS> acomptes = getOrGenerateAcomptes(annee);
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (AcompteIS a : acomptes) {
+            Map<String, Object> line = new HashMap<>();
+            line.put("id", a.getId());
+            line.put("numero", a.getTrimestre());
+            line.put("dateEcheance", a.getDateEcheance());
+            line.put("montant", a.getMontant());
+            line.put("statut", a.getStatut() != null ? a.getStatut().name() : AcompteIS.StatutAcompte.EN_ATTENTE.name());
+            line.put("datePaiement", a.getDatePaiement());
+            line.put("montantPaye", a.getMontantPaye());
+            result.add(line);
+        }
+        return result;
+    }
 
-        Double montantAcompte = isAnneePrecedente * 0.25;
+    private AcompteIS buildAcompte(Integer annee, int trimestre, LocalDate echeance, double montant, LocalDateTime now) {
+        AcompteIS.StatutAcompte statut = echeance.isBefore(LocalDate.now())
+                ? AcompteIS.StatutAcompte.EN_RETARD
+                : AcompteIS.StatutAcompte.EN_ATTENTE;
+        return AcompteIS.builder()
+                .annee(annee)
+                .trimestre(trimestre)
+                .dateEcheance(echeance)
+                .montant(montant)
+                .montantPaye(0.0)
+                .statut(statut)
+                .createdAt(now)
+                .updatedAt(now)
+                .build();
+    }
 
-        List<Map<String, Object>> acomptes = new ArrayList<>();
-        
-        // Acompte 1: 31/03
-        Map<String, Object> ac1 = new HashMap<>();
-        ac1.put("numero", 1);
-        ac1.put("dateEcheance", LocalDate.of(annee, 3, 31));
-        ac1.put("montant", montantAcompte);
-        ac1.put("statut", "EN_ATTENTE");
-        acomptes.add(ac1);
+    private List<AcompteIS> refreshAcompteStatus(List<AcompteIS> acomptes) {
+        LocalDate today = LocalDate.now();
+        boolean changed = false;
+        for (AcompteIS a : acomptes) {
+            if (a.getStatut() != AcompteIS.StatutAcompte.PAYE
+                    && a.getDateEcheance() != null
+                    && a.getDateEcheance().isBefore(today)
+                    && a.getStatut() != AcompteIS.StatutAcompte.EN_RETARD) {
+                a.setStatut(AcompteIS.StatutAcompte.EN_RETARD);
+                a.setUpdatedAt(LocalDateTime.now());
+                changed = true;
+            }
+        }
+        return changed ? acompteISRepository.saveAll(acomptes) : acomptes;
+    }
 
-        // Acompte 2: 30/06
-        Map<String, Object> ac2 = new HashMap<>();
-        ac2.put("numero", 2);
-        ac2.put("dateEcheance", LocalDate.of(annee, 6, 30));
-        ac2.put("montant", montantAcompte);
-        ac2.put("statut", "EN_ATTENTE");
-        acomptes.add(ac2);
+    private int addLine(Sheet sheet, int rowIndex, String label, Double value) {
+        Row row = sheet.createRow(rowIndex);
+        row.createCell(0).setCellValue(label);
+        row.createCell(1).setCellValue(nz(value));
+        return rowIndex + 1;
+    }
 
-        // Acompte 3: 30/09
-        Map<String, Object> ac3 = new HashMap<>();
-        ac3.put("numero", 3);
-        ac3.put("dateEcheance", LocalDate.of(annee, 9, 30));
-        ac3.put("montant", montantAcompte);
-        ac3.put("statut", "EN_ATTENTE");
-        acomptes.add(ac3);
+    private double sumAjustements(List<DeclarationIS.AjustementFiscal> ajustements) {
+        if (ajustements == null) return 0.0;
+        return ajustements.stream().mapToDouble(a -> nz(a.getMontant())).sum();
+    }
 
-        // Acompte 4: 31/12
-        Map<String, Object> ac4 = new HashMap<>();
-        ac4.put("numero", 4);
-        ac4.put("dateEcheance", LocalDate.of(annee, 12, 31));
-        ac4.put("montant", montantAcompte);
-        ac4.put("statut", "EN_ATTENTE");
-        acomptes.add(ac4);
+    private double calculISProgressif(double resultatFiscal, ISBaremeConfig cfg) {
+        if (resultatFiscal <= 0) {
+            return 0.0;
+        }
+        double s1 = nz(cfg.getSeuilTaux1());
+        double s2 = nz(cfg.getSeuilTaux2());
+        double t1 = nz(cfg.getTaux1());
+        double t2 = nz(cfg.getTaux2());
+        double t3 = nz(cfg.getTaux3());
+        if (resultatFiscal <= s1) {
+            return resultatFiscal * t1;
+        }
+        if (resultatFiscal <= s2) {
+            return (s1 * t1) + ((resultatFiscal - s1) * t2);
+        }
+        return (s1 * t1) + ((s2 - s1) * t2) + ((resultatFiscal - s2) * t3);
+    }
 
-        return acomptes;
+    private ISBaremeConfig getOrCreateBareme() {
+        return baremeConfigRepository.findFirstByOrderByUpdatedAtDesc().orElseGet(() -> {
+            LocalDateTime now = LocalDateTime.now();
+            ISBaremeConfig config = ISBaremeConfig.builder()
+                    .seuilTaux1(300000.0)
+                    .seuilTaux2(1000000.0)
+                    .taux1(0.10)
+                    .taux2(0.20)
+                    .taux3(0.31)
+                    .cotisationMinimaleTaux(0.005)
+                    .cotisationMinimaleMinimum(3000.0)
+                    .createdAt(now)
+                    .updatedAt(now)
+                    .build();
+            return baremeConfigRepository.save(config);
+        });
+    }
+
+    private double asDouble(Object value) {
+        if (value instanceof Number number) {
+            return number.doubleValue();
+        }
+        return 0.0;
+    }
+
+    private double nz(Double v) {
+        return v != null ? v : 0.0;
     }
 }
 
