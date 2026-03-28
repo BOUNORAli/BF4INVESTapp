@@ -38,10 +38,13 @@ public class BandeCommandeService {
     }
 
     public BandeCommande create(BandeCommande bc) {
-        // Générer le numéro BC si non fourni
-        if (bc.getNumeroBC() == null || bc.getNumeroBC().isEmpty()) {
-            bc.setNumeroBC(generateBCNumber(bc));
+        String numeroBC = normalizeNumeroBC(bc.getNumeroBC());
+        if (numeroBC == null) {
+            numeroBC = generateBCNumber(bc);
         }
+
+        validateNumeroBCAvailability(numeroBC, null);
+        bc.setNumeroBC(numeroBC);
 
         // Calculer les totaux
         calculateTotals(bc);
@@ -81,6 +84,15 @@ public class BandeCommandeService {
         return bcRepository.findById(id)
                 .map(existing -> {
                     String oldEtat = existing.getEtat();
+                    String requestedNumeroBC = normalizeNumeroBC(bc.getNumeroBC());
+                    if (requestedNumeroBC == null) {
+                        throw new IllegalArgumentException("Le numéro BC est requis");
+                    }
+
+                    if (!requestedNumeroBC.equalsIgnoreCase(existing.getNumeroBC())) {
+                        validateNumeroBCAvailability(requestedNumeroBC, id);
+                    }
+                    existing.setNumeroBC(requestedNumeroBC);
 
                     existing.setDateBC(bc.getDateBC());
                     existing.setFournisseurId(bc.getFournisseurId());
@@ -176,6 +188,19 @@ public class BandeCommandeService {
                     return saved;
                 })
                 .orElseThrow(() -> new RuntimeException("BC not found with id: " + id));
+    }
+
+    public boolean isNumeroBCAvailable(String numeroBC, String excludeId) {
+        String normalizedNumeroBC = normalizeNumeroBC(numeroBC);
+        if (normalizedNumeroBC == null) {
+            return false;
+        }
+
+        if (excludeId != null && !excludeId.trim().isEmpty()) {
+            return !bcRepository.existsByNumeroBCIgnoreCaseAndIdNot(normalizedNumeroBC, excludeId);
+        }
+
+        return !bcRepository.existsByNumeroBCIgnoreCase(normalizedNumeroBC);
     }
 
     public void delete(String id) {
@@ -346,11 +371,31 @@ public class BandeCommandeService {
         // date de création.
         // Cela permet de créer un BC avec une date passée (mois oublié) tout en
         // conservant la numérotation correcte.
-        String ordre = String.format("%02d", count + 1);
+        long orderNumber = count + 1;
+        String prefix = refClient + mois + refFournisseur;
+        String generatedNumeroBC;
+        do {
+            String ordre = String.format("%02d", orderNumber);
+            generatedNumeroBC = prefix + ordre + "/" + annee2chiffres;
+            orderNumber++;
+        } while (bcRepository.existsByNumeroBCIgnoreCase(generatedNumeroBC));
 
-        // 7. Assembler : refClient + mois + refFournisseur + ordre + "/" +
-        // annee2chiffres
-        return refClient + mois + refFournisseur + ordre + "/" + annee2chiffres;
+        return generatedNumeroBC;
+    }
+
+    private String normalizeNumeroBC(String numeroBC) {
+        if (numeroBC == null) {
+            return null;
+        }
+
+        String normalized = numeroBC.trim();
+        return normalized.isEmpty() ? null : normalized;
+    }
+
+    private void validateNumeroBCAvailability(String numeroBC, String excludeId) {
+        if (!isNumeroBCAvailable(numeroBC, excludeId)) {
+            throw new IllegalArgumentException("Le numéro BC \"" + numeroBC + "\" est déjà utilisé");
+        }
     }
 
     /**

@@ -61,6 +61,15 @@ public class BandeCommandeController {
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
+
+    @GetMapping("/check-number")
+    public ResponseEntity<Map<String, Boolean>> checkBCNumberAvailability(
+            @RequestParam String numeroBC,
+            @RequestParam(required = false) String excludeId
+    ) {
+        boolean available = bcService.isNumeroBCAvailable(numeroBC, excludeId);
+        return ResponseEntity.ok(Map.of("available", available));
+    }
     
     @PostMapping
     public ResponseEntity<?> createBC(@RequestBody BandeCommande bc) {
@@ -76,12 +85,17 @@ public class BandeCommandeController {
     }
     
     @PutMapping("/{id}")
-    public ResponseEntity<BandeCommande> updateBC(@PathVariable String id, @RequestBody BandeCommande bc) {
+    public ResponseEntity<?> updateBC(@PathVariable String id, @RequestBody BandeCommande bc) {
         try {
             BandeCommande updated = bcService.update(id, bc);
             return ResponseEntity.ok(updated);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         } catch (RuntimeException e) {
             return ResponseEntity.notFound().build();
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Erreur lors de la mise à jour de la bande de commande: " + e.getMessage()));
         }
     }
     

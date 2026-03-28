@@ -4,6 +4,7 @@ import { ReactiveFormsModule, FormBuilder, FormGroup, Validators, FormArray } fr
 import { ActivatedRoute, Router } from '@angular/router';
 import { StoreService, LigneAchat, LigneVente, ClientVente, Product } from '../../services/store.service';
 import { OcrService, OcrExtractResult } from '../../services/ocr.service';
+import { BcService } from '../../services/bc.service';
 import type { BC } from '../../models/types';
 import { matchesFlexibleSearch } from '../../utils/product-search.util';
 
@@ -30,7 +31,7 @@ import { matchesFlexibleSearch } from '../../utils/product-search.util';
           <button (click)="goBack()" class="flex-1 md:flex-none px-5 py-2.5 text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 font-medium shadow-sm transition text-center">
             Annuler
           </button>
-          <button (click)="save()" class="flex-1 md:flex-none px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-lg shadow-blue-600/20 font-medium transition flex items-center justify-center gap-2">
+          <button (click)="save()" [disabled]="isSaveDisabled()" class="flex-1 md:flex-none px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-lg shadow-blue-600/20 font-medium transition flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-blue-600">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
             Enregistrer
           </button>
@@ -92,8 +93,32 @@ import { matchesFlexibleSearch } from '../../utils/product-search.util';
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
               <div>
                 <label class="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Numéro BC</label>
-                <input formControlName="number" type="text" readonly [placeholder]="isEditMode ? 'Numéro existant' : 'Généré automatiquement'" class="w-full px-4 py-2.5 border border-slate-200 rounded-lg bg-slate-50 font-mono text-slate-700 cursor-not-allowed">
-                <p class="text-xs text-slate-400 mt-1">Le numéro sera généré automatiquement lors de l'enregistrement</p>
+                @if (!isEditMode) {
+                  <div class="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1 mb-2">
+                    <button type="button" (click)="setNumberMode('auto')" [class.bg-white]="numberMode() === 'auto'" [class.shadow-sm]="numberMode() === 'auto'" class="px-3 py-1.5 text-xs font-semibold rounded-md text-slate-700 transition">
+                      Automatique
+                    </button>
+                    <button type="button" (click)="setNumberMode('manual')" [class.bg-white]="numberMode() === 'manual'" [class.shadow-sm]="numberMode() === 'manual'" class="px-3 py-1.5 text-xs font-semibold rounded-md text-slate-700 transition">
+                      Manuel
+                    </button>
+                  </div>
+                }
+                <input formControlName="number" type="text" (input)="onNumberInput()" [readonly]="!canEditNumber()" [placeholder]="canEditNumber() ? 'Saisir un numéro unique' : 'Généré automatiquement'" [class.bg-slate-50]="!canEditNumber()" [class.cursor-not-allowed]="!canEditNumber()" class="w-full px-4 py-2.5 border border-slate-200 rounded-lg font-mono text-slate-700">
+                @if (!canEditNumber()) {
+                  <p class="text-xs text-slate-400 mt-1">Le numéro sera généré automatiquement à l'enregistrement.</p>
+                } @else {
+                  @if (numberCheckStatus() === 'checking') {
+                    <p class="text-xs text-blue-600 mt-1">Vérification du numéro...</p>
+                  } @else if (numberCheckStatus() === 'available') {
+                    <p class="text-xs text-emerald-600 mt-1">Numéro disponible.</p>
+                  } @else if (numberCheckStatus() === 'taken') {
+                    <p class="text-xs text-red-600 mt-1">Ce numéro est déjà utilisé.</p>
+                  } @else if (numberCheckStatus() === 'error') {
+                    <p class="text-xs text-amber-600 mt-1">Impossible de vérifier le numéro maintenant.</p>
+                  } @else {
+                    <p class="text-xs text-slate-400 mt-1">Le numéro doit être unique.</p>
+                  }
+                }
               </div>
               <div>
                 <label class="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Date d'émission <span class="text-red-500">*</span></label>
@@ -183,14 +208,24 @@ import { matchesFlexibleSearch } from '../../utils/product-search.util';
                         {{ fournisseurIdx + 1 }}
                       </div>
                       <div class="flex-1">
-                        <select formControlName="fournisseurId" 
-                                [class.border-red-300]="fournisseurForm.get('fournisseurId')?.invalid && (fournisseurForm.get('fournisseurId')?.dirty || fournisseurForm.get('fournisseurId')?.touched)"
-                                class="px-4 py-2.5 border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all text-slate-700 cursor-pointer font-medium min-w-[200px]">
-                          <option value="">Sélectionner un fournisseur...</option>
-                          @for (s of store.suppliers(); track s.id) {
-                            <option [value]="s.id">{{ s.name }}</option>
+                        <div class="relative">
+                          <input formControlName="fournisseurSearch" type="text" (focus)="openDropdown('fournisseur', fournisseurIdx)" (blur)="closeDropdownDelayed()" (input)="onSupplierSearchInput(fournisseurIdx)" placeholder="Chercher un fournisseur..." [class.border-red-300]="fournisseurForm.get('fournisseurId')?.invalid && (fournisseurForm.get('fournisseurId')?.dirty || fournisseurForm.get('fournisseurId')?.touched)" class="px-4 py-2.5 border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all text-slate-700 font-medium min-w-[260px]">
+                          @if (activeDropdownType() === 'fournisseur' && activeDropdownIndex() === fournisseurIdx) {
+                            <div class="absolute z-50 top-full left-0 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-xl max-h-56 overflow-y-auto">
+                              @for (s of filterSuppliers(fournisseurForm.value.fournisseurSearch); track s.id) {
+                                <div (mousedown)="selectSupplier(fournisseurIdx, s)" class="p-2 hover:bg-orange-50 cursor-pointer border-b border-slate-50 last:border-0">
+                                  <div class="font-medium text-sm text-slate-800">{{ s.name }}</div>
+                                  @if (s.ice) {
+                                    <div class="text-xs text-slate-500">ICE: {{ s.ice }}</div>
+                                  }
+                                </div>
+                              }
+                              @if (filterSuppliers(fournisseurForm.value.fournisseurSearch).length === 0) {
+                                <div class="p-2 text-xs text-slate-400 text-center">Aucun fournisseur trouvé</div>
+                              }
+                            </div>
                           }
-                        </select>
+                        </div>
                         @if (fournisseurForm.get('fournisseurId')?.invalid && (fournisseurForm.get('fournisseurId')?.dirty || fournisseurForm.get('fournisseurId')?.touched)) {
                           <p class="text-xs text-red-500 mt-1">Le fournisseur est requis</p>
                         }
@@ -382,12 +417,24 @@ import { matchesFlexibleSearch } from '../../utils/product-search.util';
                         {{ clientIdx + 1 }}
                       </div>
                       <div class="flex-1">
-                        <select formControlName="clientId" class="px-4 py-2.5 border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-slate-700 cursor-pointer font-medium min-w-[200px]">
-                          <option value="">Sélectionner un client...</option>
-                          @for (c of store.clients(); track c.id) {
-                            <option [value]="c.id">{{ c.name }}</option>
+                        <div class="relative">
+                          <input formControlName="clientSearch" type="text" (focus)="openDropdown('client', clientIdx)" (blur)="closeDropdownDelayed()" (input)="onClientSearchInput(clientIdx)" placeholder="Chercher un client..." class="px-4 py-2.5 border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-slate-700 font-medium min-w-[260px]">
+                          @if (activeDropdownType() === 'client' && activeDropdownIndex() === clientIdx) {
+                            <div class="absolute z-50 top-full left-0 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-xl max-h-56 overflow-y-auto">
+                              @for (c of filterClients(clientForm.value.clientSearch); track c.id) {
+                                <div (mousedown)="selectClient(clientIdx, c)" class="p-2 hover:bg-blue-50 cursor-pointer border-b border-slate-50 last:border-0">
+                                  <div class="font-medium text-sm text-slate-800">{{ c.name }}</div>
+                                  @if (c.ice) {
+                                    <div class="text-xs text-slate-500">ICE: {{ c.ice }}</div>
+                                  }
+                                </div>
+                              }
+                              @if (filterClients(clientForm.value.clientSearch).length === 0) {
+                                <div class="p-2 text-xs text-slate-400 text-center">Aucun client trouvé</div>
+                              }
+                            </div>
                           }
-                        </select>
+                        </div>
                       </div>
                     </div>
                     <div class="flex items-center gap-4">
@@ -759,6 +806,7 @@ import { matchesFlexibleSearch } from '../../utils/product-search.util';
 export class BcFormComponent implements OnInit {
   fb = inject(FormBuilder);
   store = inject(StoreService);
+  bcService = inject(BcService);
   router = inject(Router);
   route = inject(ActivatedRoute);
   ocrService = inject(OcrService);
@@ -777,6 +825,10 @@ export class BcFormComponent implements OnInit {
   // Dropdown state
   activeDropdownType = signal<string | null>(null);
   activeDropdownIndex = signal<number | null>(null);
+
+  numberMode = signal<'auto' | 'manual'>('auto');
+  numberCheckStatus = signal<'idle' | 'checking' | 'available' | 'taken' | 'error'>('idle');
+  private numberCheckTimer: ReturnType<typeof setTimeout> | null = null;
 
   // Active payment modes
   activePaymentModes = computed(() => this.store.paymentModes().filter(m => m.active));
@@ -806,6 +858,7 @@ export class BcFormComponent implements OnInit {
     });
 
     this.form.valueChanges.subscribe(() => this.calculateTotals());
+    this.form.get('number')?.valueChanges.subscribe(() => this.scheduleNumberAvailabilityCheck());
   }
 
   get fournisseursAchatArray() {
@@ -828,9 +881,13 @@ export class BcFormComponent implements OnInit {
     const id = this.route.snapshot.paramMap.get('id');
     if (id) {
       this.isEditMode = true;
+      this.numberMode.set('manual');
       this.bcId = id;
+      this.updateNumberValidators();
       this.loadExistingBC(id);
     } else {
+      this.numberMode.set('auto');
+      this.updateNumberValidators();
       // Par défaut: 1 fournisseur avec 1 ligne achat
       this.addFournisseurAchat();
       // Ne pas créer de client par défaut - l'utilisateur choisira entre "Ajouter au stock" ou ajouter un client
@@ -852,6 +909,7 @@ export class BcFormComponent implements OnInit {
       responsableLivraison: bc.responsableLivraison || '',
       ajouterAuStock: bc.ajouterAuStock || false
     });
+    this.scheduleNumberAvailabilityCheck();
 
     // Nouvelle structure multi-fournisseurs (priorité)
     if (bc.fournisseursAchat && bc.fournisseursAchat.length > 0) {
@@ -970,6 +1028,7 @@ export class BcFormComponent implements OnInit {
   createFournisseurAchatGroup(data?: any): FormGroup {
     const group = this.fb.group({
       fournisseurId: [data?.fournisseurId || '', Validators.required],
+      fournisseurSearch: [this.getSupplierName(data?.fournisseurId || '')],
       lignesAchat: this.fb.array([])
     });
 
@@ -989,6 +1048,7 @@ export class BcFormComponent implements OnInit {
   createClientVenteGroup(data?: any): FormGroup {
     const group = this.fb.group({
       clientId: [data?.clientId || ''],
+      clientSearch: [data?.clientId ? this.getClientName(data.clientId) : ''],
       lignesVente: this.fb.array([])
     });
 
@@ -1047,6 +1107,101 @@ export class BcFormComponent implements OnInit {
 
   // === Dropdown/Autocomplete ===
 
+  canEditNumber(): boolean {
+    return this.isEditMode || this.numberMode() === 'manual';
+  }
+
+  setNumberMode(mode: 'auto' | 'manual') {
+    this.numberMode.set(mode);
+    this.updateNumberValidators();
+
+    if (mode === 'auto') {
+      this.form.patchValue({ number: '' }, { emitEvent: false });
+      this.numberCheckStatus.set('idle');
+      return;
+    }
+
+    this.scheduleNumberAvailabilityCheck();
+  }
+
+  onNumberInput() {
+    this.scheduleNumberAvailabilityCheck();
+  }
+
+  private updateNumberValidators() {
+    const numberControl = this.form.get('number');
+    if (!numberControl) return;
+
+    if (this.canEditNumber()) {
+      numberControl.setValidators([Validators.required]);
+    } else {
+      numberControl.clearValidators();
+    }
+
+    numberControl.updateValueAndValidity({ emitEvent: false });
+  }
+
+  private scheduleNumberAvailabilityCheck() {
+    if (!this.canEditNumber()) {
+      this.numberCheckStatus.set('idle');
+      return;
+    }
+
+    const numero = (this.form.get('number')?.value || '').trim();
+    if (!numero) {
+      this.numberCheckStatus.set('idle');
+      return;
+    }
+
+    if (this.numberCheckTimer) {
+      clearTimeout(this.numberCheckTimer);
+    }
+
+    this.numberCheckStatus.set('checking');
+    this.numberCheckTimer = setTimeout(() => {
+      this.checkNumberAvailability(numero).catch(() => {
+        this.numberCheckStatus.set('error');
+      });
+    }, 350);
+  }
+
+  private async checkNumberAvailability(numero: string): Promise<boolean> {
+    try {
+      const available = await this.bcService.checkBCNumberAvailability(numero, this.bcId || undefined);
+      this.numberCheckStatus.set(available ? 'available' : 'taken');
+      return available;
+    } catch {
+      this.numberCheckStatus.set('error');
+      return false;
+    }
+  }
+
+  private async ensureNumberIsAvailableBeforeSave(): Promise<boolean> {
+    if (!this.canEditNumber()) {
+      return true;
+    }
+
+    const numero = (this.form.get('number')?.value || '').trim();
+    if (!numero) {
+      this.store.showToast('Veuillez renseigner un numéro de commande', 'error');
+      return false;
+    }
+
+    this.numberCheckStatus.set('checking');
+    const available = await this.checkNumberAvailability(numero);
+    if (!available) {
+      this.store.showToast('Ce numéro est déjà utilisé. Veuillez en choisir un autre.', 'error');
+      return false;
+    }
+
+    return true;
+  }
+
+  isSaveDisabled(): boolean {
+    const status = this.numberCheckStatus();
+    return this.form.invalid || status === 'checking' || status === 'taken';
+  }
+
   openDropdown(type: string, index: number) {
     this.activeDropdownType.set(type);
     this.activeDropdownIndex.set(index);
@@ -1065,6 +1220,60 @@ export class BcFormComponent implements OnInit {
     return products.filter(p => 
       matchesFlexibleSearch({ name: p.name, ref: p.ref }, term)
     ).slice(0, 10);
+  }
+
+  filterSuppliers(term: string): any[] {
+    const suppliers = this.store.suppliers();
+    if (!term || term.trim() === '') return suppliers.slice(0, 10);
+
+    return suppliers
+      .filter(s => matchesFlexibleSearch(
+        { name: s.name, ref: `${s.ice || ''} ${(s as any).referenceFournisseur || ''}` },
+        term
+      ))
+      .slice(0, 10);
+  }
+
+  filterClients(term: string): any[] {
+    const clients = this.store.clients();
+    if (!term || term.trim() === '') return clients.slice(0, 10);
+
+    return clients
+      .filter(c => matchesFlexibleSearch(
+        { name: c.name, ref: `${c.ice || ''} ${(c as any).referenceClient || ''}` },
+        term
+      ))
+      .slice(0, 10);
+  }
+
+  onSupplierSearchInput(fournisseurIdx: number) {
+    const group = this.fournisseursAchatArray.at(fournisseurIdx);
+    group.patchValue({ fournisseurId: '' }, { emitEvent: false });
+  }
+
+  onClientSearchInput(clientIdx: number) {
+    const group = this.clientsVenteArray.at(clientIdx);
+    group.patchValue({ clientId: '' }, { emitEvent: false });
+  }
+
+  selectSupplier(fournisseurIdx: number, supplier: any) {
+    const group = this.fournisseursAchatArray.at(fournisseurIdx);
+    group.patchValue({
+      fournisseurId: supplier.id,
+      fournisseurSearch: supplier.name
+    });
+    this.activeDropdownType.set(null);
+    this.activeDropdownIndex.set(null);
+  }
+
+  selectClient(clientIdx: number, client: any) {
+    const group = this.clientsVenteArray.at(clientIdx);
+    group.patchValue({
+      clientId: client.id,
+      clientSearch: client.name
+    });
+    this.activeDropdownType.set(null);
+    this.activeDropdownIndex.set(null);
   }
 
   getProduitsFromAchat(): any[] {
@@ -1159,6 +1368,12 @@ export class BcFormComponent implements OnInit {
     if (!clientId) return 'Client non défini';
     const client = this.store.clients().find(c => c.id === clientId);
     return client?.name || 'Client inconnu';
+  }
+
+  getSupplierName(supplierId: string): string {
+    if (!supplierId) return '';
+    const supplier = this.store.suppliers().find(s => s.id === supplierId);
+    return supplier?.name || '';
   }
 
   getMargeClass(marge: number): string {
@@ -1356,10 +1571,14 @@ export class BcFormComponent implements OnInit {
     return !!(field && field.invalid && (field.dirty || field.touched));
   }
 
-  save() {
+  async save() {
     if (this.form.invalid) {
       this.form.markAllAsTouched();
       this.store.showToast('Veuillez corriger les erreurs dans le formulaire', 'error');
+      return;
+    }
+
+    if (!(await this.ensureNumberIsAvailableBeforeSave())) {
       return;
     }
 
@@ -1437,6 +1656,7 @@ export class BcFormComponent implements OnInit {
     }
 
     const formVal = this.form.value;
+    const finalNumber = this.canEditNumber() ? (formVal.number || '').trim() : '';
 
     // Construire les fournisseurs avec leurs lignes d'achat
     const fournisseursAchatData = validFournisseurs.map((fournisseur: any) => {
@@ -1495,7 +1715,7 @@ export class BcFormComponent implements OnInit {
 
     const bcData: BC = {
       id: this.bcId || `bc-${Date.now()}`,
-      number: formVal.number,
+      number: finalNumber,
       date: formVal.date,
       status: formVal.status,
       paymentMode: formVal.paymentMode || undefined,
@@ -1516,9 +1736,9 @@ export class BcFormComponent implements OnInit {
     };
 
     if (this.isEditMode) {
-      this.store.updateBC(bcData);
+      await this.store.updateBC(bcData);
     } else {
-      this.store.addBC(bcData);
+      await this.store.addBC(bcData);
     }
 
     this.router.navigate(['/bc']);
@@ -1600,7 +1820,10 @@ export class BcFormComponent implements OnInit {
             }
             // Mettre à jour le premier fournisseur
             const premierFournisseur = this.fournisseursAchatArray.at(0);
-            premierFournisseur.patchValue({ fournisseurId: matchingSupplier.id });
+            premierFournisseur.patchValue({
+              fournisseurId: matchingSupplier.id,
+              fournisseurSearch: matchingSupplier.name
+            });
           }
         }
         

@@ -8,6 +8,24 @@ import { BC, LigneAchat, ClientVente, LineItem } from '../models/types';
 export class BcService {
   private api = inject(ApiService);
 
+  async checkBCNumberAvailability(numeroBC: string, excludeId?: string): Promise<boolean> {
+    const normalized = (numeroBC || '').trim();
+    if (!normalized) {
+      return false;
+    }
+
+    const query = new URLSearchParams({ numeroBC: normalized });
+    if (excludeId) {
+      query.set('excludeId', excludeId);
+    }
+
+    const response = await this.api
+      .get<{ available: boolean }>(`/bandes-commandes/check-number?${query.toString()}`)
+      .toPromise();
+
+    return !!response?.available;
+  }
+
   async getBCs(): Promise<BC[]> {
     const bcs = await this.api.get<any[]>('/bandes-commandes').toPromise() || [];
     return bcs.map(bc => this.mapBC(bc));
@@ -103,11 +121,14 @@ export class BcService {
 
   async updateBC(updatedBc: BC): Promise<BC> {
     const payload: any = {
-        numeroBC: updatedBc.number,
         dateBC: updatedBc.date,
         fournisseurId: updatedBc.supplierId,
         etat: updatedBc.status
     };
+
+    if (updatedBc.number && updatedBc.number.trim()) {
+        payload.numeroBC = updatedBc.number.trim();
+    }
     
     if (updatedBc.ajouterAuStock !== undefined) {
         payload.ajouterAuStock = updatedBc.ajouterAuStock;

@@ -405,6 +405,23 @@ export class StoreService {
     this.toastService.showToast(message, type);
   }
 
+  private extractErrorMessage(error: any, fallback: string): string {
+    const apiError = error?.error;
+    if (typeof apiError === 'string' && apiError.trim()) {
+      return apiError.trim();
+    }
+
+    if (apiError?.error && typeof apiError.error === 'string' && apiError.error.trim()) {
+      return apiError.error.trim();
+    }
+
+    if (error?.message && typeof error.message === 'string' && error.message.trim()) {
+      return error.message.trim();
+    }
+
+    return fallback;
+  }
+
   removeToast(id: number) {
     this.toastService.removeToast(id);
   }
@@ -771,7 +788,7 @@ export class StoreService {
       this.showToast('Commande créée avec succès', 'success');
       this.addNotification({ title: 'Nouvelle Commande', message: `BC ${bc.number} créée.`, type: 'success' });
     } catch (error) {
-      this.showToast('Erreur lors de la création de la commande', 'error');
+      this.showToast(this.extractErrorMessage(error, 'Erreur lors de la création de la commande'), 'error');
       throw error;
     }
   }
@@ -787,7 +804,7 @@ export class StoreService {
       }
       this.showToast('Commande mise à jour', 'success');
     } catch (error) {
-      this.showToast('Erreur lors de la mise à jour', 'error');
+      this.showToast(this.extractErrorMessage(error, 'Erreur lors de la mise à jour'), 'error');
       throw error;
     }
   }

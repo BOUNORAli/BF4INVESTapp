@@ -11,6 +11,8 @@ import java.util.Optional;
 @Repository
 public interface BandeCommandeRepository extends MongoRepository<BandeCommande, String> {
     Optional<BandeCommande> findByNumeroBC(String numeroBC);
+    boolean existsByNumeroBCIgnoreCase(String numeroBC);
+    boolean existsByNumeroBCIgnoreCaseAndIdNot(String numeroBC, String id);
     List<BandeCommande> findByClientId(String clientId);
     List<BandeCommande> findByFournisseurId(String fournisseurId);
     List<BandeCommande> findByDateBCBetween(LocalDate start, LocalDate end);
