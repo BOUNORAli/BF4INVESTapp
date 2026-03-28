@@ -54,9 +54,13 @@ public class GeminiOcrService implements DocumentOcrProvider {
         return "gemini";
     }
 
+    private String resolvedApiKey() {
+        return StringUtils.trimToNull(apiKey);
+    }
+
     @Override
     public boolean isConfigured() {
-        return StringUtils.isNotBlank(apiKey);
+        return resolvedApiKey() != null;
     }
 
     /**
@@ -64,18 +68,22 @@ public class GeminiOcrService implements DocumentOcrProvider {
      */
     public String listAvailableModels() throws IOException {
         try {
-            String listUrl = String.format("%s/models?key=%s", apiUrl, apiKey);
+            String key = resolvedApiKey();
+            if (key == null) {
+                throw new IOException("GEMINI_API_KEY manquant");
+            }
+            String listUrl = String.format("%s/models?key=%s", apiUrl, key);
             
             // #region agent log
             try {
                 java.io.FileWriter fw = new java.io.FileWriter("c:\\Users\\PC\\Documents\\BF4INVESTapp\\.cursor\\debug.log", true);
                 fw.write(String.format("{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"E\",\"location\":\"GeminiOcrService.java:listAvailableModels\",\"message\":\"Listing available models\",\"data\":{\"apiUrl\":\"%s\",\"listUrl\":\"%s\"},\"timestamp\":%d}%n", 
-                    apiUrl, listUrl.replace(apiKey, "***"), System.currentTimeMillis()));
+                    apiUrl, listUrl.replace(key, "***"), System.currentTimeMillis()));
                 fw.close();
             } catch (Exception e) {}
             // #endregion
             
-            log.info("🔍 [Gemini Diagnostic] Liste des modèles disponibles - URL: {}", listUrl.replace(apiKey, "***"));
+            log.info("🔍 [Gemini Diagnostic] Liste des modèles disponibles - URL: {}", listUrl.replace(key, "***"));
             
             String response = webClient.get()
                     .uri(listUrl)
@@ -130,7 +138,7 @@ public class GeminiOcrService implements DocumentOcrProvider {
                 file.getOriginalFilename(), file.getSize());
 
         // Vérifier la configuration
-        if (StringUtils.isBlank(apiKey)) {
+        if (resolvedApiKey() == null) {
             throw new IOException("Configuration Gemini manquante: GEMINI_API_KEY est requis");
         }
 
@@ -172,18 +180,22 @@ public class GeminiOcrService implements DocumentOcrProvider {
             } catch (Exception e) {}
             // #endregion
             
-            String url = String.format("%s/models/%s:generateContent?key=%s", apiUrl, model, apiKey);
+            String key = resolvedApiKey();
+            if (key == null) {
+                throw new IOException("GEMINI_API_KEY manquant");
+            }
+            String url = String.format("%s/models/%s:generateContent?key=%s", apiUrl, model, key);
             
             // #region agent log
             try {
                 java.io.FileWriter fw = new java.io.FileWriter("c:\\Users\\PC\\Documents\\BF4INVESTapp\\.cursor\\debug.log", true);
                 fw.write(String.format("{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"C\",\"location\":\"GeminiOcrService.java:callGeminiAPI\",\"message\":\"URL constructed\",\"data\":{\"url\":\"%s\"},\"timestamp\":%d}%n", 
-                    url.replace(apiKey, "***"), System.currentTimeMillis()));
+                    url.replace(key, "***"), System.currentTimeMillis()));
                 fw.close();
             } catch (Exception e) {}
             // #endregion
             
-            log.debug("📡 [Gemini OCR] Appel API: {}", url.replace(apiKey, "***"));
+            log.debug("📡 [Gemini OCR] Appel API: {}", url.replace(key, "***"));
 
             // Construire le body de la requête
             Map<String, Object> requestBody = new HashMap<>();
@@ -229,7 +241,7 @@ public class GeminiOcrService implements DocumentOcrProvider {
             // #endregion
 
             log.info("📤 [Gemini OCR] Envoi requête à Gemini API...");
-            log.debug("📤 [Gemini OCR] URL: {}", url.replace(apiKey, "***"));
+            log.debug("📤 [Gemini OCR] URL: {}", url.replace(key, "***"));
             log.debug("📤 [Gemini OCR] Modèle: {}", model);
 
             // Faire l'appel HTTP avec gestion d'erreurs

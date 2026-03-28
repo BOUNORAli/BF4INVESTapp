@@ -1829,9 +1829,23 @@ export class BcFormComponent implements OnInit {
         
         this.store.showToast(`${result.lignes.length} produit(s) détecté(s)`, 'success');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erreur OCR:', error);
-      this.store.showToast('Erreur lors de l\'extraction OCR. Veuillez réessayer.', 'error');
+      let msg = 'Erreur lors de l\'extraction OCR. Veuillez réessayer.';
+      const body = error?.error;
+      if (body && typeof body === 'object' && typeof body.error === 'string' && body.error.trim()) {
+        msg = body.error.trim();
+      } else if (typeof body === 'string' && body.trim()) {
+        try {
+          const parsed = JSON.parse(body);
+          if (parsed?.error && typeof parsed.error === 'string') {
+            msg = parsed.error.trim();
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+      this.store.showToast(msg, 'error');
     } finally {
       this.ocrLoading.set(false);
     }

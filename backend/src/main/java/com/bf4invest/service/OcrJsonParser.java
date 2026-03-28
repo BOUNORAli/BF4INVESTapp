@@ -78,7 +78,22 @@ public class OcrJsonParser {
         }
         jsonText = jsonText.trim();
 
-        JsonNode resultNode = objectMapper.readTree(jsonText);
+        JsonNode resultNode;
+        try {
+            resultNode = objectMapper.readTree(jsonText);
+        } catch (Exception first) {
+            String isolated = isolateTopLevelJsonObject(jsonText);
+            if (isolated != null) {
+                try {
+                    resultNode = objectMapper.readTree(isolated);
+                    log.debug("🔧 [OCR JSON] JSON extrait depuis texte entouré de prose/markdown");
+                } catch (Exception second) {
+                    throw new IOException("Réponse modèle illisible (JSON invalide): " + first.getMessage(), first);
+                }
+            } else {
+                throw new IOException("Réponse modèle illisible (JSON invalide): " + first.getMessage(), first);
+            }
+        }
 
         OcrExtractResult.OcrExtractResultBuilder builder = OcrExtractResult.builder();
 
@@ -118,6 +133,46 @@ public class OcrJsonParser {
                 result.getDateDocument(),
                 result.getNumeroDocument());
         return result;
+    }
+
+    /**
+     * Extrait le premier objet JSON {...} équilibré (utile si le modèle ajoute du texte avant/après).
+     */
+    private String isolateTopLevelJsonObject(String text) {
+        int start = text.indexOf('{');
+        if (start < 0) {
+            return null;
+        }
+        int depth = 0;
+        boolean inString = false;
+        boolean escape = false;
+        for (int i = start; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (escape) {
+                escape = false;
+                continue;
+            }
+            if (c == '\\' && inString) {
+                escape = true;
+                continue;
+            }
+            if (c == '"') {
+                inString = !inString;
+                continue;
+            }
+            if (inString) {
+                continue;
+            }
+            if (c == '{') {
+                depth++;
+            } else if (c == '}') {
+                depth--;
+                if (depth == 0) {
+                    return text.substring(start, i + 1);
+                }
+            }
+        }
+        return null;
     }
 
     private OcrExtractResult.OcrProductLine parseProductLine(JsonNode ligneNode) {

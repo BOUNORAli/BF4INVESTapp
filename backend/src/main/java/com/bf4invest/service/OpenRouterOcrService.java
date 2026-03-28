@@ -60,9 +60,13 @@ public class OpenRouterOcrService implements DocumentOcrProvider {
         return "openrouter";
     }
 
+    private String resolvedApiKey() {
+        return StringUtils.trimToNull(apiKey);
+    }
+
     @Override
     public boolean isConfigured() {
-        return StringUtils.isNotBlank(apiKey);
+        return resolvedApiKey() != null;
     }
 
     public String getModelName() {
@@ -115,10 +119,17 @@ public class OpenRouterOcrService implements DocumentOcrProvider {
         List<Map<String, Object>> messages = new ArrayList<>();
         messages.add(userMessage);
 
+        String modelTrimmed = StringUtils.trimToNull(model);
+        if (modelTrimmed == null) {
+            throw new IOException("openrouter.model (OPENROUTER_MODEL) est vide ou invalide");
+        }
+
         Map<String, Object> requestBody = new HashMap<>();
-        requestBody.put("model", model);
+        requestBody.put("model", modelTrimmed);
         requestBody.put("messages", messages);
         requestBody.put("temperature", 0.1);
+        // Limite utile pour les réponses JSON longues (factures chargées)
+        requestBody.put("max_tokens", 8192);
 
         if (requestJsonMode) {
             Map<String, Object> responseFormat = new HashMap<>();
@@ -131,7 +142,7 @@ public class OpenRouterOcrService implements DocumentOcrProvider {
         try {
             WebClient.RequestBodySpec spec = webClient.post()
                     .uri(url)
-                    .header("Authorization", "Bearer " + apiKey)
+                    .header("Authorization", "Bearer " + resolvedApiKey())
                     .header("Content-Type", "application/json");
 
             if (StringUtils.isNotBlank(httpReferer)) {
@@ -202,14 +213,23 @@ public class OpenRouterOcrService implements DocumentOcrProvider {
             throw new IOException("Réponse OpenRouter invalide: pas de choices");
         }
 
-        JsonNode message = choices.get(0).get("message");
+        JsonNode firstChoice = choices.get(0);
+        if (firstChoice.has("finish_reason")) {
+            String fr = firstChoice.get("finish_reason").asText("");
+            if ("content_filter".equalsIgnoreCase(fr)) {
+                throw new IOException("OpenRouter: contenu filtré (content_filter) — essayez une autre image ou le fallback Gemini");
+            }
+        }
+
+        JsonNode message = firstChoice.get("message");
         if (message == null) {
             throw new IOException("Réponse OpenRouter invalide: message absent");
         }
 
         JsonNode contentNode = message.get("content");
         if (contentNode == null || contentNode.isNull()) {
-            throw new IOException("Réponse OpenRouter invalide: content absent");
+            String fr = firstChoice.has("finish_reason") ? firstChoice.get("finish_reason").asText("?") : "?";
+            throw new IOException("Réponse OpenRouter: content vide (finish_reason=" + fr + "). Modèle ou quota à vérifier.");
         }
 
         if (contentNode.isTextual()) {

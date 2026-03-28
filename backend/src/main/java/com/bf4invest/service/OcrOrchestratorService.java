@@ -12,6 +12,7 @@ import java.io.IOException;
 
 /**
  * Orchestre les providers OCR : OpenRouter (principal par défaut) avec repli Gemini.
+ * Si la clé du provider principal est absente mais l'autre est présente, utilise automatiquement celui qui est configuré.
  */
 @Service
 @Slf4j
@@ -28,39 +29,48 @@ public class OcrOrchestratorService {
     private boolean fallbackEnabled;
 
     public OcrExtractResult uploadAndExtract(MultipartFile file) throws IOException {
+        boolean orOk = openRouterOcrService.isConfigured();
+        boolean gOk = geminiOcrService.isConfigured();
+
+        if (!orOk && !gOk) {
+            throw new IOException(
+                    "Aucune clé OCR configurée sur le serveur. Définissez OPENROUTER_API_KEY et/ou GEMINI_API_KEY (ex. variables Railway).");
+        }
+
         String primaryNorm = StringUtils.trimToEmpty(primary).toLowerCase();
         if (primaryNorm.isEmpty()) {
             primaryNorm = "openrouter";
         }
 
+        String effectivePrimary = resolveEffectivePrimary(primaryNorm, orOk, gOk);
+
         IOException primaryFailure = null;
 
-        if ("gemini".equals(primaryNorm)) {
-            if (geminiOcrService.isConfigured()) {
+        if ("gemini".equals(effectivePrimary)) {
+            if (gOk) {
                 try {
-                    log.info("📄 [OCR] Provider principal: gemini");
+                    log.info("📄 [OCR] Provider: gemini");
                     OcrExtractResult r = geminiOcrService.uploadAndExtract(file);
                     log.info("✅ [OCR] Succès via gemini");
                     return r;
                 } catch (IOException e) {
                     primaryFailure = e;
-                    log.warn("⚠️ [OCR] Échec provider principal gemini: {}", e.getMessage());
+                    log.warn("⚠️ [OCR] Échec gemini: {}", e.getMessage());
                 }
             } else {
                 primaryFailure = new IOException("Gemini non configuré (GEMINI_API_KEY manquant)");
                 log.warn("⚠️ [OCR] {}", primaryFailure.getMessage());
             }
         } else {
-            // default: openrouter
-            if (openRouterOcrService.isConfigured()) {
+            if (orOk) {
                 try {
-                    log.info("📄 [OCR] Provider principal: openrouter");
+                    log.info("📄 [OCR] Provider: openrouter");
                     OcrExtractResult r = openRouterOcrService.uploadAndExtract(file);
                     log.info("✅ [OCR] Succès via openrouter");
                     return r;
                 } catch (IOException e) {
                     primaryFailure = e;
-                    log.warn("⚠️ [OCR] Échec provider principal openrouter: {}", e.getMessage());
+                    log.warn("⚠️ [OCR] Échec openrouter: {}", e.getMessage());
                 }
             } else {
                 primaryFailure = new IOException("OpenRouter non configuré (OPENROUTER_API_KEY manquant)");
@@ -72,12 +82,11 @@ public class OcrOrchestratorService {
             if (primaryFailure != null) {
                 throw primaryFailure;
             }
-            throw new IOException("Aucun provider OCR configuré pour le mode principal: " + primaryNorm);
+            throw new IOException("Aucun provider OCR utilisable pour: " + effectivePrimary);
         }
 
-        // Fallback
-        if ("gemini".equals(primaryNorm)) {
-            if (openRouterOcrService.isConfigured()) {
+        if ("gemini".equals(effectivePrimary)) {
+            if (orOk) {
                 try {
                     log.info("🔄 [OCR] Fallback: openrouter");
                     OcrExtractResult r = openRouterOcrService.uploadAndExtract(file);
@@ -89,7 +98,7 @@ public class OcrOrchestratorService {
                 }
             }
         } else {
-            if (geminiOcrService.isConfigured()) {
+            if (gOk) {
                 try {
                     log.info("🔄 [OCR] Fallback: gemini");
                     OcrExtractResult r = geminiOcrService.uploadAndExtract(file);
@@ -103,7 +112,22 @@ public class OcrOrchestratorService {
         }
 
         throw combinedFailure(primaryFailure,
-                new IOException("Aucun provider de secours disponible (configurez l'autre clé API ou désactivez le mode principal actuel)"));
+                new IOException("Aucun provider de secours disponible. Vérifiez OPENROUTER_API_KEY, OPENROUTER_MODEL et GEMINI_API_KEY."));
+    }
+
+    /**
+     * Si le provider demandé n'a pas de clé mais l'autre oui, bascule pour éviter un 500 inutile en prod (ex. Railway sans OpenRouter).
+     */
+    private String resolveEffectivePrimary(String primaryNorm, boolean orOk, boolean gOk) {
+        if ("openrouter".equals(primaryNorm) && !orOk && gOk) {
+            log.info("📄 [OCR] OPENROUTER_API_KEY absent — utilisation de Gemini (GEMINI_API_KEY présent)");
+            return "gemini";
+        }
+        if ("gemini".equals(primaryNorm) && !gOk && orOk) {
+            log.info("📄 [OCR] GEMINI_API_KEY absent — utilisation d'OpenRouter (OPENROUTER_API_KEY présent)");
+            return "openrouter";
+        }
+        return primaryNorm;
     }
 
     private IOException combinedFailure(IOException primary, IOException secondary) {

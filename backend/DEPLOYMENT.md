@@ -59,3 +59,9 @@ L’extraction depuis image (`POST /api/ocr/extract-bc`) utilise par défaut **O
 ### Rollback rapide
 
 Mettre `OCR_PROVIDER_PRIMARY=gemini` sur Railway et redéployer / redémarrer le service pour forcer Gemini en premier sans toucher au code.
+
+### Erreur 500 sur `/ocr/extract-bc`
+
+- Vérifier `GET /api/ocr/diagnostic/providers` (connecté) : au moins une des deux clés doit être « configurée ».
+- Si seule **GEMINI_API_KEY** est définie (sans OpenRouter), le backend bascule automatiquement sur Gemini même si `OCR_PROVIDER_PRIMARY=openrouter`.
+- Si les deux clés sont absentes ou si **les deux** appels échouent (mauvais modèle OpenRouter, quota, etc.), la réponse JSON contient un champ `error` avec le détail ; le formulaire BC affiche ce message dans un toast après déploiement du frontend à jour.
