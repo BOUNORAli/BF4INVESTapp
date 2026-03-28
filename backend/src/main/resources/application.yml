@@ -74,7 +74,28 @@ cloudinary:
     factures: ${CLOUDINARY_FOLDER_FACTURES:bf4/factures}
     releves: ${CLOUDINARY_FOLDER_RELEVES:bf4/releves}
 
-# Google Gemini
+# OCR documents BC : OpenRouter (principal par défaut) + Gemini (secours)
+# Variables: OCR_PROVIDER_PRIMARY (openrouter|gemini), OCR_FALLBACK_ENABLED, OPENROUTER_*, GEMINI_*
+ocr:
+  provider:
+    primary: ${OCR_PROVIDER_PRIMARY:openrouter}
+    fallback-enabled: ${OCR_FALLBACK_ENABLED:true}
+  timeout-seconds:
+    openrouter: ${OCR_TIMEOUT_OPENROUTER:60}
+    gemini: ${OCR_TIMEOUT_GEMINI:60}
+
+# OpenRouter (API compatible OpenAI, vision via data URL base64)
+# Modèle free exemple : google/gemini-2.0-flash-exp:free — vérifier les modèles gratuits sur https://openrouter.ai/models
+openrouter:
+  api-key: ${OPENROUTER_API_KEY:}
+  api-url: ${OPENROUTER_API_URL:https://openrouter.ai/api/v1}
+  model: ${OPENROUTER_MODEL:google/gemini-2.0-flash-exp:free}
+  http-referer: ${OPENROUTER_HTTP_REFERER:}
+  app-title: ${OPENROUTER_APP_TITLE:BF4 Invest}
+  # true seulement si le modèle supporte response_format json_object (sinon laisser false)
+  request-json-mode: ${OPENROUTER_REQUEST_JSON_MODE:false}
+
+# Google Gemini (secours ou principal si OCR_PROVIDER_PRIMARY=gemini)
 gemini:
   api-key: ${GEMINI_API_KEY:}
   api-url: ${GEMINI_API_URL:https://generativelanguage.googleapis.com/v1beta}

@@ -26,7 +26,7 @@ export class OcrService {
   private api = inject(ApiService);
 
   /**
-   * Upload une image et extrait les informations via OCR Cloudinary
+   * Upload une image et extrait les informations (backend: OpenRouter par défaut, repli Gemini).
    */
   extractFromImage(file: File): Observable<OcrExtractResult> {
     return this.api.uploadFileWithParams<OcrExtractResult>('/ocr/extract-bc', file);

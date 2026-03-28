@@ -1,7 +1,7 @@
 package com.bf4invest.controller;
 
 import com.bf4invest.dto.OcrExtractResult;
-import com.bf4invest.service.GeminiOcrService;
+import com.bf4invest.service.OcrOrchestratorService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -18,34 +18,36 @@ import java.util.Map;
 @Slf4j
 public class OcrController {
 
-    private final GeminiOcrService ocrService;
+    private final OcrOrchestratorService ocrOrchestratorService;
 
+    /**
+     * Liste des modèles Gemini (diagnostic historique, clé GEMINI_API_KEY requise).
+     */
     @GetMapping("/diagnostic/models")
     public ResponseEntity<?> listAvailableModels() {
         try {
-            String modelsJson = ocrService.listAvailableModels();
+            String modelsJson = ocrOrchestratorService.listGeminiModels();
             return ResponseEntity.ok(Map.of("models", modelsJson));
         } catch (Exception e) {
-            log.error("❌ [OCR Diagnostic] Erreur lors de la liste des modèles", e);
+            log.error("❌ [OCR Diagnostic] Erreur lors de la liste des modèles Gemini", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("error", "Erreur lors de la liste des modèles: " + e.getMessage()));
         }
     }
 
+    /**
+     * État des providers OCR (OpenRouter / Gemini), clés présentes, modèles configurés.
+     */
+    @GetMapping("/diagnostic/providers")
+    public ResponseEntity<OcrOrchestratorService.OcrDiagnosticStatus> diagnosticProviders() {
+        return ResponseEntity.ok(ocrOrchestratorService.getDiagnosticStatus());
+    }
+
     @PostMapping("/extract-bc")
     public ResponseEntity<?> extractFromImage(
             @RequestParam("file") MultipartFile file) {
-        
-        // #region agent log
-        try {
-            java.io.FileWriter fw = new java.io.FileWriter("c:\\Users\\PC\\Documents\\BF4INVESTapp\\.cursor\\debug.log", true);
-            fw.write(String.format("{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"A\",\"location\":\"OcrController.java:extractFromImage\",\"message\":\"OCR request received\",\"data\":{\"filename\":\"%s\",\"size\":%d},\"timestamp\":%d}%n", 
-                file.getOriginalFilename(), file.getSize(), System.currentTimeMillis()));
-            fw.close();
-        } catch (Exception e) {}
-        // #endregion
-        
-        log.info("📄 [OCR] Requête d'extraction OCR - Fichier: {}, Taille: {} bytes", 
+
+        log.info("📄 [OCR] Requête d'extraction OCR - Fichier: {}, Taille: {} bytes",
                 file.getOriginalFilename(), file.getSize());
 
         if (file.isEmpty()) {
@@ -53,7 +55,6 @@ public class OcrController {
             return ResponseEntity.badRequest().body(Map.of("error", "Le fichier est vide"));
         }
 
-        // Valider le type de fichier (images uniquement pour OCR)
         String contentType = file.getContentType();
         if (contentType == null || !contentType.startsWith("image/")) {
             log.warn("⚠️ [OCR] Type de fichier non supporté: {}", contentType);
@@ -62,29 +63,18 @@ public class OcrController {
         }
 
         try {
-            OcrExtractResult result = ocrService.uploadAndExtract(file);
-            log.info("✅ [OCR] Extraction réussie - {} lignes détectées", 
+            OcrExtractResult result = ocrOrchestratorService.uploadAndExtract(file);
+            log.info("✅ [OCR] Extraction réussie - {} lignes détectées",
                     result.getLignes() != null ? result.getLignes().size() : 0);
             return ResponseEntity.ok(result);
-        } catch (IllegalStateException e) {
-            log.error("❌ [OCR] Erreur de configuration Gemini: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "Configuration Gemini OCR manquante: " + e.getMessage()));
         } catch (IOException e) {
-            log.error("❌ [OCR] Erreur lors de l'extraction OCR avec Gemini", e);
+            log.error("❌ [OCR] Erreur lors de l'extraction OCR", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "Erreur lors de l'extraction OCR avec Gemini: " + e.getMessage()));
+                    .body(Map.of("error", "Erreur lors de l'extraction OCR: " + e.getMessage()));
         } catch (Exception e) {
             log.error("❌ [OCR] Erreur inattendue lors de l'extraction OCR", e);
-            log.error("❌ [OCR] Type d'exception: {}, Message: {}", e.getClass().getName(), e.getMessage());
-            if (e.getCause() != null) {
-                log.error("❌ [OCR] Cause: {}", e.getCause().getMessage());
-            }
-            // Stack trace pour débogage
-            log.error("❌ [OCR] Stack trace complet:", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("error", "Erreur inattendue: " + (e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName())));
         }
     }
 }
-

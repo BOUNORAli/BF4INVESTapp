@@ -30,3 +30,32 @@ Sans l’origine exacte dans **CORS_ALLOWED_ORIGINS**, CORS peut bloquer les req
 4. Cliquer sur une requête API (ex. `bandes-commandes` ou `dashboard/kpis`) : dans **Request Headers**, la ligne **Cookie** doit contenir `bf4_token=...`. Si **Cookie** est absente, le problème vient bien des cookies (CORS / COOKIE_SECURE / origine).
 
 Une fois **CORS_ALLOWED_ORIGINS** et **COOKIE_SECURE=true** correctement définis et le backend redéployé, les 403 après login devraient disparaître.
+
+---
+
+## OCR documents (bons de commande) – OpenRouter + Gemini
+
+L’extraction depuis image (`POST /api/ocr/extract-bc`) utilise par défaut **OpenRouter** (modèles gratuits possibles), avec **repli automatique sur Gemini** si OpenRouter échoue ou n’est pas configuré.
+
+### Variables Railway (recommandées)
+
+| Variable | Rôle |
+|----------|------|
+| **OPENROUTER_API_KEY** | Clé API OpenRouter (obligatoire si `OCR_PROVIDER_PRIMARY=openrouter`) |
+| **OPENROUTER_MODEL** | Slug du modèle (ex. modèle gratuit vision ; vérifier sur [openrouter.ai/models](https://openrouter.ai/models)) |
+| **OPENROUTER_API_URL** | Optionnel, défaut `https://openrouter.ai/api/v1` |
+| **OPENROUTER_HTTP_REFERER** | Optionnel (en-tête `HTTP-Referer` demandé par OpenRouter pour certains comptes) |
+| **OPENROUTER_APP_TITLE** | Optionnel, en-tête `X-Title` |
+| **OPENROUTER_REQUEST_JSON_MODE** | `false` par défaut ; mettre `true` seulement si le modèle supporte `response_format: json_object` |
+| **OCR_PROVIDER_PRIMARY** | `openrouter` (défaut) ou `gemini` |
+| **OCR_FALLBACK_ENABLED** | `true` (défaut) pour activer le secours |
+| **GEMINI_API_KEY** | Conservé pour le fallback (ou pour `OCR_PROVIDER_PRIMARY=gemini`) |
+
+### Diagnostics
+
+- `GET /api/ocr/diagnostic/providers` : état des clés, provider principal, modèles configurés.
+- `GET /api/ocr/diagnostic/models` : liste des modèles Google (nécessite `GEMINI_API_KEY`).
+
+### Rollback rapide
+
+Mettre `OCR_PROVIDER_PRIMARY=gemini` sur Railway et redéployer / redémarrer le service pour forcer Gemini en premier sans toucher au code.

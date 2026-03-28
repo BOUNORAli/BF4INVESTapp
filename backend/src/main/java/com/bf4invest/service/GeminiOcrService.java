@@ -12,13 +12,14 @@ import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.*;
 
 @Service
 @Slf4j
-public class GeminiOcrService {
+public class GeminiOcrService implements DocumentOcrProvider {
+
+    private final OcrJsonParser ocrJsonParser;
 
     @Value("${gemini.api-key:}")
     private String apiKey;
@@ -34,14 +35,28 @@ public class GeminiOcrService {
     @Value("${gemini.model:gemini-2.0-flash-001}")
     private String model;
 
+    @Value("${ocr.timeout-seconds.gemini:60}")
+    private int timeoutSeconds;
+
     private final WebClient webClient;
     private final ObjectMapper objectMapper;
 
-    public GeminiOcrService() {
+    public GeminiOcrService(OcrJsonParser ocrJsonParser) {
+        this.ocrJsonParser = ocrJsonParser;
         this.webClient = WebClient.builder()
                 .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(10 * 1024 * 1024)) // 10MB
                 .build();
         this.objectMapper = new ObjectMapper();
+    }
+
+    @Override
+    public String getProviderId() {
+        return "gemini";
+    }
+
+    @Override
+    public boolean isConfigured() {
+        return StringUtils.isNotBlank(apiKey);
     }
 
     /**
@@ -109,13 +124,14 @@ public class GeminiOcrService {
     /**
      * Extrait les informations d'une facture depuis une image en utilisant Gemini Pro Vision
      */
+    @Override
     public OcrExtractResult uploadAndExtract(MultipartFile file) throws IOException {
         log.info("🔍 [Gemini OCR] Début extraction - Fichier: {}, Taille: {} bytes", 
                 file.getOriginalFilename(), file.getSize());
 
         // Vérifier la configuration
         if (StringUtils.isBlank(apiKey)) {
-            throw new IllegalStateException("Configuration Gemini manquante: api-key est requis");
+            throw new IOException("Configuration Gemini manquante: GEMINI_API_KEY est requis");
         }
 
         // Convertir l'image en base64
@@ -128,8 +144,7 @@ public class GeminiOcrService {
         log.debug("📤 [Gemini OCR] Image convertie en base64 - Taille: {} caractères, MIME: {}", 
                 base64Image.length(), mimeType);
 
-        // Construire le prompt
-        String prompt = buildPrompt();
+        String prompt = ocrJsonParser.buildBcInvoicePrompt();
 
         // Appeler l'API Gemini
         String jsonResponse = callGeminiAPI(base64Image, mimeType, prompt);
@@ -141,49 +156,6 @@ public class GeminiOcrService {
                 result.getLignes() != null ? result.getLignes().size() : 0);
 
         return result;
-    }
-
-    /**
-     * Construit le prompt système pour Gemini
-     */
-    private String buildPrompt() {
-        return """
-                Tu es un expert en extraction de données de factures et bons de commande marocains.
-                
-                Analyse cette image de facture et extrais les informations suivantes au format JSON strict.
-                
-                IMPORTANT: Tu DOIS retourner UNIQUEMENT un objet JSON valide, sans aucun texte avant ou après, sans markdown, sans code blocks.
-                
-                Format JSON requis:
-                {
-                  "rawText": "Le texte brut complet extrait de la facture",
-                  "numeroDocument": "Le numéro de la facture ou bon de commande (ex: F01054/25, 000002366)",
-                  "dateDocument": "La date de la facture au format ISO YYYY-MM-DD (ex: 2025-05-10)",
-                  "fournisseurNom": "Le nom complet de l'entreprise fournisseur émettrice (ex: SORIMAC S.A.R.L, GUARIMETAL sarl)",
-                  "lignes": [
-                    {
-                      "designation": "La désignation complète du produit (ex: FER TOR/500 DIAM 12)",
-                      "quantite": 123.0,
-                      "prixUnitaireHT": 45.50,
-                      "prixTotalHT": 5596.50,
-                      "unite": "U"
-                    }
-                  ],
-                  "confidence": 0.95
-                }
-                
-                Instructions importantes:
-                - Ignore les informations de bruit (dates de transactions bancaires, numéros de téléphone, adresses, etc.)
-                - Extrait SEULEMENT les lignes de produits réels du tableau de la facture
-                - La quantité, le prix unitaire et le prix total doivent être des nombres décimaux
-                - Le prix unitaire doit être en HT (Hors Taxe)
-                - Si le prix est en TTC (Toutes Taxes Comprises), convertis-le en HT en divisant par 1.2 (si TVA 20%)
-                - Pour l'unité, utilise "U" par défaut si non spécifié
-                - La date doit être au format YYYY-MM-DD
-                - Le numéro de document doit être exactement comme affiché sur la facture
-                - Ne confonds pas le fournisseur (émetteur) avec le client (destinataire)
-                - RÉPONSE REQUISE: Retourne UNIQUEMENT le JSON brut, valide, sans markdown, sans ```json, sans explications
-                """;
     }
 
     /**
@@ -319,9 +291,9 @@ public class GeminiOcrService {
                                     });
                         })
                     .bodyToMono(String.class)
-                    .timeout(Duration.ofSeconds(60))
-                    .onErrorMap(java.util.concurrent.TimeoutException.class, e -> 
-                        new IOException("Timeout lors de l'appel à l'API Gemini (60s dépassés)", e))
+                    .timeout(Duration.ofSeconds(Math.max(10, timeoutSeconds)))
+                    .onErrorMap(java.util.concurrent.TimeoutException.class, e ->
+                        new IOException("Timeout lors de l'appel à l'API Gemini (" + timeoutSeconds + "s dépassés)", e))
                     .block();
 
             // #region agent log
@@ -391,75 +363,7 @@ public class GeminiOcrService {
             log.debug("📄 [Gemini OCR] Texte extrait - Taille: {} caractères", extractedText.length());
             log.debug("📄 [Gemini OCR] Contenu: {}", extractedText.substring(0, Math.min(200, extractedText.length())));
 
-            // Parser le JSON extrait (peut être entouré de markdown ou autres caractères)
-            String jsonText = extractedText.trim();
-            
-            // Nettoyer le JSON si nécessaire (retirer ```json et ```)
-            if (jsonText.startsWith("```json")) {
-                jsonText = jsonText.substring(7);
-            } else if (jsonText.startsWith("```")) {
-                jsonText = jsonText.substring(3);
-            }
-            if (jsonText.endsWith("```")) {
-                jsonText = jsonText.substring(0, jsonText.length() - 3);
-            }
-            jsonText = jsonText.trim();
-
-            // Parser le JSON final
-            JsonNode resultNode = objectMapper.readTree(jsonText);
-
-            // Construire OcrExtractResult
-            OcrExtractResult.OcrExtractResultBuilder builder = OcrExtractResult.builder();
-
-            // Raw text
-            if (resultNode.has("rawText")) {
-                builder.rawText(resultNode.get("rawText").asText());
-            }
-
-            // Numéro document
-            if (resultNode.has("numeroDocument")) {
-                builder.numeroDocument(resultNode.get("numeroDocument").asText());
-            }
-
-            // Date document
-            if (resultNode.has("dateDocument")) {
-                builder.dateDocument(resultNode.get("dateDocument").asText());
-            }
-
-            // Fournisseur
-            if (resultNode.has("fournisseurNom")) {
-                builder.fournisseurNom(resultNode.get("fournisseurNom").asText());
-            }
-
-            // Confidence
-            if (resultNode.has("confidence")) {
-                builder.confidence(resultNode.get("confidence").asDouble(0.0));
-            } else {
-                builder.confidence(1.0); // Par défaut
-            }
-
-            // Lignes de produits
-            List<OcrExtractResult.OcrProductLine> lignes = new ArrayList<>();
-            if (resultNode.has("lignes") && resultNode.get("lignes").isArray()) {
-                JsonNode lignesArray = resultNode.get("lignes");
-                for (JsonNode ligneNode : lignesArray) {
-                    OcrExtractResult.OcrProductLine productLine = parseProductLine(ligneNode);
-                    if (productLine != null) {
-                        lignes.add(productLine);
-                    }
-                }
-            }
-            builder.lignes(lignes);
-
-            OcrExtractResult result = builder.build();
-
-            log.info("✅ [Gemini OCR] Parsing réussi - {} lignes, Fournisseur: {}, Date: {}, N°Doc: {}", 
-                    lignes.size(), 
-                    result.getFournisseurNom(), 
-                    result.getDateDocument(), 
-                    result.getNumeroDocument());
-
-            return result;
+            return ocrJsonParser.parseFromAssistantText(extractedText);
 
         } catch (IOException e) {
             log.error("❌ [Gemini OCR] Erreur lors du parsing de la réponse JSON", e);
@@ -470,55 +374,8 @@ public class GeminiOcrService {
         }
     }
 
-    /**
-     * Parse une ligne de produit depuis un JsonNode
-     */
-    private OcrExtractResult.OcrProductLine parseProductLine(JsonNode ligneNode) {
-        try {
-            OcrExtractResult.OcrProductLine.OcrProductLineBuilder builder = 
-                    OcrExtractResult.OcrProductLine.builder();
-
-            if (ligneNode.has("designation")) {
-                builder.designation(ligneNode.get("designation").asText());
-            }
-
-            if (ligneNode.has("quantite")) {
-                builder.quantite(ligneNode.get("quantite").asDouble());
-            }
-
-            if (ligneNode.has("prixUnitaireHT")) {
-                builder.prixUnitaireHT(ligneNode.get("prixUnitaireHT").asDouble());
-            }
-
-            if (ligneNode.has("prixTotalHT")) {
-                builder.prixTotalHT(ligneNode.get("prixTotalHT").asDouble());
-            }
-
-            if (ligneNode.has("unite")) {
-                builder.unite(ligneNode.get("unite").asText());
-            } else {
-                builder.unite("U"); // Par défaut
-            }
-
-            OcrExtractResult.OcrProductLine productLine = builder.build();
-
-            // Validation: doit avoir au moins une désignation et une quantité
-            if (productLine.getDesignation() == null || productLine.getDesignation().trim().isEmpty()) {
-                log.warn("⚠️ [Gemini OCR] Ligne de produit ignorée - désignation manquante");
-                return null;
-            }
-
-            if (productLine.getQuantite() == null || productLine.getQuantite() <= 0) {
-                log.warn("⚠️ [Gemini OCR] Ligne de produit ignorée - quantité invalide: {}", productLine.getQuantite());
-                return null;
-            }
-
-            return productLine;
-
-        } catch (Exception e) {
-            log.warn("⚠️ [Gemini OCR] Erreur lors du parsing d'une ligne de produit: {}", e.getMessage());
-            return null;
-        }
+    public String getModelName() {
+        return model;
     }
 }
 
