@@ -28,7 +28,7 @@ public class OpenRouterOcrService implements DocumentOcrProvider {
     @Value("${openrouter.api-url:https://openrouter.ai/api/v1}")
     private String apiUrl;
 
-    @Value("${openrouter.model:google/gemini-2.0-flash-exp:free}")
+    @Value("${openrouter.model:openrouter/free}")
     private String model;
 
     @Value("${openrouter.http-referer:}")

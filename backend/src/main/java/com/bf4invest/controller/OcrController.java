@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.util.Locale;
 import java.util.Map;
 
 @RestController
@@ -69,12 +70,34 @@ public class OcrController {
             return ResponseEntity.ok(result);
         } catch (IOException e) {
             log.error("❌ [OCR] Erreur lors de l'extraction OCR", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+            HttpStatus status = ocrFailureHttpStatus(e.getMessage());
+            return ResponseEntity.status(status)
                     .body(Map.of("error", "Erreur lors de l'extraction OCR: " + e.getMessage()));
         } catch (Exception e) {
             log.error("❌ [OCR] Erreur inattendue lors de l'extraction OCR", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("error", "Erreur inattendue: " + (e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName())));
         }
+    }
+
+    /**
+     * Quotas / saturation des providers gratuits : 503 plutôt que 500.
+     */
+    private static HttpStatus ocrFailureHttpStatus(String message) {
+        if (message == null) {
+            return HttpStatus.INTERNAL_SERVER_ERROR;
+        }
+        String m = message.toLowerCase(Locale.ROOT);
+        if (m.contains("429")
+                || m.contains("too_many_requests")
+                || m.contains("quota exceeded")
+                || m.contains("rate limit")
+                || m.contains("resource exhausted")) {
+            return HttpStatus.SERVICE_UNAVAILABLE;
+        }
+        if (m.contains("no endpoints found")) {
+            return HttpStatus.SERVICE_UNAVAILABLE;
+        }
+        return HttpStatus.INTERNAL_SERVER_ERROR;
     }
 }

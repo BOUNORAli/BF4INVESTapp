@@ -85,11 +85,12 @@ ocr:
     gemini: ${OCR_TIMEOUT_GEMINI:60}
 
 # OpenRouter (API compatible OpenAI, vision via data URL base64)
-# Modèle free exemple : google/gemini-2.0-flash-exp:free — vérifier les modèles gratuits sur https://openrouter.ai/models
+# Défaut : openrouter/free = routeur gratuit (choisit un modèle free avec vision) — évite « No endpoints found » sur d’anciens slugs :free
+# Alternative explicite : voir https://openrouter.ai/models (filtre :free + vision)
 openrouter:
   api-key: ${OPENROUTER_API_KEY:}
   api-url: ${OPENROUTER_API_URL:https://openrouter.ai/api/v1}
-  model: ${OPENROUTER_MODEL:google/gemini-2.0-flash-exp:free}
+  model: ${OPENROUTER_MODEL:openrouter/free}
   http-referer: ${OPENROUTER_HTTP_REFERER:}
   app-title: ${OPENROUTER_APP_TITLE:BF4 Invest}
   # true seulement si le modèle supporte response_format json_object (sinon laisser false)

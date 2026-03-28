@@ -42,7 +42,7 @@ L’extraction depuis image (`POST /api/ocr/extract-bc`) utilise par défaut **O
 | Variable | Rôle |
 |----------|------|
 | **OPENROUTER_API_KEY** | Clé API OpenRouter (obligatoire si `OCR_PROVIDER_PRIMARY=openrouter`) |
-| **OPENROUTER_MODEL** | Slug du modèle (ex. modèle gratuit vision ; vérifier sur [openrouter.ai/models](https://openrouter.ai/models)) |
+| **OPENROUTER_MODEL** | Défaut applicatif : `openrouter/free` (routeur gratuit, filtre vision automatiquement). Si vous voyez **No endpoints found** sur un slug `…:free` précis, laissez vide ou mettez `openrouter/free` ; sinon choisir un modèle listé sur [openrouter.ai/models](https://openrouter.ai/models). |
 | **OPENROUTER_API_URL** | Optionnel, défaut `https://openrouter.ai/api/v1` |
 | **OPENROUTER_HTTP_REFERER** | Optionnel (en-tête `HTTP-Referer` demandé par OpenRouter pour certains comptes) |
 | **OPENROUTER_APP_TITLE** | Optionnel, en-tête `X-Title` |
@@ -60,8 +60,10 @@ L’extraction depuis image (`POST /api/ocr/extract-bc`) utilise par défaut **O
 
 Mettre `OCR_PROVIDER_PRIMARY=gemini` sur Railway et redéployer / redémarrer le service pour forcer Gemini en premier sans toucher au code.
 
-### Erreur 500 sur `/ocr/extract-bc`
+### Erreurs `/ocr/extract-bc` (500 / 503)
 
 - Vérifier `GET /api/ocr/diagnostic/providers` (connecté) : au moins une des deux clés doit être « configurée ».
 - Si seule **GEMINI_API_KEY** est définie (sans OpenRouter), le backend bascule automatiquement sur Gemini même si `OCR_PROVIDER_PRIMARY=openrouter`.
-- Si les deux clés sont absentes ou si **les deux** appels échouent (mauvais modèle OpenRouter, quota, etc.), la réponse JSON contient un champ `error` avec le détail ; le formulaire BC affiche ce message dans un toast après déploiement du frontend à jour.
+- **OpenRouter — « No endpoints found »** : le slug du modèle n’a plus de fournisseur actif. Utiliser **`OPENROUTER_MODEL=openrouter/free`** ou un modèle à jour sur openrouter.ai ; retirer une ancienne variable Railway qui forçait `google/gemini-2.0-flash-exp:free`.
+- **Gemini — 429 / quota / `limit: 0`** : la clé a épuisé le quota gratuit (ou le projet n’a pas la facturation / l’API activée). Activer la facturation ou une autre clé dans Google AI Studio ; optionnellement tester **`GEMINI_MODEL`** (ex. `gemini-2.5-flash` ou `gemini-1.5-flash`) si votre projet a encore du quota sur ce modèle.
+- Les quotas / saturation renvoient souvent **HTTP 503** avec un champ `error` détaillé ; le formulaire BC peut l’afficher dans un toast.
