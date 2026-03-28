@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.annotation.Transient;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.LocalDate;
@@ -27,6 +28,17 @@ public class FactureVente {
     private String bandeCommandeId; // Optionnel: lié à une BC
     private String bcReference; // Référence BC (colonne AFFECTATION de l'Excel)
     private String clientId;
+
+    /**
+     * Intention de création liée au BC : absente ou LEGACY = comportement historique (totaux/lignes BC).
+     * MANUAL = montants (et optionnellement lignes) fournis par le client API (factures partielles).
+     * LINES = lignes partielles fournies, totaux calculés depuis les lignes.
+     */
+    private String allocationVenteMode;
+
+    /** Avertissement métier non persisté (ex: cumul TTC &gt; total BC client), renvoyé au client HTTP. */
+    @Transient
+    private String clientWarning;
     
     // Type de mouvement (colonne E de l'Excel: "C" pour Client, "F" pour Fournisseur, etc.)
     private String typeMouvement; // "C" = Client, "F" = Fournisseur, "IB", "FB", "CTP", "CTD", etc.

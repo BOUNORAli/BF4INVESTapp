@@ -19,6 +19,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 
 @Slf4j
@@ -69,10 +70,11 @@ public class FactureVenteService {
     }
     
     public FactureVente create(FactureVente facture) {
-        log.info("🔵 FactureVenteService.create - Création facture: clientId={}, bandeCommandeId={}, totalHT={}, totalTTC={}, lignes={}",
+        log.info("🔵 FactureVenteService.create - Création facture: clientId={}, bandeCommandeId={}, totalHT={}, totalTTC={}, lignes={}, allocationVenteMode={}",
             facture.getClientId(), facture.getBandeCommandeId(), 
             facture.getTotalHT(), facture.getTotalTTC(),
-            facture.getLignes() != null ? facture.getLignes().size() : 0);
+            facture.getLignes() != null ? facture.getLignes().size() : 0,
+            facture.getAllocationVenteMode());
         
         // ========== VALIDATION ET GESTION DES AVOIRS ==========
         if (Boolean.TRUE.equals(facture.getEstAvoir())) {
@@ -112,19 +114,15 @@ public class FactureVenteService {
             if (facture.getEstAvoir() == null) {
                 facture.setEstAvoir(false);
             }
-            
-            // Si la facture est liée à un BC, définir la date d'émission au dernier jour du mois du BC
-            if (facture.getBandeCommandeId() != null && !facture.getBandeCommandeId().isEmpty()) {
-                Optional<BandeCommande> bcOpt = bandeCommandeRepository.findById(facture.getBandeCommandeId());
-                if (bcOpt.isPresent()) {
-                    BandeCommande bc = bcOpt.get();
-                    if (bc.getDateBC() != null) {
-                        // Calculer le dernier jour du mois du BC
-                        LocalDate bcDate = bc.getDateBC();
-                        LocalDate lastDayOfMonth = bcDate.withDayOfMonth(bcDate.lengthOfMonth());
-                        facture.setDateFacture(lastDayOfMonth);
-                        log.info("Date d'émission de la facture vente définie au dernier jour du mois du BC ({}): {}", bc.getNumeroBC(), lastDayOfMonth);
-                    }
+
+            String allocMode = normalizeAllocationVenteMode(facture.getAllocationVenteMode());
+            boolean hasBc = facture.getBandeCommandeId() != null && !facture.getBandeCommandeId().isEmpty();
+            // LEGACY : date = dernier jour du mois du BC. MANUAL/LINES : conserver la date fournie si présente.
+            if (hasBc) {
+                if ("LEGACY".equals(allocMode)) {
+                    applyLastDayOfBcMonthAsDateFacture(facture);
+                } else if (facture.getDateFacture() == null) {
+                    applyLastDayOfBcMonthAsDateFacture(facture);
                 }
             }
         }
@@ -146,23 +144,18 @@ public class FactureVenteService {
             LocalDate echeance = facture.getDateFacture().plusDays(paymentTermDays);
             facture.setDateEcheance(echeance);
         }
-        
-        // PRIORITÉ 1: Si la facture est liée à une BC, utiliser les totaux de la BC
-        syncTotalsFromBC(facture);
-        
-        // PRIORITÉ 1B: Si la facture est liée à une BC, synchroniser les lignes depuis la BC
-        if (facture.getBandeCommandeId() != null && !facture.getBandeCommandeId().isEmpty()) {
-            syncLignesFromBC(facture);
+
+        if (!Boolean.TRUE.equals(facture.getEstAvoir())) {
+            applyBcSyncAccordingToAllocationMode(facture);
         }
-        
-        // PRIORITÉ 2: Si les totaux ne sont pas encore définis (pas de BC liée), calculer depuis les lignes ou totaux fournis
-        if (facture.getTotalHT() == null && facture.getTotalTTC() == null) {
+
+        // Totaux finaux : lignes prioritaires, sinon totaux fournis, sinon calcul
+        if (facture.getLignes() != null && !facture.getLignes().isEmpty()) {
             calculateTotals(facture);
-        } else {
-            // Si les totaux sont déjà définis (par syncTotalsFromBC), s'assurer que la TVA est calculée
-            if (facture.getTotalHT() != null && facture.getTotalTTC() != null && facture.getTotalTVA() == null) {
-                facture.setTotalTVA(NumberUtils.roundTo2Decimals(facture.getTotalTTC() - facture.getTotalHT()));
-            }
+        } else if (facture.getTotalHT() == null && facture.getTotalTTC() == null) {
+            calculateTotals(facture);
+        } else if (facture.getTotalHT() != null && facture.getTotalTTC() != null && facture.getTotalTVA() == null) {
+            facture.setTotalTVA(NumberUtils.roundTo2Decimals(facture.getTotalTTC() - facture.getTotalHT()));
         }
         
         // Pour les avoirs, s'assurer que les totaux calculés sont négatifs
@@ -188,12 +181,17 @@ public class FactureVenteService {
         
         facture.setCreatedAt(LocalDateTime.now());
         facture.setUpdatedAt(LocalDateTime.now());
+
+        String cumulativeWarning = buildCumulativeOverageWarning(facture);
         
         log.info("🔵 FactureVenteService.create - Avant sauvegarde: clientId={}, bandeCommandeId={}, lignes={}",
             facture.getClientId(), facture.getBandeCommandeId(),
             facture.getLignes() != null ? facture.getLignes().size() : 0);
         
         FactureVente saved = factureRepository.save(facture);
+        if (cumulativeWarning != null) {
+            saved.setClientWarning(cumulativeWarning);
+        }
         
         log.info("🔵 FactureVenteService.create - Après sauvegarde: id={}, lignes={}",
             saved.getId(), saved.getLignes() != null ? saved.getLignes().size() : 0);
@@ -424,6 +422,118 @@ public class FactureVenteService {
         });
         factureRepository.deleteById(id);
     }
+
+    private String normalizeAllocationVenteMode(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return "LEGACY";
+        }
+        String u = raw.trim().toUpperCase(Locale.ROOT);
+        if ("MANUAL".equals(u) || "PARTIAL".equals(u)) {
+            return "MANUAL";
+        }
+        if ("LINES".equals(u) || "LINE".equals(u)) {
+            return "LINES";
+        }
+        if ("LEGACY".equals(u)) {
+            return "LEGACY";
+        }
+        return "LEGACY";
+    }
+
+    private void applyLastDayOfBcMonthAsDateFacture(FactureVente facture) {
+        if (facture.getBandeCommandeId() == null || facture.getBandeCommandeId().isEmpty()) {
+            return;
+        }
+        bandeCommandeRepository.findById(facture.getBandeCommandeId()).ifPresent(bc -> {
+            if (bc.getDateBC() != null) {
+                LocalDate bcDate = bc.getDateBC();
+                LocalDate lastDayOfMonth = bcDate.withDayOfMonth(bcDate.lengthOfMonth());
+                facture.setDateFacture(lastDayOfMonth);
+                log.info("Date d'émission facture vente alignée sur fin de mois du BC ({}): {}", bc.getNumeroBC(), lastDayOfMonth);
+            }
+        });
+    }
+
+    /**
+     * Synchronisation totaux/lignes depuis BC selon le mode (facture unique LEGACY vs fractionnée MANUAL/LINES).
+     */
+    private void applyBcSyncAccordingToAllocationMode(FactureVente facture) {
+        String mode = normalizeAllocationVenteMode(facture.getAllocationVenteMode());
+        boolean hasBc = facture.getBandeCommandeId() != null && !facture.getBandeCommandeId().isEmpty();
+        if (!hasBc) {
+            return;
+        }
+        switch (mode) {
+            case "LEGACY":
+                syncTotalsFromBC(facture);
+                syncLignesFromBC(facture);
+                break;
+            case "MANUAL":
+                boolean totalsIn = facture.getTotalHT() != null && facture.getTotalTTC() != null;
+                if (!totalsIn) {
+                    syncTotalsFromBC(facture);
+                }
+                boolean linesIn = facture.getLignes() != null && !facture.getLignes().isEmpty();
+                if (!linesIn && !totalsIn) {
+                    syncLignesFromBC(facture);
+                }
+                break;
+            case "LINES":
+                // Lignes et totaux viennent du client ou du calcul ultérieur
+                break;
+            default:
+                syncTotalsFromBC(facture);
+                syncLignesFromBC(facture);
+        }
+    }
+
+    private Double resolveReferenceTtcForClientOnBc(String bcId, String clientId) {
+        Optional<BandeCommande> bcOpt = bandeCommandeRepository.findById(bcId);
+        if (bcOpt.isEmpty()) {
+            return null;
+        }
+        BandeCommande bc = bcOpt.get();
+        if (bc.getClientsVente() != null && !bc.getClientsVente().isEmpty()) {
+            double sum = bc.getClientsVente().stream()
+                    .filter(cv -> clientId != null && clientId.equals(cv.getClientId()))
+                    .mapToDouble(cv -> cv.getTotalVenteTTC() != null ? cv.getTotalVenteTTC() : 0.0)
+                    .sum();
+            if (sum > 0) {
+                return sum;
+            }
+        }
+        if (bc.getTotalVenteTTC() != null && bc.getTotalVenteTTC() > 0) {
+            return bc.getTotalVenteTTC();
+        }
+        return null;
+    }
+
+    private String buildCumulativeOverageWarning(FactureVente facture) {
+        if (Boolean.TRUE.equals(facture.getEstAvoir())) {
+            return null;
+        }
+        String bcId = facture.getBandeCommandeId();
+        String clientId = facture.getClientId();
+        if (bcId == null || bcId.isEmpty() || clientId == null || clientId.isEmpty()) {
+            return null;
+        }
+        Double ref = resolveReferenceTtcForClientOnBc(bcId, clientId);
+        if (ref == null || ref <= 0) {
+            return null;
+        }
+        double already = factureRepository.findByBandeCommandeIdAndClientId(bcId, clientId).stream()
+                .filter(f -> !Boolean.TRUE.equals(f.getEstAvoir()))
+                .mapToDouble(f -> f.getTotalTTC() != null ? f.getTotalTTC() : 0.0)
+                .sum();
+        double newTtc = facture.getTotalTTC() != null ? facture.getTotalTTC() : 0.0;
+        double cumul = already + newTtc;
+        if (cumul > ref + 0.01) {
+            return String.format(
+                    "Attention : le cumul des factures TTC pour ce client sur ce BC (%.2f MAD) dépasse le total vente de référence du BC (%.2f MAD). Vous pouvez continuer.",
+                    cumul, ref);
+        }
+        return null;
+    }
     
     private String generateFactureNumber(LocalDate date) {
         if (date == null) {
@@ -606,39 +716,38 @@ public class FactureVenteService {
         List<LineItem> lignesFacture = new ArrayList<>();
         String factureClientId = facture.getClientId();
         
-        // NOUVELLE STRUCTURE: clientsVente (multi-clients)
+        // NOUVELLE STRUCTURE: clientsVente (multi-clients), y compris plusieurs blocs pour le même clientId
         if (bc.getClientsVente() != null && !bc.getClientsVente().isEmpty()) {
             log.debug("🔵 FactureVenteService.syncLignesFromBC - Utilisation de la nouvelle structure (clientsVente), {} clients", 
                 bc.getClientsVente().size());
             
-            // Trouver le ClientVente correspondant au clientId de la facture
-            ClientVente clientVenteMatch = null;
+            List<ClientVente> matchingBlocks = new ArrayList<>();
             if (factureClientId != null && !factureClientId.isEmpty()) {
-                clientVenteMatch = bc.getClientsVente().stream()
-                    .filter(cv -> factureClientId.equals(cv.getClientId()))
-                    .findFirst()
-                    .orElse(null);
-                log.debug("🔵 FactureVenteService.syncLignesFromBC - Recherche ClientVente pour clientId {} -> {}", 
-                    factureClientId, clientVenteMatch != null ? "trouvé" : "non trouvé");
+                for (ClientVente cv : bc.getClientsVente()) {
+                    if (factureClientId.equals(cv.getClientId())) {
+                        matchingBlocks.add(cv);
+                    }
+                }
+                log.debug("🔵 FactureVenteService.syncLignesFromBC - Blocs ClientVente pour clientId {} : {}", 
+                    factureClientId, matchingBlocks.size());
             }
             
-            // Si aucun match trouvé, utiliser le premier client (fallback)
-            if (clientVenteMatch == null) {
+            if (matchingBlocks.isEmpty()) {
                 if (factureClientId != null && !factureClientId.isEmpty()) {
-                    log.warn("⚠️ FactureVenteService.syncLignesFromBC - ClientId {} de la facture ne correspond à aucun ClientVente dans la BC {}. Utilisation du premier client.",
+                    log.warn("⚠️ FactureVenteService.syncLignesFromBC - ClientId {} ne correspond à aucun ClientVente dans la BC {}. Utilisation du premier client.",
                         factureClientId, bc.getNumeroBC());
                 } else {
                     log.info("ℹ️ FactureVenteService.syncLignesFromBC - Facture sans clientId, utilisation du premier client de la BC {}", 
                         bc.getNumeroBC());
                 }
-                clientVenteMatch = bc.getClientsVente().get(0);
+                matchingBlocks = List.of(bc.getClientsVente().get(0));
             }
             
-            // Convertir les LigneVente en LineItem
-            if (clientVenteMatch != null && clientVenteMatch.getLignesVente() != null) {
-                log.debug("🔵 FactureVenteService.syncLignesFromBC - ClientVente trouvé avec {} lignesVente", 
-                    clientVenteMatch.getLignesVente().size());
-                for (LigneVente ligneVente : clientVenteMatch.getLignesVente()) {
+            for (ClientVente cvBlock : matchingBlocks) {
+                if (cvBlock.getLignesVente() == null) {
+                    continue;
+                }
+                for (LigneVente ligneVente : cvBlock.getLignesVente()) {
                     LineItem lineItem = convertLigneVenteToLineItem(ligneVente);
                     if (lineItem != null) {
                         lignesFacture.add(lineItem);
@@ -646,8 +755,9 @@ public class FactureVenteService {
                             ligneVente.getQuantiteVendue(), ligneVente.getDesignation(), lineItem.getTotalHT());
                     }
                 }
-            } else {
-                log.warn("⚠️ FactureVenteService.syncLignesFromBC - ClientVente trouvé mais lignesVente est null ou vide");
+            }
+            if (lignesFacture.isEmpty()) {
+                log.warn("⚠️ FactureVenteService.syncLignesFromBC - Aucune ligne extraite pour les blocs client sélectionnés");
             }
         }
         // ANCIENNE STRUCTURE: lignes (deprecated)

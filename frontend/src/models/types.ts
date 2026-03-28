@@ -133,6 +133,16 @@ export interface PaymentMode {
   active: boolean;
 }
 
+/** Ligne facture vente pour POST /factures-ventes (mode allocation LINES) */
+export interface SaleInvoiceLinePayload {
+  produitRef?: string;
+  designation?: string;
+  unite?: string;
+  quantiteVendue?: number;
+  prixVenteUnitaireHT?: number;
+  tva?: number;
+}
+
 export interface Invoice {
   id: string;
   number: string;
@@ -146,6 +156,19 @@ export interface Invoice {
   status: 'paid' | 'pending' | 'overdue';
   type: 'purchase' | 'sale';
   paymentMode?: string;
+
+  /** Avoir / facture normale (API factures ventes) */
+  estAvoir?: boolean;
+  factureOrigineId?: string;
+  numeroFactureOrigine?: string;
+  typeFacture?: string;
+
+  /** Création fractionnée liée au BC : LEGACY (défaut API) | MANUAL | LINES */
+  allocationVenteMode?: string;
+  /** Avertissement métier renvoyé par l’API (non persisté côté client) */
+  clientWarning?: string;
+  /** Lignes envoyées à l’API pour le mode LINES (payload uniquement) */
+  saleLines?: SaleInvoiceLinePayload[];
 
   // Champs pour les calculs comptables
   typeMouvement?: string; // "C" = Client, "F" = Fournisseur, "IB", "FB", "CTP", "CTD", etc.

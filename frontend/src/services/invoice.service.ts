@@ -60,7 +60,7 @@ export class InvoiceService {
       created = await this.api.post<any>('/factures-achats', payload).toPromise();
       return this.mapInvoice(created, 'purchase');
     } else {
-      const payload = {
+      const payload: any = {
         ...(inv.number && inv.number.trim() ? { numeroFactureVente: inv.number } : {}),
         dateFacture: inv.date,
         bandeCommandeId: inv.bcId || null,
@@ -70,6 +70,12 @@ export class InvoiceService {
         modePaiement: inv.paymentMode || null,
         etatPaiement: inv.status === 'paid' ? 'regle' : 'non_regle'
       };
+      if (inv.allocationVenteMode) {
+        payload.allocationVenteMode = inv.allocationVenteMode;
+      }
+      if (inv.saleLines && inv.saleLines.length > 0) {
+        payload.lignes = inv.saleLines;
+      }
       
       created = await this.api.post<any>('/factures-ventes', payload).toPromise();
       return this.mapInvoice(created, 'sale');
@@ -250,6 +256,12 @@ export class InvoiceService {
       status: status,
       type: type,
       paymentMode: inv.modePaiement || inv.paymentMode,
+      estAvoir: inv.estAvoir,
+      factureOrigineId: inv.factureOrigineId,
+      numeroFactureOrigine: inv.numeroFactureOrigine,
+      typeFacture: inv.typeFacture,
+      allocationVenteMode: inv.allocationVenteMode,
+      clientWarning: inv.clientWarning,
       
       typeMouvement: inv.typeMouvement,
       nature: inv.nature,

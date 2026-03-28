@@ -5,7 +5,17 @@ import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, FormsModule } 
 import { RouterLink, Router, ActivatedRoute } from '@angular/router';
 import { ComptabiliteService } from '../../services/comptabilite.service';
 import { DashboardStore } from '../../stores/dashboard.store';
-import type { EcritureComptable } from '../../models/types';
+import type { EcritureComptable, SaleInvoiceLinePayload } from '../../models/types';
+
+/** Ligne pour le mode allocation avancée (quantités à facturer) */
+interface SaleAllocationRow {
+  produitRef: string;
+  designation: string;
+  prixVenteUnitaireHT: number;
+  tva: number;
+  qtyMax: number;
+  qtyFacturer: number;
+}
 import { matchesFlexibleSearch } from '../../utils/product-search.util';
 
 @Component({
@@ -409,6 +419,64 @@ import { matchesFlexibleSearch } from '../../utils/product-search.util';
                            }
                         </select>
                      </div>
+                     @if (form.get('bcId')?.value && form.get('partnerId')?.value && !form.get('estAvoir')?.value && !isEditMode()) {
+                        <div class="rounded-lg border border-indigo-200 bg-white/80 p-3 space-y-2">
+                           <label class="flex items-center gap-2 text-sm cursor-pointer">
+                              <input type="checkbox" [checked]="fractionnementBc()" (change)="onToggleFractionnement($event)" class="rounded border-indigo-300 text-indigo-600" />
+                              <span class="font-medium text-indigo-800">Facture fractionnée (plusieurs factures pour ce BC et ce client)</span>
+                           </label>
+                           <p class="text-xs text-slate-600">Sans cocher : une facture alignée sur les totaux du BC (comportement habituel).</p>
+                           @if (fractionnementBc()) {
+                              @if (bcBillingHint(); as hint) {
+                                 <div class="text-xs text-slate-700 space-y-1 bg-slate-50 rounded p-2">
+                                    @if (hint.referenceTtc != null) {
+                                       <div>Réf. BC (client) TTC : <span class="font-semibold">{{ hint.referenceTtc | number:'1.2-2' }}</span> MAD</div>
+                                       <div>Déjà facturé TTC : <span class="font-semibold">{{ hint.invoicedTtc | number:'1.2-2' }}</span> MAD</div>
+                                       <div>Reste estimé TTC : <span class="font-semibold" [class.text-amber-700]="hint.remainingTtc != null && hint.remainingTtc < 0">{{ hint.remainingTtc != null ? (hint.remainingTtc | number:'1.2-2') : '—' }}</span> MAD</div>
+                                    } @else {
+                                       <div class="text-slate-500">Totaux BC client indisponibles — saisissez les montants manuellement.</div>
+                                    }
+                                 </div>
+                              }
+                              <label class="flex items-center gap-2 text-sm cursor-pointer mt-2">
+                                 <input type="checkbox" [checked]="allocationAvancee()" (change)="onToggleAllocationAvancee($event)" class="rounded border-indigo-300 text-indigo-600" />
+                                 <span class="font-medium text-indigo-800">Allocation avancée par lignes</span>
+                              </label>
+                              @if (allocationAvancee()) {
+                                 <div class="border border-slate-200 rounded-lg overflow-hidden max-h-56 overflow-y-auto text-xs">
+                                    <table class="w-full">
+                                       <thead class="bg-slate-100 text-slate-600">
+                                          <tr>
+                                             <th class="text-left p-2">Produit</th>
+                                             <th class="text-right p-2">Prix HT</th>
+                                             <th class="text-right p-2">Qté max</th>
+                                             <th class="text-right p-2">À facturer</th>
+                                          </tr>
+                                       </thead>
+                                       <tbody>
+                                          @for (row of allocationRows(); track $index) {
+                                             <tr class="border-t border-slate-100">
+                                                <td class="p-2">
+                                                   <div class="font-medium">{{ row.designation || row.produitRef }}</div>
+                                                   <div class="text-slate-400">{{ row.produitRef }}</div>
+                                                </td>
+                                                <td class="p-2 text-right">{{ row.prixVenteUnitaireHT | number:'1.2-2' }}</td>
+                                                <td class="p-2 text-right">{{ row.qtyMax }}</td>
+                                                <td class="p-2 text-right">
+                                                   <input type="number" min="0" [attr.max]="row.qtyMax" class="w-20 border border-slate-200 rounded px-1 py-0.5 text-right"
+                                                      [value]="row.qtyFacturer"
+                                                      (input)="onAllocationQtyChange($index, $any($event.target).value)" />
+                                                </td>
+                                             </tr>
+                                          }
+                                       </tbody>
+                                    </table>
+                                 </div>
+                                 <p class="text-xs text-slate-500">Montants HT/TTC calculés automatiquement à partir des quantités.</p>
+                              }
+                           }
+                        </div>
+                     }
                   </div>
 
                   <div class="space-y-4">
@@ -444,6 +512,8 @@ import { matchesFlexibleSearch } from '../../utils/product-search.util';
                            <label class="block text-sm font-semibold text-slate-700 mb-1">Montant HT <span class="text-red-500">*</span></label>
                            <input formControlName="amountHT" type="number" step="0.01" 
                                   [class.border-red-300]="isFieldInvalid('amountHT')"
+                                  [readonly]="allocationAvancee()"
+                                  [class.bg-slate-50]="allocationAvancee()"
                                   class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition text-right">
                            @if (isFieldInvalid('amountHT')) {
                               <p class="text-xs text-red-500 mt-1">Montant requis (>0)</p>
@@ -453,6 +523,8 @@ import { matchesFlexibleSearch } from '../../utils/product-search.util';
                            <label class="block text-sm font-semibold text-slate-700 mb-1">Montant TTC <span class="text-red-500">*</span></label>
                            <input formControlName="amountTTC" type="number" step="0.01" 
                                   [class.border-red-300]="isFieldInvalid('amountTTC')"
+                                  [readonly]="allocationAvancee()"
+                                  [class.bg-slate-50]="allocationAvancee()"
                                   class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition text-right font-bold text-slate-800">
                            @if (isFieldInvalid('amountTTC')) {
                               <p class="text-xs text-red-500 mt-1">Montant requis (>0)</p>
@@ -480,7 +552,7 @@ import { matchesFlexibleSearch } from '../../utils/product-search.util';
                         </div>
                      </div>
 
-                     @if (stockWarnings().length > 0) {
+                     @if (!allocationAvancee() && stockWarnings().length > 0) {
                         <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-2">
                            <div class="flex items-center gap-2 text-amber-800 font-semibold text-sm">
                               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
@@ -1059,6 +1131,21 @@ export class SalesInvoicesComponent implements OnInit {
   originalInvoice: Invoice | null = null; // Stocker la facture originale pour préserver les valeurs
   availableBCs = signal<BC[]>([]);
   clientPickerOpen = signal(false);
+
+  /** Plusieurs factures vente pour le même BC + client */
+  fractionnementBc = signal(false);
+  allocationAvancee = signal(false);
+  allocationRows = signal<SaleAllocationRow[]>([]);
+  /** Incrémenté pour rafraîchir l’indicateur facturé / restant */
+  billingHintTick = signal(0);
+
+  bcBillingHint = computed(() => {
+    this.billingHintTick();
+    this.allocationRows();
+    this.store.invoices();
+    this.store.bcs();
+    return this.computeBcBillingHint();
+  });
   selectedInvoiceForDetails = signal<Invoice | null>(null);
   selectedInvoiceForPayments = signal<Invoice | null>(null);
   selectedInvoiceForEcritures = signal<Invoice | null>(null);
@@ -1596,12 +1683,19 @@ export class SalesInvoicesComponent implements OnInit {
     this.form.patchValue({ dueDate: today.toISOString().split('T')[0] });
 
     this.availableBCs.set([]);
+    this.fractionnementBc.set(false);
+    this.allocationAvancee.set(false);
+    this.allocationRows.set([]);
+    this.refreshBillingHint();
     this.isFormOpen.set(true);
   }
 
   closeForm() {
     this.isFormOpen.set(false);
     this.originalInvoice = null; // Réinitialiser lors de la fermeture
+    this.fractionnementBc.set(false);
+    this.allocationAvancee.set(false);
+    this.allocationRows.set([]);
   }
 
   /** IDs clients liés au BC (multi-clients ou legacy) */
@@ -1657,6 +1751,7 @@ export class SalesInvoicesComponent implements OnInit {
     );
     this.clientPickerOpen.set(false);
     this.onPartnerChange();
+    this.refreshBillingHint();
   }
 
   onPartnerChange() {
@@ -1666,60 +1761,240 @@ export class SalesInvoicesComponent implements OnInit {
     } else {
       this.availableBCs.set([]);
     }
+    this.refreshBillingHint();
+  }
+
+  refreshBillingHint() {
+    this.billingHintTick.update(v => v + 1);
+  }
+
+  computeBcBillingHint(): {
+    referenceTtc: number | null;
+    invoicedTtc: number;
+    remainingTtc: number | null;
+  } | null {
+    const bcId = this.form.get('bcId')?.value;
+    const clientId = this.form.get('partnerId')?.value;
+    if (!bcId || !clientId) {
+      return null;
+    }
+    const bc = this.store.bcs().find(b => b.id === bcId);
+    if (!bc) {
+      return null;
+    }
+    const refTotals = this.getReferenceSaleTotalsForBcClient(bc, clientId);
+    const referenceTtc = refTotals.totalTtc > 0 ? refTotals.totalTtc : null;
+    const invoicedTtc = this.store
+      .invoices()
+      .filter(
+        i =>
+          i.type === 'sale' &&
+          !i.estAvoir &&
+          i.bcId === bcId &&
+          i.partnerId === clientId
+      )
+      .reduce((s, i) => s + Math.max(0, Number(i.amountTTC) || 0), 0);
+    const remainingTtc = referenceTtc != null ? referenceTtc - invoicedTtc : null;
+    return { referenceTtc, invoicedTtc, remainingTtc };
+  }
+
+  /** Somme tous les blocs clientsVente du même client (ex. 2 blocs « même client » sur un BC) */
+  getReferenceSaleTotalsForBcClient(
+    bc: BC,
+    clientId: string
+  ): { totalHT: number; totalTva: number; totalTtc: number } {
+    let totalHT = 0;
+    let totalTva = 0;
+    if (bc.clientsVente?.length && clientId) {
+      const blocks = bc.clientsVente.filter(cv => cv.clientId === clientId);
+      for (const cv of blocks) {
+        if (cv.totalVenteHT != null && cv.totalVenteTTC != null) {
+          totalHT += cv.totalVenteHT;
+          totalTva += cv.totalVenteTTC - cv.totalVenteHT;
+        } else if (cv.lignesVente?.length) {
+          const ht = cv.lignesVente.reduce(
+            (acc, l) =>
+              acc + (Number(l.quantiteVendue) || 0) * (Number(l.prixVenteUnitaireHT) || 0),
+            0
+          );
+          const tva = cv.lignesVente.reduce(
+            (acc, l) =>
+              acc +
+              (Number(l.quantiteVendue) || 0) *
+                (Number(l.prixVenteUnitaireHT) || 0) *
+                ((Number(l.tva) || 0) / 100),
+            0
+          );
+          totalHT += ht;
+          totalTva += tva;
+        }
+      }
+      return { totalHT, totalTva, totalTtc: totalHT + totalTva };
+    }
+    if (bc.items?.length) {
+      const ht = bc.items.reduce((acc, i) => acc + i.qtySell * i.priceSellHT, 0);
+      const tva = bc.items.reduce(
+        (acc, i) => acc + i.qtySell * i.priceSellHT * (i.tvaRate / 100),
+        0
+      );
+      return { totalHT: ht, totalTva: tva, totalTtc: ht + tva };
+    }
+    return { totalHT: 0, totalTva: 0, totalTtc: 0 };
+  }
+
+  onToggleFractionnement(ev: Event) {
+    const checked = (ev.target as HTMLInputElement).checked;
+    this.fractionnementBc.set(checked);
+    if (!checked) {
+      this.allocationAvancee.set(false);
+      this.allocationRows.set([]);
+    }
+    this.refreshBillingHint();
+    this.onBCChange();
+  }
+
+  onToggleAllocationAvancee(ev: Event) {
+    const checked = (ev.target as HTMLInputElement).checked;
+    this.allocationAvancee.set(checked);
+    if (checked) {
+      this.rebuildAllocationRowsFromBc();
+    } else {
+      this.allocationRows.set([]);
+      this.onBCChange();
+    }
+    this.refreshBillingHint();
+  }
+
+  rebuildAllocationRowsFromBc() {
+    const bcId = this.form.get('bcId')?.value;
+    const clientId = this.form.get('partnerId')?.value;
+    const bc = this.store.bcs().find(b => b.id === bcId);
+    if (!bc || !clientId) {
+      this.allocationRows.set([]);
+      return;
+    }
+    const rows: SaleAllocationRow[] = [];
+    if (bc.clientsVente?.length) {
+      const blocks = bc.clientsVente.filter(cv => cv.clientId === clientId);
+      for (const cv of blocks) {
+        for (const lv of cv.lignesVente || []) {
+          rows.push({
+            produitRef: lv.produitRef || '',
+            designation: lv.designation || lv.produitRef || '',
+            prixVenteUnitaireHT: Number(lv.prixVenteUnitaireHT) || 0,
+            tva: lv.tva != null && lv.tva !== undefined ? Number(lv.tva) : 20,
+            qtyMax: Math.round(Number(lv.quantiteVendue) || 0),
+            qtyFacturer: 0
+          });
+        }
+      }
+    }
+    this.allocationRows.set(rows);
+    this.recalcAllocationFormTotals();
+  }
+
+  recalcAllocationFormTotals() {
+    let ht = 0;
+    let tva = 0;
+    for (const r of this.allocationRows()) {
+      const q = Math.max(0, Math.round(Number(r.qtyFacturer) || 0));
+      const lineHt = q * (Number(r.prixVenteUnitaireHT) || 0);
+      ht += lineHt;
+      tva += lineHt * ((Number(r.tva) || 0) / 100);
+    }
+    this.form.patchValue(
+      {
+        amountHT: Math.round(ht * 100) / 100,
+        amountTTC: Math.round((ht + tva) * 100) / 100
+      },
+      { emitEvent: false }
+    );
+  }
+
+  onAllocationQtyChange(index: number, raw: string) {
+    const rows = this.allocationRows();
+    const max = rows[index]?.qtyMax ?? 0;
+    const q = Math.max(0, Math.min(Math.round(Number(raw) || 0), max));
+    this.allocationRows.update(arr => {
+      const copy = [...arr];
+      if (copy[index]) {
+        copy[index] = { ...copy[index], qtyFacturer: q };
+      }
+      return copy;
+    });
+    this.recalcAllocationFormTotals();
+    this.refreshBillingHint();
+  }
+
+  buildSaleLinesFromAllocation(): SaleInvoiceLinePayload[] {
+    const out: SaleInvoiceLinePayload[] = [];
+    for (const r of this.allocationRows()) {
+      const q = Math.round(Number(r.qtyFacturer) || 0);
+      if (q <= 0) {
+        continue;
+      }
+      out.push({
+        produitRef: r.produitRef,
+        designation: r.designation,
+        unite: 'U',
+        quantiteVendue: q,
+        prixVenteUnitaireHT: r.prixVenteUnitaireHT,
+        tva: r.tva ?? 20
+      });
+    }
+    return out;
   }
 
   onBCChange() {
     const bcId = this.form.get('bcId')?.value;
     const clientId = this.form.get('partnerId')?.value;
-    const bc = this.store.bcs().find(b => b.id === bcId);
-    
-    if (bc) {
-      let totalHT = 0;
-      let totalTva = 0;
+    const bc = bcId ? this.store.bcs().find(b => b.id === bcId) : undefined;
 
-      // Nouvelle structure multi-clients
-      if (bc.clientsVente && bc.clientsVente.length > 0) {
-        // Trouver le client spécifique dans le BC
-        const clientVente = bc.clientsVente.find(cv => cv.clientId === clientId);
-        if (clientVente && clientVente.lignesVente) {
-          // Utiliser les totaux pré-calculés si disponibles
-          if (clientVente.totalVenteHT !== undefined && clientVente.totalVenteTTC !== undefined) {
-            totalHT = clientVente.totalVenteHT;
-            totalTva = (clientVente.totalVenteTTC || 0) - totalHT;
-          } else {
-            // Calculer à partir des lignes de vente
-            totalHT = clientVente.lignesVente.reduce((acc, l) => 
-              acc + (l.quantiteVendue || 0) * (l.prixVenteUnitaireHT || 0), 0);
-            totalTva = clientVente.lignesVente.reduce((acc, l) => 
-              acc + (l.quantiteVendue || 0) * (l.prixVenteUnitaireHT || 0) * ((l.tva || 0) / 100), 0);
-          }
-        } else {
-          console.warn('🔵 sales-invoices.onBCChange - ClientVente ou lignesVente non trouvé pour clientId:', clientId);
-        }
-      } 
-      // Ancienne structure
-      else if (bc.items) {
-        totalHT = bc.items.reduce((acc, i) => acc + (i.qtySell * i.priceSellHT), 0);
-        totalTva = bc.items.reduce((acc, i) => acc + (i.qtySell * i.priceSellHT * (i.tvaRate/100)), 0);
-      }
-      
-      // Calculer la date d'émission = dernier jour du mois du BC
-      let dateEmission: string = '';
-      if (bc.date) {
-        const bcDate = new Date(bc.date);
-        // Obtenir le dernier jour du mois du BC
-        const lastDayOfMonth = new Date(bcDate.getFullYear(), bcDate.getMonth() + 1, 0);
-        dateEmission = lastDayOfMonth.toISOString().split('T')[0];
-      }
-      
-      this.form.patchValue({
-        amountHT: totalHT,
-        amountTTC: totalHT + totalTva,
-        date: dateEmission // Définir la date d'émission au dernier jour du mois du BC
-      });
-    } else {
-      console.warn('🔵 sales-invoices.onBCChange - BC non trouvé pour id:', bcId);
+    if (!bc) {
+      this.allocationRows.set([]);
+      this.refreshBillingHint();
+      return;
     }
+
+    if (this.allocationAvancee()) {
+      this.rebuildAllocationRowsFromBc();
+      this.refreshBillingHint();
+      return;
+    }
+
+    if (this.fractionnementBc()) {
+      const hint = this.computeBcBillingHint();
+      const rem = hint?.remainingTtc;
+      if (rem != null && rem > 0 && clientId) {
+        const ref = this.getReferenceSaleTotalsForBcClient(bc, clientId);
+        const htPart =
+          ref.totalTtc > 0 ? (rem / ref.totalTtc) * ref.totalHT : rem / 1.2;
+        this.form.patchValue(
+          {
+            amountHT: Math.round(htPart * 100) / 100,
+            amountTTC: Math.round(rem * 100) / 100
+          },
+          { emitEvent: true }
+        );
+      }
+      this.refreshBillingHint();
+      return;
+    }
+
+    const t = this.getReferenceSaleTotalsForBcClient(bc, clientId || '');
+    let dateEmission = '';
+    if (bc.date) {
+      const bcDate = new Date(bc.date);
+      const lastDayOfMonth = new Date(bcDate.getFullYear(), bcDate.getMonth() + 1, 0);
+      dateEmission = lastDayOfMonth.toISOString().split('T')[0];
+    }
+
+    this.form.patchValue({
+      amountHT: t.totalHT,
+      amountTTC: t.totalTtc,
+      date: dateEmission
+    });
+    this.refreshBillingHint();
   }
 
   editInvoice(inv: Invoice) {
@@ -1748,6 +2023,10 @@ export class SalesInvoicesComponent implements OnInit {
     if (inv.partnerId) {
       this.availableBCs.set(this.bcsLinkedToClient(inv.partnerId));
     }
+    this.fractionnementBc.set(false);
+    this.allocationAvancee.set(false);
+    this.allocationRows.set([]);
+    this.refreshBillingHint();
     this.isFormOpen.set(true);
   }
 
@@ -2045,6 +2324,20 @@ export class SalesInvoicesComponent implements OnInit {
       factureOrigineId: val.factureOrigineId || undefined,
       numeroFactureOrigine: val.factureOrigineId ? undefined : undefined // Sera rempli par le backend
     };
+
+    if (!this.isEditMode() && invoice.type === 'sale' && val.bcId && val.partnerId && !val.estAvoir) {
+      if (this.allocationAvancee()) {
+        const lines = this.buildSaleLinesFromAllocation();
+        if (lines.length === 0) {
+          this.store.showToast('Indiquez au moins une quantité à facturer (allocation par lignes).', 'error');
+          return;
+        }
+        invoice.allocationVenteMode = 'LINES';
+        invoice.saleLines = lines;
+      } else if (this.fractionnementBc()) {
+        invoice.allocationVenteMode = 'MANUAL';
+      }
+    }
     
     try {
       if (this.isEditMode()) {

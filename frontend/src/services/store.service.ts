@@ -196,6 +196,18 @@ export interface Invoice {
   numeroFactureOrigine?: string; // Numéro de la facture d'origine (pour affichage rapide)
   facturesLieesIds?: string[]; // Liste des IDs des factures liées (si avoir partiel)
   // ==========================================
+
+  /** Facture vente fractionnée liée au BC (payload création / réponse API) */
+  allocationVenteMode?: string;
+  clientWarning?: string;
+  saleLines?: Array<{
+    produitRef?: string;
+    designation?: string;
+    unite?: string;
+    quantiteVendue?: number;
+    prixVenteUnitaireHT?: number;
+    tva?: number;
+  }>;
   
   // Champs pour les calculs comptables
   typeMouvement?: string; // "C" = Client, "F" = Fournisseur, "IB", "FB", "CTP", "CTD", etc.
@@ -935,6 +947,9 @@ export class StoreService {
     try {
       const created = await this.invoiceService.addInvoice(inv);
       this.invoiceStore.upsertInvoice(created);
+      if (created.clientWarning) {
+        this.showToast(created.clientWarning, 'info');
+      }
       
       this.showToast(inv.type === 'sale' ? 'Facture vente émise' : 'Facture achat enregistrée', 'success');
       this.addNotification({ 
