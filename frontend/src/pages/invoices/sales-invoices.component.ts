@@ -6,6 +6,7 @@ import { RouterLink, Router, ActivatedRoute } from '@angular/router';
 import { ComptabiliteService } from '../../services/comptabilite.service';
 import { DashboardStore } from '../../stores/dashboard.store';
 import type { EcritureComptable } from '../../models/types';
+import { matchesFlexibleSearch } from '../../utils/product-search.util';
 
 @Component({
   selector: 'app-sales-invoices',
@@ -371,14 +372,30 @@ import type { EcritureComptable } from '../../models/types';
                      
                      <div>
                         <label class="block text-xs font-bold text-indigo-700 uppercase mb-1">Client <span class="text-red-500">*</span></label>
-                        <select formControlName="partnerId" (change)="onPartnerChange()" 
-                                [class.border-red-300]="isFieldInvalid('partnerId')"
-                                class="w-full p-2 border border-indigo-200 rounded-lg bg-white focus:ring-2 focus:ring-blue-500/20 outline-none">
-                           <option value="">Sélectionner un client</option>
-                           @for (c of store.clients(); track c.id) {
-                              <option [value]="c.id">{{ c.name }}</option>
-                           }
-                        </select>
+                        <div class="relative">
+                          <input formControlName="partnerSearch" type="text"
+                            (focus)="openClientPicker()"
+                            (blur)="closeClientPickerDelayed()"
+                            (input)="onClientSearchInput()"
+                            placeholder="Chercher un client..."
+                            [class.border-red-300]="isFieldInvalid('partnerId')"
+                            class="w-full p-2 border border-indigo-200 rounded-lg bg-white focus:ring-2 focus:ring-blue-500/20 outline-none">
+                          @if (clientPickerOpen()) {
+                            <div class="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-indigo-200 rounded-lg shadow-xl max-h-56 overflow-y-auto">
+                              @for (c of filterClients(form.value.partnerSearch); track c.id) {
+                                <div (mousedown)="selectSalesClient(c)" class="p-2 hover:bg-indigo-50 cursor-pointer border-b border-slate-50 last:border-0">
+                                  <div class="font-medium text-sm text-slate-800">{{ c.name }}</div>
+                                  @if (c.ice) {
+                                    <div class="text-xs text-slate-500">ICE: {{ c.ice }}</div>
+                                  }
+                                </div>
+                              }
+                              @if (filterClients(form.value.partnerSearch).length === 0) {
+                                <div class="p-2 text-sm text-slate-500">Aucun client</div>
+                              }
+                            </div>
+                          }
+                        </div>
                         @if (isFieldInvalid('partnerId')) {
                            <p class="text-xs text-red-500 mt-1">Le client est requis</p>
                         }
@@ -1041,6 +1058,7 @@ export class SalesInvoicesComponent implements OnInit {
   editingId: string | null = null;
   originalInvoice: Invoice | null = null; // Stocker la facture originale pour préserver les valeurs
   availableBCs = signal<BC[]>([]);
+  clientPickerOpen = signal(false);
   selectedInvoiceForDetails = signal<Invoice | null>(null);
   selectedInvoiceForPayments = signal<Invoice | null>(null);
   selectedInvoiceForEcritures = signal<Invoice | null>(null);
@@ -1141,6 +1159,7 @@ export class SalesInvoicesComponent implements OnInit {
   form: FormGroup = this.fb.group({
     number: [''], // Laisser vide - sera généré par le backend avec la nouvelle logique
     partnerId: ['', Validators.required],
+    partnerSearch: [''],
     bcId: [''],
     date: [new Date().toISOString().split('T')[0], Validators.required],
     dueDate: ['', Validators.required],
@@ -1567,7 +1586,8 @@ export class SalesInvoicesComponent implements OnInit {
       amountHT: 0,
       amountTTC: 0,
       estAvoir: false,
-      factureOrigineId: ''
+      factureOrigineId: '',
+      partnerSearch: ''
     });
     
     // Set default due date
@@ -1584,19 +1604,65 @@ export class SalesInvoicesComponent implements OnInit {
     this.originalInvoice = null; // Réinitialiser lors de la fermeture
   }
 
+  /** IDs clients liés au BC (multi-clients ou legacy) */
+  getClientIds(bc: BC): string[] {
+    if (bc.clientsVente && bc.clientsVente.length > 0) {
+      return bc.clientsVente.map(cv => cv.clientId).filter((id): id is string => !!id);
+    }
+    if (bc.clientId) {
+      return [bc.clientId];
+    }
+    return [];
+  }
+
+  bcsLinkedToClient(clientId: string): BC[] {
+    return this.store.bcs().filter(b => this.getClientIds(b).includes(clientId));
+  }
+
+  openClientPicker() {
+    this.clientPickerOpen.set(true);
+  }
+
+  closeClientPickerDelayed() {
+    setTimeout(() => this.clientPickerOpen.set(false), 200);
+  }
+
+  filterClients(term: string): any[] {
+    const clients = this.store.clients();
+    if (!term || term.trim() === '') {
+      return clients.slice(0, 10);
+    }
+    return clients
+      .filter(c =>
+        matchesFlexibleSearch(
+          { name: c.name, ref: `${c.ice || ''} ${(c as any).referenceClient || ''}` },
+          term
+        )
+      )
+      .slice(0, 10);
+  }
+
+  onClientSearchInput() {
+    this.form.patchValue({ partnerId: '' }, { emitEvent: false });
+    this.availableBCs.set([]);
+  }
+
+  selectSalesClient(client: { id: string; name: string }) {
+    this.form.patchValue(
+      {
+        partnerId: client.id,
+        partnerSearch: client.name
+      },
+      { emitEvent: false }
+    );
+    this.clientPickerOpen.set(false);
+    this.onPartnerChange();
+  }
+
   onPartnerChange() {
     const clientId = this.form.get('partnerId')?.value;
     if (clientId) {
-      // Filtrer les BCs qui contiennent ce client (nouvelle structure multi-clients ou ancienne structure)
-      const bcs = this.store.bcs().filter(bc => {
-        // Nouvelle structure: clientsVente
-        if (bc.clientsVente && bc.clientsVente.length > 0) {
-          return bc.clientsVente.some(cv => cv.clientId === clientId);
-        }
-        // Ancienne structure: clientId unique
-        return bc.clientId === clientId;
-      });
-      this.availableBCs.set(bcs);
+      this.availableBCs.set(this.bcsLinkedToClient(clientId));
     } else {
       this.availableBCs.set([]);
     }
@@ -1666,6 +1732,7 @@ export class SalesInvoicesComponent implements OnInit {
     const formValues = {
       number: inv.number || '',
       partnerId: inv.partnerId || '',
+      partnerSearch: this.store.getClientName(inv.partnerId || ''),
       bcId: inv.bcId || '',
       date: inv.date || '',
       dueDate: inv.dueDate || '',
@@ -1679,8 +1746,7 @@ export class SalesInvoicesComponent implements OnInit {
     this.form.patchValue(formValues);
     
     if (inv.partnerId) {
-      const bcs = this.store.bcs().filter(b => b.clientId === inv.partnerId);
-      this.availableBCs.set(bcs);
+      this.availableBCs.set(this.bcsLinkedToClient(inv.partnerId));
     }
     this.isFormOpen.set(true);
   }

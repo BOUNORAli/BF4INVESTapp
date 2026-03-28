@@ -10,6 +10,7 @@ import { NavigationRefreshService } from '../../services/navigation-refresh.serv
 import { SkeletonTableComponent } from '../../components/skeleton/skeleton-table.component';
 import { firstValueFrom, take } from 'rxjs';
 import type { EcritureComptable } from '../../models/types';
+import { matchesFlexibleSearch } from '../../utils/product-search.util';
 
 @Component({
   selector: 'app-purchase-invoices',
@@ -360,14 +361,30 @@ import type { EcritureComptable } from '../../models/types';
                      
                      <div>
                         <label class="block text-xs font-bold text-blue-700 uppercase mb-1">Fournisseur <span class="text-red-500">*</span></label>
-                        <select formControlName="partnerId" (change)="onPartnerChange()" 
-                                [class.border-red-300]="isFieldInvalid('partnerId')"
-                                class="w-full p-2 border border-blue-200 rounded-lg bg-white focus:ring-2 focus:ring-blue-500/20 outline-none">
-                           <option value="">Sélectionner un fournisseur</option>
-                           @for (s of store.suppliers(); track s.id) {
-                              <option [value]="s.id">{{ s.name }}</option>
-                           }
-                        </select>
+                        <div class="relative">
+                          <input formControlName="partnerSearch" type="text"
+                            (focus)="openSupplierPicker()"
+                            (blur)="closeSupplierPickerDelayed()"
+                            (input)="onPartnerSearchInput()"
+                            placeholder="Chercher un fournisseur..."
+                            [class.border-red-300]="isFieldInvalid('partnerId')"
+                            class="w-full p-2 border border-blue-200 rounded-lg bg-white focus:ring-2 focus:ring-blue-500/20 outline-none">
+                          @if (supplierPickerOpen()) {
+                            <div class="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-blue-200 rounded-lg shadow-xl max-h-56 overflow-y-auto">
+                              @for (s of filterSuppliers(form.value.partnerSearch); track s.id) {
+                                <div (mousedown)="selectPurchaseSupplier(s)" class="p-2 hover:bg-blue-50 cursor-pointer border-b border-slate-50 last:border-0">
+                                  <div class="font-medium text-sm text-slate-800">{{ s.name }}</div>
+                                  @if (s.ice) {
+                                    <div class="text-xs text-slate-500">ICE: {{ s.ice }}</div>
+                                  }
+                                </div>
+                              }
+                              @if (filterSuppliers(form.value.partnerSearch).length === 0) {
+                                <div class="p-2 text-sm text-slate-500">Aucun fournisseur</div>
+                              }
+                            </div>
+                          }
+                        </div>
                         @if (isFieldInvalid('partnerId')) {
                            <p class="text-xs text-red-500 mt-1">Le fournisseur est requis</p>
                         }
@@ -1232,6 +1249,8 @@ export class PurchaseInvoicesComponent implements OnInit {
   isEditMode = signal(false);
   editingId: string | null = null;
   availableBCs = signal<BC[]>([]);
+  /** Liste déroulante recherche fournisseur (facture achat) */
+  supplierPickerOpen = signal(false);
   
   // Factures disponibles pour liaison avec avoir
   availableFacturesForAvoir = computed(() => {
@@ -1303,6 +1322,7 @@ export class PurchaseInvoicesComponent implements OnInit {
   form: FormGroup = this.fb.group({
     number: ['', Validators.required],
     partnerId: ['', Validators.required],
+    partnerSearch: [''],
     bcId: [''],
     date: [new Date().toISOString().split('T')[0], Validators.required],
     dueDate: ['', Validators.required],
@@ -1595,7 +1615,8 @@ export class PurchaseInvoicesComponent implements OnInit {
       amountTTC: 0,
       ajouterAuStock: false,
       estAvoir: false,
-      factureOrigineId: ''
+      factureOrigineId: '',
+      partnerSearch: ''
     });
     // Trigger due date calc
     const today = new Date();
@@ -1617,12 +1638,65 @@ export class PurchaseInvoicesComponent implements OnInit {
     this.isFormOpen.set(false);
   }
 
+  /** IDs fournisseurs liés au BC (structure multi-fournisseurs ou legacy) */
+  getSupplierIds(bc: BC): string[] {
+    if (bc.fournisseursAchat && bc.fournisseursAchat.length > 0) {
+      return bc.fournisseursAchat.map(fa => fa.fournisseurId).filter((id): id is string => !!id);
+    }
+    if (bc.supplierId) {
+      return [bc.supplierId];
+    }
+    return [];
+  }
+
+  bcsLinkedToSupplier(supplierId: string): BC[] {
+    return this.store.bcs().filter(b => this.getSupplierIds(b).includes(supplierId));
+  }
+
+  openSupplierPicker() {
+    this.supplierPickerOpen.set(true);
+  }
+
+  closeSupplierPickerDelayed() {
+    setTimeout(() => this.supplierPickerOpen.set(false), 200);
+  }
+
+  filterSuppliers(term: string): any[] {
+    const suppliers = this.store.suppliers();
+    if (!term || term.trim() === '') {
+      return suppliers.slice(0, 10);
+    }
+    return suppliers
+      .filter(s =>
+        matchesFlexibleSearch(
+          { name: s.name, ref: `${s.ice || ''} ${(s as any).referenceFournisseur || ''}` },
+          term
+        )
+      )
+      .slice(0, 10);
+  }
+
+  onPartnerSearchInput() {
+    this.form.patchValue({ partnerId: '' }, { emitEvent: false });
+    this.availableBCs.set([]);
+  }
+
+  selectPurchaseSupplier(supplier: { id: string; name: string }) {
+    this.form.patchValue(
+      {
+        partnerId: supplier.id,
+        partnerSearch: supplier.name
+      },
+      { emitEvent: false }
+    );
+    this.supplierPickerOpen.set(false);
+    this.onPartnerChange();
+  }
+
   onPartnerChange() {
     const supplierId = this.form.get('partnerId')?.value;
     if (supplierId) {
-      // Filter BCs for this supplier
-      const bcs = this.store.bcs().filter(b => b.supplierId === supplierId);
-      this.availableBCs.set(bcs);
+      this.availableBCs.set(this.bcsLinkedToSupplier(supplierId));
     } else {
       this.availableBCs.set([]);
     }
@@ -1672,6 +1746,7 @@ export class PurchaseInvoicesComponent implements OnInit {
     this.form.patchValue({
       number: inv.number || '',
       partnerId: inv.partnerId || '',
+      partnerSearch: this.store.getSupplierName(inv.partnerId || ''),
       bcId: inv.bcId || '',
       date: inv.date || new Date().toISOString().split('T')[0],
       dueDate: inv.dueDate || inv.date || new Date().toISOString().split('T')[0], // Utiliser date si dueDate manquant
@@ -1685,8 +1760,7 @@ export class PurchaseInvoicesComponent implements OnInit {
     });
     // Populate BCs if supplier is set
     if (inv.partnerId) {
-      const bcs = this.store.bcs().filter(b => b.supplierId === inv.partnerId);
-      this.availableBCs.set(bcs);
+      this.availableBCs.set(this.bcsLinkedToSupplier(inv.partnerId));
     }
     // Charger les informations du fichier si existant
     const factureAchat = inv as any;
