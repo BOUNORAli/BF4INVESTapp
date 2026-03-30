@@ -288,6 +288,15 @@ export class BcService {
         margePourcentage: lv.margePourcentage
       }))
     })) : [];
+
+    // Compatibilité legacy: si supplierId n'est pas fourni mais que la structure multi-fournisseurs existe,
+    // on expose au moins un supplierId primaire pour les écrans legacy qui n'ont pas encore été migrés.
+    const primarySupplierId =
+      (fournisseursAchat && fournisseursAchat.length > 0
+        ? fournisseursAchat
+            .map(fa => fa.fournisseurId)
+            .find((id: string) => id && id.trim().length > 0)
+        : undefined) || '';
     
     // Mapper items (ancienne structure pour r├®trocompatibilit├®)
     const items: LineItem[] = (bc.lignes || bc.items || []).map((item: any) => ({
@@ -307,7 +316,7 @@ export class BcService {
       number: bc.numeroBC || bc.number,
       date: bc.dateBC || bc.date,
       clientId: bc.clientId, // R├®trocompatibilit├®
-      supplierId: bc.fournisseurId || bc.supplierId,
+      supplierId: bc.fournisseurId || bc.supplierId || primarySupplierId,
       ajouterAuStock: bc.ajouterAuStock || false,
       status: bc.etat || bc.status,
       paymentMode: bc.modePaiement || bc.paymentMode,

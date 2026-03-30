@@ -197,8 +197,19 @@ export class SearchIndexService {
     
     bcs.forEach(bc => {
       try {
-        const clientName = bc.clientId ? getClientName(bc.clientId) : 'Inconnu';
-        const supplierName = bc.supplierId ? getSupplierName(bc.supplierId) : 'Inconnu';
+        const clientIds =
+          (bc.clientsVente && bc.clientsVente.length > 0)
+            ? bc.clientsVente.map(cv => cv.clientId).filter((id): id is string => !!id)
+            : (bc.clientId ? [bc.clientId] : []);
+        const clientNames = clientIds.map(id => getClientName(id)).filter(n => n && n.length > 0);
+        const clientName = clientNames.length > 0 ? clientNames.join(' / ') : 'Inconnu';
+
+        const supplierIds =
+          (bc.fournisseursAchat && bc.fournisseursAchat.length > 0)
+            ? bc.fournisseursAchat.map(fa => fa.fournisseurId).filter((id): id is string => !!id)
+            : (bc.supplierId ? [bc.supplierId] : []);
+        const supplierNames = supplierIds.map(id => getSupplierName(id)).filter(n => n && n.length > 0);
+        const supplierName = supplierNames.length > 0 ? supplierNames.join(' / ') : 'Inconnu';
         
         this.indexEntry({
           id: bc.id,
@@ -210,6 +221,8 @@ export class SearchIndexService {
             bc.number || '',
             clientName,
             supplierName,
+            ...(clientNames.length > 0 ? clientNames : []),
+            ...(supplierNames.length > 0 ? supplierNames : []),
             bc.date || '',
             ...(bc.lieuLivraison ? [bc.lieuLivraison] : []),
             ...(bc.conditionLivraison ? [bc.conditionLivraison] : [])

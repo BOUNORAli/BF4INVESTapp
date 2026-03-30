@@ -183,7 +183,25 @@ import { SkeletonTableComponent } from '../../components/skeleton/skeleton-table
                       <!-- Fournisseur -->
                       <span class="text-xs text-slate-500 flex items-center gap-1 pl-1">
                         <svg class="w-3 h-3 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
-                        {{ store.getSupplierName(bc.supplierId) }}
+                        @if (getSupplierIds(bc).length > 0) {
+                          <div class="flex flex-wrap gap-1">
+                            @for (supplierId of getSupplierIds(bc); track supplierId; let i = $index) {
+                              @if (i < 3) {
+                                <span class="inline-flex items-center gap-1 px-2 py-0.5 bg-orange-50 text-orange-700 rounded-full text-xs font-medium">
+                                  <span class="w-1.5 h-1.5 rounded-full bg-orange-500"></span>
+                                  {{ store.getSupplierName(supplierId) }}
+                                </span>
+                              }
+                            }
+                            @if (getSupplierIds(bc).length > 3) {
+                              <span class="px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full text-xs font-medium">
+                                +{{ getSupplierIds(bc).length - 3 }}
+                              </span>
+                            }
+                          </div>
+                        } @else {
+                          <span class="text-xs text-slate-400">Aucun fournisseur</span>
+                        }
                       </span>
                     </div>
                   </td>

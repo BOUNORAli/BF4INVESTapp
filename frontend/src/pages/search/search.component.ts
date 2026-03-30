@@ -142,16 +142,25 @@ export class SearchComponent implements OnInit {
 
     // Recherche dans les BCs
     this.store.bcs().forEach(bc => {
-      const clientName = this.store.getClientName(bc.clientId).toLowerCase();
-      const supplierName = this.store.getSupplierName(bc.supplierId).toLowerCase();
+      const clientIds = this.getClientIdsFromBc(bc);
+      const supplierIds = this.getSupplierIdsFromBc(bc);
+
+      const clientNames = clientIds.map(id => this.store.getClientName(id).toLowerCase());
+      const supplierNames = supplierIds.map(id => this.store.getSupplierName(id).toLowerCase());
+
+      const matchesClient = clientNames.some(name => name.includes(lowerQuery));
+      const matchesSupplier = supplierNames.some(name => name.includes(lowerQuery));
+
       if (bc.number.toLowerCase().includes(lowerQuery) ||
-          clientName.includes(lowerQuery) ||
-          supplierName.includes(lowerQuery)) {
+          matchesClient ||
+          matchesSupplier) {
         results.push({
           id: bc.id,
           type: 'bc',
           title: bc.number,
-          subtitle: `${this.store.getClientName(bc.clientId)} / ${this.store.getSupplierName(bc.supplierId)}`,
+          subtitle: `${clientIds.length > 0 ? clientIds.map(id => this.store.getClientName(id)).join(' / ') : 'Client inconnu'} / ${
+            supplierIds.length > 0 ? supplierIds.map(id => this.store.getSupplierName(id)).join(' / ') : 'Fournisseur inconnu'
+          }`,
           route: `/bc/edit/${bc.id}`,
           icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z'
         });
@@ -268,6 +277,30 @@ export class SearchComponent implements OnInit {
     const regex = new RegExp(`(${escapedQuery})`, 'gi');
     const highlighted = sanitized.replace(regex, '<mark class="bg-yellow-200 text-yellow-900 px-0.5 rounded">$1</mark>');
     return this.sanitizer.bypassSecurityTrustHtml(highlighted);
+  }
+
+  private getClientIdsFromBc(bc: any): string[] {
+    if (bc?.clientsVente?.length > 0) {
+      return bc.clientsVente
+        .map((cv: any) => cv.clientId)
+        .filter((id: any): id is string => !!id);
+    }
+    if (bc?.clientId) {
+      return [bc.clientId];
+    }
+    return [];
+  }
+
+  private getSupplierIdsFromBc(bc: any): string[] {
+    if (bc?.fournisseursAchat?.length > 0) {
+      return bc.fournisseursAchat
+        .map((fa: any) => fa.fournisseurId)
+        .filter((id: any): id is string => !!id);
+    }
+    if (bc?.supplierId) {
+      return [bc.supplierId];
+    }
+    return [];
   }
 
   getCategoryLabel(type: string): string {
