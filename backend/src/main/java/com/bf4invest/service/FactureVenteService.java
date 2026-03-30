@@ -795,10 +795,8 @@ public class FactureVenteService {
         lineItem.setDesignation(ligneVente.getDesignation());
         lineItem.setUnite(ligneVente.getUnite() != null ? ligneVente.getUnite() : "U");
         
-        // Convertir quantiteVendue de Double à Integer
-        if (ligneVente.getQuantiteVendue() != null) {
-            lineItem.setQuantiteVendue(ligneVente.getQuantiteVendue().intValue());
-        }
+        // Garder les quantités décimales telles quelles
+        lineItem.setQuantiteVendue(ligneVente.getQuantiteVendue());
         
         lineItem.setPrixVenteUnitaireHT(ligneVente.getPrixVenteUnitaireHT());
         lineItem.setTva(ligneVente.getTva());
@@ -864,7 +862,7 @@ public class FactureVenteService {
                 continue;
             }
             
-            Integer quantite = ligne.getQuantiteVendue();
+            Double quantite = ligne.getQuantiteVendue();
             if (quantite == null || quantite <= 0) {
                 log.warn("⚠️ FactureVenteService.updateStockFromFacture - Quantité invalide pour produitRef: {}, ignorée", ligne.getProduitRef());
                 continue;
@@ -872,7 +870,7 @@ public class FactureVenteService {
             
             try {
                 // Vérifier le stock disponible avant de décrémenter
-                Integer stockActuel = productService.getStockByRef(ligne.getProduitRef());
+                Double stockActuel = productService.getStockByRef(ligne.getProduitRef());
                 
                 if (stockActuel < quantite) {
                     log.warn("⚠️ FactureVenteService.updateStockFromFacture - Stock insuffisant pour produitRef: {}. Stock actuel: {}, Quantité demandée: {}. La vente est autorisée mais le stock deviendra négatif.", 
@@ -882,7 +880,7 @@ public class FactureVenteService {
                 // Décrémenter le stock (même si insuffisant, on permet la vente)
                 Product updated = productService.updateStockByRef(ligne.getProduitRef(), -quantite);
                 if (updated != null) {
-                    Integer nouveauStock = updated.getQuantiteEnStock() != null ? updated.getQuantiteEnStock() : 0;
+                    Double nouveauStock = updated.getQuantiteEnStock() != null ? updated.getQuantiteEnStock() : 0.0;
                     if (nouveauStock < 0) {
                         log.warn("⚠️ FactureVenteService.updateStockFromFacture - Stock négatif pour produitRef: {}, nouveau stock: {}", 
                             ligne.getProduitRef(), nouveauStock);

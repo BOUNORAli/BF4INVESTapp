@@ -266,7 +266,8 @@ public class PdfService {
         lineItem.setUnite(ligneVente.getUnite() != null ? ligneVente.getUnite() : "U");
 
         if (ligneVente.getQuantiteVendue() != null) {
-            lineItem.setQuantiteVendue(ligneVente.getQuantiteVendue().intValue());
+            // Garder la précision décimale
+            lineItem.setQuantiteVendue(ligneVente.getQuantiteVendue());
         }
 
         lineItem.setPrixVenteUnitaireHT(ligneVente.getPrixVenteUnitaireHT());

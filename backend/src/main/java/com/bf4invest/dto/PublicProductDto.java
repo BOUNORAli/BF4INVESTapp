@@ -20,7 +20,7 @@ public class PublicProductDto {
     private String unite;
     private Double prixVentePondereHT;
     private Double tva;
-    private Integer quantiteEnStock;
+    private Double quantiteEnStock;
     private String imageBase64;
     private String imageContentType;
     private String categorie;

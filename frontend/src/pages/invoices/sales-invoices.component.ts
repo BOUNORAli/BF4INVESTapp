@@ -463,7 +463,7 @@ import { matchesFlexibleSearch } from '../../utils/product-search.util';
                                                 <td class="p-2 text-right">{{ row.prixVenteUnitaireHT | number:'1.2-2' }}</td>
                                                 <td class="p-2 text-right">{{ row.qtyMax }}</td>
                                                 <td class="p-2 text-right">
-                                                   <input type="number" min="0" [attr.max]="row.qtyMax" class="w-20 border border-slate-200 rounded px-1 py-0.5 text-right"
+                                                   <input type="number" min="0" step="0.001" [attr.max]="row.qtyMax" class="w-20 border border-slate-200 rounded px-1 py-0.5 text-right"
                                                       [value]="row.qtyFacturer"
                                                       (input)="onAllocationQtyChange($index, $any($event.target).value)" />
                                                 </td>
@@ -1118,6 +1118,17 @@ import { matchesFlexibleSearch } from '../../utils/product-search.util';
 })
 export class SalesInvoicesComponent implements OnInit {
   Math = Math; // Make Math available in template
+
+  private parseDecimalInput(raw: unknown): number {
+    if (raw === null || raw === undefined) return 0;
+    const s = String(raw)
+      .trim()
+      .replace(/\s+/g, '')
+      .replace(',', '.');
+    if (!s) return 0;
+    const n = Number(s);
+    return Number.isFinite(n) ? n : 0;
+  }
 
   store = inject(StoreService);
   fb = inject(FormBuilder);
@@ -1883,7 +1894,7 @@ export class SalesInvoicesComponent implements OnInit {
             designation: lv.designation || lv.produitRef || '',
             prixVenteUnitaireHT: Number(lv.prixVenteUnitaireHT) || 0,
             tva: lv.tva != null && lv.tva !== undefined ? Number(lv.tva) : 20,
-            qtyMax: Math.round(Number(lv.quantiteVendue) || 0),
+              qtyMax: Math.max(0, Number(lv.quantiteVendue) || 0),
             qtyFacturer: 0
           });
         }
@@ -1897,7 +1908,7 @@ export class SalesInvoicesComponent implements OnInit {
     let ht = 0;
     let tva = 0;
     for (const r of this.allocationRows()) {
-      const q = Math.max(0, Math.round(Number(r.qtyFacturer) || 0));
+      const q = Math.max(0, Number(r.qtyFacturer) || 0);
       const lineHt = q * (Number(r.prixVenteUnitaireHT) || 0);
       ht += lineHt;
       tva += lineHt * ((Number(r.tva) || 0) / 100);
@@ -1914,7 +1925,8 @@ export class SalesInvoicesComponent implements OnInit {
   onAllocationQtyChange(index: number, raw: string) {
     const rows = this.allocationRows();
     const max = rows[index]?.qtyMax ?? 0;
-    const q = Math.max(0, Math.min(Math.round(Number(raw) || 0), max));
+    const parsed = this.parseDecimalInput(raw);
+    const q = Math.max(0, Math.min(parsed, max));
     this.allocationRows.update(arr => {
       const copy = [...arr];
       if (copy[index]) {
@@ -1929,7 +1941,7 @@ export class SalesInvoicesComponent implements OnInit {
   buildSaleLinesFromAllocation(): SaleInvoiceLinePayload[] {
     const out: SaleInvoiceLinePayload[] = [];
     for (const r of this.allocationRows()) {
-      const q = Math.round(Number(r.qtyFacturer) || 0);
+      const q = Math.max(0, Number(r.qtyFacturer) || 0);
       if (q <= 0) {
         continue;
       }

@@ -39,7 +39,7 @@ public class Product {
     
     private String fournisseurId; // Référence au fournisseur
     
-    private Integer quantiteEnStock; // Quantité en stock (défaut: 0)
+    private Double quantiteEnStock; // Quantité en stock (défaut: 0)
     
     private String imageBase64; // Image du produit en base64 (optionnel)
     private String imageContentType; // Type MIME de l'image (image/png, image/jpeg, etc.)

@@ -507,13 +507,14 @@ public class FactureAchatService {
                 continue;
             }
             
-            Integer quantite = ligne.getQuantiteAchetee();
+            Double quantite = ligne.getQuantiteAchetee();
             if (quantite == null || quantite <= 0) {
                 log.warn("⚠️ FactureAchatService.updateStockFromFacture - Quantité invalide pour produitRef: {}, ignorée", ligne.getProduitRef());
                 continue;
             }
             
             try {
+                // Stock est en Double : on conserve la précision décimale
                 Product updated = productService.updateStockByRef(ligne.getProduitRef(), quantite);
                 if (updated != null) {
                     log.info("✅ FactureAchatService.updateStockFromFacture - Stock mis à jour pour produitRef: {}, quantité ajoutée: {}, nouveau stock: {}", 

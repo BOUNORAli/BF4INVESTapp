@@ -14,8 +14,8 @@ public class LineItem {
     private String designation;
     private String unite;
     
-    private Integer quantiteAchetee;
-    private Integer quantiteVendue;
+    private Double quantiteAchetee;
+    private Double quantiteVendue;
     
     private Double prixAchatUnitaireHT;
     private Double prixVenteUnitaireHT;

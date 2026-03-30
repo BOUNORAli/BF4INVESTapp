@@ -1023,10 +1023,9 @@ public class BandeCommandeService {
 
             // Ajouter au stock uniquement si surplus > 0
             if (surplus > 0) {
-                Integer quantiteStock = surplus.intValue(); // Arrondir à l'entier inférieur
-
                 try {
-                    Product updated = productService.updateStockByRef(ligne.getProduitRef(), quantiteStock);
+                    // Garder la précision décimale sur le stock
+                    Product updated = productService.updateStockByRef(ligne.getProduitRef(), surplus);
                     if (updated != null) {
                         // Log réussi (peut être ajouté si nécessaire)
                     } else {

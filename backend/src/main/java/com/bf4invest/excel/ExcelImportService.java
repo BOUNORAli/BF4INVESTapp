@@ -2203,7 +2203,7 @@ public class ExcelImportService {
                         .prixVentePondereHT(prixVentePondere)
                         .tva(agg.tva)
                         .fournisseurId(fournisseurId)
-                        .quantiteEnStock(0)
+                        .quantiteEnStock(0.0)
                         .derniereMiseAJourPrix(LocalDateTime.now())
                         .createdAt(LocalDateTime.now())
                         .updatedAt(LocalDateTime.now())
@@ -2248,10 +2248,10 @@ public class ExcelImportService {
                 log.debug("Trying to parse quantite_bc as string: {}", qteAchatStr);
             }
         }
-        ligne.setQuantiteAchetee(qteBC != null ? qteBC.intValue() : 0);
+        ligne.setQuantiteAchetee(qteBC != null ? qteBC : 0.0);
 
         Double qteLivree = getDoubleValue(row, columnMap, "quantite_livree");
-        ligne.setQuantiteVendue(qteLivree != null ? qteLivree.intValue() : ligne.getQuantiteAchetee());
+        ligne.setQuantiteVendue(qteLivree != null ? qteLivree : ligne.getQuantiteAchetee());
 
         // Prix d'achat unitaire HT
         Double prixAchatHT = getDoubleValue(row, columnMap, "prix_achat_unitaire_ht");
@@ -2265,7 +2265,7 @@ public class ExcelImportService {
                 tva = 20.0;
 
             if (ptTTCImporte != null && ptTTCImporte > 0) {
-                Integer qte = ligne.getQuantiteAchetee();
+                Double qte = ligne.getQuantiteAchetee();
                 if (qte != null && qte > 0) {
                     // Prix unitaire TTC = PT TTC / Quantite
                     Double prixUnitaireTTC = ptTTCImporte / qte;
@@ -3625,10 +3625,8 @@ public class ExcelImportService {
                         fournisseurId = supplier.getId();
                     }
 
-                    Integer quantiteStock = getIntegerValue(row, columnMap, "quantite_stock");
-                    if (quantiteStock == null) {
-                        quantiteStock = 0;
-                    }
+                    Integer quantiteStockInt = getIntegerValue(row, columnMap, "quantite_stock");
+                    Double quantiteStock = quantiteStockInt != null ? quantiteStockInt.doubleValue() : 0.0;
 
                     // Utiliser la designation comme référence si elle est disponible et différente
                     // Sinon utiliser refArticle nettoyée
