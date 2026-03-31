@@ -1816,10 +1816,19 @@ public class PdfService {
             long tensPart = number / 10;
             long unitsPart = number % 10;
             
-            if (tensPart == 7 || tensPart == 9) {
-                // Soixante-dix, Quatre-vingt-dix
-                return tens[(int) tensPart] + (tensPart == 7 ? "-Dix" : "-Dix") + 
-                       (unitsPart > 0 ? "-" + units[(int) unitsPart] : "");
+            // Français standard:
+            // 70–79 = soixante + (10..19), avec 71 = soixante-et-onze
+            // 90–99 = quatre-vingt + (10..19)
+            if (tensPart == 7) {
+                long rest = number - 60; // 10..19
+                if (rest == 11) {
+                    return "Soixante-et-Onze";
+                }
+                return "Soixante-" + convertNumberToFrench(rest);
+            }
+            if (tensPart == 9) {
+                long rest = number - 80; // 10..19
+                return "Quatre-Vingt-" + convertNumberToFrench(rest);
             }
             
             String result = tens[(int) tensPart];

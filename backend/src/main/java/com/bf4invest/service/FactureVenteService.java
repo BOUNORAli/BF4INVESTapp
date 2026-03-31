@@ -307,6 +307,9 @@ public class FactureVenteService {
                     log.info("🔵 FactureVenteService.update - Montants existants AVANT update: totalHT={}, totalTTC={}", 
                         existing.getTotalHT(), existing.getTotalTTC());
                     
+                    if (facture.getNumeroFactureVente() != null && !facture.getNumeroFactureVente().isBlank()) {
+                        existing.setNumeroFactureVente(facture.getNumeroFactureVente().trim());
+                    }
                     if (facture.getDateFacture() != null) {
                         existing.setDateFacture(facture.getDateFacture());
                         existing.setDateEcheance(facture.getDateFacture().plusDays(appConfig.getDefaultPaymentTermDays()));

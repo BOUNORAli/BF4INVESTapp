@@ -261,6 +261,9 @@ public class FactureAchatService {
     public FactureAchat update(String id, FactureAchat facture) {
         return factureRepository.findById(id)
                 .map(existing -> {
+                    if (facture.getNumeroFactureAchat() != null && !facture.getNumeroFactureAchat().isBlank()) {
+                        existing.setNumeroFactureAchat(facture.getNumeroFactureAchat().trim());
+                    }
                     if (facture.getDateFacture() != null) {
                         existing.setDateFacture(facture.getDateFacture());
                         existing.setDateEcheance(facture.getDateFacture().plusMonths(2));
