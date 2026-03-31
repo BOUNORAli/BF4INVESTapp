@@ -14,6 +14,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 @Slf4j
@@ -168,7 +169,8 @@ public class PaiementService {
                                 .mapToDouble(p -> p.getMontant() != null ? p.getMontant() : 0.0)
                                 .sum());
                         
-                        double montantRestant = NumberUtils.roundTo2Decimals(facture.getTotalTTC() - totalPaiements);
+                        double totalTtc = facture.getTotalTTC() != null ? facture.getTotalTTC() : 0.0;
+                        double montantRestant = NumberUtils.roundTo2Decimals(totalTtc - totalPaiements);
                         
                         if (montantRestant <= 0) {
                             facture.setEtatPaiement("regle");
@@ -178,7 +180,7 @@ public class PaiementService {
                         
                         facture.setMontantRestant(montantRestant);
                         if (facture.getPaiements() == null) {
-                            facture.setPaiements(List.of());
+                            facture.setPaiements(new ArrayList<>());
                         }
                         facture.getPaiements().add(paiement);
                         
@@ -197,7 +199,8 @@ public class PaiementService {
                                 .mapToDouble(p -> p.getMontant() != null ? p.getMontant() : 0.0)
                                 .sum());
                         
-                        double montantRestant = NumberUtils.roundTo2Decimals(facture.getTotalTTC() - totalPaiements);
+                        double totalTtc = facture.getTotalTTC() != null ? facture.getTotalTTC() : 0.0;
+                        double montantRestant = NumberUtils.roundTo2Decimals(totalTtc - totalPaiements);
                         
                         if (montantRestant <= 0) {
                             facture.setEtatPaiement("regle");
@@ -207,7 +210,7 @@ public class PaiementService {
                         
                         facture.setMontantRestant(montantRestant);
                         if (facture.getPaiements() == null) {
-                            facture.setPaiements(List.of());
+                            facture.setPaiements(new ArrayList<>());
                         }
                         facture.getPaiements().add(paiement);
                         
