@@ -260,5 +260,31 @@ export class InvoiceStore {
       return newMap;
     });
   }
+  
+  /**
+   * Met à jour un paiement pour une facture
+   */
+  updatePaymentForInvoice(invoiceId: string, payment: Payment): void {
+    this.payments.update(map => {
+      const newMap = new Map(map);
+      const existing = newMap.get(invoiceId) || [];
+      const updated = existing.map(p => p.id === payment.id ? payment : p);
+      newMap.set(invoiceId, updated);
+      return newMap;
+    });
+  }
+  
+  /**
+   * Supprime un paiement pour une facture
+   */
+  removePaymentFromInvoice(invoiceId: string, paymentId: string): void {
+    this.payments.update(map => {
+      const newMap = new Map(map);
+      const existing = newMap.get(invoiceId) || [];
+      const filtered = existing.filter(p => p.id !== paymentId);
+      newMap.set(invoiceId, filtered);
+      return newMap;
+    });
+  }
 }
 

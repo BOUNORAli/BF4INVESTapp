@@ -1227,6 +1227,43 @@ export class StoreService {
       throw error;
     }
   }
+  
+  async updatePaiement(payment: Payment): Promise<void> {
+    try {
+      const updated = await this.invoiceService.updatePayment(payment);
+      const invoiceId = updated.factureAchatId || updated.factureVenteId || '';
+      if (invoiceId) {
+        this.invoiceStore.updatePaymentForInvoice(invoiceId, updated);
+        await this.loadInvoices();
+        await this.loadSoldeGlobal();
+      }
+      this.showToast('Paiement mis à jour avec succès', 'success');
+    } catch (error) {
+      console.error('Error updating payment:', error);
+      this.showToast('Erreur lors de la mise à jour du paiement', 'error');
+      throw error;
+    }
+  }
+  
+  async deletePaiement(payment: Payment): Promise<void> {
+    if (!payment.id) {
+      return;
+    }
+    try {
+      await this.invoiceService.deletePayment(payment.id);
+      const invoiceId = payment.factureAchatId || payment.factureVenteId || '';
+      if (invoiceId) {
+        this.invoiceStore.removePaymentFromInvoice(invoiceId, payment.id);
+        await this.loadInvoices();
+        await this.loadSoldeGlobal();
+      }
+      this.showToast('Paiement supprimé avec succès', 'success');
+    } catch (error) {
+      console.error('Error deleting payment:', error);
+      this.showToast('Erreur lors de la suppression du paiement', 'error');
+      throw error;
+    }
+  }
 
 
   // T├®l├®charger le rapport complet du dashboard

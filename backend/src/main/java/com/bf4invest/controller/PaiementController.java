@@ -22,6 +22,18 @@ public class PaiementController {
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
     
+    @PutMapping("/{id}")
+    public ResponseEntity<Paiement> updatePaiement(@PathVariable String id, @RequestBody Paiement paiement) {
+        Paiement updated = paiementService.update(id, paiement);
+        return ResponseEntity.ok(updated);
+    }
+    
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deletePaiement(@PathVariable String id) {
+        paiementService.delete(id);
+        return ResponseEntity.noContent().build();
+    }
+    
     @GetMapping
     public ResponseEntity<List<Paiement>> getPaiements(
             @RequestParam(required = false) String factureAchatId,

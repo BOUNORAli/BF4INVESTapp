@@ -162,6 +162,24 @@ export class InvoiceService {
     const created = await this.api.post<any>('/paiements', payload).toPromise();
     return this.mapPayment(created);
   }
+  
+  async updatePayment(payment: Payment): Promise<Payment> {
+    if (!payment.id) {
+      throw new Error('updatePayment requires payment.id');
+    }
+    const payload: any = {
+      date: payment.date,
+      mode: payment.mode,
+      reference: payment.reference || '',
+      notes: payment.notes || ''
+    };
+    const updated = await this.api.put<any>(`/paiements/${payment.id}`, payload).toPromise();
+    return this.mapPayment(updated);
+  }
+  
+  async deletePayment(id: string): Promise<void> {
+    await this.api.delete(`/paiements/${id}`).toPromise();
+  }
 
   // PDF Methods
   async downloadFactureVentePDF(factureId: string): Promise<Blob> {

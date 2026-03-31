@@ -151,6 +151,68 @@ public class PaiementService {
         return saved;
     }
     
+    public Paiement update(String id, Paiement patch) {
+        Paiement existing = paiementRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Paiement not found with id: " + id));
+        
+        // On autorise surtout la mise à jour des métadonnées (date, mode, référence, notes)
+        if (patch.getDate() != null) {
+            existing.setDate(patch.getDate());
+        }
+        if (patch.getMode() != null && !patch.getMode().isBlank()) {
+            existing.setMode(patch.getMode());
+        }
+        if (patch.getReference() != null) {
+            existing.setReference(patch.getReference());
+        }
+        if (patch.getNotes() != null) {
+            existing.setNotes(patch.getNotes());
+        }
+        
+        // On évite de modifier le lien facture et le montant pour ne pas casser la comptabilité
+        
+        // Recalcul des champs comptables de base
+        calculComptableService.calculerPaiement(existing);
+        
+        Paiement saved = paiementRepository.save(existing);
+        
+        // Recalcul de la facture liée
+        updateFacturePaymentStatus(saved);
+        
+        // Audit simple
+        auditService.logUpdate("Paiement", saved.getId(), null, "Paiement mis à jour (date/mode/référence/notes)");
+        
+        return saved;
+    }
+    
+    public void delete(String id) {
+        Paiement paiement = paiementRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Paiement not found with id: " + id));
+        
+        String factureAchatId = paiement.getFactureAchatId();
+        String factureVenteId = paiement.getFactureVenteId();
+        
+        paiementRepository.deleteById(id);
+        
+        // Recalcul de la facture achat si nécessaire
+        if (factureAchatId != null) {
+            factureAchatRepository.findById(factureAchatId).ifPresent(facture -> {
+                recomputeFactureAchatFromPayments(facture);
+                factureAchatRepository.save(facture);
+            });
+        }
+        
+        // Recalcul de la facture vente si nécessaire
+        if (factureVenteId != null) {
+            factureVenteRepository.findById(factureVenteId).ifPresent(facture -> {
+                recomputeFactureVenteFromPayments(facture);
+                factureVenteRepository.save(facture);
+            });
+        }
+        
+        auditService.logDelete("Paiement", id, "Paiement supprimé");
+    }
+    
     public List<Paiement> findByFactureAchatId(String factureAchatId) {
         return paiementRepository.findByFactureAchatId(factureAchatId);
     }
@@ -163,30 +225,7 @@ public class PaiementService {
         if (paiement.getFactureAchatId() != null) {
             factureAchatRepository.findById(paiement.getFactureAchatId())
                     .ifPresent(facture -> {
-                        // Récupérer tous les paiements pour cette facture
-                        List<Paiement> paiements = paiementRepository.findByFactureAchatId(facture.getId());
-                        double totalPaiements = NumberUtils.roundTo2Decimals(paiements.stream()
-                                .mapToDouble(p -> p.getMontant() != null ? p.getMontant() : 0.0)
-                                .sum());
-                        
-                        double totalTtc = facture.getTotalTTC() != null ? facture.getTotalTTC() : 0.0;
-                        double montantRestant = NumberUtils.roundTo2Decimals(totalTtc - totalPaiements);
-                        
-                        if (montantRestant <= 0) {
-                            facture.setEtatPaiement("regle");
-                        } else if (totalPaiements > 0) {
-                            facture.setEtatPaiement("partiellement_regle");
-                        }
-                        
-                        facture.setMontantRestant(montantRestant);
-                        if (facture.getPaiements() == null) {
-                            facture.setPaiements(new ArrayList<>());
-                        }
-                        facture.getPaiements().add(paiement);
-                        
-                        // Appliquer la déduction automatique des prévisions
-                        deduirePrevisions(facture.getPrevisionsPaiement(), paiement.getMontant() != null ? paiement.getMontant() : 0.0);
-                        
+                        recomputeFactureAchatFromPayments(facture);
                         factureAchatRepository.save(facture);
                     });
         }
@@ -194,32 +233,59 @@ public class PaiementService {
         if (paiement.getFactureVenteId() != null) {
             factureVenteRepository.findById(paiement.getFactureVenteId())
                     .ifPresent(facture -> {
-                        List<Paiement> paiements = paiementRepository.findByFactureVenteId(facture.getId());
-                        double totalPaiements = NumberUtils.roundTo2Decimals(paiements.stream()
-                                .mapToDouble(p -> p.getMontant() != null ? p.getMontant() : 0.0)
-                                .sum());
-                        
-                        double totalTtc = facture.getTotalTTC() != null ? facture.getTotalTTC() : 0.0;
-                        double montantRestant = NumberUtils.roundTo2Decimals(totalTtc - totalPaiements);
-                        
-                        if (montantRestant <= 0) {
-                            facture.setEtatPaiement("regle");
-                        } else if (totalPaiements > 0) {
-                            facture.setEtatPaiement("partiellement_regle");
-                        }
-                        
-                        facture.setMontantRestant(montantRestant);
-                        if (facture.getPaiements() == null) {
-                            facture.setPaiements(new ArrayList<>());
-                        }
-                        facture.getPaiements().add(paiement);
-                        
-                        // Appliquer la déduction automatique des prévisions
-                        deduirePrevisions(facture.getPrevisionsPaiement(), paiement.getMontant() != null ? paiement.getMontant() : 0.0);
-                        
+                        recomputeFactureVenteFromPayments(facture);
                         factureVenteRepository.save(facture);
                     });
         }
+    }
+    
+    private void recomputeFactureAchatFromPayments(FactureAchat facture) {
+        List<Paiement> paiements = paiementRepository.findByFactureAchatId(facture.getId());
+        double totalPaiements = NumberUtils.roundTo2Decimals(paiements.stream()
+                .mapToDouble(p -> p.getMontant() != null ? p.getMontant() : 0.0)
+                .sum());
+        
+        double totalTtc = facture.getTotalTTC() != null ? facture.getTotalTTC() : 0.0;
+        double montantRestant = NumberUtils.roundTo2Decimals(totalTtc - totalPaiements);
+        
+        if (montantRestant <= 0 && totalTtc > 0) {
+            facture.setEtatPaiement("regle");
+        } else if (totalPaiements > 0) {
+            facture.setEtatPaiement("partiellement_regle");
+        } else {
+            facture.setEtatPaiement("non_regle");
+        }
+        
+        facture.setMontantRestant(montantRestant);
+        facture.setPaiements(new ArrayList<>(paiements));
+        
+        // Appliquer la déduction automatique des prévisions à partir du total payé
+        double montantPaiementTotal = totalPaiements;
+        deduirePrevisions(facture.getPrevisionsPaiement(), montantPaiementTotal);
+    }
+    
+    private void recomputeFactureVenteFromPayments(FactureVente facture) {
+        List<Paiement> paiements = paiementRepository.findByFactureVenteId(facture.getId());
+        double totalPaiements = NumberUtils.roundTo2Decimals(paiements.stream()
+                .mapToDouble(p -> p.getMontant() != null ? p.getMontant() : 0.0)
+                .sum());
+        
+        double totalTtc = facture.getTotalTTC() != null ? facture.getTotalTTC() : 0.0;
+        double montantRestant = NumberUtils.roundTo2Decimals(totalTtc - totalPaiements);
+        
+        if (montantRestant <= 0 && totalTtc > 0) {
+            facture.setEtatPaiement("regle");
+        } else if (totalPaiements > 0) {
+            facture.setEtatPaiement("partiellement_regle");
+        } else {
+            facture.setEtatPaiement("non_regle");
+        }
+        
+        facture.setMontantRestant(montantRestant);
+        facture.setPaiements(new ArrayList<>(paiements));
+        
+        double montantPaiementTotal = totalPaiements;
+        deduirePrevisions(facture.getPrevisionsPaiement(), montantPaiementTotal);
     }
     
     /**

@@ -1,6 +1,6 @@
 import { Component, inject, signal, computed, OnInit, HostListener, NgZone, ChangeDetectorRef, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { StoreService, Invoice, BC, PrevisionPaiement } from '../../services/store.service';
+import { StoreService, Invoice, BC, PrevisionPaiement, Payment } from '../../services/store.service';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, FormsModule } from '@angular/forms';
 import { Router, ActivatedRoute } from '@angular/router';
 import { ComptabiliteService } from '../../services/comptabilite.service';
@@ -976,6 +976,7 @@ import { matchesFlexibleSearch } from '../../utils/product-search.util';
                             <th class="px-4 py-3 text-right font-semibold text-slate-700">Solde Global Après</th>
                             <th class="px-4 py-3 text-right font-semibold text-slate-700">Solde Fournisseur Après</th>
                             <th class="px-4 py-3 text-left font-semibold text-slate-700">Référence</th>
+                            <th class="px-4 py-3 text-center font-semibold text-slate-700">Actions</th>
                           </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100">
@@ -994,6 +995,14 @@ import { matchesFlexibleSearch } from '../../utils/product-search.util';
                                 {{ payment.soldePartenaireApres | number:'1.2-2' }} MAD
                               </td>
                               <td class="px-4 py-3 text-xs text-slate-500">{{ payment.reference || '-' }}</td>
+                              <td class="px-4 py-3 text-center space-x-2">
+                                <button (click)="startEditPayment(payment)" class="text-blue-600 hover:text-blue-800 text-xs font-medium">
+                                  Modifier
+                                </button>
+                                <button (click)="deletePayment(payment)" class="text-red-600 hover:text-red-800 text-xs font-medium">
+                                  Supprimer
+                                </button>
+                              </td>
                             </tr>
                           }
                         </tbody>
@@ -2047,6 +2056,9 @@ export class PurchaseInvoicesComponent implements OnInit {
     };
   });
 
+  // Édition d'un paiement
+  editingPaymentId: string | null = null;
+
   async addPayment() {
     if (this.paymentForm.invalid || !this.selectedInvoiceForPayments()) {
       return;
@@ -2054,7 +2066,8 @@ export class PurchaseInvoicesComponent implements OnInit {
 
     const inv = this.selectedInvoiceForPayments()!;
     const invoiceId = inv.id; // Sauvegarder l'ID avant les modifications
-    const paymentData = {
+    const paymentData: Payment = {
+      id: this.editingPaymentId || undefined,
       factureAchatId: inv.id,
       date: this.paymentForm.value.date!,
       montant: this.paymentForm.value.montant!,
@@ -2064,7 +2077,11 @@ export class PurchaseInvoicesComponent implements OnInit {
     };
 
     try {
-      await this.store.addPaiement(paymentData);
+      if (this.editingPaymentId) {
+        await this.store.updatePaiement(paymentData);
+      } else {
+        await this.store.addPaiement(paymentData);
+      }
       
       // Réinitialiser le formulaire immédiatement pour une meilleure UX
       this.paymentForm.reset({
@@ -2074,6 +2091,7 @@ export class PurchaseInvoicesComponent implements OnInit {
         reference: '',
         notes: ''
       });
+      this.editingPaymentId = null;
       
       // Mettre à jour localement la facture sélectionnée si elle a été mise à jour dans le store
       const updatedInvoice = this.store.invoices().find(i => i.id === invoiceId);
@@ -2090,6 +2108,47 @@ export class PurchaseInvoicesComponent implements OnInit {
       });
     } catch (error) {
       console.error('Error adding payment:', error);
+    }
+  }
+
+  startEditPayment(payment: Payment) {
+    this.editingPaymentId = payment.id || null;
+    this.paymentForm.setValue({
+      date: payment.date,
+      montant: payment.montant,
+      mode: payment.mode,
+      reference: payment.reference || '',
+      notes: payment.notes || ''
+    });
+  }
+
+  cancelEditPayment() {
+    this.editingPaymentId = null;
+    this.paymentForm.reset({
+      date: new Date().toISOString().split('T')[0],
+      montant: 0,
+      mode: '',
+      reference: '',
+      notes: ''
+    });
+  }
+
+  async deletePayment(payment: Payment) {
+    if (!payment.id) {
+      return;
+    }
+    const confirmDelete = window.confirm('Supprimer définitivement ce paiement ?');
+    if (!confirmDelete) {
+      return;
+    }
+    try {
+      await this.store.deletePaiement(payment);
+      const inv = this.selectedInvoiceForPayments();
+      if (inv) {
+        await this.store.loadPaymentsForInvoice(inv.id, 'purchase');
+      }
+    } catch (error) {
+      console.error('Error deleting payment:', error);
     }
   }
 
