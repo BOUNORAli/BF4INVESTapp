@@ -1,4 +1,4 @@
-import { Component, inject, signal, OnInit } from '@angular/core';
+import { Component, inject, signal, computed, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { UserService, ApiUser, CreateUserPayload, UpdateUserPayload, UserRole } from '../../services/user.service';
@@ -84,7 +84,7 @@ const ROLES: UserRole[] = ['ADMIN', 'COMMERCIAL', 'COMPTABLE', 'LECTEUR'];
           <div (click)="closeModal()" class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"></div>
           <div class="relative bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-md max-h-[90vh] overflow-y-auto">
             <div class="sticky top-0 bg-white border-b border-slate-100 px-6 py-4 flex justify-between items-center">
-              <h2 class="text-lg font-bold text-slate-800">{{ editingId() ? 'Modifier l\'utilisateur' : 'Nouvel utilisateur' }}</h2>
+              <h2 class="text-lg font-bold text-slate-800">{{ modalTitle() }}</h2>
               <button (click)="closeModal()" class="text-slate-400 hover:text-slate-600 transition">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
               </button>
@@ -176,6 +176,7 @@ export class UsersComponent implements OnInit {
   formEnabled = true;
 
   readonly roles = ROLES;
+  readonly modalTitle = computed(() => this.editingId() ? "Modifier l'utilisateur" : 'Nouvel utilisateur');
 
   ngOnInit() {
     this.loadUsers();
