@@ -24,6 +24,10 @@ export interface Product {
   category?: string;
   priceBuyHT: number;
   priceSellHT: number;
+  priceBuyMinHT?: number;
+  priceBuyMaxHT?: number;
+  priceSellMinHT?: number;
+  priceSellMaxHT?: number;
   stock?: number; // Quantit├® en stock
   imageUrl?: string; // URL de l'image (base64 data URL)
 }

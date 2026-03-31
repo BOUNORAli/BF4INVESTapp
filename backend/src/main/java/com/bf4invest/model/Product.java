@@ -33,6 +33,12 @@ public class Product {
     private Double prixAchatPondereHT; // Prix d'achat pondéré calculé depuis toutes les BC
     private Double prixVentePondereHT; // Prix de vente pondéré calculé depuis toutes les BC
     
+    // Statistiques historiques (min/max) calculées depuis toutes les BC
+    private Double prixAchatMinHT;
+    private Double prixAchatMaxHT;
+    private Double prixVenteMinHT;
+    private Double prixVenteMaxHT;
+    
     private Double tva; // en pourcentage (ex: 20.0)
     
     private LocalDateTime derniereMiseAJourPrix; // Date de dernière mise à jour des prix pondérés

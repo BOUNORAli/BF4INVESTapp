@@ -97,8 +97,8 @@ export const ContactPage: React.FC = () => {
                 <div className="flex items-start gap-3">
                   <MapPin className="mt-0.5 h-4 w-4 text-accent" />
                   <div>
-                    <p className="text-xs font-semibold text-primary">Siège &amp; plateforme logistique</p>
-                    <p>Hamria, Meknès, Maroc</p>
+                    <p className="text-xs font-semibold text-primary">Siège</p>
+                    <p>Résidence NAKHIL Appartement 13, 4ème ETAGE, 2 SEPTEMBRE, Meknès, Maroc</p>
                   </div>
                 </div>
               </div>

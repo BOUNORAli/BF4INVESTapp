@@ -103,6 +103,10 @@ export class ProductService {
       // Utiliser les prix pondérés en priorité, avec fallback sur prix unitaires pour rétrocompatibilité
       priceBuyHT: p.prixAchatPondereHT ?? p.prixAchatUnitaireHT ?? p.priceBuyHT ?? 0,
       priceSellHT: p.prixVentePondereHT ?? p.prixVenteUnitaireHT ?? p.priceSellHT ?? 0,
+      priceBuyMinHT: p.prixAchatMinHT ?? p.priceBuyMinHT,
+      priceBuyMaxHT: p.prixAchatMaxHT ?? p.priceBuyMaxHT,
+      priceSellMinHT: p.prixVenteMinHT ?? p.priceSellMinHT,
+      priceSellMaxHT: p.prixVenteMaxHT ?? p.priceSellMaxHT,
       stock: p.quantiteEnStock !== undefined ? p.quantiteEnStock : (p.stock !== undefined ? p.stock : 0),
       imageUrl: imageUrl
     };

@@ -87,7 +87,7 @@ export const Footer: React.FC = () => {
           <h3 className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-400">Informations B2B</h3>
           <div className="flex items-start gap-2">
             <MapPin className="mt-0.5 h-4 w-4 text-accent" />
-            <p>Quartier Industriel, Meknès, Maroc</p>
+            <p>Résidence NAKHIL Appartement 13, 4ème ETAGE, 2 SEPTEMBRE, Meknès, Maroc</p>
           </div>
           <div className="flex items-start gap-2">
             <Phone className="mt-0.5 h-4 w-4 text-accent" />

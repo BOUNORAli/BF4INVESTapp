@@ -62,6 +62,11 @@ public class ProductPriceService {
         double quantiteVendueTotale = 0.0;
         Double tva = null;
         
+        Double prixAchatMin = null;
+        Double prixAchatMax = null;
+        Double prixVenteMin = null;
+        Double prixVenteMax = null;
+        
         // Parcourir toutes les BC
         for (BandeCommande bc : allBCs) {
             if (bc.getLignesAchat() == null) {
@@ -78,6 +83,9 @@ public class ProductPriceService {
                         double prix = ligneAchat.getPrixAchatUnitaireHT();
                         quantiteAcheteeTotale += qty;
                         sommePrixAchatPondere += prix * qty;
+                        
+                        prixAchatMin = prixAchatMin == null ? prix : Math.min(prixAchatMin, prix);
+                        prixAchatMax = prixAchatMax == null ? prix : Math.max(prixAchatMax, prix);
                     }
                     
                     if (ligneAchat.getTva() != null && tva == null) {
@@ -99,6 +107,9 @@ public class ProductPriceService {
                                     double prix = ligneVente.getPrixVenteUnitaireHT();
                                     quantiteVendueTotale += qty;
                                     sommePrixVentePondere += prix * qty;
+                                    
+                                    prixVenteMin = prixVenteMin == null ? prix : Math.min(prixVenteMin, prix);
+                                    prixVenteMax = prixVenteMax == null ? prix : Math.max(prixVenteMax, prix);
                                 }
                             }
                         }
@@ -126,6 +137,10 @@ public class ProductPriceService {
         // Mettre à jour le produit
         product.setPrixAchatPondereHT(prixAchatPondere);
         product.setPrixVentePondereHT(prixVentePondere);
+        product.setPrixAchatMinHT(prixAchatMin != null ? BigDecimal.valueOf(prixAchatMin).setScale(2, RoundingMode.HALF_UP).doubleValue() : null);
+        product.setPrixAchatMaxHT(prixAchatMax != null ? BigDecimal.valueOf(prixAchatMax).setScale(2, RoundingMode.HALF_UP).doubleValue() : null);
+        product.setPrixVenteMinHT(prixVenteMin != null ? BigDecimal.valueOf(prixVenteMin).setScale(2, RoundingMode.HALF_UP).doubleValue() : null);
+        product.setPrixVenteMaxHT(prixVenteMax != null ? BigDecimal.valueOf(prixVenteMax).setScale(2, RoundingMode.HALF_UP).doubleValue() : null);
         if (tva != null) {
             product.setTva(tva);
         }
