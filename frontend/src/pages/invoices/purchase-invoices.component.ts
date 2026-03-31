@@ -1702,37 +1702,75 @@ export class PurchaseInvoicesComponent implements OnInit {
     }
   }
 
+  private computePurchaseTotalsFromBc(bc: BC): { totalHT: number; totalTTC: number } {
+    const safeNum = (v: unknown): number => {
+      const n = Number(v);
+      return Number.isFinite(n) ? n : 0;
+    };
+
+    // 1) Priorité multi-fournisseurs (fournisseursAchat -> lignesAchat)
+    if (bc.fournisseursAchat && bc.fournisseursAchat.length > 0) {
+      // Si le backend a déjà pré-calculé les totaux au niveau BC, on les utilise.
+      if (bc.totalAchatHT !== undefined && bc.totalAchatTTC !== undefined) {
+        const totalHT = safeNum(bc.totalAchatHT);
+        const totalTTC = safeNum(bc.totalAchatTTC);
+        return { totalHT, totalTTC };
+      }
+
+      const lignes = (bc.fournisseursAchat.flatMap(fa => fa.lignesAchat || []) || []).filter(Boolean);
+      const totalHT = lignes.reduce(
+        (acc, l: any) => acc + (safeNum(l.quantiteAchetee) || 0) * (safeNum(l.prixAchatUnitaireHT) || 0),
+        0
+      );
+      const totalTVA = lignes.reduce(
+        (acc, l: any) =>
+          acc +
+          (safeNum(l.quantiteAchetee) || 0) *
+            (safeNum(l.prixAchatUnitaireHT) || 0) *
+            (safeNum(l.tva) || 0) / 100,
+        0
+      );
+      return { totalHT, totalTTC: totalHT + totalTVA };
+    }
+
+    // 2) Nouveau mode mono-liste (lignesAchat)
+    if (bc.lignesAchat && bc.lignesAchat.length > 0) {
+      if (bc.totalAchatHT !== undefined && bc.totalAchatTTC !== undefined) {
+        const totalHT = safeNum(bc.totalAchatHT);
+        const totalTTC = safeNum(bc.totalAchatTTC);
+        return { totalHT, totalTTC };
+      }
+
+      const totalHT = bc.lignesAchat.reduce(
+        (acc, l) => acc + (l.quantiteAchetee || 0) * (l.prixAchatUnitaireHT || 0),
+        0
+      );
+      const totalTVA = bc.lignesAchat.reduce(
+        (acc, l) => acc + (l.quantiteAchetee || 0) * (l.prixAchatUnitaireHT || 0) * ((l.tva || 0) / 100),
+        0
+      );
+      return { totalHT, totalTTC: totalHT + totalTVA };
+    }
+
+    // 3) Legacy (items)
+    if (bc.items) {
+      const totalHT = bc.items.reduce((acc, i) => acc + (i.qtyBuy * i.priceBuyHT), 0);
+      const totalTVA = bc.items.reduce((acc, i) => acc + (i.qtyBuy * i.priceBuyHT * (i.tvaRate / 100)), 0);
+      return { totalHT, totalTTC: totalHT + totalTVA };
+    }
+
+    return { totalHT: 0, totalTTC: 0 };
+  }
+
   onBCChange() {
     const bcId = this.form.get('bcId')?.value;
     const bc = this.store.bcs().find(b => b.id === bcId);
     
     if (bc) {
-      let totalHT = 0;
-      let totalTva = 0;
-
-      // Nouvelle structure: lignesAchat
-      if (bc.lignesAchat && bc.lignesAchat.length > 0) {
-        // Utiliser les totaux pré-calculés si disponibles
-        if (bc.totalAchatHT !== undefined && bc.totalAchatTTC !== undefined) {
-          totalHT = bc.totalAchatHT;
-          totalTva = bc.totalAchatTTC - totalHT;
-        } else {
-          // Calculer à partir des lignes d'achat
-          totalHT = bc.lignesAchat.reduce((acc, l) => 
-            acc + (l.quantiteAchetee || 0) * (l.prixAchatUnitaireHT || 0), 0);
-          totalTva = bc.lignesAchat.reduce((acc, l) => 
-            acc + (l.quantiteAchetee || 0) * (l.prixAchatUnitaireHT || 0) * ((l.tva || 0) / 100), 0);
-        }
-      } 
-      // Ancienne structure: items
-      else if (bc.items) {
-        totalHT = bc.items.reduce((acc, i) => acc + (i.qtyBuy * i.priceBuyHT), 0);
-        totalTva = bc.items.reduce((acc, i) => acc + (i.qtyBuy * i.priceBuyHT * (i.tvaRate/100)), 0);
-      }
-      
+      const { totalHT, totalTTC } = this.computePurchaseTotalsFromBc(bc);
       this.form.patchValue({
         amountHT: totalHT,
-        amountTTC: totalHT + totalTva
+        amountTTC: totalTTC
       });
     } else {
       console.warn('🔵 purchase-invoices.onBCChange - BC non trouvé pour id:', bcId);
