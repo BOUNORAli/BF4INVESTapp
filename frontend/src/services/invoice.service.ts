@@ -43,7 +43,6 @@ export class InvoiceService {
 
     if (inv.type === 'purchase') {
       const payload: any = {
-        numeroFactureAchat: inv.number,
         dateFacture: inv.date,
         bandeCommandeId: inv.bcId || null,
         fournisseurId: inv.partnerId,
@@ -52,6 +51,10 @@ export class InvoiceService {
         modePaiement: inv.paymentMode || null,
         etatPaiement: inv.status === 'paid' ? 'regle' : 'non_regle'
       };
+      
+      if (inv.number && inv.number.trim()) {
+        payload.numeroFactureAchat = inv.number.trim();
+      }
       
       if ((inv as any).ajouterAuStock !== undefined) {
         payload.ajouterAuStock = (inv as any).ajouterAuStock;

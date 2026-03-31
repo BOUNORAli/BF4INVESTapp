@@ -402,8 +402,15 @@ import { matchesFlexibleSearch } from '../../utils/product-search.util';
 
                   <div class="space-y-4">
                      <div>
-                       <label class="block text-sm font-semibold text-slate-700 mb-1">Numéro Facture (Fournisseur)</label>
-                       <input formControlName="number" type="text" placeholder="Ex: FA-2025-XXX" class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition uppercase">
+                       <label class="block text-sm font-semibold text-slate-700 mb-1">
+                         Numéro Facture (Fournisseur)
+                         <span class="text-xs text-slate-400 font-normal">(optionnel)</span>
+                       </label>
+                       <input
+                         formControlName="number"
+                         type="text"
+                         placeholder="Laisser vide pour numéro auto"
+                         class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition uppercase">
                      </div>
 
                      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1320,7 +1327,7 @@ export class PurchaseInvoicesComponent implements OnInit {
   activePaymentModes = computed(() => this.store.paymentModes().filter(m => m.active));
 
   form: FormGroup = this.fb.group({
-    number: ['', Validators.required],
+    number: [''],
     partnerId: ['', Validators.required],
     partnerSearch: [''],
     bcId: [''],
