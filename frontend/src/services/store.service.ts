@@ -590,6 +590,23 @@ export class StoreService {
     }
   }
 
+  // --- ADMIN: MIGRATIONS ---
+  async backfillProductPriceStats(): Promise<any> {
+    // Recalcule prix pondérés + min/max depuis toutes les BC (historique)
+    try {
+      this.showToast('Recalcul des prix produits en cours...', 'info');
+      const res = await this.api.post<any>('/admin/migration/migrate-product-prices-to-weighted', {}).toPromise();
+      // Rafraîchir la liste produits
+      await this.loadProducts();
+      this.showToast('Recalcul terminé. Produits actualisés.', 'success');
+      return res;
+    } catch (error) {
+      // 401/403 seront déjà toastés par l'interceptor, on garde juste un log
+      console.error('Error running product price backfill:', error);
+      throw error;
+    }
+  }
+
   // --- MAPPERS ---
   // Mappers removed as they are now in specific services
 

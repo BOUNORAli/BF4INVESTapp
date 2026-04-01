@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, FormsModule } from '@angular/forms';
 import { StoreService, Product } from '../../services/store.service';
 import { matchesFlexibleSearch } from '../../utils/product-search.util';
+import { AuthService } from '../../services/auth.service';
 
 @Component({
   selector: 'app-products',
@@ -22,6 +23,12 @@ import { matchesFlexibleSearch } from '../../utils/product-search.util';
             </span>
             <input type="text" [(ngModel)]="searchTerm" placeholder="Chercher produit..." class="w-full md:w-64 pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none">
           </div>
+          @if (auth.isAdmin()) {
+            <button (click)="runBackfill()" [disabled]="backfillRunning()" class="px-4 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 shadow-sm font-medium transition flex items-center justify-center gap-2 disabled:opacity-50">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v6h6M20 20v-6h-6M5 19a9 9 0 0114-7M19 5a9 9 0 00-14 7"></path></svg>
+              {{ backfillRunning() ? 'Recalcul...' : 'Recalculer min/max' }}
+            </button>
+          }
           <button (click)="openForm()" class="px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-lg shadow-blue-600/20 font-medium transition flex items-center justify-center gap-2">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
             Nouveau Produit
@@ -241,6 +248,8 @@ import { matchesFlexibleSearch } from '../../utils/product-search.util';
 export class ProductsComponent {
   store = inject(StoreService);
   fb = inject(FormBuilder);
+  auth = inject(AuthService);
+  backfillRunning = signal(false);
   
   isFormOpen = signal(false);
   isEditMode = signal(false);
@@ -268,6 +277,16 @@ export class ProductsComponent {
       matchesFlexibleSearch({ name: p.name, ref: p.ref }, term)
     );
   });
+
+  async runBackfill() {
+    if (this.backfillRunning()) return;
+    this.backfillRunning.set(true);
+    try {
+      await this.store.backfillProductPriceStats();
+    } finally {
+      this.backfillRunning.set(false);
+    }
+  }
 
   getMargin(prod: Product) {
      if (prod.priceBuyHT === 0) return 0;
