@@ -22,6 +22,16 @@ Sans l’origine exacte dans **CORS_ALLOWED_ORIGINS**, CORS peut bloquer les req
    `https://bf4invest-app.vercel.app,https://bf4invest-website.vercel.app`
 3. Après modification des variables, **redéployer** le service sur Railway.
 
+## Produits — initialiser prix min/max (historique)
+
+Les champs **prix achat min/max** et **prix vente min/max** sont calculés depuis l’historique des **BC** (lignes achat/vente).
+
+- **Backfill (une seule fois)** après déploiement de la version qui contient cette feature : appeler l’endpoint admin :
+  - `POST /api/admin/migration/migrate-product-prices-to-weighted`
+  - Cela recalcule les prix pondérés **et** met à jour les min/max pour tous les produits.
+
+Ensuite, à chaque création/modification de BC, le recalcul se fait automatiquement pour les produits impactés.
+
 ## Vérifier dans le navigateur
 
 1. Onglet **Network** (F12).

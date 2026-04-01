@@ -10,6 +10,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -28,6 +29,7 @@ public class BandeCommandeService {
     private final ProductService productService;
     private final ClientService clientService;
     private final SupplierService supplierService;
+    private final ProductPriceService productPriceService;
 
     public List<BandeCommande> findAll() {
         return bcRepository.findAll();
@@ -69,6 +71,9 @@ public class BandeCommandeService {
         if (Boolean.TRUE.equals(saved.getAjouterAuStock()) && hasPurchaseLines) {
             updateStockFromBC(saved);
         }
+        
+        // Recalculer les prix produits (pondérés + min/max) pour les produits impactés
+        recalculateImpactedProductPrices(saved);
 
         // Journaliser la création
         int nbClients = saved.getNombreClients();
@@ -177,6 +182,9 @@ public class BandeCommandeService {
                     if (Boolean.TRUE.equals(bc.getAjouterAuStock()) && hasPurchaseLines) {
                         updateStockFromBC(saved);
                     }
+                    
+                    // Recalculer les prix produits (pondérés + min/max) pour les produits impactés
+                    recalculateImpactedProductPrices(saved);
 
                     // Journaliser la modification
                     String details = "BC " + saved.getNumeroBC() + " modifiée";
@@ -188,6 +196,78 @@ public class BandeCommandeService {
                     return saved;
                 })
                 .orElseThrow(() -> new RuntimeException("BC not found with id: " + id));
+    }
+    
+    private void recalculateImpactedProductPrices(BandeCommande bc) {
+        if (bc == null) {
+            return;
+        }
+        
+        // key => {ref, designation, unite}
+        Map<String, String[]> impacted = new LinkedHashMap<>();
+        java.util.function.BiConsumer<String[], Map<String, String[]>> add = (triple, map) -> {
+            if (triple == null || triple.length != 3) return;
+            String ref = triple[0];
+            if (ref == null || ref.isBlank()) return;
+            String designation = triple[1] != null ? triple[1] : "";
+            String unite = (triple[2] != null && !triple[2].isBlank()) ? triple[2] : "U";
+            String key = ref + "||" + designation + "||" + unite;
+            map.putIfAbsent(key, new String[] { ref, designation, unite });
+        };
+        
+        try {
+            // Achats: nouvelle structure multi-fournisseurs
+            if (bc.getFournisseursAchat() != null) {
+                for (FournisseurAchat fa : bc.getFournisseursAchat()) {
+                    if (fa == null || fa.getLignesAchat() == null) continue;
+                    for (LigneAchat la : fa.getLignesAchat()) {
+                        if (la == null) continue;
+                        add.accept(new String[] { la.getProduitRef(), la.getDesignation(), la.getUnite() }, impacted);
+                    }
+                }
+            }
+            
+            // Achats: fallback lignesAchat
+            if (bc.getLignesAchat() != null) {
+                for (LigneAchat la : bc.getLignesAchat()) {
+                    if (la == null) continue;
+                    add.accept(new String[] { la.getProduitRef(), la.getDesignation(), la.getUnite() }, impacted);
+                }
+            }
+            
+            // Ventes: clientsVente
+            if (bc.getClientsVente() != null) {
+                for (ClientVente cv : bc.getClientsVente()) {
+                    if (cv == null || cv.getLignesVente() == null) continue;
+                    for (LigneVente lv : cv.getLignesVente()) {
+                        if (lv == null) continue;
+                        add.accept(new String[] { lv.getProduitRef(), lv.getDesignation(), lv.getUnite() }, impacted);
+                    }
+                }
+            }
+            
+            // Legacy: lignes (LineItem)
+            if (bc.getLignes() != null) {
+                for (LineItem li : bc.getLignes()) {
+                    if (li == null) continue;
+                    add.accept(new String[] { li.getProduitRef(), li.getDesignation(), li.getUnite() }, impacted);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("⚠️ Impossible de déterminer les produits impactés pour BC {}: {}", bc.getNumeroBC(), e.getMessage());
+        }
+        
+        if (impacted.isEmpty()) {
+            return;
+        }
+        
+        for (String[] triple : impacted.values()) {
+            try {
+                productPriceService.recalculateProductWeightedPrices(triple[0], triple[1], triple[2]);
+            } catch (Exception e) {
+                log.warn("⚠️ Recalcul prix produit échoué (ref={}, designation={}, unite={}): {}", triple[0], triple[1], triple[2], e.getMessage());
+            }
+        }
     }
 
     public boolean isNumeroBCAvailable(String numeroBC, String excludeId) {
