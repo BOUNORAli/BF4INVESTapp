@@ -1,6 +1,7 @@
 package com.bf4invest.service;
 
 import com.bf4invest.model.BandeCommande;
+import com.bf4invest.model.FournisseurAchat;
 import com.bf4invest.model.LigneAchat;
 import com.bf4invest.model.LigneVente;
 import com.bf4invest.model.Product;
@@ -69,27 +70,48 @@ public class ProductPriceService {
         
         // Parcourir toutes les BC
         for (BandeCommande bc : allBCs) {
-            if (bc.getLignesAchat() == null) {
-                continue;
-            }
-            
-            // Chercher ce produit dans les lignes d'achat
-            for (LigneAchat ligneAchat : bc.getLignesAchat()) {
-                if (matchesProduct(ligneAchat, productRef, designation, unite)) {
-                    // Agréger les données d'achat
-                    if (ligneAchat.getQuantiteAchetee() != null && ligneAchat.getQuantiteAchetee() > 0 &&
-                        ligneAchat.getPrixAchatUnitaireHT() != null && ligneAchat.getPrixAchatUnitaireHT() > 0) {
-                        double qty = ligneAchat.getQuantiteAchetee();
-                        double prix = ligneAchat.getPrixAchatUnitaireHT();
-                        quantiteAcheteeTotale += qty;
-                        sommePrixAchatPondere += prix * qty;
-                        
-                        prixAchatMin = prixAchatMin == null ? prix : Math.min(prixAchatMin, prix);
-                        prixAchatMax = prixAchatMax == null ? prix : Math.max(prixAchatMax, prix);
+            // --- ACHATS ---
+            // Nouvelle structure: fournisseursAchat[].lignesAchat
+            if (bc.getFournisseursAchat() != null && !bc.getFournisseursAchat().isEmpty()) {
+                for (FournisseurAchat fa : bc.getFournisseursAchat()) {
+                    if (fa == null || fa.getLignesAchat() == null) continue;
+                    for (LigneAchat ligneAchat : fa.getLignesAchat()) {
+                        if (matchesProduct(ligneAchat, productRef, designation, unite)) {
+                            if (ligneAchat.getQuantiteAchetee() != null && ligneAchat.getQuantiteAchetee() > 0 &&
+                                ligneAchat.getPrixAchatUnitaireHT() != null && ligneAchat.getPrixAchatUnitaireHT() > 0) {
+                                double qty = ligneAchat.getQuantiteAchetee();
+                                double prix = ligneAchat.getPrixAchatUnitaireHT();
+                                quantiteAcheteeTotale += qty;
+                                sommePrixAchatPondere += prix * qty;
+
+                                prixAchatMin = prixAchatMin == null ? prix : Math.min(prixAchatMin, prix);
+                                prixAchatMax = prixAchatMax == null ? prix : Math.max(prixAchatMax, prix);
+                            }
+
+                            if (ligneAchat.getTva() != null && tva == null) {
+                                tva = ligneAchat.getTva();
+                            }
+                        }
                     }
-                    
-                    if (ligneAchat.getTva() != null && tva == null) {
-                        tva = ligneAchat.getTva();
+                }
+            } else if (bc.getLignesAchat() != null) {
+                // Ancienne structure: bc.lignesAchat
+                for (LigneAchat ligneAchat : bc.getLignesAchat()) {
+                    if (matchesProduct(ligneAchat, productRef, designation, unite)) {
+                        if (ligneAchat.getQuantiteAchetee() != null && ligneAchat.getQuantiteAchetee() > 0 &&
+                            ligneAchat.getPrixAchatUnitaireHT() != null && ligneAchat.getPrixAchatUnitaireHT() > 0) {
+                            double qty = ligneAchat.getQuantiteAchetee();
+                            double prix = ligneAchat.getPrixAchatUnitaireHT();
+                            quantiteAcheteeTotale += qty;
+                            sommePrixAchatPondere += prix * qty;
+
+                            prixAchatMin = prixAchatMin == null ? prix : Math.min(prixAchatMin, prix);
+                            prixAchatMax = prixAchatMax == null ? prix : Math.max(prixAchatMax, prix);
+                        }
+
+                        if (ligneAchat.getTva() != null && tva == null) {
+                            tva = ligneAchat.getTva();
+                        }
                     }
                 }
             }
@@ -157,30 +179,50 @@ public class ProductPriceService {
      * Vérifie si une ligne d'achat correspond au produit recherché
      */
     private boolean matchesProduct(LigneAchat ligne, String productRef, String designation, String unite) {
-        boolean refMatch = (ligne.getProduitRef() == null && productRef == null) ||
-                          (ligne.getProduitRef() != null && ligne.getProduitRef().equals(productRef));
-        boolean designationMatch = (ligne.getDesignation() == null && designation == null) ||
-                                  (ligne.getDesignation() != null && ligne.getDesignation().equals(designation));
-        String ligneUnite = ligne.getUnite() != null ? ligne.getUnite() : "U";
-        String searchUnite = unite != null && !unite.isEmpty() ? unite : "U";
-        boolean uniteMatch = ligneUnite.equals(searchUnite);
-        
-        return refMatch && designationMatch && uniteMatch;
+        String searchRef = norm(productRef);
+        String searchDesignation = norm(designation);
+        String searchUnite = normUnite(unite);
+
+        String lineRef = norm(ligne != null ? ligne.getProduitRef() : null);
+        String lineDesignation = norm(ligne != null ? ligne.getDesignation() : null);
+        String lineUnite = normUnite(ligne != null ? ligne.getUnite() : null);
+
+        // Stratégie:
+        // - si ref renseignée des deux côtés -> match par ref (robuste aux espaces/casse)
+        // - sinon fallback sur designation + unite
+        if (!searchRef.isEmpty() && !lineRef.isEmpty()) {
+            return searchRef.equalsIgnoreCase(lineRef);
+        }
+        if (searchDesignation.isEmpty() || lineDesignation.isEmpty()) return false;
+        return searchDesignation.equalsIgnoreCase(lineDesignation) && searchUnite.equalsIgnoreCase(lineUnite);
     }
     
     /**
      * Vérifie si une ligne de vente correspond au produit recherché
      */
     private boolean matchesProduct(LigneVente ligne, String productRef, String designation, String unite) {
-        boolean refMatch = (ligne.getProduitRef() == null && productRef == null) ||
-                          (ligne.getProduitRef() != null && ligne.getProduitRef().equals(productRef));
-        boolean designationMatch = (ligne.getDesignation() == null && designation == null) ||
-                                  (ligne.getDesignation() != null && ligne.getDesignation().equals(designation));
-        String ligneUnite = ligne.getUnite() != null ? ligne.getUnite() : "U";
-        String searchUnite = unite != null && !unite.isEmpty() ? unite : "U";
-        boolean uniteMatch = ligneUnite.equals(searchUnite);
-        
-        return refMatch && designationMatch && uniteMatch;
+        String searchRef = norm(productRef);
+        String searchDesignation = norm(designation);
+        String searchUnite = normUnite(unite);
+
+        String lineRef = norm(ligne != null ? ligne.getProduitRef() : null);
+        String lineDesignation = norm(ligne != null ? ligne.getDesignation() : null);
+        String lineUnite = normUnite(ligne != null ? ligne.getUnite() : null);
+
+        if (!searchRef.isEmpty() && !lineRef.isEmpty()) {
+            return searchRef.equalsIgnoreCase(lineRef);
+        }
+        if (searchDesignation.isEmpty() || lineDesignation.isEmpty()) return false;
+        return searchDesignation.equalsIgnoreCase(lineDesignation) && searchUnite.equalsIgnoreCase(lineUnite);
+    }
+
+    private String norm(String s) {
+        return s == null ? "" : s.trim();
+    }
+
+    private String normUnite(String unite) {
+        String u = norm(unite);
+        return u.isEmpty() ? "U" : u;
     }
     
     /**
