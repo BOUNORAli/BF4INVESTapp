@@ -242,23 +242,32 @@ public class DataMigrationService {
         
         for (Product product : allProducts) {
             try {
-                boolean updated = false;
-                
                 // Étape 1: Copier les prix unitaires vers les prix pondérés si les prix pondérés sont null
+                boolean step1Changed = false;
                 if (product.getPrixAchatPondereHT() == null && product.getPrixAchatUnitaireHT() != null) {
                     product.setPrixAchatPondereHT(product.getPrixAchatUnitaireHT());
                     stats.put("prixAchatCopies", stats.get("prixAchatCopies") + 1);
-                    updated = true;
+                    step1Changed = true;
                 }
                 
                 if (product.getPrixVentePondereHT() == null && product.getPrixVenteUnitaireHT() != null) {
                     product.setPrixVentePondereHT(product.getPrixVenteUnitaireHT());
                     stats.put("prixVenteCopies", stats.get("prixVenteCopies") + 1);
-                    updated = true;
+                    step1Changed = true;
                 }
                 
-                // Étape 2: Recalculer les prix pondérés depuis toutes les BC
-                // Cela va écraser les prix copiés avec les vrais prix pondérés calculés
+                // Persister l'étape 1 AVANT le recalcul : recalculate charge une copie fraîche en DB et sauvegarde
+                // (min/max, pondérés). Un save(product) après avec cet objet stale écraserait ces champs.
+                boolean migrationSaveDone = false;
+                if (step1Changed) {
+                    product.setUpdatedAt(LocalDateTime.now());
+                    productRepository.save(product);
+                    migrationSaveDone = true;
+                    stats.put("produitsMisesAJour", stats.get("produitsMisesAJour") + 1);
+                }
+                
+                // Étape 2: Recalculer depuis les BC (sauvegarde déjà faite dans ProductPriceService)
+                boolean recalcOk = false;
                 try {
                     productPriceService.recalculateProductWeightedPrices(
                         product.getRefArticle(),
@@ -266,16 +275,14 @@ public class DataMigrationService {
                         product.getUnite()
                     );
                     stats.put("prixRecalcules", stats.get("prixRecalcules") + 1);
-                    updated = true;
+                    recalcOk = true;
                 } catch (Exception e) {
                     log.warn("⚠️  Impossible de recalculer les prix pour produit {}: {}", 
                         product.getRefArticle(), e.getMessage());
-                    // Continuer même si le recalcul échoue, on garde les prix copiés
+                    // Si l'étape 1 a été persistée, les prix copiés restent ; sinon inchangé
                 }
                 
-                if (updated) {
-                    product.setUpdatedAt(LocalDateTime.now());
-                    productRepository.save(product);
+                if (recalcOk && !migrationSaveDone) {
                     stats.put("produitsMisesAJour", stats.get("produitsMisesAJour") + 1);
                 }
                 
