@@ -2,6 +2,7 @@ package com.bf4invest.service;
 
 import com.bf4invest.model.BandeCommande;
 import com.bf4invest.model.FournisseurAchat;
+import com.bf4invest.model.LineItem;
 import com.bf4invest.model.LigneAchat;
 import com.bf4invest.model.LigneVente;
 import com.bf4invest.model.Product;
@@ -138,6 +139,36 @@ public class ProductPriceService {
                     }
                 }
             }
+
+            // --- LEGACY: bc.lignes (LineItem) — achat + vente dans le même objet (anciens BC)
+            if (bc.getLignes() != null) {
+                for (LineItem li : bc.getLignes()) {
+                    if (li == null || !matchesProductLineItem(li, productRef, designation, unite)) {
+                        continue;
+                    }
+                    if (li.getQuantiteAchetee() != null && li.getQuantiteAchetee() > 0
+                        && li.getPrixAchatUnitaireHT() != null && li.getPrixAchatUnitaireHT() > 0) {
+                        double qty = li.getQuantiteAchetee();
+                        double prix = li.getPrixAchatUnitaireHT();
+                        quantiteAcheteeTotale += qty;
+                        sommePrixAchatPondere += prix * qty;
+                        prixAchatMin = prixAchatMin == null ? prix : Math.min(prixAchatMin, prix);
+                        prixAchatMax = prixAchatMax == null ? prix : Math.max(prixAchatMax, prix);
+                    }
+                    if (li.getQuantiteVendue() != null && li.getQuantiteVendue() > 0
+                        && li.getPrixVenteUnitaireHT() != null && li.getPrixVenteUnitaireHT() > 0) {
+                        double qty = li.getQuantiteVendue();
+                        double prix = li.getPrixVenteUnitaireHT();
+                        quantiteVendueTotale += qty;
+                        sommePrixVentePondere += prix * qty;
+                        prixVenteMin = prixVenteMin == null ? prix : Math.min(prixVenteMin, prix);
+                        prixVenteMax = prixVenteMax == null ? prix : Math.max(prixVenteMax, prix);
+                    }
+                    if (li.getTva() != null && tva == null) {
+                        tva = li.getTva();
+                    }
+                }
+            }
         }
         
         // Calculer les prix pondérés globaux (arrondis à 2 décimales)
@@ -156,23 +187,36 @@ public class ProductPriceService {
                 .doubleValue();
         }
         
-        // Mettre à jour le produit
-        product.setPrixAchatPondereHT(prixAchatPondere);
-        product.setPrixVentePondereHT(prixVentePondere);
-        product.setPrixAchatMinHT(prixAchatMin != null ? BigDecimal.valueOf(prixAchatMin).setScale(2, RoundingMode.HALF_UP).doubleValue() : null);
-        product.setPrixAchatMaxHT(prixAchatMax != null ? BigDecimal.valueOf(prixAchatMax).setScale(2, RoundingMode.HALF_UP).doubleValue() : null);
-        product.setPrixVenteMinHT(prixVenteMin != null ? BigDecimal.valueOf(prixVenteMin).setScale(2, RoundingMode.HALF_UP).doubleValue() : null);
-        product.setPrixVenteMaxHT(prixVenteMax != null ? BigDecimal.valueOf(prixVenteMax).setScale(2, RoundingMode.HALF_UP).doubleValue() : null);
+        // Ne pas écraser avec null si aucune ligne BC ne matche (évite régression après backfill)
+        boolean anyUpdate = false;
+        if (quantiteAcheteeTotale > 0) {
+            product.setPrixAchatPondereHT(prixAchatPondere);
+            product.setPrixAchatMinHT(BigDecimal.valueOf(prixAchatMin).setScale(2, RoundingMode.HALF_UP).doubleValue());
+            product.setPrixAchatMaxHT(BigDecimal.valueOf(prixAchatMax).setScale(2, RoundingMode.HALF_UP).doubleValue());
+            anyUpdate = true;
+        }
+        if (quantiteVendueTotale > 0) {
+            product.setPrixVentePondereHT(prixVentePondere);
+            product.setPrixVenteMinHT(BigDecimal.valueOf(prixVenteMin).setScale(2, RoundingMode.HALF_UP).doubleValue());
+            product.setPrixVenteMaxHT(BigDecimal.valueOf(prixVenteMax).setScale(2, RoundingMode.HALF_UP).doubleValue());
+            anyUpdate = true;
+        }
         if (tva != null) {
             product.setTva(tva);
+            anyUpdate = true;
         }
+
+        if (!anyUpdate) {
+            log.debug("Aucune ligne BC pour produit ref={} — prix existants conservés (pas de save)", product.getRefArticle());
+            return;
+        }
+
         product.setDerniereMiseAJourPrix(LocalDateTime.now());
         product.setUpdatedAt(LocalDateTime.now());
-        
         productRepository.save(product);
-        
-        log.info("Prix pondérés recalculés pour produit {}: Achat={}, Vente={}", 
-            product.getRefArticle(), prixAchatPondere, prixVentePondere);
+
+        log.info("Prix pondérés recalculés pour produit {}: Achat={}, Vente={}",
+            product.getRefArticle(), product.getPrixAchatPondereHT(), product.getPrixVentePondereHT());
     }
     
     /**
@@ -201,6 +245,22 @@ public class ProductPriceService {
      * Vérifie si une ligne de vente correspond au produit recherché
      */
     private boolean matchesProduct(LigneVente ligne, String productRef, String designation, String unite) {
+        String searchRef = norm(productRef);
+        String searchDesignation = norm(designation);
+        String searchUnite = normUnite(unite);
+
+        String lineRef = norm(ligne != null ? ligne.getProduitRef() : null);
+        String lineDesignation = norm(ligne != null ? ligne.getDesignation() : null);
+        String lineUnite = normUnite(ligne != null ? ligne.getUnite() : null);
+
+        if (!searchRef.isEmpty() && !lineRef.isEmpty()) {
+            return searchRef.equalsIgnoreCase(lineRef);
+        }
+        if (searchDesignation.isEmpty() || lineDesignation.isEmpty()) return false;
+        return searchDesignation.equalsIgnoreCase(lineDesignation) && searchUnite.equalsIgnoreCase(lineUnite);
+    }
+
+    private boolean matchesProductLineItem(LineItem ligne, String productRef, String designation, String unite) {
         String searchRef = norm(productRef);
         String searchDesignation = norm(designation);
         String searchUnite = normUnite(unite);
