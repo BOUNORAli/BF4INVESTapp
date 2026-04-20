@@ -2170,6 +2170,15 @@ public class ExcelImportService {
                 if (prixVentePondere != null) {
                     product.setPrixVentePondereHT(prixVentePondere);
                 }
+                // Filet de sécurité : unitaire pour restauration / affichage (import ne remplissait que le pondéré)
+                if (prixAchatPondere != null && prixAchatPondere > 0
+                    && (product.getPrixAchatUnitaireHT() == null || product.getPrixAchatUnitaireHT() <= 0)) {
+                    product.setPrixAchatUnitaireHT(prixAchatPondere);
+                }
+                if (prixVentePondere != null && prixVentePondere > 0
+                    && (product.getPrixVenteUnitaireHT() == null || product.getPrixVenteUnitaireHT() <= 0)) {
+                    product.setPrixVenteUnitaireHT(prixVentePondere);
+                }
 
                 // Mettre à jour les autres champs si nécessaire
                 // Mettre à jour refArticle avec la nouvelle valeur combinée
@@ -2201,6 +2210,8 @@ public class ExcelImportService {
                         .unite(agg.unite != null ? agg.unite : "U")
                         .prixAchatPondereHT(prixAchatPondere)
                         .prixVentePondereHT(prixVentePondere)
+                        .prixAchatUnitaireHT(prixAchatPondere)
+                        .prixVenteUnitaireHT(prixVentePondere)
                         .tva(agg.tva)
                         .fournisseurId(fournisseurId)
                         .quantiteEnStock(0.0)

@@ -408,14 +408,13 @@ public class ProductPriceService {
         String lineDesignation = norm(ligne != null ? ligne.getDesignation() : null);
         String lineUnite = normUnite(ligne != null ? ligne.getUnite() : null);
 
-        // Stratégie:
-        // - si ref renseignée des deux côtés -> match par ref (robuste aux espaces/casse)
-        // - sinon fallback sur designation + unite
-        if (!searchRef.isEmpty() && !lineRef.isEmpty()) {
-            return searchRef.equalsIgnoreCase(lineRef);
-        }
-        if (searchDesignation.isEmpty() || lineDesignation.isEmpty()) return false;
-        return searchDesignation.equalsIgnoreCase(lineDesignation) && searchUnite.equalsIgnoreCase(lineUnite);
+        // Ref exacte OU désignation+unité (produits import : refArticle "2 - CIMENT" vs ligne "2")
+        boolean refMatch = !searchRef.isEmpty() && !lineRef.isEmpty()
+            && searchRef.equalsIgnoreCase(lineRef);
+        boolean desigMatch = !searchDesignation.isEmpty() && !lineDesignation.isEmpty()
+            && searchDesignation.equalsIgnoreCase(lineDesignation)
+            && searchUnite.equalsIgnoreCase(lineUnite);
+        return refMatch || desigMatch;
     }
     
     /**
@@ -430,11 +429,12 @@ public class ProductPriceService {
         String lineDesignation = norm(ligne != null ? ligne.getDesignation() : null);
         String lineUnite = normUnite(ligne != null ? ligne.getUnite() : null);
 
-        if (!searchRef.isEmpty() && !lineRef.isEmpty()) {
-            return searchRef.equalsIgnoreCase(lineRef);
-        }
-        if (searchDesignation.isEmpty() || lineDesignation.isEmpty()) return false;
-        return searchDesignation.equalsIgnoreCase(lineDesignation) && searchUnite.equalsIgnoreCase(lineUnite);
+        boolean refMatch = !searchRef.isEmpty() && !lineRef.isEmpty()
+            && searchRef.equalsIgnoreCase(lineRef);
+        boolean desigMatch = !searchDesignation.isEmpty() && !lineDesignation.isEmpty()
+            && searchDesignation.equalsIgnoreCase(lineDesignation)
+            && searchUnite.equalsIgnoreCase(lineUnite);
+        return refMatch || desigMatch;
     }
 
     private boolean matchesProductLineItem(LineItem ligne, String productRef, String designation, String unite) {
@@ -446,11 +446,12 @@ public class ProductPriceService {
         String lineDesignation = norm(ligne != null ? ligne.getDesignation() : null);
         String lineUnite = normUnite(ligne != null ? ligne.getUnite() : null);
 
-        if (!searchRef.isEmpty() && !lineRef.isEmpty()) {
-            return searchRef.equalsIgnoreCase(lineRef);
-        }
-        if (searchDesignation.isEmpty() || lineDesignation.isEmpty()) return false;
-        return searchDesignation.equalsIgnoreCase(lineDesignation) && searchUnite.equalsIgnoreCase(lineUnite);
+        boolean refMatch = !searchRef.isEmpty() && !lineRef.isEmpty()
+            && searchRef.equalsIgnoreCase(lineRef);
+        boolean desigMatch = !searchDesignation.isEmpty() && !lineDesignation.isEmpty()
+            && searchDesignation.equalsIgnoreCase(lineDesignation)
+            && searchUnite.equalsIgnoreCase(lineUnite);
+        return refMatch || desigMatch;
     }
 
     private String norm(String s) {
