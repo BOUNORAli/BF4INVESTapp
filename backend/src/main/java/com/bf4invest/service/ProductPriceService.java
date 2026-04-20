@@ -1,6 +1,8 @@
 package com.bf4invest.service;
 
+import com.bf4invest.dto.ProductBcUsageDto;
 import com.bf4invest.model.BandeCommande;
+import com.bf4invest.model.ClientVente;
 import com.bf4invest.model.FournisseurAchat;
 import com.bf4invest.model.LineItem;
 import com.bf4invest.model.LigneAchat;
@@ -15,6 +17,9 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 
@@ -206,6 +211,30 @@ public class ProductPriceService {
             anyUpdate = true;
         }
 
+        // Restaurer depuis prix unitaires si pondéré corrompu (null ou <= 0) et pas de données BC pour ce côté
+        if (quantiteAcheteeTotale <= 0) {
+            Double unit = product.getPrixAchatUnitaireHT();
+            if (unit != null && unit > 0
+                && (product.getPrixAchatPondereHT() == null || product.getPrixAchatPondereHT() <= 0)) {
+                double r = round2(unit);
+                product.setPrixAchatPondereHT(r);
+                product.setPrixAchatMinHT(r);
+                product.setPrixAchatMaxHT(r);
+                anyUpdate = true;
+            }
+        }
+        if (quantiteVendueTotale <= 0) {
+            Double unit = product.getPrixVenteUnitaireHT();
+            if (unit != null && unit > 0
+                && (product.getPrixVentePondereHT() == null || product.getPrixVentePondereHT() <= 0)) {
+                double r = round2(unit);
+                product.setPrixVentePondereHT(r);
+                product.setPrixVenteMinHT(r);
+                product.setPrixVenteMaxHT(r);
+                anyUpdate = true;
+            }
+        }
+
         if (!anyUpdate) {
             log.debug("Aucune ligne BC pour produit ref={} — prix existants conservés (pas de save)", product.getRefArticle());
             return;
@@ -217,6 +246,154 @@ public class ProductPriceService {
 
         log.info("Prix pondérés recalculés pour produit {}: Achat={}, Vente={}",
             product.getRefArticle(), product.getPrixAchatPondereHT(), product.getPrixVentePondereHT());
+    }
+
+    /**
+     * Liste des bons de commande où le produit apparaît (toutes structures BC).
+     */
+    public List<ProductBcUsageDto> findBandeCommandesUsingProduct(String productId) {
+        Optional<Product> opt = productRepository.findById(productId);
+        if (!opt.isPresent()) {
+            return List.of();
+        }
+        Product p = opt.get();
+        String productRef = p.getRefArticle() != null ? p.getRefArticle() : "";
+        String designation = p.getDesignation() != null ? p.getDesignation() : "";
+        String unite = (p.getUnite() != null && !p.getUnite().isEmpty()) ? p.getUnite() : "U";
+
+        List<ProductBcUsageDto> out = new ArrayList<>();
+        for (BandeCommande bc : bcRepository.findAll()) {
+            UsageAgg agg = new UsageAgg();
+            accumulateProductUsageInBc(bc, productRef, designation, unite, agg);
+            if (!agg.matched) {
+                continue;
+            }
+            Double buyAvg = agg.qtyBuy > 0 ? round2(agg.sumBuy / agg.qtyBuy) : null;
+            Double sellAvg = agg.qtySell > 0 ? round2(agg.sumSell / agg.qtySell) : null;
+            out.add(ProductBcUsageDto.builder()
+                .bandeCommandeId(bc.getId())
+                .numeroBC(bc.getNumeroBC())
+                .dateBC(bc.getDateBC())
+                .quantiteAcheteeTotale(agg.qtyBuy > 0 ? round2(agg.qtyBuy) : null)
+                .prixAchatUnitaireHtPondere(buyAvg)
+                .quantiteVendueTotale(agg.qtySell > 0 ? round2(agg.qtySell) : null)
+                .prixVenteUnitaireHtPondere(sellAvg)
+                .fournisseurIds(agg.supplierIds.isEmpty() ? null : String.join(",", agg.supplierIds))
+                .clientIds(agg.clientIds.isEmpty() ? null : String.join(",", agg.clientIds))
+                .build());
+        }
+        out.sort(Comparator.comparing(ProductBcUsageDto::getDateBC, Comparator.nullsLast(Comparator.reverseOrder())));
+        return out;
+    }
+
+    private static final class UsageAgg {
+        boolean matched;
+        double qtyBuy;
+        double sumBuy;
+        double qtySell;
+        double sumSell;
+        final LinkedHashSet<String> supplierIds = new LinkedHashSet<>();
+        final LinkedHashSet<String> clientIds = new LinkedHashSet<>();
+    }
+
+    private void accumulateProductUsageInBc(BandeCommande bc, String productRef, String designation, String unite, UsageAgg agg) {
+        if (bc.getFournisseursAchat() != null && !bc.getFournisseursAchat().isEmpty()) {
+            for (FournisseurAchat fa : bc.getFournisseursAchat()) {
+                if (fa == null || fa.getLignesAchat() == null) {
+                    continue;
+                }
+                for (LigneAchat ligneAchat : fa.getLignesAchat()) {
+                    if (!matchesProduct(ligneAchat, productRef, designation, unite)) {
+                        continue;
+                    }
+                    agg.matched = true;
+                    if (fa.getFournisseurId() != null && !fa.getFournisseurId().isBlank()) {
+                        agg.supplierIds.add(fa.getFournisseurId());
+                    }
+                    if (ligneAchat.getQuantiteAchetee() != null && ligneAchat.getQuantiteAchetee() > 0
+                        && ligneAchat.getPrixAchatUnitaireHT() != null && ligneAchat.getPrixAchatUnitaireHT() > 0) {
+                        double qty = ligneAchat.getQuantiteAchetee();
+                        double prix = ligneAchat.getPrixAchatUnitaireHT();
+                        agg.qtyBuy += qty;
+                        agg.sumBuy += prix * qty;
+                    }
+                }
+            }
+        } else if (bc.getLignesAchat() != null) {
+            for (LigneAchat ligneAchat : bc.getLignesAchat()) {
+                if (!matchesProduct(ligneAchat, productRef, designation, unite)) {
+                    continue;
+                }
+                agg.matched = true;
+                if (bc.getFournisseurId() != null && !bc.getFournisseurId().isBlank()) {
+                    agg.supplierIds.add(bc.getFournisseurId());
+                }
+                if (ligneAchat.getQuantiteAchetee() != null && ligneAchat.getQuantiteAchetee() > 0
+                    && ligneAchat.getPrixAchatUnitaireHT() != null && ligneAchat.getPrixAchatUnitaireHT() > 0) {
+                    double qty = ligneAchat.getQuantiteAchetee();
+                    double prix = ligneAchat.getPrixAchatUnitaireHT();
+                    agg.qtyBuy += qty;
+                    agg.sumBuy += prix * qty;
+                }
+            }
+        }
+
+        if (bc.getClientsVente() != null) {
+            for (ClientVente clientVente : bc.getClientsVente()) {
+                if (clientVente == null || clientVente.getLignesVente() == null) {
+                    continue;
+                }
+                for (LigneVente ligneVente : clientVente.getLignesVente()) {
+                    if (!matchesProduct(ligneVente, productRef, designation, unite)) {
+                        continue;
+                    }
+                    agg.matched = true;
+                    if (clientVente.getClientId() != null && !clientVente.getClientId().isBlank()) {
+                        agg.clientIds.add(clientVente.getClientId());
+                    }
+                    if (ligneVente.getQuantiteVendue() != null && ligneVente.getQuantiteVendue() > 0
+                        && ligneVente.getPrixVenteUnitaireHT() != null && ligneVente.getPrixVenteUnitaireHT() > 0) {
+                        double qty = ligneVente.getQuantiteVendue();
+                        double prix = ligneVente.getPrixVenteUnitaireHT();
+                        agg.qtySell += qty;
+                        agg.sumSell += prix * qty;
+                    }
+                }
+            }
+        }
+
+        if (bc.getLignes() != null) {
+            for (LineItem li : bc.getLignes()) {
+                if (li == null || !matchesProductLineItem(li, productRef, designation, unite)) {
+                    continue;
+                }
+                agg.matched = true;
+                if (bc.getFournisseurId() != null && !bc.getFournisseurId().isBlank()) {
+                    agg.supplierIds.add(bc.getFournisseurId());
+                }
+                if (bc.getClientId() != null && !bc.getClientId().isBlank()) {
+                    agg.clientIds.add(bc.getClientId());
+                }
+                if (li.getQuantiteAchetee() != null && li.getQuantiteAchetee() > 0
+                    && li.getPrixAchatUnitaireHT() != null && li.getPrixAchatUnitaireHT() > 0) {
+                    double qty = li.getQuantiteAchetee();
+                    double prix = li.getPrixAchatUnitaireHT();
+                    agg.qtyBuy += qty;
+                    agg.sumBuy += prix * qty;
+                }
+                if (li.getQuantiteVendue() != null && li.getQuantiteVendue() > 0
+                    && li.getPrixVenteUnitaireHT() != null && li.getPrixVenteUnitaireHT() > 0) {
+                    double qty = li.getQuantiteVendue();
+                    double prix = li.getPrixVenteUnitaireHT();
+                    agg.qtySell += qty;
+                    agg.sumSell += prix * qty;
+                }
+            }
+        }
+    }
+
+    private static double round2(double v) {
+        return BigDecimal.valueOf(v).setScale(2, RoundingMode.HALF_UP).doubleValue();
     }
     
     /**

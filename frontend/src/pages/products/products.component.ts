@@ -1,14 +1,16 @@
 import { Component, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, FormsModule } from '@angular/forms';
+import { RouterModule } from '@angular/router';
 import { StoreService, Product } from '../../services/store.service';
+import { ProductService, ProductBcUsage } from '../../services/product.service';
 import { matchesFlexibleSearch } from '../../utils/product-search.util';
 import { AuthService } from '../../services/auth.service';
 
 @Component({
   selector: 'app-products',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, FormsModule],
+  imports: [CommonModule, ReactiveFormsModule, FormsModule, RouterModule],
   template: `
     <div class="space-y-6 fade-in-up relative pb-10">
       <div class="flex flex-col md:flex-row justify-between items-center bg-white p-6 rounded-xl shadow-sm border border-slate-100 gap-4">
@@ -117,7 +119,8 @@ import { AuthService } from '../../services/auth.service';
               </div>
 
               <div class="mt-5 flex gap-2">
-                <button (click)="editProduct(prod)" class="flex-1 py-2 text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-lg hover:bg-white hover:text-blue-600 hover:border-blue-200 transition-all font-medium">Éditer</button>
+                <button type="button" (click)="openBcModal(prod)" class="flex-1 py-2 text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-lg hover:bg-white hover:text-indigo-600 hover:border-indigo-200 transition-all font-medium">Voir BC</button>
+                <button type="button" (click)="editProduct(prod)" class="flex-1 py-2 text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-lg hover:bg-white hover:text-blue-600 hover:border-blue-200 transition-all font-medium">Éditer</button>
               </div>
             </div>
           </div>
@@ -236,6 +239,78 @@ import { AuthService } from '../../services/auth.service';
          </div>
       }
 
+      @if (bcModalOpen()) {
+        <div class="fixed inset-0 z-[60] flex justify-end" aria-modal="true" role="dialog">
+          <div (click)="closeBcModal()" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity"></div>
+          <div class="relative w-full md:max-w-lg md:w-full bg-white h-full shadow-2xl flex flex-col animate-[slideInRight_0.3s_ease-out]">
+            <div class="flex items-center justify-between p-6 border-b border-slate-100 bg-slate-50/50">
+              <div>
+                <h2 class="text-lg font-bold text-slate-800">Bons de commande</h2>
+                <p class="text-sm text-slate-500 mt-0.5 truncate max-w-[280px] md:max-w-md">{{ bcModalProduct()?.name }}</p>
+              </div>
+              <button type="button" (click)="closeBcModal()" class="text-slate-400 hover:text-slate-600 transition p-2" aria-label="Fermer">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+              </button>
+            </div>
+            <div class="flex-1 overflow-y-auto p-4">
+              @if (bcUsagesLoading()) {
+                <div class="flex flex-col items-center justify-center py-16 text-slate-500 gap-3">
+                  <div class="w-10 h-10 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                  <span class="text-sm">Chargement…</span>
+                </div>
+              } @else if (bcUsages().length === 0) {
+                <p class="text-center text-slate-500 py-12 text-sm">Aucun bon de commande ne référence ce produit.</p>
+              } @else {
+                <ul class="space-y-3">
+                  @for (row of bcUsages(); track row.bandeCommandeId) {
+                    <li class="border border-slate-200 rounded-xl p-4 bg-white hover:border-blue-200 transition-shadow shadow-sm">
+                      <div class="flex flex-wrap items-start justify-between gap-2 mb-2">
+                        <a [routerLink]="['/bc/edit', row.bandeCommandeId]" (click)="closeBcModal()" class="font-semibold text-blue-600 hover:text-blue-800 hover:underline">
+                          {{ row.numeroBC || row.bandeCommandeId }}
+                        </a>
+                        @if (row.dateBC) {
+                          <span class="text-xs text-slate-500">{{ row.dateBC }}</span>
+                        }
+                      </div>
+                      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-slate-600">
+                        @if (row.quantiteAcheteeTotale != null || row.prixAchatUnitaireHtPondere != null) {
+                          <div>
+                            <span class="text-slate-400">Achat</span>
+                            <div class="font-medium text-slate-800">
+                              @if (row.quantiteAcheteeTotale != null) { {{ row.quantiteAcheteeTotale | number:'1.0-3' }} @if (bcModalProduct()) { {{ bcModalProduct()!.unit }} } }
+                              @if (row.prixAchatUnitaireHtPondere != null) {
+                                <span class="text-slate-500"> · </span>{{ row.prixAchatUnitaireHtPondere | number:'1.2-2' }} MAD
+                              }
+                            </div>
+                          </div>
+                        }
+                        @if (row.quantiteVendueTotale != null || row.prixVenteUnitaireHtPondere != null) {
+                          <div>
+                            <span class="text-slate-400">Vente</span>
+                            <div class="font-medium text-slate-800">
+                              @if (row.quantiteVendueTotale != null) { {{ row.quantiteVendueTotale | number:'1.0-3' }} @if (bcModalProduct()) { {{ bcModalProduct()!.unit }} } }
+                              @if (row.prixVenteUnitaireHtPondere != null) {
+                                <span class="text-slate-500"> · </span>{{ row.prixVenteUnitaireHtPondere | number:'1.2-2' }} MAD
+                              }
+                            </div>
+                          </div>
+                        }
+                      </div>
+                      @if (row.fournisseurIds || row.clientIds) {
+                        <p class="text-[11px] text-slate-400 mt-2 truncate" [title]="(row.fournisseurIds || '') + (row.clientIds ? ' · ' + row.clientIds : '')">
+                          @if (row.fournisseurIds) { F: {{ row.fournisseurIds }} }
+                          @if (row.clientIds) { @if (row.fournisseurIds) { · } C: {{ row.clientIds }} }
+                        </p>
+                      }
+                    </li>
+                  }
+                </ul>
+              }
+            </div>
+          </div>
+        </div>
+      }
+
     </div>
   `,
   styles: [`
@@ -247,9 +322,15 @@ import { AuthService } from '../../services/auth.service';
 })
 export class ProductsComponent {
   store = inject(StoreService);
+  productService = inject(ProductService);
   fb = inject(FormBuilder);
   auth = inject(AuthService);
   backfillRunning = signal(false);
+
+  bcModalOpen = signal(false);
+  bcModalProduct = signal<Product | null>(null);
+  bcUsages = signal<ProductBcUsage[]>([]);
+  bcUsagesLoading = signal(false);
   
   isFormOpen = signal(false);
   isEditMode = signal(false);
@@ -286,6 +367,28 @@ export class ProductsComponent {
     } finally {
       this.backfillRunning.set(false);
     }
+  }
+
+  async openBcModal(prod: Product) {
+    this.bcModalProduct.set(prod);
+    this.bcModalOpen.set(true);
+    this.bcUsages.set([]);
+    this.bcUsagesLoading.set(true);
+    try {
+      const rows = await this.productService.getProductBcs(prod.id);
+      this.bcUsages.set(rows);
+    } catch (e) {
+      console.error(e);
+      this.bcUsages.set([]);
+    } finally {
+      this.bcUsagesLoading.set(false);
+    }
+  }
+
+  closeBcModal() {
+    this.bcModalOpen.set(false);
+    this.bcModalProduct.set(null);
+    this.bcUsages.set([]);
   }
 
   getMargin(prod: Product) {

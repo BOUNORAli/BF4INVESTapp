@@ -1,6 +1,8 @@
 package com.bf4invest.controller;
 
+import com.bf4invest.dto.ProductBcUsageDto;
 import com.bf4invest.model.Product;
+import com.bf4invest.service.ProductPriceService;
 import com.bf4invest.service.ProductService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -15,6 +17,7 @@ import java.util.List;
 public class ProductController {
     
     private final ProductService productService;
+    private final ProductPriceService productPriceService;
     
     @GetMapping
     public ResponseEntity<List<Product>> getAllProducts() {
@@ -26,6 +29,14 @@ public class ProductController {
         return productService.findById(id)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
+    }
+
+    @GetMapping("/{id}/bcs")
+    public ResponseEntity<List<ProductBcUsageDto>> getProductBandeCommandes(@PathVariable String id) {
+        if (productService.findById(id).isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok(productPriceService.findBandeCommandesUsingProduct(id));
     }
     
     @PostMapping

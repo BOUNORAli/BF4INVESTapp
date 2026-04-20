@@ -2,11 +2,48 @@ import { Injectable, inject } from '@angular/core';
 import { ApiService } from './api.service';
 import { Product } from '../models/types';
 
+/** Fallback affichage : ignore null/undefined et 0 (prix corrompu en base). */
+function pickPrice(...vals: (number | null | undefined)[]): number {
+  for (const v of vals) {
+    if (v != null && v > 0) {
+      return v;
+    }
+  }
+  return 0;
+}
+
+export interface ProductBcUsage {
+  bandeCommandeId: string;
+  numeroBC: string;
+  dateBC: string | null;
+  quantiteAcheteeTotale?: number | null;
+  prixAchatUnitaireHtPondere?: number | null;
+  quantiteVendueTotale?: number | null;
+  prixVenteUnitaireHtPondere?: number | null;
+  fournisseurIds?: string | null;
+  clientIds?: string | null;
+}
+
 @Injectable({
   providedIn: 'root'
 })
 export class ProductService {
   private api = inject(ApiService);
+
+  async getProductBcs(productId: string): Promise<ProductBcUsage[]> {
+    const rows = await this.api.get<any[]>(`/produits/${productId}/bcs`).toPromise() || [];
+    return rows.map((r) => ({
+      bandeCommandeId: r.bandeCommandeId,
+      numeroBC: r.numeroBC ?? '',
+      dateBC: r.dateBC ?? null,
+      quantiteAcheteeTotale: r.quantiteAcheteeTotale ?? null,
+      prixAchatUnitaireHtPondere: r.prixAchatUnitaireHtPondere ?? null,
+      quantiteVendueTotale: r.quantiteVendueTotale ?? null,
+      prixVenteUnitaireHtPondere: r.prixVenteUnitaireHtPondere ?? null,
+      fournisseurIds: r.fournisseurIds ?? null,
+      clientIds: r.clientIds ?? null
+    }));
+  }
 
   async getProducts(): Promise<Product[]> {
     const products = await this.api.get<any[]>('/produits').toPromise() || [];
@@ -100,9 +137,9 @@ export class ProductService {
       name: p.designation || p.name,
       unit: p.unite || p.unit,
       category: p.categorie || p.category || 'Matériaux de Construction',
-      // Utiliser les prix pondérés en priorité, avec fallback sur prix unitaires pour rétrocompatibilité
-      priceBuyHT: p.prixAchatPondereHT ?? p.prixAchatUnitaireHT ?? p.priceBuyHT ?? 0,
-      priceSellHT: p.prixVentePondereHT ?? p.prixVenteUnitaireHT ?? p.priceSellHT ?? 0,
+      // Pondéré puis unitaire : pickPrice ignore 0 (anciens backfills corrompus)
+      priceBuyHT: pickPrice(p.prixAchatPondereHT, p.prixAchatUnitaireHT, p.priceBuyHT),
+      priceSellHT: pickPrice(p.prixVentePondereHT, p.prixVenteUnitaireHT, p.priceSellHT),
       priceBuyMinHT: p.prixAchatMinHT ?? p.priceBuyMinHT,
       priceBuyMaxHT: p.prixAchatMaxHT ?? p.priceBuyMaxHT,
       priceSellMinHT: p.prixVenteMinHT ?? p.priceSellMinHT,
