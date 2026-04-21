@@ -3,7 +3,8 @@ import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, FormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
 import { StoreService } from '../../services/store.service';
-import type { BC, LineItem, LigneVente } from '../../services/store.service';
+import type { BC, Client, LineItem, LigneVente } from '../../services/store.service';
+import { matchesFlexibleSearch } from '../../utils/product-search.util';
 import { InvoiceService } from '../../services/invoice.service';
 import { PartnerStore } from '../../stores/partner.store';
 import { BCStore } from '../../stores/bc.store';
@@ -55,28 +56,59 @@ interface BcLineDraft {
           <div class="space-y-4">
             <div [formGroup]="blForm" class="space-y-4">
             <div class="grid md:grid-cols-2 gap-4">
-              <div>
+              <div class="relative">
                 <label class="block text-xs font-semibold text-slate-600 mb-1">Client *</label>
-                <select formControlName="partnerId" (change)="rebuildRowsFromBc()" class="w-full border rounded-lg px-3 py-2 text-sm">
-                  <option value="">— Choisir —</option>
-                  @for (c of store.clients(); track c.id) {
-                    <option [value]="c.id">{{ c.name }}</option>
-                  }
-                </select>
+                <input type="text" formControlName="partnerSearch"
+                  (focus)="openClientPicker()"
+                  (blur)="closeClientPickerDelayed()"
+                  (input)="onClientSearchInput()"
+                  placeholder="Rechercher un client…"
+                  class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500/20 outline-none" />
+                @if (clientPickerOpen()) {
+                  <div class="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-56 overflow-y-auto">
+                    @for (c of filterClients(blForm.value.partnerSearch || ''); track c.id) {
+                      <div (mousedown)="selectBlClient(c)" class="p-2 hover:bg-slate-50 cursor-pointer border-b border-slate-100 last:border-0">
+                        <div class="font-medium text-sm text-slate-800">{{ c.name }}</div>
+                        @if (c.ice) {
+                          <div class="text-xs text-slate-500">ICE: {{ c.ice }}</div>
+                        }
+                      </div>
+                    } @empty {
+                      <div class="p-2 text-sm text-slate-500">Aucun client</div>
+                    }
+                  </div>
+                }
               </div>
               <div>
                 <label class="block text-xs font-semibold text-slate-600 mb-1">Date du BL *</label>
                 <input type="date" formControlName="dateBonLivraison" class="w-full border rounded-lg px-3 py-2 text-sm" />
               </div>
             </div>
-            <div>
+            <div class="relative">
               <label class="block text-xs font-semibold text-slate-600 mb-1">BC (optionnel)</label>
-              <select formControlName="bcId" (change)="rebuildRowsFromBc()" class="w-full border rounded-lg px-3 py-2 text-sm">
-                <option value="">— Aucune (saisie libre) —</option>
-                @for (bc of store.bcs(); track bc.id) {
-                  <option [value]="bc.id">{{ bc.number || bc.id }}</option>
-                }
-              </select>
+              <input type="text" formControlName="bcSearch"
+                [disabled]="bcSearchDisabled()"
+                (focus)="openBcPicker()"
+                (blur)="closeBcPickerDelayed()"
+                (input)="onBcSearchInput()"
+                [placeholder]="bcSearchDisabled() ? 'Choisissez d’abord un client' : 'Rechercher une BC du client…'"
+                class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500/20 outline-none disabled:bg-slate-100 disabled:text-slate-500" />
+              @if (bcPickerOpen()) {
+                <div class="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-56 overflow-y-auto">
+                  @if (bcSearchDisabled()) {
+                    <div class="p-2 text-sm text-slate-500">Choisissez d’abord un client</div>
+                  } @else {
+                    @for (bc of filterBcs(blForm.value.bcSearch || ''); track bc.id) {
+                      <div (mousedown)="selectBlBc(bc)" class="p-2 hover:bg-slate-50 cursor-pointer border-b border-slate-100 last:border-0">
+                        <div class="font-medium text-sm text-slate-800">{{ bc.number || bc.id }}</div>
+                        <div class="text-xs text-slate-500">{{ bc.date }}</div>
+                      </div>
+                    } @empty {
+                      <div class="p-2 text-sm text-slate-500">Aucun BC pour ce client</div>
+                    }
+                  }
+                </div>
+              }
             </div>
             </div>
 
@@ -259,6 +291,8 @@ export class BonsLivraisonComponent implements OnInit {
   readonly bcRows = signal<BcLineDraft[]>([]);
   readonly bcHint = signal<string | null>(null);
   readonly selectedBcLabel = signal('');
+  readonly clientPickerOpen = signal(false);
+  readonly bcPickerOpen = signal(false);
 
   lineDrafts = signal<LineDraft[]>([
     { produitRef: '', designation: '', unite: 'U', quantiteVendue: 1, prixVenteUnitaireHT: 0, tva: 20 },
@@ -266,8 +300,10 @@ export class BonsLivraisonComponent implements OnInit {
 
   blForm: FormGroup = this.fb.group({
     partnerId: ['', Validators.required],
-    dateBonLivraison: [new Date().toISOString().split('T')[0], Validators.required],
+    partnerSearch: [''],
     bcId: [''],
+    bcSearch: [''],
+    dateBonLivraison: [new Date().toISOString().split('T')[0], Validators.required],
   });
 
   ngOnInit(): void {
@@ -275,6 +311,124 @@ export class BonsLivraisonComponent implements OnInit {
     void this.bcStore.loadBCs().catch(() => undefined);
     void this.store.loadInvoices().catch(() => undefined);
     void this.load();
+  }
+
+  bcSearchDisabled(): boolean {
+    return !(this.blForm.get('partnerId')?.value || '').toString().trim();
+  }
+
+  openClientPicker(): void {
+    this.clientPickerOpen.set(true);
+  }
+
+  closeClientPickerDelayed(): void {
+    setTimeout(() => this.clientPickerOpen.set(false), 200);
+  }
+
+  filterClients(term: string): Client[] {
+    const clients = this.store.clients();
+    if (!term || term.trim() === '') {
+      return clients.slice(0, 10);
+    }
+    return clients
+      .filter(c =>
+        matchesFlexibleSearch(
+          { name: c.name, ref: `${c.ice || ''} ${c.referenceClient || ''}`.trim() },
+          term
+        )
+      )
+      .slice(0, 10);
+  }
+
+  onClientSearchInput(): void {
+    this.blForm.patchValue({ partnerId: '', bcId: '', bcSearch: '' }, { emitEvent: false });
+    this.fromBc.set(false);
+    this.bcRows.set([]);
+    this.bcHint.set(null);
+    this.selectedBcLabel.set('');
+    this.rebuildRowsFromBc();
+  }
+
+  selectBlClient(c: Client): void {
+    this.blForm.patchValue(
+      {
+        partnerId: c.id,
+        partnerSearch: c.name,
+        bcId: '',
+        bcSearch: '',
+      },
+      { emitEvent: false }
+    );
+    this.clientPickerOpen.set(false);
+    this.fromBc.set(false);
+    this.bcRows.set([]);
+    this.bcHint.set(null);
+    this.selectedBcLabel.set('');
+    this.rebuildRowsFromBc();
+  }
+
+  getClientIdsOfBc(bc: BC): string[] {
+    if (bc.clientsVente && bc.clientsVente.length > 0) {
+      return bc.clientsVente.map(cv => cv.clientId).filter((id): id is string => !!id);
+    }
+    if (bc.clientId) {
+      return [bc.clientId];
+    }
+    return [];
+  }
+
+  bcsForSelectedClient(): BC[] {
+    const pid = (this.blForm.get('partnerId')?.value || '').toString().trim();
+    if (!pid) {
+      return [];
+    }
+    return this.store.bcs().filter(b => this.getClientIdsOfBc(b).includes(pid));
+  }
+
+  filterBcs(term: string): BC[] {
+    const list = this.bcsForSelectedClient();
+    if (!term || term.trim() === '') {
+      return list.slice(0, 10);
+    }
+    return list
+      .filter(bc =>
+        matchesFlexibleSearch(
+          { name: `${bc.number || ''} ${bc.date || ''}`.trim(), ref: bc.id },
+          term
+        )
+      )
+      .slice(0, 10);
+  }
+
+  openBcPicker(): void {
+    if (!this.bcSearchDisabled()) {
+      this.bcPickerOpen.set(true);
+    }
+  }
+
+  closeBcPickerDelayed(): void {
+    setTimeout(() => this.bcPickerOpen.set(false), 200);
+  }
+
+  selectBlBc(bc: BC): void {
+    this.blForm.patchValue(
+      {
+        bcId: bc.id,
+        bcSearch: bc.number || bc.id,
+      },
+      { emitEvent: false }
+    );
+    this.bcPickerOpen.set(false);
+    this.rebuildRowsFromBc();
+  }
+
+  onBcSearchInput(): void {
+    this.blForm.patchValue({ bcId: '' }, { emitEvent: false });
+    this.fromBc.set(false);
+    this.bcRows.set([]);
+    this.bcHint.set(null);
+    this.selectedBcLabel.set('');
+    this.rebuildRowsFromBc();
   }
 
   trackBcRow(i: number, row: BcLineDraft): string {
@@ -560,7 +714,13 @@ export class BonsLivraisonComponent implements OnInit {
         lignes,
       });
       this.store.showToast('Bon de livraison créé', 'success');
-      this.blForm.patchValue({ bcId: '' });
+      this.blForm.patchValue({
+        partnerId: '',
+        partnerSearch: '',
+        bcId: '',
+        bcSearch: '',
+        dateBonLivraison: new Date().toISOString().split('T')[0],
+      });
       this.fromBc.set(false);
       this.bcRows.set([]);
       this.bcHint.set(null);
