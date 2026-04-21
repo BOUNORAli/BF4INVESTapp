@@ -181,6 +181,11 @@ import { matchesFlexibleSearch } from '../../utils/product-search.util';
                           AVOIR
                         </span>
                       }
+                      @if (inv.bonLivraisonSourceIds && inv.bonLivraisonSourceIds.length > 0) {
+                        <span class="px-2 py-0.5 bg-sky-100 text-sky-800 rounded text-xs font-semibold border border-sky-200" title="Facture issue de bons de livraison regroupés">
+                          Depuis BL
+                        </span>
+                      }
                     </div>
                     <span class="text-xs text-slate-400 hidden md:inline">Ref interne</span>
                   </td>

@@ -18,9 +18,14 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -75,6 +80,10 @@ public class FactureVenteService {
             facture.getTotalHT(), facture.getTotalTTC(),
             facture.getLignes() != null ? facture.getLignes().size() : 0,
             facture.getAllocationVenteMode());
+
+        if ("BL_SEUL".equals(facture.getStatut())) {
+            throw new IllegalArgumentException("Utilisez POST /factures-ventes/bons-livraison pour créer un bon de livraison");
+        }
         
         // ========== VALIDATION ET GESTION DES AVOIRS ==========
         if (Boolean.TRUE.equals(facture.getEstAvoir())) {
@@ -196,8 +205,10 @@ public class FactureVenteService {
         log.info("🔵 FactureVenteService.create - Après sauvegarde: id={}, lignes={}",
             saved.getId(), saved.getLignes() != null ? saved.getLignes().size() : 0);
         
-        // Décrémenter le stock des produits vendus
-        if (saved.getLignes() != null && !saved.getLignes().isEmpty()) {
+        // Décrémenter le stock des produits vendus (sauf facture issue d'un regroupement de BL : stock déjà sorti sur les BL)
+        boolean skipStockForMergedSources = saved.getBonLivraisonSourceIds() != null
+                && !saved.getBonLivraisonSourceIds().isEmpty();
+        if (!skipStockForMergedSources && saved.getLignes() != null && !saved.getLignes().isEmpty()) {
             updateStockFromFacture(saved);
         }
         
@@ -276,6 +287,284 @@ public class FactureVenteService {
         
         auditService.logUpdate("FactureVente", avoirId, null,
             "Avoir " + avoir.getNumeroFactureVente() + " lié à la facture " + origine.getNumeroFactureVente());
+    }
+
+    /**
+     * Crée un bon de livraison (document BL_SEUL, pas de numéro/date de facture, décrément stock).
+     */
+    public FactureVente createBonLivraison(FactureVente payload) {
+        if (Boolean.TRUE.equals(payload.getEstAvoir())) {
+            throw new IllegalArgumentException("Un bon de livraison ne peut pas être un avoir");
+        }
+        if (payload.getClientId() == null || payload.getClientId().isBlank()) {
+            throw new IllegalArgumentException("clientId est requis pour un bon de livraison");
+        }
+        if (payload.getLignes() == null || payload.getLignes().isEmpty()) {
+            throw new IllegalArgumentException("Au moins une ligne est requise pour un bon de livraison");
+        }
+
+        FactureVente bl = new FactureVente();
+        bl.setClientId(payload.getClientId().trim());
+        bl.setBandeCommandeId(payload.getBandeCommandeId());
+        bl.setBcReference(payload.getBcReference());
+        bl.setAllocationVenteMode(payload.getAllocationVenteMode());
+        bl.setModePaiement(payload.getModePaiement());
+        bl.setLignes(new ArrayList<>(payload.getLignes()));
+
+        LocalDate dateBl = payload.getDateBonLivraison() != null ? payload.getDateBonLivraison() : LocalDate.now();
+        bl.setDateBonLivraison(dateBl);
+
+        if (payload.getNumeroBonLivraison() != null && !payload.getNumeroBonLivraison().isBlank()) {
+            bl.setNumeroBonLivraison(payload.getNumeroBonLivraison().trim());
+        } else {
+            bl.setNumeroBonLivraison(generateBonLivraisonNumber(dateBl));
+        }
+
+        bl.setStatut("BL_SEUL");
+        bl.setTypeFacture("NORMALE");
+        bl.setEstAvoir(false);
+        bl.setNumeroFactureVente(null);
+        bl.setDateFacture(null);
+        bl.setDateEcheance(null);
+
+        if (!Boolean.TRUE.equals(bl.getEstAvoir())) {
+            boolean hasBc = bl.getBandeCommandeId() != null && !bl.getBandeCommandeId().isEmpty();
+            if (hasBc) {
+                // Pas d'alignement date facture (fin de mois BC) : le BL n'a pas encore de date de facture.
+                applyBcSyncAccordingToAllocationMode(bl);
+            }
+        }
+
+        if (bl.getLignes() != null && !bl.getLignes().isEmpty()) {
+            calculateTotals(bl);
+        } else if (bl.getTotalHT() == null && bl.getTotalTTC() == null) {
+            calculateTotals(bl);
+        }
+
+        calculComptableService.calculerFactureVente(bl);
+        if (bl.getEtatPaiement() == null) {
+            bl.setEtatPaiement("non_regle");
+        }
+        bl.setCreatedAt(LocalDateTime.now());
+        bl.setUpdatedAt(LocalDateTime.now());
+
+        String cumulativeWarning = buildCumulativeOverageWarning(bl);
+        FactureVente saved = factureRepository.save(bl);
+        if (cumulativeWarning != null) {
+            saved.setClientWarning(cumulativeWarning);
+        }
+
+        if (saved.getLignes() != null && !saved.getLignes().isEmpty()) {
+            updateStockFromFacture(saved);
+        }
+
+        auditService.logCreate("FactureVente", saved.getId(),
+                "Bon de livraison " + saved.getNumeroBonLivraison() + " créé - Montant TTC: " + saved.getTotalTTC() + " MAD");
+
+        return saved;
+    }
+
+    /**
+     * Transforme un BL_SEUL en facture (même document).
+     */
+    public FactureVente facturerBonLivraison(String blId, LocalDate dateFacture) {
+        if (dateFacture == null) {
+            throw new IllegalArgumentException("dateFacture est requise");
+        }
+        FactureVente bl = factureRepository.findById(blId)
+                .orElseThrow(() -> new RuntimeException("Bon de livraison non trouvé: " + blId));
+        if (!"BL_SEUL".equals(bl.getStatut())) {
+            throw new IllegalArgumentException("Seul un document en statut BL_SEUL peut être facturé (id=" + blId + ")");
+        }
+
+        bl.setDateFacture(dateFacture);
+        if (bl.getNumeroFactureVente() == null || bl.getNumeroFactureVente().isEmpty()) {
+            bl.setNumeroFactureVente(generateFactureNumber(dateFacture));
+        }
+        int paymentTermDays = appConfig.getDefaultPaymentTermDays();
+        bl.setDateEcheance(dateFacture.plusDays(paymentTermDays));
+        bl.setStatut("FACTUREE");
+        bl.setUpdatedAt(LocalDateTime.now());
+
+        calculComptableService.calculerFactureVente(bl);
+        FactureVente saved = factureRepository.save(bl);
+
+        enregistrerSoldeFactureVente(saved);
+        try {
+            comptabiliteService.genererEcritureFactureVente(saved);
+        } catch (Exception e) {
+            log.warn("Erreur lors de la génération de l'écriture comptable pour facturation BL {}: {}", saved.getId(), e.getMessage());
+        }
+
+        auditService.logUpdate("FactureVente", saved.getId(), null,
+                "Bon " + saved.getNumeroBonLivraison() + " facturé sous " + saved.getNumeroFactureVente());
+
+        return saved;
+    }
+
+    /**
+     * Regroupe plusieurs BL_SEUL en une nouvelle facture vente.
+     */
+    public FactureVente facturerBonsLivraisonGroupes(List<String> blIds, LocalDate dateFacture) {
+        if (dateFacture == null) {
+            throw new IllegalArgumentException("dateFacture est requise");
+        }
+        if (blIds == null || blIds.isEmpty()) {
+            throw new IllegalArgumentException("blIds ne peut pas être vide");
+        }
+        List<String> distinctIds = blIds.stream().filter(Objects::nonNull).map(String::trim).filter(s -> !s.isEmpty()).distinct().collect(Collectors.toList());
+        if (distinctIds.isEmpty()) {
+            throw new IllegalArgumentException("blIds ne contient aucun id valide");
+        }
+        if (distinctIds.size() == 1) {
+            return facturerBonLivraison(distinctIds.get(0), dateFacture);
+        }
+
+        List<FactureVente> sources = new ArrayList<>();
+        for (String id : distinctIds) {
+            FactureVente s = factureRepository.findById(id)
+                    .orElseThrow(() -> new RuntimeException("Bon de livraison non trouvé: " + id));
+            sources.add(s);
+        }
+
+        String clientId = sources.get(0).getClientId();
+        for (FactureVente s : sources) {
+            if (!"BL_SEUL".equals(s.getStatut())) {
+                throw new IllegalArgumentException("Le document " + s.getId() + " n'est pas en statut BL_SEUL");
+            }
+            if (clientId == null || s.getClientId() == null || !clientId.equals(s.getClientId())) {
+                throw new IllegalArgumentException("Tous les bons de livraison doivent concerner le même client");
+            }
+        }
+
+        List<LineItem> mergedLines = mergeLineItemsFromBonsLivraisons(sources);
+        FactureVente fv = new FactureVente();
+        fv.setClientId(clientId);
+        fv.setLignes(mergedLines);
+        Set<String> bcIds = sources.stream()
+                .map(FactureVente::getBandeCommandeId)
+                .filter(id -> id != null && !id.isBlank())
+                .collect(Collectors.toSet());
+        if (bcIds.size() == 1) {
+            fv.setBandeCommandeId(bcIds.iterator().next());
+        }
+        fv.setBonLivraisonSourceIds(new ArrayList<>(distinctIds));
+        fv.setStatut("FACTUREE");
+        fv.setEstAvoir(false);
+        fv.setTypeFacture("NORMALE");
+        fv.setDateFacture(dateFacture);
+        fv.setNumeroFactureVente(generateFactureNumber(dateFacture));
+        fv.setDateEcheance(dateFacture.plusDays(appConfig.getDefaultPaymentTermDays()));
+        fv.setEtatPaiement("non_regle");
+        fv.setCreatedAt(LocalDateTime.now());
+        fv.setUpdatedAt(LocalDateTime.now());
+
+        calculateTotals(fv);
+        calculComptableService.calculerFactureVente(fv);
+        FactureVente saved = factureRepository.save(fv);
+
+        for (FactureVente s : sources) {
+            s.setStatut("MERGE_DANS_FV");
+            s.setFactureVenteFinaleId(saved.getId());
+            s.setUpdatedAt(LocalDateTime.now());
+            factureRepository.save(s);
+        }
+
+        enregistrerSoldeFactureVente(saved);
+        try {
+            comptabiliteService.genererEcritureFactureVente(saved);
+        } catch (Exception e) {
+            log.warn("Erreur lors de la génération de l'écriture comptable pour facture groupée {}: {}", saved.getId(), e.getMessage());
+        }
+
+        auditService.logCreate("FactureVente", saved.getId(),
+                "Facture vente " + saved.getNumeroFactureVente() + " créée depuis " + distinctIds.size() + " bons de livraison");
+
+        return saved;
+    }
+
+    private void enregistrerSoldeFactureVente(FactureVente saved) {
+        if (saved.getClientId() == null || saved.getTotalTTC() == null) {
+            return;
+        }
+        try {
+            clientService.findById(saved.getClientId()).ifPresent(client -> {
+                String libelle = "Facture vente " + saved.getNumeroFactureVente();
+                soldeService.enregistrerTransaction(
+                        "FACTURE_VENTE",
+                        saved.getTotalTTC(),
+                        saved.getClientId(),
+                        "CLIENT",
+                        client.getNom(),
+                        saved.getId(),
+                        saved.getNumeroFactureVente(),
+                        libelle,
+                        saved.getDateFacture()
+                );
+            });
+        } catch (Exception e) {
+            log.warn("Erreur lors de l'enregistrement de la transaction solde pour facture vente {}: {}", saved.getId(), e.getMessage());
+        }
+    }
+
+    private List<LineItem> mergeLineItemsFromBonsLivraisons(List<FactureVente> sources) {
+        Map<String, LineItem> byKey = new LinkedHashMap<>();
+        for (FactureVente src : sources) {
+            if (src.getLignes() == null) {
+                continue;
+            }
+            for (LineItem ligne : src.getLignes()) {
+                if (ligne == null) {
+                    continue;
+                }
+                String ref = ligne.getProduitRef() != null ? ligne.getProduitRef() : "";
+                double prix = ligne.getPrixVenteUnitaireHT() != null ? ligne.getPrixVenteUnitaireHT() : 0.0;
+                double tva = ligne.getTva() != null ? ligne.getTva() : 0.0;
+                String key = ref + "|" + prix + "|" + tva;
+                LineItem existing = byKey.get(key);
+                if (existing == null) {
+                    LineItem copy = new LineItem();
+                    copy.setProduitRef(ligne.getProduitRef());
+                    copy.setDesignation(ligne.getDesignation());
+                    copy.setUnite(ligne.getUnite() != null ? ligne.getUnite() : "U");
+                    copy.setQuantiteVendue(ligne.getQuantiteVendue() != null ? ligne.getQuantiteVendue() : 0.0);
+                    copy.setPrixVenteUnitaireHT(ligne.getPrixVenteUnitaireHT());
+                    copy.setTva(ligne.getTva());
+                    byKey.put(key, copy);
+                } else {
+                    double q = (existing.getQuantiteVendue() != null ? existing.getQuantiteVendue() : 0.0)
+                            + (ligne.getQuantiteVendue() != null ? ligne.getQuantiteVendue() : 0.0);
+                    existing.setQuantiteVendue(q);
+                }
+            }
+        }
+        List<LineItem> out = new ArrayList<>(byKey.values());
+        for (LineItem li : out) {
+            double qte = li.getQuantiteVendue() != null ? li.getQuantiteVendue() : 0;
+            double prixHT = li.getPrixVenteUnitaireHT() != null ? li.getPrixVenteUnitaireHT() : 0;
+            double tvaRate = li.getTva() != null ? li.getTva() / 100.0 : 0.0;
+            li.setTotalHT(NumberUtils.roundTo2Decimals(qte * prixHT));
+            li.setTotalTTC(NumberUtils.roundTo2Decimals(li.getTotalHT() * (1 + tvaRate)));
+        }
+        return out;
+    }
+
+    private String generateBonLivraisonNumber(LocalDate date) {
+        if (date == null) {
+            throw new IllegalArgumentException("La date du bon de livraison est requise pour générer le numéro");
+        }
+        int month = date.getMonthValue();
+        String mois = String.format("%02d", month);
+        int year = date.getYear();
+        String annee4chiffres = String.valueOf(year);
+        long count = factureRepository.findAll().stream()
+                .filter(f -> f.getDateBonLivraison() != null
+                        && f.getDateBonLivraison().getMonthValue() == month
+                        && f.getDateBonLivraison().getYear() == year
+                        && f.getNumeroBonLivraison() != null && !f.getNumeroBonLivraison().isEmpty())
+                .count();
+        String numero = String.format("%02d", count + 1);
+        return "BL" + mois + numero + "/" + annee4chiffres;
     }
     
     /**
@@ -419,11 +708,50 @@ public class FactureVenteService {
     }
     
     public void delete(String id) {
-        // Journaliser avant suppression
-        factureRepository.findById(id).ifPresent(f -> {
-            auditService.logDelete("FactureVente", id, "Facture Vente " + f.getNumeroFactureVente() + " supprimée");
-        });
+        FactureVente f = factureRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Facture vente not found with id: " + id));
+        if ("MERGE_DANS_FV".equals(f.getStatut())) {
+            throw new IllegalArgumentException(
+                    "Impossible de supprimer ce bon : il a été regroupé dans une facture (id facture: "
+                            + f.getFactureVenteFinaleId() + ")");
+        }
+        if (shouldRestoreStockOnDelete(f)) {
+            restoreStockFromFacture(f);
+        }
+        String label = f.getNumeroFactureVente() != null ? f.getNumeroFactureVente() : f.getNumeroBonLivraison();
+        auditService.logDelete("FactureVente", id, "Facture Vente / BL " + label + " supprimée");
         factureRepository.deleteById(id);
+    }
+
+    private boolean shouldRestoreStockOnDelete(FactureVente f) {
+        if (Boolean.TRUE.equals(f.getEstAvoir())) {
+            return false;
+        }
+        if (f.getBonLivraisonSourceIds() != null && !f.getBonLivraisonSourceIds().isEmpty()) {
+            return false;
+        }
+        return f.getLignes() != null && !f.getLignes().isEmpty();
+    }
+
+    private void restoreStockFromFacture(FactureVente facture) {
+        if (facture.getLignes() == null || facture.getLignes().isEmpty()) {
+            return;
+        }
+        for (LineItem ligne : facture.getLignes()) {
+            if (ligne.getProduitRef() == null || ligne.getProduitRef().isEmpty()) {
+                continue;
+            }
+            Double quantite = ligne.getQuantiteVendue();
+            if (quantite == null || quantite <= 0) {
+                continue;
+            }
+            try {
+                productService.updateStockByRef(ligne.getProduitRef(), quantite);
+                log.info("Stock restauré pour {} (+{}) après suppression document {}", ligne.getProduitRef(), quantite, facture.getId());
+            } catch (Exception e) {
+                log.warn("Erreur restauration stock pour {}: {}", ligne.getProduitRef(), e.getMessage());
+            }
+        }
     }
 
     private String normalizeAllocationVenteMode(String raw) {

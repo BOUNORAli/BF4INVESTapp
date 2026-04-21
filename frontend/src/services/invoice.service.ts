@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { ApiService } from './api.service';
-import { Invoice, Payment } from '../models/types';
+import { Invoice, Payment, SaleInvoiceLinePayload } from '../models/types';
 
 @Injectable({
   providedIn: 'root'
@@ -190,6 +190,52 @@ export class InvoiceService {
     return await this.api.downloadFile(`/pdf/factures-ventes/${factureId}/bon-de-livraison`).toPromise();
   }
 
+  async getBonsLivraison(): Promise<Invoice[]> {
+    const rows = await this.api.get<any[]>('/factures-ventes', { statut: 'BL_SEUL' }).toPromise() || [];
+    return rows.map(inv => this.mapInvoice(inv, 'sale'));
+  }
+
+  async addBonLivraison(payload: {
+    clientId: string;
+    dateBonLivraison?: string;
+    bandeCommandeId?: string;
+    allocationVenteMode?: string;
+    lignes: SaleInvoiceLinePayload[];
+  }): Promise<Invoice> {
+    const body: any = {
+      clientId: payload.clientId,
+      lignes: payload.lignes,
+    };
+    if (payload.dateBonLivraison) {
+      body.dateBonLivraison = payload.dateBonLivraison;
+    }
+    if (payload.bandeCommandeId) {
+      body.bandeCommandeId = payload.bandeCommandeId;
+    }
+    if (payload.allocationVenteMode) {
+      body.allocationVenteMode = payload.allocationVenteMode;
+    }
+    const created = await this.api.post<any>('/factures-ventes/bons-livraison', body).toPromise();
+    return this.mapInvoice(created, 'sale');
+  }
+
+  async facturerBonLivraison(blId: string, dateFacture: string): Promise<Invoice> {
+    const enc = encodeURIComponent(dateFacture);
+    const updated = await this.api.post<any>(
+      `/factures-ventes/bons-livraison/${blId}/facturer?date=${enc}`,
+      {}
+    ).toPromise();
+    return this.mapInvoice(updated, 'sale');
+  }
+
+  async facturerBonsLivraisonGroupes(blIds: string[], dateFacture: string): Promise<Invoice> {
+    const created = await this.api.post<any>('/factures-ventes/bons-livraison/facturer-groupes', {
+      blIds,
+      dateFacture,
+    }).toPromise();
+    return this.mapInvoice(created, 'sale');
+  }
+
   async downloadFactureAchatPDF(factureId: string): Promise<Blob> {
     return await this.api.downloadFile(`/pdf/factures-achats/${factureId}`).toPromise();
   }
@@ -266,11 +312,11 @@ export class InvoiceService {
     
     return {
       id: inv.id,
-      number: inv.numeroFactureAchat || inv.numeroFactureVente || inv.number,
+      number: inv.numeroFactureAchat || inv.numeroFactureVente || inv.numeroBonLivraison || inv.number,
       bcId: inv.bandeCommandeId || inv.bcId || '',
       bcReference: inv.bcReference,
       partnerId: inv.fournisseurId || inv.clientId || inv.partnerId,
-      date: inv.dateFacture || inv.date,
+      date: inv.dateFacture || inv.dateBonLivraison || inv.date,
       amountHT: amountHT,
       amountTTC: amountTTC,
       dueDate: dueDate,
@@ -283,6 +329,10 @@ export class InvoiceService {
       typeFacture: inv.typeFacture,
       allocationVenteMode: inv.allocationVenteMode,
       clientWarning: inv.clientWarning,
+      statut: inv.statut,
+      numeroBonLivraison: inv.numeroBonLivraison,
+      dateBonLivraison: inv.dateBonLivraison,
+      bonLivraisonSourceIds: inv.bonLivraisonSourceIds,
       
       typeMouvement: inv.typeMouvement,
       nature: inv.nature,

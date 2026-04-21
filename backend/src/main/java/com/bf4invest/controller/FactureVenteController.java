@@ -1,5 +1,6 @@
 package com.bf4invest.controller;
 
+import com.bf4invest.dto.FacturerBonsLivraisonGroupesRequest;
 import com.bf4invest.model.FactureVente;
 import com.bf4invest.service.FactureVenteService;
 import lombok.RequiredArgsConstructor;
@@ -8,6 +9,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @Slf4j
@@ -21,7 +23,8 @@ public class FactureVenteController {
     @GetMapping
     public ResponseEntity<List<FactureVente>> getAllFactures(
             @RequestParam(required = false) String clientId,
-            @RequestParam(required = false) String etatPaiement
+            @RequestParam(required = false) String etatPaiement,
+            @RequestParam(required = false) String statut
     ) {
         List<FactureVente> factures = factureService.findAll();
         
@@ -34,6 +37,17 @@ public class FactureVenteController {
         if (etatPaiement != null) {
             factures = factures.stream()
                     .filter(f -> f.getEtatPaiement() != null && f.getEtatPaiement().equals(etatPaiement))
+                    .toList();
+        }
+
+        if (statut != null && !statut.isBlank()) {
+            factures = factures.stream()
+                    .filter(f -> statut.equals(f.getStatut()))
+                    .toList();
+        } else {
+            // Ne pas exposer les BL seuls ni les BL absorbés par défaut (liste factures vente classique)
+            factures = factures.stream()
+                    .filter(f -> !"BL_SEUL".equals(f.getStatut()) && !"MERGE_DANS_FV".equals(f.getStatut()))
                     .toList();
         }
         
@@ -49,8 +63,56 @@ public class FactureVenteController {
     
     @PostMapping
     public ResponseEntity<FactureVente> createFacture(@RequestBody FactureVente facture) {
-        FactureVente created = factureService.create(facture);
-        return ResponseEntity.status(HttpStatus.CREATED).body(created);
+        try {
+            FactureVente created = factureService.create(facture);
+            return ResponseEntity.status(HttpStatus.CREATED).body(created);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    @PostMapping("/bons-livraison")
+    public ResponseEntity<FactureVente> createBonLivraison(@RequestBody FactureVente payload) {
+        try {
+            FactureVente created = factureService.createBonLivraison(payload);
+            return ResponseEntity.status(HttpStatus.CREATED).body(created);
+        } catch (IllegalArgumentException e) {
+            log.warn("createBonLivraison: {}", e.getMessage());
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    @PostMapping("/bons-livraison/facturer-groupes")
+    public ResponseEntity<FactureVente> facturerBonsLivraisonGroupes(@RequestBody FacturerBonsLivraisonGroupesRequest body) {
+        try {
+            if (body == null || body.getBlIds() == null) {
+                return ResponseEntity.badRequest().build();
+            }
+            FactureVente created = factureService.facturerBonsLivraisonGroupes(body.getBlIds(), body.getDateFacture());
+            return ResponseEntity.status(HttpStatus.CREATED).body(created);
+        } catch (IllegalArgumentException e) {
+            log.warn("facturerBonsLivraisonGroupes: {}", e.getMessage());
+            return ResponseEntity.badRequest().build();
+        } catch (RuntimeException e) {
+            log.warn("facturerBonsLivraisonGroupes: {}", e.getMessage());
+            return ResponseEntity.notFound().build();
+        }
+    }
+
+    @PostMapping("/bons-livraison/{id}/facturer")
+    public ResponseEntity<FactureVente> facturerBonLivraison(
+            @PathVariable String id,
+            @RequestParam(required = false) LocalDate date) {
+        LocalDate dateFacture = date != null ? date : LocalDate.now();
+        try {
+            FactureVente updated = factureService.facturerBonLivraison(id, dateFacture);
+            return ResponseEntity.ok(updated);
+        } catch (IllegalArgumentException e) {
+            log.warn("facturerBonLivraison: {}", e.getMessage());
+            return ResponseEntity.badRequest().build();
+        } catch (RuntimeException e) {
+            return ResponseEntity.notFound().build();
+        }
     }
     
     @PutMapping("/{id}")
@@ -85,8 +147,14 @@ public class FactureVenteController {
     
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteFacture(@PathVariable String id) {
-        factureService.delete(id);
-        return ResponseEntity.noContent().build();
+        try {
+            factureService.delete(id);
+            return ResponseEntity.noContent().build();
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().build();
+        } catch (RuntimeException e) {
+            return ResponseEntity.notFound().build();
+        }
     }
     
     // ========== ENDPOINTS POUR GESTION DES AVOIRS ==========

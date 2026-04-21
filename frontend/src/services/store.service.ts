@@ -204,6 +204,11 @@ export interface Invoice {
   /** Facture vente fractionnée liée au BC (payload création / réponse API) */
   allocationVenteMode?: string;
   clientWarning?: string;
+  /** Facture issue d’un regroupement de bons de livraison */
+  bonLivraisonSourceIds?: string[];
+  statut?: string;
+  numeroBonLivraison?: string;
+  dateBonLivraison?: string;
   saleLines?: Array<{
     produitRef?: string;
     designation?: string;

@@ -1322,9 +1322,15 @@ public class PdfService {
             FontFactory.getFont(FontFactory.HELVETICA_BOLD, 10));
         blNumCell.addElement(blLabel);
         
-        // Utiliser le numéro de facture ou générer un numéro de BL
-        String blNum = facture.getNumeroFactureVente() != null ? 
-            "BL-" + facture.getNumeroFactureVente() : "";
+        // Numéro BL dédié (BL_SEUL) ou préfixe sur numéro de facture (historique)
+        String blNum;
+        if (facture.getNumeroBonLivraison() != null && !facture.getNumeroBonLivraison().isEmpty()) {
+            blNum = facture.getNumeroBonLivraison();
+        } else if (facture.getNumeroFactureVente() != null) {
+            blNum = "BL-" + facture.getNumeroFactureVente();
+        } else {
+            blNum = "";
+        }
         Paragraph blNumText = new Paragraph(blNum, 
             FontFactory.getFont(FontFactory.HELVETICA_BOLD, 12));
         blNumCell.addElement(blNumText);
@@ -1338,8 +1344,11 @@ public class PdfService {
             FontFactory.getFont(FontFactory.HELVETICA_BOLD, 9));
         dateCell.addElement(dateLabel);
         
-        String dateStr = facture.getDateFacture() != null ? 
-            facture.getDateFacture().format(DATE_FORMATTER) : "";
+        LocalDate dateBlOuFacture = facture.getDateBonLivraison() != null
+                ? facture.getDateBonLivraison()
+                : facture.getDateFacture();
+        String dateStr = dateBlOuFacture != null
+            ? dateBlOuFacture.format(DATE_FORMATTER) : "";
         Paragraph dateText = new Paragraph(dateStr, 
             FontFactory.getFont(FontFactory.HELVETICA, 9));
         dateCell.addElement(dateText);

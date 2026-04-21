@@ -174,6 +174,12 @@ export interface Invoice {
   /** Lignes envoyées à l’API pour le mode LINES (payload uniquement) */
   saleLines?: SaleInvoiceLinePayload[];
 
+  /** Bon de livraison / regroupement (API factures ventes) */
+  statut?: string;
+  numeroBonLivraison?: string;
+  dateBonLivraison?: string;
+  bonLivraisonSourceIds?: string[];
+
   // Champs pour les calculs comptables
   typeMouvement?: string; // "C" = Client, "F" = Fournisseur, "IB", "FB", "CTP", "CTD", etc.
   nature?: string; // "facture", "paiement", "loy", etc.

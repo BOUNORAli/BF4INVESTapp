@@ -48,6 +48,10 @@ export const routes: Routes = [
         loadComponent: () => import('./pages/invoices/purchase-invoices.component').then(m => m.PurchaseInvoicesComponent)
       },
       { 
+        path: 'bons-livraison', 
+        loadComponent: () => import('./pages/bons-livraison/bons-livraison.component').then(m => m.BonsLivraisonComponent)
+      },
+      { 
         path: 'invoices/sales', 
         loadComponent: () => import('./pages/invoices/sales-invoices.component').then(m => m.SalesInvoicesComponent)
       },

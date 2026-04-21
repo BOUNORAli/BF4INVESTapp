@@ -104,6 +104,22 @@ public class FactureVente {
     
     // ==========================================
     
+    // ========== BON DE LIVRAISON (avant facture) ==========
+    /**
+     * Cycle de vie document vente : BL_SEUL (livré, pas encore facturé), FACTUREE (facture normale),
+     * MERGE_DANS_FV (ce BL a été regroupé dans une autre facture). null = FACTUREE (rétrocompatibilité).
+     */
+    private String statut;
+    /** Numéro BL dédié (ex. BL0401/2026), distinct du numéro de facture. */
+    private String numeroBonLivraison;
+    /** Date du bon de livraison (livraison physique). */
+    private LocalDate dateBonLivraison;
+    /** Si cette facture résulte d'un regroupement de BL, IDs des documents source (statut MERGE_DANS_FV). */
+    private List<String> bonLivraisonSourceIds;
+    /** Après regroupement : ID de la facture vente finale créée. */
+    private String factureVenteFinaleId;
+    // ======================================================
+    
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

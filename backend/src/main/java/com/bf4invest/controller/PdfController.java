@@ -152,8 +152,14 @@ public class PdfController {
             
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_PDF);
-            String blNum = facture.getNumeroFactureVente() != null ? 
-                "BL-" + facture.getNumeroFactureVente() : "BL-" + id;
+            String blNum;
+            if (facture.getNumeroBonLivraison() != null && !facture.getNumeroBonLivraison().isEmpty()) {
+                blNum = facture.getNumeroBonLivraison();
+            } else if (facture.getNumeroFactureVente() != null) {
+                blNum = "BL-" + facture.getNumeroFactureVente();
+            } else {
+                blNum = "BL-" + id;
+            }
             headers.setContentDispositionFormData("attachment", blNum + ".pdf");
             
             return ResponseEntity.ok()
