@@ -173,6 +173,8 @@ export interface Invoice {
   clientWarning?: string;
   /** Lignes envoyées à l’API pour le mode LINES (payload uniquement) */
   saleLines?: SaleInvoiceLinePayload[];
+  /** Lignes renvoyées par l’API (factures / BL) pour calculs côté UI */
+  lignes?: SaleInvoiceLinePayload[];
 
   /** Bon de livraison / regroupement (API factures ventes) */
   statut?: string;

@@ -217,6 +217,15 @@ export interface Invoice {
     prixVenteUnitaireHT?: number;
     tva?: number;
   }>;
+  /** Lignes API (facture / BL) */
+  lignes?: Array<{
+    produitRef?: string;
+    designation?: string;
+    unite?: string;
+    quantiteVendue?: number;
+    prixVenteUnitaireHT?: number;
+    tva?: number;
+  }>;
   
   // Champs pour les calculs comptables
   typeMouvement?: string; // "C" = Client, "F" = Fournisseur, "IB", "FB", "CTP", "CTD", etc.

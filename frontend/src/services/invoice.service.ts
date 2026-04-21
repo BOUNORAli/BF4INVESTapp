@@ -240,6 +240,20 @@ export class InvoiceService {
     return await this.api.downloadFile(`/pdf/factures-achats/${factureId}`).toPromise();
   }
 
+  private mapLignesFromApi(lignes: any[] | undefined | null): SaleInvoiceLinePayload[] | undefined {
+    if (!lignes || !Array.isArray(lignes) || lignes.length === 0) {
+      return undefined;
+    }
+    return lignes.map((l: any) => ({
+      produitRef: l.produitRef || '',
+      designation: l.designation || l.produitRef || '',
+      unite: l.unite || 'U',
+      quantiteVendue: l.quantiteVendue != null ? Number(l.quantiteVendue) : 0,
+      prixVenteUnitaireHT: l.prixVenteUnitaireHT != null ? Number(l.prixVenteUnitaireHT) : 0,
+      tva: l.tva != null ? Number(l.tva) : 20,
+    }));
+  }
+
   private mapPayment(p: any): Payment {
     return {
       id: p.id,
@@ -333,6 +347,7 @@ export class InvoiceService {
       numeroBonLivraison: inv.numeroBonLivraison,
       dateBonLivraison: inv.dateBonLivraison,
       bonLivraisonSourceIds: inv.bonLivraisonSourceIds,
+      lignes: this.mapLignesFromApi(inv.lignes),
       
       typeMouvement: inv.typeMouvement,
       nature: inv.nature,
